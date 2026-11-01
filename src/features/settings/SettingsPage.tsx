@@ -1,0 +1,775 @@
+import { useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useNavigate } from "react-router";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpRight,
+  BookOpen,
+  CaretRight,
+  Check,
+  CloudCheck,
+  CloudSlash,
+  DeviceMobile,
+  Envelope,
+  FloppyDisk,
+  Globe,
+  House,
+  LockKey,
+  Moon,
+  Palette,
+  PencilSimple,
+  Phone,
+  ShieldCheck,
+  SignOut,
+  Sun,
+  Warning,
+} from "@phosphor-icons/react";
+import { useNotebook } from "../../app/NotebookProvider";
+import { Sheet } from "../../components/Sheet";
+import { useLanguageContext } from "../../context/LanguageProvider";
+import {
+  createWorkspaceStorage,
+  parseBackup,
+  type LedgerBackup,
+} from "../../data/repository";
+import { isCloudConfigured, resolveCloudConflict } from "../../data/sync";
+import { summarize } from "../../domain/ledger";
+import { saveFile, todayDhaka } from "../../lib/display";
+import {
+  applyPalette,
+  applyTheme,
+  readPreferences,
+  savePreferences,
+  type Preferences,
+} from "../../lib/preferences";
+import { themePalettes } from "../../lib/themes";
+import { useAuth } from "../auth/AuthProvider";
+import { SettingsAppearance } from "./SettingsAppearance";
+import "./settings.css";
+
+type Panel =
+  | "appearance"
+  | "language"
+  | "name"
+  | "backup"
+  | "sync"
+  | "account"
+  | "install";
+
+function SettingsRow({
+  title,
+  description,
+  value,
+  icon,
+  tone = "blue",
+  onClick,
+  disabled = false,
+}: {
+  title: string;
+  description?: string;
+  value?: string;
+  icon: ReactNode;
+  tone?: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  const detailId = useId();
+  return (
+    <button
+      className="settings-row"
+      type="button"
+      aria-label={title}
+      aria-describedby={description || value ? detailId : undefined}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <span className={`settings-row-icon is-${tone}`} aria-hidden="true">
+        {icon}
+      </span>
+      <span className="settings-row-copy">
+        <strong>{title}</strong>
+        {description && <small id={detailId}>{description}</small>}
+      </span>
+      {value && (
+        <span
+          className="settings-row-value"
+          id={description ? undefined : detailId}
+        >
+          {value}
+        </span>
+      )}
+      <CaretRight className="settings-row-caret" size={16} aria-hidden="true" />
+    </button>
+  );
+}
+
+export function SettingsPage() {
+  const { ledger, state, mode, save, notify, go } = useNotebook();
+  const { t, language, setLanguage, number, money, date } =
+    useLanguageContext();
+  const auth = useAuth();
+  const navigate = useNavigate();
+  const storage = useMemo(() => createWorkspaceStorage(mode), [mode]);
+  const [preferences, setPreferences] = useState(readPreferences);
+  const selectedPalette =
+    themePalettes.find((palette) => palette.value === preferences.palette) ??
+    themePalettes[0];
+  const [panel, setPanel] = useState<Panel | null>(null);
+  const [name, setName] = useState(ledger.project.name);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [restore, setRestore] = useState<{
+    text: string;
+    backup: LedgerBackup;
+  } | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const accountLabel =
+    auth.user?.email?.trim() ||
+    auth.user?.phone?.trim() ||
+    t("নিজের অ্যাকাউন্ট");
+  const phoneAccount = Boolean(auth.user?.phone && !auth.user?.email);
+  const activePanel = restore ? "restore" : panel;
+  const themeName = t(
+    preferences.theme === "dark"
+      ? "গভীর রাত"
+      : preferences.theme === "system"
+        ? "ফোনের সঙ্গে"
+        : "দিনের আলো",
+  );
+  const ThemeIcon =
+    preferences.theme === "dark"
+      ? Moon
+      : preferences.theme === "system"
+        ? DeviceMobile
+        : Sun;
+  const openPanel = (value: Panel) => {
+    setError("");
+    if (value === "name") setName(ledger.project.name);
+    setPanel(value);
+  };
+  const closePanel = () => {
+    if (busy) return;
+    setError("");
+    if (restore) {
+      setRestore(null);
+      setConfirmed(false);
+    } else setPanel(null);
+  };
+  const action = async (callback: () => Promise<void>) => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await callback();
+    } catch (error) {
+      setError(
+        t(
+          error instanceof Error &&
+            error.message === "payment_purpose_would_be_lost"
+            ? "এই কপিতে টাকার কারণের আগের তথ্য নেই। নতুন কপি বেছে নিন।"
+            : error instanceof Error &&
+                error.message === "work_history_would_be_lost"
+              ? "এই কপিতে কাজের আগের তথ্য নেই। ইতিহাস রাখতে নতুন কপি বেছে নিন।"
+              : "কাজটি পুরো শেষ হয়নি। আবার চেষ্টা করুন।",
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const appearance = (change: Partial<Preferences>) => {
+    const next = { ...preferences, ...change };
+    setPreferences(next);
+    savePreferences(change);
+    applyTheme(next.theme);
+    applyPalette(next.palette);
+  };
+  const loadBackup = (file?: File) => {
+    if (!file) return;
+    void action(async () => {
+      if (file.size > 100 * 1024 * 1024) throw new Error("backup_too_large");
+      const text = await file.text();
+      const backup = parseBackup(text);
+      if (backup.ledger.isDemo !== (mode === "demo"))
+        throw new Error("workspace_mode_mismatch");
+      setRestore({ text, backup });
+      setConfirmed(false);
+    });
+  };
+  const status =
+    mode === "demo"
+      ? t("নমুনা খাতা")
+      : state.conflict
+        ? t("হিসাব মিলিয়ে নিন")
+        : auth.status === "offline"
+          ? t("এখন ইন্টারনেট নেই")
+          : state.pending
+            ? t("সংযোগ পেলে হিসাব পাঠানো হবে")
+            : state.lastSyncedAt
+              ? t("হিসাব নিরাপদে সংরক্ষিত")
+              : t("ফোনে সংরক্ষিত");
+  const panelTitle = restore
+    ? t("আগের কপি থেকে খাতা ফিরিয়ে আনুন")
+    : t(
+        panel === "appearance"
+          ? "নিজের মতো সাজান"
+          : panel === "language"
+            ? "ভাষা"
+            : panel === "name"
+              ? "খাতার নাম"
+              : panel === "backup"
+                ? "হিসাবের কপি"
+                : panel === "sync"
+                  ? "সংরক্ষণের অবস্থা"
+                  : panel === "account"
+                    ? "অ্যাকাউন্ট"
+                    : "ফোনে অ্যাপ রাখুন",
+      );
+  const sheetError = error ? (
+    <p className="settings-error" role="alert">
+      <Warning size={19} />
+      {error}
+    </p>
+  ) : null;
+  const pending = Boolean(
+    state.pending || state.conflict || auth.status === "offline",
+  );
+  return (
+    <div className="settings-page page-content">
+      <header className="page-heading settings-page-heading">
+        <div>
+          <h1>{t("সেটিংস")}</h1>
+          <p>{t("আপনার খাতা, আপনার পছন্দ।")}</p>
+        </div>
+        <span className="settings-heading-mark" aria-hidden="true">
+          <Palette size={24} weight="duotone" />
+        </span>
+      </header>
+      <section className="settings-profile">
+        <span className="settings-avatar">
+          <House size={30} weight="duotone" />
+        </span>
+        <div className="settings-profile-copy">
+          <p className="settings-profile-label">
+            {t(mode === "demo" ? "নমুনা খাতা" : "আপনার খাতা")}
+          </p>
+          <h2>{ledger.project.name}</h2>
+          <p className="settings-profile-account">
+            {mode === "demo" ? t("নমুনা হিসাব দেখছেন") : accountLabel}
+          </p>
+          <span className={`settings-sync ${pending ? "is-pending" : ""}`}>
+            {auth.status === "offline" ? (
+              <CloudSlash size={14} />
+            ) : (
+              <CloudCheck size={14} />
+            )}{" "}
+            {status}
+          </span>
+        </div>
+        <button
+          className="settings-profile-edit"
+          type="button"
+          onClick={() => openPanel("name")}
+          aria-label={t("খাতার নাম বদলান")}
+        >
+          <PencilSimple size={19} />
+        </button>
+      </section>
+      {mode === "real" && state.conflict && (
+        <button
+          className="settings-conflict-notice"
+          onClick={() => openPanel("sync")}
+        >
+          <Warning size={23} weight="duotone" />
+          <span>
+            <strong>{t("এই ফোন ও অনলাইনের হিসাব আলাদা হয়েছে।")}</strong>
+            <small>{t("হিসাব মিলিয়ে নিন")}</small>
+          </span>
+          <CaretRight size={17} />
+        </button>
+      )}
+      <div className="settings-dashboard">
+        <section
+          className="settings-group settings-personal-group"
+          aria-labelledby="settings-preferences-title"
+        >
+          <h2 id="settings-preferences-title">{t("আপনার পছন্দ")}</h2>
+          <button
+            className="settings-appearance-card"
+            type="button"
+            aria-label={t("রং ও সাজ")}
+            onClick={() => openPanel("appearance")}
+          >
+            <span className="settings-appearance-card-top">
+              <span className="settings-row-icon is-violet">
+                <Palette size={21} weight="duotone" />
+              </span>
+              <span className="settings-appearance-card-title">
+                <strong>{t("রং ও সাজ")}</strong>
+                <small>{t("নিজের মতো সাজান")}</small>
+              </span>
+              <CaretRight size={17} />
+            </span>
+            <span className="settings-appearance-scene" aria-hidden="true">
+              <span className="settings-scene-lines">
+                <i />
+                <i />
+                <i />
+              </span>
+              <span className="settings-scene-swatch">
+                {selectedPalette.colors.map((color) => (
+                  <i key={color} style={{ background: color }} />
+                ))}
+              </span>
+            </span>
+            <span className="settings-appearance-card-bottom">
+              <strong>{t(selectedPalette.label)}</strong>
+              <span>
+                <ThemeIcon size={14} />
+                {themeName}
+              </span>
+            </span>
+          </button>
+          <div className="settings-group-card">
+            <SettingsRow
+              title={t("ভাষা")}
+              value={language === "bn" ? t("বাংলা") : t("English")}
+              icon={<Globe size={21} weight="duotone" />}
+              tone="blue"
+              onClick={() => openPanel("language")}
+            />
+            <SettingsRow
+              title={t("খাতার নাম")}
+              description={ledger.project.name}
+              icon={<BookOpen size={21} weight="duotone" />}
+              tone="amber"
+              onClick={() => openPanel("name")}
+            />
+          </div>
+        </section>
+        <div className="settings-data-column">
+          <section
+            className="settings-group"
+            aria-labelledby="settings-data-title"
+          >
+            <h2 id="settings-data-title">{t("হিসাব ও সংরক্ষণ")}</h2>
+            <div className="settings-group-card">
+              <SettingsRow
+                title={t("হিসাবের কপি")}
+                description={t("কপি নামান বা আগের কপি খুলুন")}
+                icon={<ShieldCheck size={22} weight="duotone" />}
+                tone="green"
+                onClick={() => openPanel("backup")}
+              />
+              {mode === "real" && (
+                <SettingsRow
+                  title={t("সংরক্ষণের অবস্থা")}
+                  description={status}
+                  icon={
+                    auth.status === "offline" ? (
+                      <CloudSlash size={21} weight="duotone" />
+                    ) : (
+                      <CloudCheck size={21} weight="duotone" />
+                    )
+                  }
+                  tone={pending ? "amber" : "blue"}
+                  onClick={() => openPanel("sync")}
+                />
+              )}
+              <SettingsRow
+                title={t("পুরোনো হিসাব ঠিক করি")}
+                description={t("আগের খাতার তথ্য দেখুন")}
+                icon={<PencilSimple size={21} weight="duotone" />}
+                tone="amber"
+                onClick={() => go("/review")}
+              />
+            </div>
+          </section>
+          <section
+            className="settings-group"
+            aria-labelledby="settings-more-title"
+          >
+            <h2 id="settings-more-title">{t("আরও কিছু")}</h2>
+            <div className="settings-group-card">
+              {mode === "real" && (
+                <SettingsRow
+                  title={t("অ্যাকাউন্ট")}
+                  description={t("লগইন ও গোপনীয়তা")}
+                  icon={<LockKey size={21} weight="duotone" />}
+                  tone="violet"
+                  onClick={() => openPanel("account")}
+                />
+              )}
+              <SettingsRow
+                title={t("ফোনে অ্যাপ রাখুন")}
+                description={t("এক ট্যাপেই নিজের খাতা খুলুন")}
+                icon={<DeviceMobile size={21} weight="duotone" />}
+                tone="blue"
+                onClick={() => openPanel("install")}
+              />
+            </div>
+          </section>
+          {mode === "demo" && (
+            <button
+              className="settings-own-notebook"
+              type="button"
+              onClick={() => navigate(auth.user ? "/" : "/login")}
+            >
+              <House size={20} weight="duotone" />
+              <span>{t("নিজের খাতা খুলুন")}</span>
+              <ArrowUpRight size={17} />
+            </button>
+          )}
+        </div>
+      </div>
+      <p className="settings-footer-note">
+        <ShieldCheck size={14} />
+        {t("নিজের হিসাব, নিজের কাছে।")}
+      </p>
+      <input
+        ref={input}
+        type="file"
+        accept="application/json,.json"
+        hidden
+        onChange={(event) => {
+          loadBackup(event.target.files?.[0]);
+          event.target.value = "";
+        }}
+      />
+      {activePanel && (
+        <Sheet
+          key={activePanel}
+          title={panelTitle}
+          subtitle={restore ? t("ফাইলটি দেখে নিশ্চিত হয়ে নিন।") : undefined}
+          onClose={closePanel}
+        >
+          <div className="settings-sheet-body">
+            {restore ? (
+              <>
+                <div className="settings-restore-summary">
+                  <strong>{restore.backup.ledger.project.name}</strong>
+                  <p>
+                    {t("{{count}}টি হিসাব", {
+                      count: number(restore.backup.ledger.entries.length),
+                    })}
+                  </p>
+                  <p>
+                    {t("মোট খরচ")}:{" "}
+                    {money(summarize(restore.backup.ledger).cost)}
+                  </p>
+                </div>
+                <p className="settings-sheet-text">
+                  {t(
+                    "এতে বর্তমান খাতার জায়গায় এই কপির হিসাব আসবে। আগের হিসাবের একটি উদ্ধার কপি ফোনে রাখা হবে।",
+                  )}
+                </p>
+                <label className="settings-confirm">
+                  <input
+                    type="checkbox"
+                    checked={confirmed}
+                    onChange={(event) => setConfirmed(event.target.checked)}
+                  />
+                  {t("আমি ফাইলটি দেখে এই খাতা ফিরিয়ে আনতে চাই।")}
+                </label>
+                {sheetError}
+                <button
+                  className="primary-button settings-sheet-primary"
+                  disabled={!confirmed || busy}
+                  onClick={() =>
+                    void action(async () => {
+                      await storage.importBackup(restore.text, {
+                        replace: true,
+                      });
+                      setRestore(null);
+                      setPanel(null);
+                      notify(t("খাতা ফিরিয়ে আনা হয়েছে"));
+                      void state.sync().catch(() => {});
+                    })
+                  }
+                >
+                  {busy ? t("অপেক্ষা করুন…") : t("খাতা ফিরিয়ে আনুন")}
+                </button>
+              </>
+            ) : panel === "appearance" ? (
+              <SettingsAppearance
+                preferences={preferences}
+                onChange={appearance}
+              />
+            ) : panel === "language" ? (
+              <>
+                <p className="settings-sheet-intro">
+                  {t("যে ভাষায় হিসাব রাখতে চান।")}
+                </p>
+                <div className="settings-language">
+                  {(
+                    [
+                      ["bn", "বাংলা"],
+                      ["en", "English"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={language === value}
+                      className={language === value ? "is-selected" : ""}
+                      onClick={() => setLanguage(value)}
+                    >
+                      <span
+                        className="settings-language-glyph"
+                        aria-hidden="true"
+                      >
+                        {value === "bn" ? "অ" : "A"}
+                      </span>
+                      <strong>{t(label)}</strong>
+                      {language === value ? (
+                        <Check size={19} weight="bold" />
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : panel === "name" ? (
+              <>
+                <p className="settings-sheet-intro">
+                  {t("আপনার পছন্দের একটি নাম দিন।")}
+                </p>
+                <form
+                  className="settings-name"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (name.trim())
+                      void action(async () => {
+                        await save((current) => ({
+                          ...current,
+                          project: { ...current.project, name: name.trim() },
+                        }));
+                        setPanel(null);
+                      });
+                  }}
+                >
+                  <label htmlFor="notebook-name">{t("খাতার নাম")}</label>
+                  <input
+                    id="notebook-name"
+                    className="field-input"
+                    disabled={busy}
+                    value={name}
+                    maxLength={200}
+                    required
+                    autoFocus
+                    onChange={(event) => setName(event.target.value)}
+                  />
+                  {sheetError}
+                  <button
+                    className="primary-button settings-sheet-primary"
+                    disabled={busy || !name.trim()}
+                  >
+                    <FloppyDisk size={18} />
+                    {busy ? t("অপেক্ষা করুন…") : t("রাখুন")}
+                  </button>
+                </form>
+              </>
+            ) : panel === "backup" ? (
+              <>
+                <div className="settings-sheet-callout">
+                  <span className="settings-row-icon is-green">
+                    <ShieldCheck size={25} weight="duotone" />
+                  </span>
+                  <p>{t("ভাউচারসহ পুরো খাতার একটি কপি নিজের কাছে রাখুন।")}</p>
+                </div>
+                <div className="settings-sheet-actions">
+                  <SettingsRow
+                    title={t("কপি নামান")}
+                    description={t("এই মুহূর্তের পুরো হিসাব")}
+                    icon={<ArrowDown size={21} />}
+                    tone="green"
+                    disabled={busy}
+                    onClick={() =>
+                      void action(async () => {
+                        const backup = await storage.exportBackup();
+                        saveFile(backup, `bari-khata-${todayDhaka()}.json`);
+                        notify(t("খাতার কপি নামানো হয়েছে"));
+                      })
+                    }
+                  />
+                  <SettingsRow
+                    title={t("আগের কপি খুলুন")}
+                    description={t("ফাইল বেছে আগে দেখে নিন")}
+                    icon={<ArrowUp size={21} />}
+                    tone="blue"
+                    disabled={busy}
+                    onClick={() => input.current?.click()}
+                  />
+                </div>
+                <p className="settings-hint">
+                  {t("এই ফাইলে ব্যক্তিগত হিসাব থাকে। নিরাপদ জায়গায় রাখুন।")}
+                </p>
+                {sheetError}
+              </>
+            ) : panel === "sync" ? (
+              <>
+                <div
+                  className={`settings-storage-status ${pending ? "is-pending" : ""}`}
+                >
+                  <span
+                    className={`settings-row-icon ${pending ? "is-amber" : "is-green"}`}
+                  >
+                    {auth.status === "offline" ? (
+                      <CloudSlash size={28} weight="duotone" />
+                    ) : (
+                      <CloudCheck size={28} weight="duotone" />
+                    )}
+                  </span>
+                  <strong>{status}</strong>
+                  <p>{t("আপনার হিসাব এই ফোনেও সংরক্ষিত থাকে।")}</p>
+                  {state.lastSyncedAt && (
+                    <small>
+                      {t("শেষ সংরক্ষণ: {{date}}", {
+                        date: date(state.lastSyncedAt),
+                      })}
+                    </small>
+                  )}
+                </div>
+                {isCloudConfigured && (
+                  <button
+                    className="primary-button settings-sheet-primary"
+                    type="button"
+                    disabled={busy || auth.status === "offline"}
+                    onClick={() =>
+                      void action(async () => {
+                        const result = await state.sync();
+                        notify(
+                          result.status === "synced"
+                            ? t("হিসাব মিলিয়ে নেওয়া হয়েছে")
+                            : t(
+                                "এখন মিলিয়ে নেওয়া যায়নি। ফোনের হিসাব রাখা আছে।",
+                              ),
+                        );
+                      })
+                    }
+                  >
+                    <CloudCheck size={20} />
+                    {busy ? t("অপেক্ষা করুন…") : t("এখন মিলিয়ে নিন")}
+                  </button>
+                )}
+                {state.conflict && (
+                  <div className="settings-conflict">
+                    <strong>{t("এই ফোন ও অনলাইনের হিসাব আলাদা হয়েছে।")}</strong>
+                    <p>
+                      {t("একটি কপি বেছে নেওয়ার আগে খাতার কপি নামিয়ে রাখুন।")}
+                    </p>
+                    <button
+                      className="secondary-button"
+                      disabled={busy}
+                      onClick={() => openPanel("backup")}
+                    >
+                      <ArrowDown size={18} />
+                      {t("হিসাবের কপি")}
+                    </button>
+                    <button
+                      className="secondary-button"
+                      disabled={busy || auth.status === "offline"}
+                      onClick={() =>
+                        void action(async () => {
+                          await resolveCloudConflict("use-cloud");
+                          notify(t("অনলাইনের হিসাব নেওয়া হয়েছে"));
+                        })
+                      }
+                    >
+                      {t("অনলাইনের কপি নিন")}
+                    </button>
+                    <button
+                      className="secondary-button"
+                      disabled={busy || auth.status === "offline"}
+                      onClick={() =>
+                        void action(async () => {
+                          await resolveCloudConflict("keep-local");
+                          notify(t("ফোনের হিসাব রাখা হয়েছে"));
+                        })
+                      }
+                    >
+                      {t("এই ফোনের কপি রাখুন")}
+                    </button>
+                  </div>
+                )}
+                {sheetError}
+              </>
+            ) : panel === "account" ? (
+              <>
+                <div className="settings-account-line">
+                  <span className="settings-row-icon is-violet">
+                    {phoneAccount ? (
+                      <Phone size={23} weight="duotone" />
+                    ) : (
+                      <Envelope size={23} weight="duotone" />
+                    )}
+                  </span>
+                  <div>
+                    <small>{t("নিজের অ্যাকাউন্ট")}</small>
+                    <strong>{accountLabel}</strong>
+                  </div>
+                </div>
+                <div className="settings-privacy-note">
+                  <ShieldCheck size={22} weight="duotone" />
+                  <div>
+                    <strong>{t("প্রত্যেকের হিসাব আলাদা")}</strong>
+                    <p>
+                      {t(
+                        "নিজের অ্যাকাউন্ট দিয়ে আপনার ব্যক্তিগত খাতা খুলবেন। প্রত্যেকের হিসাব আলাদা থাকে।",
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <p className="settings-hint">
+                  {t(
+                    "একবার লগইন করে হিসাব নামানো থাকলে ইন্টারনেট ছাড়াও ব্যবহার করতে পারবেন। লগআউট করলে আবার লগইন করতে হবে।",
+                  )}
+                </p>
+                {sheetError}
+                <button
+                  className="settings-signout"
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void action(async () => {
+                      try {
+                        await auth.signOut();
+                      } finally {
+                        navigate("/login", { replace: true });
+                      }
+                    })
+                  }
+                >
+                  <SignOut size={21} />
+                  {t("লগআউট")}
+                </button>
+              </>
+            ) : panel === "install" ? (
+              <>
+                <div className="settings-install-hero">
+                  <DeviceMobile size={48} weight="duotone" />
+                  <h3>{t("আইফোনে অ্যাপের মতো রাখুন")}</h3>
+                  <p>{t("এক ট্যাপেই নিজের খাতা খুলুন")}</p>
+                </div>
+                <ol className="settings-install-steps">
+                  <li>
+                    <span>{number(1)}</span>
+                    {t("Safari-তে বাড়ির খাতা খুলুন।")}
+                  </li>
+                  <li>
+                    <span>{number(2)}</span>
+                    {t("শেয়ার বোতামে চাপ দিন।")}
+                  </li>
+                  <li>
+                    <span>{number(3)}</span>
+                    {t("‘হোম স্ক্রিনে যোগ করুন’ বেছে নিন।")}
+                  </li>
+                </ol>
+              </>
+            ) : null}
+          </div>
+        </Sheet>
+      )}
+    </div>
+  );
+}

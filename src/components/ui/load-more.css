@@ -1,0 +1,26 @@
+.list-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 12px 8px;
+}
+.list-load-more > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 24px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 550;
+}
+.list-load-more > button:hover {
+  background: var(--accent-soft);
+}
+.list-load-more > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}

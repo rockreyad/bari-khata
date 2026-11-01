@@ -1,0 +1,338 @@
+:root {
+  --light-bg: #f1f4f8;
+  --light-surface: #fcfdff;
+  --light-surface-muted: #e9eef5;
+  --light-text: #243247;
+  --light-muted: #53647a;
+  --light-line: #dce3ed;
+  --light-accent: #3e5879;
+  --light-accent-strong: #213555;
+  --light-accent-soft: #e2eaf5;
+  --light-hero-gradient: linear-gradient(120deg, #e0e9f5, #ede8e5 75%, #f5efe7);
+  --light-page-wash:
+    radial-gradient(ellipse at 12% 0%, #dce6f184, transparent 58%),
+    linear-gradient(135deg, #f1f4f8, #f6f4f0);
+  --light-primary-gradient: linear-gradient(120deg, #213555, #3e5879);
+  --light-primary-hover: linear-gradient(120deg, #1b2d49, #354d6b);
+  --dark-accent: #adc4e5;
+  --dark-accent-strong: #c6d7ee;
+  --dark-accent-soft: #273141;
+  --dark-primary-gradient: linear-gradient(120deg, #adc4e5, #c3d3e9);
+  --dark-primary-hover: linear-gradient(120deg, #bed0e9, #d1def0);
+  --dark-hero-gradient: linear-gradient(120deg, #242c38, #22262c 62%, #2b2824);
+  --dark-page-wash:
+    radial-gradient(ellipse at 8% 0%, #adc4e508, transparent 58%), #101113;
+  --bg: var(--light-bg);
+  --surface: var(--light-surface);
+  --surface-muted: var(--light-surface-muted);
+  --text: var(--light-text);
+  --muted: var(--light-muted);
+  --line: var(--light-line);
+  --accent: var(--light-accent);
+  --accent-strong: var(--light-accent-strong);
+  --accent-soft: var(--light-accent-soft);
+  --primary-gradient: var(--light-primary-gradient);
+  --primary-gradient-hover: var(--light-primary-hover);
+  --primary-ink: #fff;
+  --hero-gradient: var(--light-hero-gradient);
+  --page-wash: var(--light-page-wash);
+  --surface-gradient: linear-gradient(
+    145deg,
+    var(--surface),
+    color-mix(in srgb, var(--accent-soft) 20%, var(--surface))
+  );
+  --danger: #b83c4e;
+  --warning: #90601f;
+  --success: #267b58;
+  --info: #4773ac;
+  --purple: #7655ae;
+  --green: var(--accent);
+  --green-dark: var(--accent-strong);
+  --lime: var(--accent-soft);
+  --shadow: 0 5px 24px #25334a06;
+  --radius: 22px;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--bg);
+  color-scheme: light;
+}
+:root[data-palette="forest"] {
+  --light-bg: #f2f4ed;
+  --light-surface: #fdfef9;
+  --light-surface-muted: #e9ede2;
+  --light-text: #2c3930;
+  --light-muted: #576450;
+  --light-line: #dce1d5;
+  --light-accent: #3f4f44;
+  --light-accent-strong: #2c3930;
+  --light-accent-soft: #e1e9db;
+  --light-hero-gradient: linear-gradient(120deg, #dfe9dc, #e7e8d8 65%, #eee6d8);
+  --light-page-wash:
+    radial-gradient(ellipse at 12% 0%, #dce6d080, transparent 58%),
+    linear-gradient(135deg, #f2f4ed, #f7f4eb);
+  --light-primary-gradient: linear-gradient(120deg, #2c3930, #526951);
+  --light-primary-hover: linear-gradient(120deg, #253028, #455a44);
+  --dark-accent: #b1c7ab;
+  --dark-accent-strong: #cddbc7;
+  --dark-accent-soft: #2b342c;
+  --dark-primary-gradient: linear-gradient(120deg, #b1c7ab, #ced9bd);
+  --dark-primary-hover: linear-gradient(120deg, #c3d4bb, #dce4d0);
+  --dark-hero-gradient: linear-gradient(120deg, #282f29, #232725 62%, #2d2923);
+  --dark-page-wash:
+    radial-gradient(ellipse at 8% 0%, #b1c7ab07, transparent 58%), #101113;
+}
+:root[data-palette="violet"] {
+  --light-bg: #f5f1f8;
+  --light-surface: #fffaff;
+  --light-surface-muted: #eee7f2;
+  --light-text: #3c2946;
+  --light-muted: #6b5874;
+  --light-line: #e5dce9;
+  --light-accent: #70507d;
+  --light-accent-strong: #441752;
+  --light-accent-soft: #eee1f2;
+  --light-hero-gradient: linear-gradient(120deg, #e8def1, #f1e0ed 65%, #f8e5ec);
+  --light-page-wash:
+    radial-gradient(ellipse at 12% 0%, #e4d3ee80, transparent 58%),
+    linear-gradient(135deg, #f5f1f8, #fcf2f5);
+  --light-primary-gradient: linear-gradient(120deg, #441752, #785789);
+  --light-primary-hover: linear-gradient(120deg, #391345, #684a78);
+  --dark-accent: #cdb2df;
+  --dark-accent-strong: #e1cbe9;
+  --dark-accent-soft: #342b3c;
+  --dark-primary-gradient: linear-gradient(120deg, #cdb2df, #e8c6d5);
+  --dark-primary-hover: linear-gradient(120deg, #dcc5e9, #efd4df);
+  --dark-hero-gradient: linear-gradient(120deg, #302938, #27252c 62%, #33272d);
+  --dark-page-wash:
+    radial-gradient(ellipse at 8% 0%, #cdb2df08, transparent 58%), #101113;
+}
+:root[data-palette="sunset"] {
+  --light-bg: #faf3eb;
+  --light-surface: #fffdf8;
+  --light-surface-muted: #f3e8db;
+  --light-text: #493126;
+  --light-muted: #735d4c;
+  --light-line: #eadfce;
+  --light-accent: #9c4d20;
+  --light-accent-strong: #723412;
+  --light-accent-soft: #f8e5d2;
+  --light-hero-gradient: linear-gradient(120deg, #f8e1cb, #f9e8cf 65%, #fff0d5);
+  --light-page-wash:
+    radial-gradient(ellipse at 12% 0%, #f3d5b380, transparent 58%),
+    linear-gradient(135deg, #faf3eb, #fff7e8);
+  --light-primary-gradient: linear-gradient(120deg, #803d18, #a95424);
+  --light-primary-hover: linear-gradient(120deg, #6c3213, #95471c);
+  --dark-accent: #edb687;
+  --dark-accent-strong: #f5cfa9;
+  --dark-accent-soft: #392e26;
+  --dark-primary-gradient: linear-gradient(120deg, #edb687, #f4d19d);
+  --dark-primary-hover: linear-gradient(120deg, #f3c59e, #f7dfb6);
+  --dark-hero-gradient: linear-gradient(120deg, #332c25, #282623 62%, #342c23);
+  --dark-page-wash:
+    radial-gradient(ellipse at 8% 0%, #edb68708, transparent 58%), #101113;
+}
+:root[data-theme="dark"] {
+  --bg: #101113;
+  --surface: #191b1f;
+  --surface-muted: #23262b;
+  --text: #e5e7eb;
+  --muted: #a4a9b4;
+  --line: #33363e;
+  --accent: var(--dark-accent);
+  --accent-strong: var(--dark-accent-strong);
+  --accent-soft: var(--dark-accent-soft);
+  --primary-gradient: var(--dark-primary-gradient);
+  --primary-gradient-hover: var(--dark-primary-hover);
+  --primary-ink: #17191d;
+  --hero-gradient: var(--dark-hero-gradient);
+  --page-wash: var(--dark-page-wash);
+  --danger: #f0909a;
+  --warning: #e8b56f;
+  --success: #7cc9a6;
+  --info: #91b5ed;
+  --purple: #c2a5ee;
+  --shadow: 0 6px 26px #00000020;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101113;
+    --surface: #191b1f;
+    --surface-muted: #23262b;
+    --text: #e5e7eb;
+    --muted: #a4a9b4;
+    --line: #33363e;
+    --accent: var(--dark-accent);
+    --accent-strong: var(--dark-accent-strong);
+    --accent-soft: var(--dark-accent-soft);
+    --primary-gradient: var(--dark-primary-gradient);
+    --primary-gradient-hover: var(--dark-primary-hover);
+    --primary-ink: #17191d;
+    --hero-gradient: var(--dark-hero-gradient);
+    --page-wash: var(--dark-page-wash);
+    --danger: #f0909a;
+    --warning: #e8b56f;
+    --success: #7cc9a6;
+    --info: #91b5ed;
+    --purple: #c2a5ee;
+    --shadow: 0 6px 26px #00000020;
+    color-scheme: dark;
+  }
+}
+body {
+  background: var(--page-wash);
+  background-attachment: fixed;
+}
+:root .app-sidebar {
+  background: var(--surface-gradient);
+}
+:root .app-topbar,
+:root .mobile-bottom-nav {
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+}
+:root .home-total-heading {
+  background: var(--hero-gradient);
+}
+:root .home-total-heading strong {
+  color: var(--accent-strong);
+}
+:root .primary-button,
+:root .brand-symbol,
+:root .mobile-add,
+:root .total-card,
+:root .calculator-apply {
+  color: var(--primary-ink);
+  background: var(--primary-gradient);
+}
+:root .primary-button:hover,
+:root .mobile-add:hover {
+  background: var(--primary-gradient-hover);
+}
+:root .auth-page {
+  background: var(--page-wash);
+}
+:root .auth-card {
+  background: var(--surface-gradient);
+  box-shadow: 0 24px 80px color-mix(in srgb, var(--accent) 7%, transparent);
+}
+:root .auth-brand {
+  color: var(--accent-strong);
+}
+:root .sidebar,
+:root .topbar {
+  background: var(--surface);
+}
+:root .mobile-nav {
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+}
+:root
+  :is(
+    .stat-card.warm,
+    .stat-card.sage,
+    .welcome,
+    .sidebar-tip,
+    .note-card,
+    .demo-banner,
+    .work-add,
+    .sync-status,
+    .settings-callout,
+    .entry-total,
+    .credit-hint
+  ) {
+  background: var(--accent-soft);
+  border-color: var(--line);
+}
+:root :is(.entry-row:hover, .list-header, .entry-summary, .segmented) {
+  background: var(--surface-muted);
+}
+:root :is(.nav-item.active, .entry-kind-grid button.active) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+:root .field-input {
+  border-color: var(--line);
+}
+:root :is(.entry-amount, .person-balance strong, .contract-data strong) {
+  color: var(--accent-strong);
+}
+:root
+  :is(
+    .danger-text,
+    .form-error,
+    .auth-error,
+    .calculator-error,
+    .app-action-menu-item.is-danger
+  ) {
+  color: var(--danger);
+}
+:root .auth-error {
+  background: color-mix(in srgb, var(--danger) 9%, var(--surface));
+}
+:root
+  :is(
+    .settings-sync,
+    .contact-credit,
+    .status-choices button.done,
+    .history-expense_credit .history-row-amount,
+    .history-refund .history-row-amount,
+    .auth-private svg,
+    .auth-illustration svg:last-child
+  ) {
+  color: var(--success);
+}
+:root
+  :is(
+    .settings-sync.is-pending,
+    .contact-due,
+    .status-choices button.ongoing,
+    .review-progress span,
+    .home-review-symbol,
+    .auth-registration-symbol.is-invalid
+  ) {
+  color: var(--warning);
+}
+:root .status-tag.ongoing,
+:root .review-dot,
+:root .callout-mark {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+}
+:root .status-tag.done {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, var(--surface));
+}
+:root .sync-indicator svg {
+  color: var(--success);
+}
+:root .sync-indicator.needs-attention svg {
+  color: var(--warning);
+}
+:root .home-review-symbol {
+  background: color-mix(in srgb, var(--warning) 11%, var(--surface));
+}
+:root :is(.review-heading-icon, .review-information svg, .review-summary-icon) {
+  color: var(--purple);
+}
+:root .contact-worker {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+}
+:root .contact-shop {
+  color: var(--info);
+  background: color-mix(in srgb, var(--info) 10%, var(--surface));
+}
+:root .contact-driver {
+  color: var(--purple);
+  background: color-mix(in srgb, var(--purple) 10%, var(--surface));
+}
+:root .calculator-top-keys button:first-child {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+}
+@media print {
+  :root,
+  body {
+    background: #fff;
+    color: #222;
+  }
+}

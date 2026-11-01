@@ -1,0 +1,56 @@
+.entry-work-shortcuts {
+  margin-bottom: 24px;
+  min-width: 0;
+}
+.entry-work-shortcuts h3 {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+.entry-shortcut-scroll {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding: 0 2px 12px;
+  overscroll-behavior-x: contain;
+}
+.entry-shortcut-scroll article {
+  flex: 0 0 240px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  padding: 14px;
+  scroll-snap-align: start;
+}
+.entry-shortcut-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+.entry-shortcut-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.entry-shortcut-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.entry-shortcut-actions button {
+  min-height: 42px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 650;
+}
+.entry-shortcut-actions button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

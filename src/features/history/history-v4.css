@@ -1,0 +1,126 @@
+.history-row-copy > .history-row-meta-v4 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.history-row-meta-v4 time {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.history-row-meta-v4 > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.detail-entity-link-v4 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--accent);
+  text-align: left;
+  min-height: 32px;
+  margin-block: -6px;
+  max-width: 100%;
+}
+.detail-entity-link-v4 strong {
+  color: inherit;
+}
+.detail-entity-link-v4 svg {
+  flex: none;
+}
+.detail-entity-link-v4:hover {
+  text-decoration: underline;
+}
+.detail-line-context-v4 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.review-warning-v4 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  padding: 13px 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line));
+  background: var(--accent-soft);
+  border-radius: 14px;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  line-height: 1.7;
+}
+.review-warning-v4 > span:last-child {
+  color: var(--accent);
+  white-space: nowrap;
+}
+.review-bulk-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.review-bulk-toolbar button {
+  font-size: 12px;
+  min-height: 44px;
+}
+.review-bulk-choice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.review-bulk-choice > label {
+  flex: none;
+  width: 42px;
+  min-height: 64px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.review-bulk-choice input,
+.review-bulk-all input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.review-bulk-choice > .history-list {
+  flex: 1;
+  min-width: 0;
+}
+.review-bulk-choice + .review-bulk-choice {
+  border-top: 1px solid var(--line);
+}
+.review-bulk-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.review-bulk-help {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.review-bulk-preview {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-muted);
+  font-size: 12px;
+  line-height: 1.9;
+}
+@media (max-width: 760px) {
+  .review-warning-v4 {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+}

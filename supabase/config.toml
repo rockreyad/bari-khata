@@ -1,0 +1,70 @@
+project_id = "bari-khata"
+
+[api]
+enabled = true
+port = 55431
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 55432
+shadow_port = 55430
+major_version = 17
+
+[db.migrations]
+enabled = true
+
+[db.seed]
+enabled = false
+
+[studio]
+enabled = true
+port = 55433
+api_url = "http://127.0.0.1"
+
+[local_smtp]
+enabled = true
+port = 55434
+
+[storage]
+enabled = true
+file_size_limit = "10MiB"
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:4180"
+additional_redirect_urls = [
+  "http://localhost:4180", "http://localhost:5180", "http://127.0.0.1:5180", "http://127.0.0.1:4180",
+  "http://localhost:4180/auth/confirm", "http://127.0.0.1:4180/auth/confirm",
+  "http://localhost:5180/auth/confirm", "http://127.0.0.1:5180/auth/confirm",
+  "http://localhost:5186/auth/confirm", "http://127.0.0.1:5186/auth/confirm"
+]
+jwt_expiry = 3600
+enable_signup = true
+minimum_password_length = 8
+
+[auth.rate_limit]
+email_sent = 30
+sign_in_sign_ups = 30
+token_verifications = 30
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+max_frequency = "1m"
+otp_expiry = 3600
+
+[auth.email.template.confirmation]
+subject = "বাড়ির খাতা — ইমেইল নিশ্চিত করুন"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.sms]
+enable_signup = true
+enable_confirmations = true
+
+[analytics]
+enabled = false
+
+[edge_runtime]
+enabled = false

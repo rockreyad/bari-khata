@@ -1,0 +1,803 @@
+.app-select,
+.app-date-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 47px;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 11px 13px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background 0.15s;
+}
+.app-select > span:first-child,
+.app-date-trigger > span:first-of-type {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.app-select-caret {
+  color: var(--muted);
+  flex: none;
+  display: inline-flex;
+  transition: transform 0.18s;
+}
+.app-select[data-state="open"] .app-select-caret {
+  transform: rotate(180deg);
+}
+.app-select:hover:not(:disabled),
+.app-date-trigger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.app-select:focus-visible,
+.app-date-trigger:focus-visible {
+  border-color: var(--field-focus-border, var(--accent));
+  outline: none;
+  box-shadow: 0 0 0 3px var(--field-focus-halo, var(--accent-soft));
+}
+.app-select[data-state="open"],
+.app-date-trigger[data-state="open"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.app-select:disabled,
+.app-date-trigger:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.app-select[aria-invalid="true"],
+.app-date-trigger[aria-invalid="true"] {
+  border-color: #d45963;
+}
+.app-select-popup {
+  z-index: 280;
+  min-width: var(--radix-select-trigger-width);
+  max-width: min(440px, calc(100vw - 24px));
+  max-height: min(380px, var(--radix-select-content-available-height));
+  padding: 5px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--surface);
+  box-shadow:
+    0 12px 38px #091c3330,
+    0 3px 9px #091c3309;
+  animation: app-control-in 0.15s ease-out;
+  transform-origin: var(--radix-select-content-transform-origin);
+  color: var(--text);
+}
+.app-select-options {
+  padding: 1px;
+}
+.app-select-option {
+  min-height: 41px;
+  position: relative;
+  padding: 10px 37px 10px 12px;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1.65;
+  outline: none;
+  cursor: pointer;
+  user-select: none;
+  overflow-wrap: anywhere;
+}
+.app-select-option[data-highlighted] {
+  background: var(--surface-muted);
+}
+.app-select-option[data-state="checked"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.app-select-option[data-disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+.app-select-check {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+}
+.app-select-group {
+  padding: 10px 12px 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+}
+.app-select-scroll {
+  display: grid;
+  place-items: center;
+  height: 24px;
+  color: var(--muted);
+  background: var(--surface);
+}
+.app-action-menu {
+  z-index: 270;
+  min-width: 205px;
+  max-width: calc(100vw - 28px);
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  box-shadow: 0 12px 35px #091c3326;
+  color: var(--text);
+  animation: app-control-in 0.15s ease-out;
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin);
+}
+.app-action-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 43px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  outline: none;
+  font-size: 13px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.app-action-menu-item[data-highlighted] {
+  background: var(--surface-muted);
+}
+.app-action-menu-item.is-danger {
+  color: #ca4657;
+}
+.app-action-menu-item[data-disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+.app-menu-item-icon {
+  display: inline-flex;
+  color: var(--muted);
+}
+.app-menu-item-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.app-menu-separator {
+  height: 1px;
+  margin: 5px 7px;
+  background: var(--line);
+}
+.app-date-trigger {
+  justify-content: flex-start;
+  font-variant-numeric: tabular-nums;
+}
+.app-date-trigger > svg {
+  color: var(--accent);
+  flex: none;
+}
+.app-date-trigger.is-empty {
+  color: var(--muted);
+}
+.date-trigger-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--line);
+  flex: none;
+  margin-left: auto;
+}
+.app-date-popup {
+  z-index: 260;
+  width: 334px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 28px);
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: 0 14px 48px #091c332d;
+  padding: 17px;
+  color: var(--text);
+  animation: app-control-in 0.15s ease-out;
+  transform-origin: var(--radix-popover-content-transform-origin);
+}
+.app-date-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.control-popup-close {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  padding: 0;
+  background: var(--surface-muted);
+  color: var(--muted);
+  flex: none;
+}
+.calendar-navigation {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 89px 30px;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.calendar-navigation .app-select {
+  min-height: 36px;
+  height: 36px;
+  padding: 6px 7px;
+  font-size: 12px;
+  border-color: transparent;
+  background: var(--surface-muted);
+  border-radius: 9px;
+  gap: 4px;
+}
+.calendar-navigation .app-select svg {
+  width: 11px;
+}
+.calendar-arrow {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  width: 30px;
+  height: 34px;
+  border-radius: 9px;
+  color: var(--muted);
+}
+.calendar-arrow:hover:not(:disabled) {
+  background: var(--surface-muted);
+  color: var(--accent);
+}
+.calendar-arrow:disabled {
+  opacity: 0.25;
+}
+.calendar-native-caption {
+  display: none;
+}
+.calendar-grid {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 3px;
+  table-layout: fixed;
+}
+.calendar-weekday {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+  text-align: center;
+  height: 28px;
+}
+.calendar-day {
+  padding: 0;
+  height: 39px;
+  width: 14.285%;
+  text-align: center;
+}
+.calendar-day-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 36px;
+  width: 36px;
+  margin: auto;
+  padding: 0;
+  border-radius: 11px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: transparent;
+}
+.calendar-day-button:hover {
+  background: var(--surface-muted);
+  color: var(--accent);
+}
+.calendar-day-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.calendar-today:not(.calendar-selected) .calendar-day-button {
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 650;
+}
+.calendar-today .calendar-day-button::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.calendar-selected .calendar-day-button {
+  background: var(--accent);
+  color: var(--surface);
+  box-shadow: 0 3px 9px color-mix(in srgb, var(--accent) 25%, transparent);
+  font-weight: 650;
+}
+.calendar-outside:not(.calendar-selected) .calendar-day-button {
+  color: var(--muted);
+  opacity: 0.45;
+}
+.calendar-disabled .calendar-day-button {
+  opacity: 0.22;
+  cursor: default;
+}
+.calendar-footer {
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.calendar-footer button {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  border-radius: 8px;
+  min-height: 32px;
+  padding: 4px 10px;
+}
+.calendar-footer button:first-child {
+  background: var(--accent-soft);
+}
+.money-control {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  position: relative;
+  vertical-align: middle;
+}
+.money-control > input {
+  width: 100%;
+  padding-right: 49px !important;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.money-control.is-disabled {
+  opacity: 0.55;
+}
+.money-calculator-trigger {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  padding: 0;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
+.money-calculator-trigger:hover {
+  background: var(--accent-soft);
+}
+.amount-field > div .money-control {
+  flex: 1;
+  font: inherit;
+  color: inherit;
+}
+.amount-field .money-calculator-trigger {
+  width: 37px;
+  height: 37px;
+  border-radius: 11px;
+}
+.money-calculator {
+  z-index: 260;
+  width: 315px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 21px;
+  background: var(--surface);
+  padding: 16px;
+  color: var(--text);
+  box-shadow: 0 15px 48px #091c3330;
+  animation: app-control-in 0.15s ease-out;
+  transform-origin: var(--radix-popover-content-transform-origin);
+}
+.calculator-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 13px;
+}
+.calculator-heading > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.calculator-heading > span svg {
+  color: var(--accent);
+}
+.calculator-display {
+  display: grid;
+  gap: 7px;
+  padding: 13px 14px;
+  border: 0;
+  border-radius: 15px;
+  background: var(--surface-muted);
+  margin-bottom: 14px;
+  text-align: right;
+}
+.calculator-display input {
+  border: 0;
+  outline: 0 !important;
+  background: transparent;
+  box-shadow: none;
+  width: 100%;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  font-size: 17px;
+  line-height: 1.5;
+  text-align: right;
+  color: var(--muted);
+  border-radius: 0;
+}
+.calculator-display input::placeholder {
+  font-size: 13px;
+}
+.calculator-display output {
+  color: var(--accent);
+  font-size: 32px;
+  font-weight: 650;
+  min-height: 48px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.calculator-top-keys {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 7px;
+  margin-bottom: 7px;
+}
+.calculator-top-keys button {
+  display: grid;
+  place-items: center;
+  min-height: 34px;
+  border-radius: 9px;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--surface-muted);
+}
+.calculator-top-keys button:first-child {
+  font-size: 10px;
+  color: #bd5d4d;
+  background: color-mix(in srgb, #bd5d4d 8%, var(--surface));
+}
+.calculator-keys {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+.calculator-keys button {
+  display: grid;
+  place-items: center;
+  height: 50px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  font-size: 21px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--line) 45%, transparent);
+}
+.calculator-keys button:hover {
+  background: var(--surface-muted);
+}
+.calculator-keys button:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+.calculator-keys .operator {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: transparent;
+  font-size: 23px;
+}
+.calculator-keys .equals {
+  background: var(--accent);
+  color: var(--surface);
+}
+.calculator-apply {
+  margin-top: 13px;
+  width: 100%;
+  min-height: 43px;
+  border-radius: 11px;
+  background: var(--accent);
+  color: var(--surface);
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+}
+.calculator-error {
+  font-size: 11px;
+  color: #c94e5c;
+  margin: 11px 0 0;
+  line-height: 1.8;
+}
+@keyframes app-control-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (max-width: 760px) {
+  .app-select,
+  .app-date-trigger {
+    min-height: 47px;
+    font-size: 14px;
+  }
+  .app-select-option {
+    min-height: 45px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    font-size: 14px;
+  }
+  .app-select-popup {
+    max-height: min(360px, var(--radix-select-content-available-height));
+  }
+  .app-action-menu-item {
+    min-height: 46px;
+    font-size: 14px;
+  }
+  .calendar-day-button {
+    height: 37px;
+    width: 37px;
+    font-size: 14px;
+  }
+  .calendar-navigation .app-select {
+    min-height: 36px;
+    font-size: 12px;
+  }
+  .money-control > input {
+    font-size: 16px;
+  }
+  .amount-field .money-control > input {
+    font-size: 31px;
+  }
+  .calculator-display input {
+    font-size: 22px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-select-popup,
+  .app-date-popup,
+  .app-action-menu,
+  .money-calculator {
+    animation: none;
+  }
+}
+
+.control-native-form-field {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  border: 0 !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+.app-date-popup:not(.control-mobile-popup),
+.money-calculator:not(.control-mobile-popup) {
+  max-height: min(
+    calc(100dvh - 24px),
+    var(--radix-popover-content-available-height, calc(100dvh - 24px))
+  );
+  overscroll-behavior: contain;
+}
+.control-mobile-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 248;
+  background: #0a172a70;
+  backdrop-filter: blur(3px);
+  animation: app-control-overlay-in 0.14s ease-out;
+}
+.control-mobile-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 260;
+  transform: translate(-50%, -50%);
+  max-width: calc(100vw - 28px);
+  max-height: min(
+    600px,
+    calc(
+      100dvh - env(safe-area-inset-top, 0px) -
+        env(safe-area-inset-bottom, 0px) - 28px
+    )
+  );
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  outline: none;
+  animation: app-control-modal-in 0.16s ease-out;
+  box-shadow: 0 20px 70px #06142c45;
+}
+.control-mobile-popup .app-date-heading,
+.control-mobile-popup .calculator-heading {
+  position: sticky;
+  top: -17px;
+  z-index: 2;
+  background: var(--surface);
+  padding-top: 4px;
+  padding-bottom: 10px;
+}
+.control-mobile-popup .calculator-apply,
+.control-mobile-popup .calendar-footer {
+  position: sticky;
+  bottom: -17px;
+  z-index: 2;
+}
+.control-mobile-popup .calendar-footer {
+  background: var(--surface);
+}
+.control-popup-accessible-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@keyframes app-control-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes app-control-modal-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .control-mobile-overlay,
+  .control-mobile-popup {
+    animation: none;
+  }
+}
+.app-combobox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+.app-combobox > input {
+  width: 100%;
+  min-width: 0;
+  padding-right: 34px;
+}
+.app-combobox-caret {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+.app-combobox-popup {
+  z-index: 280;
+  width: var(--radix-popover-trigger-width);
+  min-width: min(220px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  max-height: min(
+    310px,
+    var(--radix-popover-content-available-height, calc(100dvh - 24px))
+  );
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 5px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 12px 35px #091c3328;
+  animation: app-control-in 0.14s ease-out;
+}
+.combobox-caption {
+  padding: 7px 10px 6px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.app-combobox-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 9px;
+  padding: 10px;
+  cursor: pointer;
+  text-align: left;
+  user-select: none;
+}
+.app-combobox-option > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.app-combobox-option strong {
+  font-size: 13px;
+  line-height: 1.6;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.app-combobox-option small {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.app-combobox-option > svg {
+  color: var(--accent);
+  flex: none;
+}
+.app-combobox-option.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.combobox-no-match {
+  padding: 11px 10px 13px;
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .app-combobox-option {
+    padding: 12px 10px;
+  }
+  .app-combobox-option strong {
+    font-size: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-combobox-popup {
+    animation: none;
+  }
+}
+
+.calculator-display output.is-pending {
+  opacity: 0.45;
+}
