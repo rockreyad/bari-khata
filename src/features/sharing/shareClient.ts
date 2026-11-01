@@ -4,8 +4,16 @@ import { getCloudSession } from "../../data/sync";
 import { getActiveOwner } from "../../data/database";
 import type { Account } from "../../domain/model";
 
-import { SharedStatementSchema, type SharedStatement } from "./shareModel";
-export { SharedStatementSchema, type SharedStatement } from "./shareModel";
+import {
+  SharedStatementSchema,
+  type SharedStatement,
+  type SharedKind,
+} from "./shareModel";
+export {
+  SharedStatementSchema,
+  type SharedStatement,
+  type SharedKind,
+} from "./shareModel";
 
 const ShareStatusSchema = z.object({
   id: z.uuid(),
@@ -85,6 +93,7 @@ export async function readShare(
   token: string,
   offset = 0,
   revision?: number,
+  kind?: SharedKind,
 ): Promise<SharedStatement | null> {
   if (!validShareToken(token)) return null;
   const { url, key } = config();
@@ -105,6 +114,7 @@ export async function readShare(
     p_offset: offset,
     p_limit: 40,
     p_revision: revision ?? null,
+    ...(kind ? { p_kind: kind } : {}),
   });
   if (result.error)
     throw new Error(

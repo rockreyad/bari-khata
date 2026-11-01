@@ -17,7 +17,7 @@ import { PersonMark, kindLabels } from "./ContactIdentity";
 import "./people.css";
 export function PeoplePage() {
   const { ledger, entity, go } = useNotebook();
-  const { t, money } = useLanguageContext();
+  const { t, money, formatDigits } = useLanguageContext();
   const [params, setParams] = useSearchParams();
   const query = params.get("q") ?? "";
   const kind = params.get("type") ?? "all";
@@ -99,7 +99,7 @@ export function PeoplePage() {
               onSelect: () => filter("status", "due"),
             },
             {
-              label: t("আগাম দিয়েছি"),
+              label: t("অগ্রিম দিয়েছি"),
               onSelect: () => filter("status", "advance"),
             },
           ]}
@@ -139,9 +139,11 @@ export function PeoplePage() {
             >
               <PersonMark person={person} />
               <span className="contact-row-name">
-                <strong>{person.name}</strong>
+                <strong>{formatDigits(person.name)}</strong>
                 <small>
-                  {person.role || t(kindLabels[personKind(person)])}
+                  {formatDigits(
+                    person.role || t(kindLabels[personKind(person)]),
+                  )}
                 </small>
               </span>
               <span className="contact-row-money">
@@ -161,7 +163,9 @@ export function PeoplePage() {
                   ) : null}
                   {summary.advance > 0 ? (
                     <small className="contact-credit">
-                      {t("আগাম {{amount}}", { amount: money(summary.advance) })}
+                      {t("অগ্রিম {{amount}}", {
+                        amount: money(summary.advance),
+                      })}
                     </small>
                   ) : null}
                 </span>

@@ -7,6 +7,8 @@ import {
   DotsThreeIcon,
   FolderOpenIcon,
   PlusIcon,
+  ChartLineUpIcon,
+  CaretDownIcon,
 } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
@@ -27,6 +29,7 @@ import {
   type WorkTab,
 } from "./workEntries";
 import "./works.css";
+import { SpendingChart } from "../../components/ui/SpendingChart";
 import { AppMenu } from "../../components/ui/AppMenu";
 const statusNames = {
   planned: "শুরু হয়নি",
@@ -52,7 +55,7 @@ export function WorkCard({
   ledger: Ledger;
   onOpen: () => void;
 }) {
-  const { t, money } = useLanguageContext();
+  const { t, money, formatDigits } = useLanguageContext();
   const s = summarize(ledger, work.id);
   const actions = work.quickActions ?? ["expense", "payment"];
   const rows = [
@@ -88,7 +91,11 @@ export function WorkCard({
           {t(statusNames[work.status])}
         </span>
       </div>
-      <h3>{work.name}</h3>
+      <h3>{formatDigits(work.name)}</h3>
+      <div className="notebook-card-total">
+        <span>{t("মোট খরচ")}</span>
+        <strong>{money(s.cost)}</strong>
+      </div>
       <div className="notebook-amounts">
         {rows.map((row) => (
           <span key={row.label}>
@@ -173,7 +180,8 @@ export function WorksPage() {
 export function WorkPage() {
   const { workId } = useParams();
   const { ledger, go, entity, add, detail } = useNotebook();
-  const { t, money, date, language } = useLanguageContext();
+  const { t, money, date, language, formatDigits } = useLanguageContext();
+  const [showChart, setShowChart] = useState(false);
   const [params, setParams] = useSearchParams();
   const raw = params.get("tab") ?? "all";
   const tab: WorkTab = [
@@ -287,7 +295,7 @@ export function WorkPage() {
         <div className="work-title">
           <WorkMark icon={work.icon} color={work.color} size={29} />
           <div>
-            <h1>{work.name}</h1>
+            <h1>{formatDigits(work.name)}</h1>
             <span className={`status-tag ${work.status}`}>
               <i />
               {t(statusNames[work.status])}
@@ -323,35 +331,38 @@ export function WorkPage() {
             <strong>{money(s.cost)}</strong>
           </div>
           <button
-            className="text-button"
-            onClick={() => go(`/reports?work=${work.id}`)}
+            className="work-chart-toggle"
+            aria-label={t("মাসের খরচ দেখি")}
+            aria-expanded={showChart}
+            onClick={() => setShowChart((value) => !value)}
           >
-            {t("বিস্তারিত হিসাব")}
-            <ArrowRightIcon size={15} />
+            <ChartLineUpIcon size={23} weight="duotone" />
           </button>
         </div>
-        <dl className="work-overview-balances">
-          <div>
-            <dt>{t(s.refunds ? "দিয়েছি (ফেরত বাদে)" : "টাকা দিয়েছি")}</dt>
-            <dd>{money(s.netPaid)}</dd>
-          </div>
-          <div>
-            <dt>{t("দিতে বাকি")}</dt>
-            <dd>{money(s.payable)}</dd>
-          </div>
-          <div>
-            <dt>{t("আগাম দিয়েছি")}</dt>
-            <dd>{money(s.advance)}</dd>
-          </div>
-        </dl>
-        {s.advance > 0 ? (
-          <p className="work-advance-note">
-            {t(
-              "বিলের চেয়ে বেশি দেওয়া টাকা আগাম হিসেবে আছে। কাজের বিল লিখলে সেটি খরচে যোগ হবে।",
-            )}
-          </p>
+        <div className="work-paid-strip">
+          <span>{t(s.refunds ? "দিয়েছি (ফেরত বাদে)" : "টাকা দিয়েছি")}</span>
+          <strong>{money(s.netPaid)}</strong>
+        </div>
+        {s.payable > 0 || s.advance > 0 ? (
+          <details className="work-balance-disclosure">
+            <summary>
+              {t("বাকি ও অগ্রিম")}
+              <CaretDownIcon size={16} />
+            </summary>
+            <dl className="work-overview-balances">
+              <div>
+                <dt>{t("দিতে বাকি")}</dt>
+                <dd>{money(s.payable)}</dd>
+              </div>
+              <div>
+                <dt>{t("অগ্রিম দিয়েছি")}</dt>
+                <dd>{money(s.advance)}</dd>
+              </div>
+            </dl>
+          </details>
         ) : null}
       </section>
+      {showChart ? <SpendingChart ledger={ledger} workId={work.id} /> : null}
       <div className="work-tabs-v3" aria-label={t("খাতার লেনদেন বেছে দেখুন")}>
         {(
           [
@@ -383,7 +394,7 @@ export function WorkPage() {
       {tab === "activity" ? (
         <>
           <section className="panel work-facts-v3">
-            {work.description ? <p>{work.description}</p> : null}
+            {work.description ? <p>{formatDigits(work.description)}</p> : null}
             <div>
               <span>{t("কাজ শুরুর তারিখ")}</span>
               <strong>
@@ -449,7 +460,7 @@ export function WorkPage() {
                         </dl>
                       ) : (
                         <p>
-                          {event.after.name} ·{" "}
+                          {formatDigits(event.after.name)} ·{" "}
                           {t(statusNames[event.after.status])}
                         </p>
                       )}
@@ -564,7 +575,7 @@ export function WorkPage() {
                       <strong>
                         {ledger.people.find((p) => p.id === c.personId)?.name}
                       </strong>
-                      <p>{c.title}</p>
+                      <p>{formatDigits(c.title)}</p>
                       <div>
                         <span>{t("ঠিক করা মোট মজুরি")}</span>
                         <strong>{money(c.total)}</strong>

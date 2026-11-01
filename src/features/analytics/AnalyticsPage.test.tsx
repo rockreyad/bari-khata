@@ -6,6 +6,7 @@ import { AnalyticsPage, filtersFromSearch } from "./AnalyticsPage";
 
 vi.mock("../../context/LanguageProvider", () => ({
   useLanguageContext: () => ({
+    formatDigits: String,
     t: (text: string, values: Record<string, string | number> = {}) =>
       text.replace(/\{\{(\w+)\}\}/g, (_, name: string) =>
         String(values[name] ?? ""),

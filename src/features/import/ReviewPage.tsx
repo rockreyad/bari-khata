@@ -33,7 +33,7 @@ function OrganizeSheet({
 }) {
   const notebook = useNotebook();
   const { ledger } = notebook;
-  const { t, money, date, number } = useLanguageContext();
+  const { t, money, date, number, formatDigits } = useLanguageContext();
   const [drafts, setDrafts] = useState(() => reviewDraft(entry, ledger));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -80,7 +80,7 @@ function OrganizeSheet({
             <strong>{t("মূল খাতায় যা লেখা ছিল")}</strong>
           </div>
           <p className="review-original-note">
-            {entry.source?.note || t("বিবরণ লেখা নেই")}
+            {formatDigits(entry.source?.note || t("বিবরণ লেখা নেই"))}
           </p>
           <strong className="review-original-money">
             {money(
@@ -90,11 +90,11 @@ function OrganizeSheet({
           <dl>
             <div>
               <dt>{t("মূল খাতা")}</dt>
-              <dd>{entry.source?.ledger}</dd>
+              <dd>{formatDigits(entry.source?.ledger ?? "")}</dd>
             </div>
             <div>
               <dt>{t("মূল ঘর")}</dt>
-              <dd>{entry.source?.cell}</dd>
+              <dd>{formatDigits(entry.source?.cell ?? "")}</dd>
             </div>
             <div>
               <dt>{t("তারিখ")}</dt>
@@ -232,7 +232,7 @@ function OrganizeSheet({
         {entry.reviewReason ? (
           <details className="review-reason">
             <summary>{t("কোন তথ্য দেওয়া বাকি")}</summary>
-            <p>{entry.reviewReason}</p>
+            <p>{formatDigits(entry.reviewReason)}</p>
           </details>
         ) : null}
         {error ? (

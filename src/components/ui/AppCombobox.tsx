@@ -1,3 +1,4 @@
+import { localizedDigits } from "../../lib/numerals";
 import {
   useEffect,
   useId,
@@ -98,7 +99,7 @@ export function AppCombobox({
   autoComplete,
   ...props
 }: AppComboboxProps) {
-  const { t } = useLanguageContext();
+  const { t, language } = useLanguageContext();
   const [internal, setInternal] = useState(String(defaultValue ?? ""));
   const current = String(value === undefined ? internal : value);
   const [open, setOpen] = useState(false);
@@ -272,9 +273,16 @@ export function AppCombobox({
                   onClick={() => choose(suggestion)}
                 >
                   <span>
-                    <strong>{suggestion.label ?? suggestion.value}</strong>
+                    <strong>
+                      {localizedDigits(
+                        suggestion.label ?? suggestion.value,
+                        language,
+                      )}
+                    </strong>
                     {suggestion.description ? (
-                      <small>{suggestion.description}</small>
+                      <small>
+                        {localizedDigits(suggestion.description, language)}
+                      </small>
                     ) : null}
                   </span>
                   {normalized(suggestion.value) === normalized(current) ? (

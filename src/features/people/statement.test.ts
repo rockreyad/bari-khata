@@ -1,3 +1,4 @@
+import { localizedDigits } from "../../lib/numerals";
 import { describe, expect, it } from "vitest";
 import { LedgerSchema } from "../../domain/model";
 import {
@@ -222,4 +223,28 @@ describe("read-only contact statements", () => {
     expect(JSON.stringify(statement)).not.toContain("mixed-trip");
     expect(document.entries).toHaveLength(3);
   });
+});
+
+it("exports untrusted labels using the selected numerals without changing saved account data", () => {
+  const document = ledger();
+  document.people[0].name = "মিস্ত্রি 12 <script>";
+  document.entries[0].lines[0].label = "দরজা 8টি";
+  const statement = contactStatement(document, document.people[0]);
+  const before = JSON.stringify(statement);
+  for (const language of ["bn", "en"] as const) {
+    const html = statementHtml(statement, {
+      t: String,
+      money: String,
+      date: (value) => value ?? "",
+      language,
+      formatDigits: (value) => localizedDigits(value, language),
+    });
+    expect(html).toContain(`<html lang="${language}">`);
+    expect(html).toContain(
+      localizedDigits("মিস্ত্রি 12 &lt;script&gt;", language),
+    );
+    expect(html).toContain(localizedDigits("দরজা 8টি", language));
+    expect(html).not.toContain("<script>");
+  }
+  expect(JSON.stringify(statement)).toBe(before);
 });

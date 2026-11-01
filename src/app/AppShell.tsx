@@ -77,7 +77,7 @@ function Reports() {
 }
 export function AppShell() {
   const { ledger, state, mode, base, quick, go, close, save } = useNotebook();
-  const { t } = useLanguageContext();
+  const { t, formatDigits } = useLanguageContext();
   const [params] = useSearchParams();
   const location = useLocation();
   const pwa = usePwa();
@@ -136,7 +136,7 @@ export function AppShell() {
             <span className="privacy-dot" />
             <span>
               {t(mode === "demo" ? "নমুনার খাতা" : "ব্যক্তিগত খাতা")}
-              <small>{ledger.project.name}</small>
+              <small>{formatDigits(ledger.project.name)}</small>
             </span>
           </div>
           <NotebookNavLink
@@ -156,7 +156,7 @@ export function AppShell() {
           </button>
           <div className="project-title">
             <span className="privacy-dot" />
-            {ledger.project.name}
+            {formatDigits(ledger.project.name)}
           </div>
           <div className="topbar-actions">
             <button

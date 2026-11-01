@@ -62,6 +62,7 @@ vi.mock("../../context/LanguageProvider", () => ({
       text.replace(/{{(\w+)}}/g, (_, key: string) => String(values[key] ?? "")),
     money: (amount: number) => `৳${amount / 100}`,
     number: String,
+    formatDigits: String,
     date: (value: string | null) => value ?? "—",
   }),
 }));
@@ -295,4 +296,34 @@ describe("organized settings", () => {
     expect(screen.getByTestId("route").textContent).toBe("/login");
     expect(api.signOut).not.toHaveBeenCalled();
   });
+});
+
+it("shows password change only for a real email account, keeping phone-code and demo accounts untouched", async () => {
+  const user = userEvent.setup();
+  api.user = {
+    id: "00000000-0000-4000-8000-000000000001",
+    email: "owner@example.com",
+    phone: null,
+  };
+  const first = mount();
+  await user.click(screen.getByRole("button", { name: "অ্যাকাউন্ট" }));
+  expect(screen.getByText("পাসওয়ার্ড পরিবর্তন")).toBeTruthy();
+  first.unmount();
+  api.user = {
+    id: "00000000-0000-4000-8000-000000000001",
+    email: null,
+    phone: "+8801700000091",
+  };
+  const phone = mount();
+  await user.click(screen.getByRole("button", { name: "অ্যাকাউন্ট" }));
+  expect(screen.queryByText("পাসওয়ার্ড পরিবর্তন")).toBeNull();
+  phone.unmount();
+  api.mode = "demo";
+  api.user = {
+    id: "00000000-0000-4000-8000-000000000001",
+    email: "owner@example.com",
+    phone: null,
+  };
+  mount();
+  expect(screen.queryByText("পাসওয়ার্ড পরিবর্তন")).toBeNull();
 });

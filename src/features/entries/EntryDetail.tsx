@@ -7,6 +7,8 @@ import {
   FileTextIcon,
   PencilSimpleIcon,
   ReceiptIcon,
+  UserCircleIcon,
+  WalletIcon,
 } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
@@ -26,6 +28,7 @@ import {
 import { entryKindLabels } from "../history/history";
 import "../history/history.css";
 import "../history/history-v4.css";
+import "./entry-detail.css";
 const auditLabels: Partial<Record<AuditField, string>> = {
   kind: "হিসাবের ধরন",
   date: "লেনদেনের তারিখ",
@@ -53,7 +56,7 @@ function SnapshotCard({
   snapshot: EntrySnapshot;
   ledger: Ledger;
 }) {
-  const { t, money, date } = useLanguageContext();
+  const { t, money, date, formatDigits } = useLanguageContext();
   const person = ledger.people.find((p) => p.id === snapshot.personId);
   return (
     <div className="revision-snapshot-card">
@@ -69,7 +72,7 @@ function SnapshotCard({
         {person ? (
           <div>
             <span>{t("ব্যক্তি বা দোকান")}</span>
-            <strong>{person.name}</strong>
+            <strong>{formatDigits(person.name)}</strong>
           </div>
         ) : null}
         <div>
@@ -95,19 +98,21 @@ function SnapshotCard({
         <div className="detail-line" key={line.id}>
           <div>
             <strong>
-              {line.label ||
-                ledger.items.find((i) => i.id === line.itemId)?.name ||
-                t(costNames[line.costType])}
+              {formatDigits(
+                line.label ||
+                  ledger.items.find((i) => i.id === line.itemId)?.name ||
+                  t(costNames[line.costType]),
+              )}
             </strong>
             <small>
-              {ledger.works.find((w) => w.id === line.workId)?.name} ·{" "}
-              {t(costNames[line.costType])}
+              {formatDigits(
+                ledger.works.find((w) => w.id === line.workId)?.name ?? "",
+              )}{" "}
+              · {t(costNames[line.costType])}
             </small>
-            {line.usage ? <small>{line.usage}</small> : null}
+            {line.usage ? <small>{formatDigits(line.usage)}</small> : null}
             {line.quantity ? (
-              <small>
-                {line.quantity} {line.unit}
-              </small>
+              <small>{formatDigits(`${line.quantity} ${line.unit}`)}</small>
             ) : null}
           </div>
           <strong>{money(line.amount)}</strong>
@@ -116,7 +121,9 @@ function SnapshotCard({
       {snapshot.allocations.map((allocation, index) => (
         <div className="amount-row" key={index}>
           <span>
-            {ledger.works.find((w) => w.id === allocation.workId)?.name}
+            {formatDigits(
+              ledger.works.find((w) => w.id === allocation.workId)?.name ?? "",
+            )}
           </span>
           <strong>{money(allocation.amount)}</strong>
         </div>
@@ -127,20 +134,23 @@ function SnapshotCard({
           <strong>{money(part.amount)}</strong>
         </div>
       ))}
-      {snapshot.note ? <p>{snapshot.note}</p> : null}
+      {snapshot.note ? <p>{formatDigits(snapshot.note)}</p> : null}
       {snapshot.receipts.length ? (
         <p>
           {t("ভাউচার")}:{" "}
-          {snapshot.receipts.map((receipt) => receipt.name).join(", ")}
+          {formatDigits(
+            snapshot.receipts.map((receipt) => receipt.name).join(", "),
+          )}
         </p>
       ) : null}
       {snapshot.source ? (
         <div className="detail-source">
           <p>
-            {snapshot.source.file} · {snapshot.source.sheet} ·{" "}
-            {snapshot.source.cell}
+            {formatDigits(
+              `${snapshot.source.file} · ${snapshot.source.sheet} · ${snapshot.source.cell}`,
+            )}
           </p>
-          <p>{snapshot.source.note}</p>
+          <p>{formatDigits(snapshot.source.note)}</p>
         </div>
       ) : null}
     </div>
@@ -148,7 +158,7 @@ function SnapshotCard({
 }
 export function EntryDetail({ id }: { id: string }) {
   const { ledger, mode, close, add, save, notify, go, detail } = useNotebook();
-  const { t, money, date, language } = useLanguageContext();
+  const { t, money, date, language, formatDigits } = useLanguageContext();
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode]);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -165,6 +175,7 @@ export function EntryDetail({ id }: { id: string }) {
   const linked = ledger.entries
     .filter((row) => row.relatedEntryId === entry.id)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const linkedReturns = linked.some((row) => row.kind === "expense_credit");
   const linkedPaid = linked
     .filter((row) => !row.voided && row.kind === "payment")
     .reduce((sum, row) => sum + entryTotal(row), 0);
@@ -173,6 +184,20 @@ export function EntryDetail({ id }: { id: string }) {
     .reduce((sum, row) => sum + entryTotal(row), 0);
   const amount = entryTotal(entry);
   const kind = entryKindLabels[entry.kind];
+  const amountLabel =
+    entry.kind === "expense"
+      ? entry.account === "materials"
+        ? "মালের বিল"
+        : entry.account === "labour"
+          ? "মজুরির বিল"
+          : "খরচ"
+      : kind;
+  const relatedBill = ledger.entries.find(
+    (row) => row.id === entry.relatedEntryId,
+  );
+  const showNote =
+    entry.note &&
+    !entry.lines.some((line) => line.label.trim() === entry.note.trim());
   const stamp = (value: string) => {
     const parsed = new Date(value);
     return value && Number.isFinite(parsed.getTime())
@@ -292,7 +317,7 @@ export function EntryDetail({ id }: { id: string }) {
   }
   return (
     <Sheet
-      title={t(kind)}
+      title={t("লেনদেনের বিস্তারিত")}
       subtitle={date(entry.date, { year: "numeric" })}
       onClose={close}
       footer={
@@ -363,37 +388,47 @@ export function EntryDetail({ id }: { id: string }) {
         </div>
       }
     >
-      <div className="entry-detail detail-v3">
-        <div className="detail-total">
-          <span>{t(kind)}</span>
+      <div className="entry-detail detail-v3 transaction-detail-v5">
+        <section
+          className="entry-amount-card-v5"
+          aria-label={t("টাকার পরিমাণ")}
+        >
+          <span className="entry-kind-v5">
+            <ReceiptIcon size={17} weight="duotone" />
+            {t(amountLabel)}
+          </span>
           <strong>{money(amount)}</strong>
           {entry.voided ? (
             <span className="status-tag planned">{t("বাতিল")}</span>
           ) : null}
-        </div>
+        </section>
         {person ? (
-          <div className="detail-v3-summary">
-            <div>
-              <span>{t("ব্যক্তি বা দোকান")}</span>
-              <button
-                className="detail-entity-link-v4"
-                onClick={() =>
-                  go(
-                    `/people/${encodeURIComponent(person.id)}?account=${entry.account}`,
-                  )
-                }
-              >
-                <strong>{person.name}</strong>
-                <ArrowRightIcon size={16} />
-              </button>
-            </div>
-          </div>
+          <button
+            className="entry-person-card-v5"
+            aria-label={formatDigits(person.name)}
+            onClick={() =>
+              go(
+                `/people/${encodeURIComponent(person.id)}?account=${entry.account}`,
+              )
+            }
+          >
+            <span className="entry-person-symbol-v5">
+              <UserCircleIcon size={24} weight="duotone" />
+            </span>
+            <span>
+              <small>
+                {formatDigits(person.role || t("ব্যক্তি বা দোকান"))}
+              </small>
+              <strong>{formatDigits(person.name)}</strong>
+            </span>
+            <ArrowRightIcon size={18} />
+          </button>
         ) : null}
         {purpose ? (
           <div className="detail-v3-summary">
             <div>
               <span>{t("কিসের টাকা")}</span>
-              <strong>{purpose.name}</strong>
+              <strong>{formatDigits(purpose.name)}</strong>
             </div>
           </div>
         ) : null}
@@ -408,7 +443,9 @@ export function EntryDetail({ id }: { id: string }) {
                 <div className="detail-line" key={line.id}>
                   <div>
                     <strong>
-                      {line.label || item?.name || t(costNames[line.costType])}
+                      {formatDigits(
+                        line.label || item?.name || t(costNames[line.costType]),
+                      )}
                     </strong>
                     <small className="detail-line-context-v4">
                       <button
@@ -417,25 +454,36 @@ export function EntryDetail({ id }: { id: string }) {
                           go(`/works/${encodeURIComponent(line.workId)}`)
                         }
                       >
-                        {ledger.works.find((w) => w.id === line.workId)?.name}
+                        {formatDigits(
+                          ledger.works.find((w) => w.id === line.workId)
+                            ?.name ?? "",
+                        )}
                         <ArrowRightIcon size={13} />
                       </button>
                       <span>· {t(costNames[line.costType])}</span>
                     </small>
                     {item?.brand || line.usage || group ? (
                       <small>
-                        {[item?.brand, line.usage, group?.name]
-                          .filter(Boolean)
-                          .join(" · ")}
+                        {formatDigits(
+                          [
+                            ...new Set(
+                              [item?.brand, line.usage, group?.name].filter(
+                                Boolean,
+                              ),
+                            ),
+                          ].join(" · "),
+                        )}
                       </small>
                     ) : null}
                     {line.quantity ? (
                       <small>
-                        {line.quantity} {line.unit}
+                        {formatDigits(`${line.quantity} ${line.unit}`)}
                       </small>
                     ) : null}
                   </div>
-                  <strong>{money(line.amount)}</strong>
+                  {entry.lines.length > 1 ? (
+                    <strong>{money(line.amount)}</strong>
+                  ) : null}
                 </div>
               );
             })}
@@ -451,10 +499,14 @@ export function EntryDetail({ id }: { id: string }) {
                     go(`/works/${encodeURIComponent(part.workId)}`)
                   }
                 >
-                  {ledger.works.find((w) => w.id === part.workId)?.name}
+                  {formatDigits(
+                    ledger.works.find((w) => w.id === part.workId)?.name ?? "",
+                  )}
                   <ArrowRightIcon size={14} />
                 </button>
-                <strong>{money(part.amount)}</strong>
+                {entry.allocations.length > 1 ? (
+                  <strong>{money(part.amount)}</strong>
+                ) : null}
               </div>
             ))}
           </div>
@@ -467,28 +519,31 @@ export function EntryDetail({ id }: { id: string }) {
                   <PaymentIcon method={part.method} size={18} />
                   {t(methodNames[part.method])}
                 </span>
-                <strong>{money(part.amount)}</strong>
+                {entry.paymentParts.length > 1 ? (
+                  <strong>{money(part.amount)}</strong>
+                ) : null}
               </div>
             ))}
           </div>
         ) : null}
-        {entry.note ? <p className="entry-note">{entry.note}</p> : null}
+        {showNote ? (
+          <p className="entry-note">{formatDigits(entry.note)}</p>
+        ) : null}
         {linked.length ? (
-          <section className="detail-linked">
-            <h3>{t("এই বিলের টাকার হিসাব")}</h3>
-            {linkedPaid ? (
-              <div className="detail-linked-total">
-                <span>{t("টাকা দিয়েছি")}</span>
-                <strong>{money(linkedPaid)}</strong>
-              </div>
-            ) : null}
-            {linkedRefund ? (
-              <div className="detail-linked-total">
-                <span>{t("টাকা পেয়েছি")}</span>
-                <strong>{money(linkedRefund)}</strong>
-              </div>
-            ) : null}
-            <div>
+          <details className="entry-payment-fold-v5">
+            <summary>
+              <WalletIcon size={21} weight="duotone" />
+              <span>
+                {t(
+                  linkedReturns ? "বিলের লেনদেন" : "এই বিলের সঙ্গে রাখা পরিশোধ",
+                )}
+              </span>
+              {!linkedReturns ? (
+                <strong>{money(linkedPaid - linkedRefund)}</strong>
+              ) : null}
+              <span className="entry-fold-mark-v5" aria-hidden="true" />
+            </summary>
+            <div className="entry-payment-events-v5">
               {linked.map((row) => (
                 <button
                   key={row.id}
@@ -516,15 +571,21 @@ export function EntryDetail({ id }: { id: string }) {
                 </button>
               ))}
             </div>
-            <p>{t("লেনদেন চাপলে সেই টাকার পুরো ইতিহাস দেখবেন।")}</p>
-          </section>
+          </details>
         ) : null}
-        {entry.relatedEntryId ? (
+        {relatedBill ? (
           <button
-            className="detail-v3-review"
-            onClick={() => detail(entry.relatedEntryId!)}
+            className="entry-related-bill-v5"
+            aria-label={`${t("মূল বিল")}: ${formatDigits(relatedBill.lines[0]?.label || t("খরচ"))}`}
+            onClick={() => detail(relatedBill.id)}
           >
-            {t("যে বিলের টাকা দেওয়া হয়েছে")}
+            <FileTextIcon size={20} weight="duotone" />
+            <span>
+              <small>{t("মূল বিল")}</small>
+              <strong>
+                {formatDigits(relatedBill.lines[0]?.label || t("খরচ"))}
+              </strong>
+            </span>
             <ArrowRightIcon size={16} />
           </button>
         ) : null}
@@ -542,7 +603,7 @@ export function EntryDetail({ id }: { id: string }) {
                   onClick={() => void receipt(file.id, file.name)}
                 >
                   <ReceiptIcon size={20} />
-                  <span>{file.name}</span>
+                  <span>{formatDigits(file.name)}</span>
                   <ArrowSquareOutIcon size={17} />
                 </button>
               ))}
@@ -593,9 +654,17 @@ export function EntryDetail({ id }: { id: string }) {
                         <div className="revision-change" key={change.field}>
                           <span>{t(auditLabels[change.field] ?? "তথ্য")}</span>
                           <div className="revision-change-values">
-                            <del>{fieldText(change.field, change.before)}</del>
+                            <del>
+                              {formatDigits(
+                                fieldText(change.field, change.before),
+                              )}
+                            </del>
                             <ArrowRightIcon size={13} />
-                            <ins>{fieldText(change.field, change.after)}</ins>
+                            <ins>
+                              {formatDigits(
+                                fieldText(change.field, change.after),
+                              )}
+                            </ins>
                           </div>
                         </div>
                       ))}
@@ -616,16 +685,21 @@ export function EntryDetail({ id }: { id: string }) {
           <details className="detail-fold">
             <summary>
               <FileTextIcon size={19} />
-              {t("পুরোনো খাতার তথ্য")}
+              {t(
+                entry.source || entry.balanceImpact === "historical"
+                  ? "পুরোনো খাতার তথ্য"
+                  : "তথ্য যোগ করা বাকি",
+              )}
             </summary>
             <div className="detail-source">
               {entry.source ? (
                 <>
                   <p>
-                    {entry.source.file} · {entry.source.sheet} ·{" "}
-                    {entry.source.cell}
+                    {formatDigits(
+                      `${entry.source.file} · ${entry.source.sheet} · ${entry.source.cell}`,
+                    )}
                   </p>
-                  <p>{entry.source.note}</p>
+                  <p>{formatDigits(entry.source.note)}</p>
                 </>
               ) : null}
               {entry.balanceImpact === "historical" ? (

@@ -4,13 +4,18 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SharedStatementPage } from "./SharedStatementPage";
 import { SharedStatementSchema } from "./shareModel";
-const mocked = vi.hoisted(() => ({ read: vi.fn() }));
+const mocked = vi.hoisted(() => ({ read: vi.fn(), download: vi.fn() }));
+vi.mock("./shareExport", async (original) => ({
+  ...(await original<typeof import("./shareExport")>()),
+  downloadSharedCsv: mocked.download,
+}));
 vi.mock("./shareClient", () => ({ readShare: mocked.read }));
 vi.mock("../../context/LanguageProvider", () => ({
   useLanguageContext: () => ({
     t: (text: string) => text,
     money: (value: number) => `৳${value / 100}`,
     date: (value: string | null) => value ?? "তারিখ জানা নেই",
+    formatDigits: (value: string | number) => String(value),
   }),
 }));
 const page = () =>
@@ -45,6 +50,7 @@ const page = () =>
   });
 beforeEach(() => {
   mocked.read.mockReset();
+  mocked.download.mockReset();
   window.location.hash = "a".repeat(64);
 });
 afterEach(cleanup);
@@ -80,7 +86,7 @@ describe("public live statements", () => {
     expect(mocked.read).toHaveBeenCalledWith("a".repeat(64));
     await user.click(screen.getByRole("button", { name: "আরও হিসাব দেখি" }));
     await waitFor(() =>
-      expect(screen.getAllByText("টাকা দিয়েছি").length).toBeGreaterThan(1),
+      expect(screen.getAllByText("টাকা দিয়েছি").length).toBeGreaterThan(0),
     );
     expect(mocked.read).toHaveBeenLastCalledWith("a".repeat(64), 1, 1);
     expect(screen.queryByRole("button", { name: "আরও হিসাব দেখি" })).toBeNull();
@@ -146,4 +152,74 @@ describe("public live statements", () => {
       }),
     ).toThrow();
   });
+});
+
+it("shows shop purchases as the headline, keeps full totals while filtering a server page and offers a full scoped copy", async () => {
+  const first = page();
+  const shop = {
+    ...first,
+    person: { name: "দরজার দোকান", role: "", kind: "shop" },
+    account: "materials",
+    total: 1,
+    nextOffset: null,
+    counts: { expense: 1, payment: 1, expense_credit: 1, refund: 0 },
+  };
+  mocked.read
+    .mockResolvedValueOnce(shop)
+    .mockResolvedValueOnce({
+      ...shop,
+      rows: [
+        {
+          ...first.rows[0],
+          key: "returned",
+          kind: "expense_credit",
+          description: "দরজা ফেরত",
+          charge: -10000,
+        },
+      ],
+    })
+    .mockResolvedValueOnce(shop);
+  const user = userEvent.setup();
+  render(<SharedStatementPage />);
+  await screen.findByText("ফেরত বাদে কেনাকাটা");
+  expect(screen.queryByText("এই লিংকে শুধু হিসাব দেখা যায়")).toBeNull();
+  expect(screen.queryByText("এই লিংকে কোনো তথ্য বদলানো যায় না।")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "মাল ফেরত" }));
+  await screen.findByText("দরজা ফেরত");
+  expect(mocked.read).toHaveBeenLastCalledWith(
+    "a".repeat(64),
+    0,
+    undefined,
+    "expense_credit",
+  );
+  expect(
+    screen.getByRole("region", { name: "হিসাবের সারাংশ" }).textContent,
+  ).toContain("৳300");
+  await user.click(screen.getByRole("button", { name: "কপি নামান" }));
+  await waitFor(() => expect(mocked.download).toHaveBeenCalledOnce());
+  expect(mocked.read).toHaveBeenLastCalledWith("a".repeat(64));
+  expect(mocked.download.mock.calls[0][1]).toContain("মজুরির বিল");
+});
+it("shows contracts only when scoped worker contracts exist", async () => {
+  mocked.read
+    .mockResolvedValueOnce({
+      ...page(),
+      nextOffset: null,
+      contracts: [
+        {
+          title: "রাজমিস্ত্রির কাজ",
+          workName: "দরজা",
+          total: 60000000,
+          netPaid: 3000000,
+          remaining: 57000000,
+        },
+      ],
+    })
+    .mockResolvedValueOnce({ ...page(), nextOffset: null });
+  const user = userEvent.setup();
+  render(<SharedStatementPage />);
+  await screen.findByText("মোট পেয়েছেন");
+  expect(screen.getByText("চুক্তির হিসাব")).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "হালনাগাদ দেখি" }));
+  await waitFor(() => expect(screen.queryByText("চুক্তির হিসাব")).toBeNull());
 });

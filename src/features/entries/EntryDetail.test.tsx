@@ -33,6 +33,7 @@ vi.mock("../../context/LanguageProvider", () => ({
           }).format(new Date(`${value}T12:00:00+06:00`))
         : "তারিখ দেওয়া নেই",
     language: "en",
+    formatDigits: (value: string | number) => String(value),
   }),
 }));
 const calendarLabel = (value: string) =>
@@ -153,7 +154,11 @@ describe("transaction detail activity", () => {
       detail: vi.fn(),
     });
     const html = renderToString(<EntryDetail id="bill" />);
-    expect(html).toContain("এই বিলের টাকার হিসাব");
+    expect(html).toContain("এই বিলের সঙ্গে রাখা পরিশোধ");
+    expect(html).toContain('<details class="entry-payment-fold-v5">');
+    expect(html).not.toContain("এই বিলের টাকার হিসাব");
+    expect(html).not.toContain("লেনদেন চাপলে সেই টাকার পুরো ইতিহাস দেখবেন।");
+    expect(html.match(/৳2000/g)).toHaveLength(1);
     expect(html).toContain("৳1500");
     expect(html).toContain("৳1000");
     expect(html).toContain("৳500");
@@ -195,4 +200,73 @@ describe("transaction detail activity", () => {
     expect(html).toContain(`<del>${calendarLabel("2025-11-01")}</del>`);
     expect(html).toContain(`<ins>${calendarLabel("2026-11-01")}</ins>`);
   });
+});
+
+it("does not label a new unreviewed bill as an old-notebook import", () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "door", name: "দরজা" }],
+    entries: [
+      {
+        id: "new-bill",
+        kind: "expense",
+        reviewStatus: "needs_review",
+        lines: [
+          { id: "line", workId: "door", label: "৮টি দরজা", amount: 9300000 },
+        ],
+      },
+    ],
+  });
+  notebook.mockReturnValue({
+    ledger,
+    mode: "demo",
+    close: vi.fn(),
+    add: vi.fn(),
+    save: vi.fn(),
+    notify: vi.fn(),
+    go: vi.fn(),
+    detail: vi.fn(),
+  });
+  const html = renderToString(<EntryDetail id="new-bill" />);
+  expect(html).toContain("তথ্য যোগ করা বাকি");
+  expect(html).not.toContain("পুরোনো খাতার তথ্য");
+  expect(html).not.toContain("পুরোনো খাতা থেকে এসেছে");
+});
+it("keeps a linked material return reachable without presenting it as a zero payment", () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "door", name: "দরজা" }],
+    entries: [
+      {
+        id: "bill",
+        kind: "expense",
+        lines: [{ id: "line", workId: "door", label: "দরজা", amount: 9300000 }],
+      },
+      {
+        id: "return",
+        kind: "expense_credit",
+        relatedEntryId: "bill",
+        lines: [
+          {
+            id: "return-line",
+            workId: "door",
+            label: "দরজা ফেরত",
+            amount: 1000000,
+          },
+        ],
+      },
+    ],
+  });
+  notebook.mockReturnValue({
+    ledger,
+    mode: "demo",
+    close: vi.fn(),
+    add: vi.fn(),
+    save: vi.fn(),
+    notify: vi.fn(),
+    go: vi.fn(),
+    detail: vi.fn(),
+  });
+  const html = renderToString(<EntryDetail id="bill" />);
+  expect(html).toContain("বিলের লেনদেন");
+  expect(html).toContain("মাল ফেরত");
+  expect(html).not.toContain("৳0");
 });

@@ -1,3 +1,4 @@
+import { localizedDigits } from "../../lib/numerals";
 import {
   Children,
   Fragment,
@@ -81,7 +82,7 @@ export function AppSelect({
   "aria-invalid": invalid,
   ...rest
 }: AppSelectProps) {
-  const { t } = useLanguageContext();
+  const { t, language } = useLanguageContext();
   const choices = useMemo(() => selectChoices(children), [children]);
   const initial =
     defaultValue === undefined
@@ -178,14 +179,22 @@ export function AppSelect({
               return (
                 <Fragment key={`${choice.value}:${index}`}>
                   {showGroup ? (
-                    <div className="app-select-group">{choice.group}</div>
+                    <div className="app-select-group">
+                      {localizedDigits(choice.group, language)}
+                    </div>
                   ) : null}
                   <Select.Item
                     className="app-select-option"
                     value={encode(choice.value)}
                     disabled={choice.disabled}
                   >
-                    <Select.ItemText>{choice.label}</Select.ItemText>
+                    <Select.ItemText>
+                      {Children.map(choice.label, (label) =>
+                        typeof label === "string" || typeof label === "number"
+                          ? localizedDigits(label, language)
+                          : label,
+                      )}
+                    </Select.ItemText>
                     <Select.ItemIndicator className="app-select-check">
                       <CheckIcon size={17} weight="bold" />
                     </Select.ItemIndicator>

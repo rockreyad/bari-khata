@@ -1,3 +1,4 @@
+import { latinDigits } from "../../lib/numerals";
 import {
   useId,
   useRef,
@@ -41,7 +42,7 @@ export function MoneyInput({
   onKeyDown,
   ...props
 }: MoneyInputProps) {
-  const { t, money, number } = useLanguageContext();
+  const { t, money, number, formatDigits } = useLanguageContext();
   const [internal, setInternal] = useState(String(defaultValue ?? ""));
   const current = String(value === undefined ? internal : value);
   const [open, setOpen] = useState(false);
@@ -111,15 +112,16 @@ export function MoneyInput({
     >
       <input
         {...props}
-        value={current}
+        value={formatDigits(current)}
         name={name}
         className={className}
         disabled={disabled}
         readOnly={readOnly}
         inputMode={props.inputMode ?? "decimal"}
         onChange={(event) => {
-          setInternal(event.target.value);
-          onChange?.(event);
+          const next = latinDigits(event.target.value);
+          setInternal(next);
+          onChange?.(valueChange<HTMLInputElement>(next, name));
         }}
         onKeyDown={(event) => {
           onKeyDown?.(event);
@@ -184,9 +186,9 @@ export function MoneyInput({
               ref={expressionRef}
               type="text"
               inputMode="none"
-              value={expression}
+              value={formatDigits(expression)}
               onChange={(event) => {
-                setExpression(event.target.value.slice(0, 240));
+                setExpression(latinDigits(event.target.value).slice(0, 240));
                 setShowError(false);
               }}
               onKeyDown={expressionKey}

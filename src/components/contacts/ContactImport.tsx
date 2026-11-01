@@ -1,3 +1,4 @@
+import { localizedDigits } from "../../lib/numerals";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { AddressBookIcon, FileArrowUpIcon } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
@@ -15,7 +16,7 @@ export function ContactImport({
 }: {
   onPick: (contact: { name: string; phone: string }) => void;
 }) {
-  const { t } = useLanguageContext();
+  const { t, language } = useLanguageContext();
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -139,10 +140,10 @@ export function ContactImport({
           {pending.phones.map((phone) => (
             <button
               type="button"
-              key={phone}
+              key={localizedDigits(phone, language)}
               onClick={() => pick(pending, phone)}
             >
-              {phone}
+              {localizedDigits(phone, language)}
             </button>
           ))}
           <button

@@ -1,3 +1,6 @@
+import { settingsPasswordEnglish } from "../features/settings/settingsPasswordEnglish";
+import { localizedDigits } from "../lib/numerals";
+import { spendingEnglish } from "../components/ui/spendingEnglish";
 import { contactImportEnglish } from "../components/contacts/contactImportEnglish";
 import { phoneAuthEnglish } from "../features/auth/phoneAuthEnglish";
 import { authRegistrationEnglish } from "../features/auth/authRegistrationEnglish";
@@ -35,6 +38,8 @@ import {
 
 type Language = "bn" | "en";
 const english: Record<string, string> = {
+  ...spendingEnglish,
+  ...settingsPasswordEnglish,
   ...contactImportEnglish,
   ...v3English,
   ...v4English,
@@ -148,6 +153,7 @@ type LanguageContextValue = {
   t: (text: string, values?: Record<string, string | number>) => string;
   money: (poisha: number, compact?: boolean) => string;
   number: (value: number) => string;
+  formatDigits: (value: string | number) => string;
   date: (value: string | null, options?: Intl.DateTimeFormatOptions) => string;
 };
 const LanguageContext = createContext<LanguageContextValue | null>(null);
@@ -169,7 +175,12 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       let translated = language === "en" ? (english[text] ?? text) : text;
       for (const [key, value] of Object.entries(values))
         translated = translated.replaceAll(`{{${key}}}`, String(value));
-      return translated;
+      return localizedDigits(
+        language === "bn"
+          ? translated.replaceAll("আগাম", "অগ্রিম")
+          : translated,
+        language,
+      );
     },
     [language],
   );
@@ -178,6 +189,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       language,
       setLanguage,
       t,
+      formatDigits: (value) => localizedDigits(value, language),
       money: (poisha, compact = false) =>
         `৳${new Intl.NumberFormat(locale, { maximumFractionDigits: 2, ...(compact ? { notation: "compact" as const, maximumFractionDigits: 1 } : {}) }).format(poisha / 100)}`,
       number: (value) =>

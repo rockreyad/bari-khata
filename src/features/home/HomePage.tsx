@@ -16,7 +16,7 @@ import { pendingReviewEntries } from "../import/bulkReview";
 import { WorkCard } from "../works/WorksPages";
 export function HomePage() {
   const { ledger, add, go, detail } = useNotebook();
-  const { t, money, number } = useLanguageContext();
+  const { t, money, number, formatDigits } = useLanguageContext();
   const s = summarize(ledger);
   const pending = pendingReviewEntries(ledger).length;
   const cards = [
@@ -39,7 +39,7 @@ export function HomePage() {
     <div className="home-v3 page-flow">
       <header className="page-heading home-heading-v3">
         <div>
-          <p className="eyebrow">{ledger.project.name}</p>
+          <p className="eyebrow">{formatDigits(ledger.project.name)}</p>
           <h1>{t("আমার হিসাব")}</h1>
         </div>
         <button

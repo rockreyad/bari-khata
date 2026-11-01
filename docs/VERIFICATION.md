@@ -167,3 +167,13 @@
 - Hosted database-এ নতুন limiter migration ও তার history একই transaction-এ বসেছে। Service role-এর RPC অনুমতি, anon/authenticated নিষেধ, private table RLS, দশটি migration record ও মূল SQL-এর checksum—ছয়টি যাচাই পাস করেছে।
 
 - Live function-এ `.ts` path থেকে module খুঁজে না পাওয়ার ত্রুটি ধরা পড়েছিল। Production import-এ emitted `.js` path ঠিক করা হয়েছে। এখন প্রতিটি `npm run build`-এ আলাদা NodeNext compilation এবং তৈরি JavaScript সরাসরি Node-এ import করে Web handler চালানো বাধ্যতামূলক; disabled configuration-এ কোনো backend request ছাড়াই 404 দিতে হয়। Vite-এর TypeScript resolution দিয়ে এই packaging ত্রুটি আড়াল হয় না।
+
+## খাতা, লেনদেন ও প্রাপকের পাতা — ২ নভেম্বর ২০২৬
+
+- প্রতিটি খাতায় মোট খরচ সামনে; বাকি/অগ্রিম আলাদা disclosure। প্রয়োজনমতো ছয় মাসের কেনাকাটা, মজুরি ও অন্য খরচের chart। Payment আবার খরচ হিসেবে যোগ হয় না।
+- দোকানে কেনাকাটা প্রধান action; মিস্ত্রির মোট প্রাপ্তি ও প্রাসঙ্গিক চুক্তি। Details-এ একবার মোট টাকা, ভাঁজ করা পরিশোধ, সরাসরি ব্যক্তি ও কাজের link। নতুন অসম্পূর্ণ হিসাবকে পুরোনো খাতার তথ্য বলা হয় না।
+- বাংলা/English-এ সংখ্যা, তারিখ, input, dropdown ও export যাচাই; input-এর পরিমাণ canonical সংখ্যায় থাকে। ফোনের প্রবেশের code অপরিবর্তিত।
+- ইমেইলের password পরিবর্তনের unit/UI test ও স্থানীয় Supabase integration পাস: ভুল বর্তমান password, সঠিক পরিবর্তন, নতুন login, পুরোনো password অকার্যকর, একই user ID, test account পরিষ্কার। আসল account-এর password বদলানো হয়নি।
+- শেয়ার function-এর নতুন filter, scoped contract, পুরোনো চার-argument call, revision pin এবং গোপনীয়তার rollback integration পাস। Production-এ migration source checksum ও invalid token rejection যাচাই করা হয়েছে।
+- Export সব অনুমোদিত page নেয়; মাঝখানে revision বদল, বাতিল link, duplicate বা অসম্পূর্ণ page হলে কপি বন্ধ হয়।
+- সম্পূর্ণ ৬০টি test file-এর ৪৩৫টি test পাস। Production build ও native API runtime check পাস। ৩৯০px browser-এ খাতা, দোকান, details, ভাষা পরিবর্তন ও dark theme দেখা হয়েছে; এটি আসল iPhone hardware পরীক্ষার বিকল্প নয়।

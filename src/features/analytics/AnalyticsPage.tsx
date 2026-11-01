@@ -88,7 +88,7 @@ export function AnalyticsPage({
   onEntry,
   initialGroupId,
 }: AnalyticsPageProps) {
-  const { t, money, date } = useLanguageContext();
+  const { t, money, date, formatDigits } = useLanguageContext();
   const [params, setParams] = useSearchParams();
   const filters = useMemo(
     () => filtersFromSearch(params, initialGroupId),
@@ -362,7 +362,7 @@ export function AnalyticsPage({
               key={chip.field}
               onClick={() => update({ [chip.field]: "" })}
             >
-              {chip.label}
+              {formatDigits(chip.label)}
               <XIcon size={13} />
             </button>
           ))}
@@ -375,7 +375,7 @@ export function AnalyticsPage({
         <span>{heading}</span>
         <strong>{money(totals.total)}</strong>
         <small>
-          {scopeLabel}
+          {formatDigits(scopeLabel)}
           {section === "material" ? ` · ${t("মালের দাম")}` : ""}
         </small>
         {totals.returns ? <p>{t("ফেরত ও সমন্বয় বাদ দেওয়া হয়েছে।")}</p> : null}

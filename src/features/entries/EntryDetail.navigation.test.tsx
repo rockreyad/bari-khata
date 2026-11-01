@@ -38,6 +38,7 @@ vi.mock("../../context/LanguageProvider", () => ({
     money: (value: number) => `৳${value / 100}`,
     date: (value: string | null) => value || "তারিখ দেওয়া নেই",
     language: "bn",
+    formatDigits: (value: string | number) => String(value),
   }),
 }));
 afterEach(cleanup);
@@ -80,4 +81,68 @@ describe("entry detail navigation", () => {
     );
     expect(screen.queryByText("কখন কী বদলেছে")).toBeNull();
   });
+});
+
+it("keeps payment drill-down collapsed and opens only the selected payment or original bill", () => {
+  const ledger = LedgerSchema.parse({
+    people: [{ id: "shop", name: "দরজার দোকান", kind: "shop" }],
+    works: [{ id: "door", name: "দরজা" }],
+    entries: [
+      {
+        id: "bill",
+        kind: "expense",
+        personId: "shop",
+        note: "৮টি দরজা",
+        lines: [
+          { id: "line", label: "৮টি দরজা", workId: "door", amount: 9300000 },
+        ],
+      },
+      {
+        id: "cash",
+        kind: "payment",
+        personId: "shop",
+        relatedEntryId: "bill",
+        paymentParts: [{ amount: 3000000 }],
+        allocations: [{ workId: "door", amount: 3000000 }],
+      },
+      {
+        id: "standalone",
+        kind: "payment",
+        personId: "shop",
+        paymentParts: [{ amount: 200000 }],
+        allocations: [{ workId: "door", amount: 200000 }],
+      },
+    ],
+  });
+  const detail = vi.fn();
+  notebook.mockReturnValue({
+    ledger,
+    mode: "demo",
+    go: vi.fn(),
+    close: vi.fn(),
+    add: vi.fn(),
+    save: vi.fn(),
+    notify: vi.fn(),
+    detail,
+  });
+  const { container, unmount } = render(<EntryDetail id="bill" />);
+  const fold = container.querySelector(".entry-payment-fold-v5")!;
+  expect(fold.hasAttribute("open")).toBe(false);
+  expect(fold.querySelector("summary")?.textContent).toContain("৳30000");
+  expect(fold.textContent).not.toContain("৳32000");
+  expect(container.querySelectorAll(".entry-note")).toHaveLength(0);
+  expect(
+    container.querySelector(".detail-v3-lines")?.textContent,
+  ).not.toContain("৳93000");
+  expect(container.textContent).not.toContain("যে বিলের টাকা দেওয়া হয়েছে");
+  expect(container.textContent).not.toContain("দিতে বাকি");
+  fireEvent.click(fold.querySelector("summary")!);
+  expect(fold.hasAttribute("open")).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: /টাকা দিয়েছি.*৳30000/ }));
+  expect(detail).toHaveBeenCalledWith("cash");
+  unmount();
+  render(<EntryDetail id="cash" />);
+  fireEvent.click(screen.getByRole("button", { name: "মূল বিল: ৮টি দরজা" }));
+  expect(detail).toHaveBeenLastCalledWith("bill");
+  expect(screen.getAllByText("৳30000")).toHaveLength(1);
 });

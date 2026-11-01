@@ -23,6 +23,7 @@ vi.mock("../../context/LanguageProvider", () => ({
   useLanguageContext: () => ({
     t: (text: string, values?: Record<string, unknown>) =>
       text.replace(/{{(\w+)}}/g, (_, key) => String(values?.[key] ?? "")),
+    formatDigits: String,
     number: String,
   }),
 }));

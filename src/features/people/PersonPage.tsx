@@ -12,6 +12,7 @@ import {
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { EntryList } from "../../components/ui/EntryList";
+import { SpendingChart } from "../../components/ui/SpendingChart";
 import { AppMenu } from "../../components/ui/AppMenu";
 import {
   allowedContactActions,
@@ -28,7 +29,7 @@ import { phoneLink } from "./people";
 import "./people.css";
 export function PersonPage() {
   const { ledger, go, add, entity, detail, base } = useNotebook();
-  const { t, money } = useLanguageContext();
+  const { t, money, formatDigits } = useLanguageContext();
   const { id, personId } = useParams();
   const [params, setParams] = useSearchParams();
   const [shareOpen, setShareOpen] = useState(false);
@@ -54,6 +55,10 @@ export function PersonPage() {
   const entries = useMemo(
     () => sortContactEntries(summary?.entries ?? [], false),
     [summary],
+  );
+  const chartLedger = useMemo(
+    () => ({ ...ledger, entries: summary?.entries ?? [] }),
+    [ledger, summary],
   );
   const filter = (key: string, value: string) =>
     setParams(
@@ -129,6 +134,41 @@ export function PersonPage() {
           (c) => c.personId === person.id && (!workId || c.workId === workId),
         )
       : [];
+  const isPurchase = account === "materials";
+  const heroLabel = isPurchase
+    ? "মোট কেনাকাটা"
+    : kind === "worker"
+      ? "মোট টাকা নিয়েছেন"
+      : "মোট দিয়েছি";
+  const heroAmount = isPurchase ? summary.cost : summary.netPaid;
+  const hasReturns = summary.entries.some(
+    (entry) => entry.kind === "expense_credit",
+  );
+  const metrics = [
+    {
+      label: isPurchase
+        ? "টাকা দিয়েছি"
+        : account === "labour"
+          ? "কাজের বিল"
+          : "মোট খরচ",
+      amount: isPurchase ? summary.netPaid : summary.cost,
+      tone: "",
+    },
+    {
+      label: "দিতে বাকি",
+      amount: summary.payable,
+      tone: summary.payable ? "contact-due" : "",
+    },
+    ...(summary.advance > 0
+      ? [
+          {
+            label: "অগ্রিম দিয়েছি",
+            amount: summary.advance,
+            tone: "contact-credit",
+          },
+        ]
+      : []),
+  ];
   const menu = [
     ...(kind === "worker"
       ? [
@@ -185,8 +225,8 @@ export function PersonPage() {
       <header className="contact-profile-header">
         <PersonMark person={person} large />
         <div>
-          <h1>{person.name}</h1>
-          <p>{person.role || t(kindLabels[kind])}</p>
+          <h1>{formatDigits(person.name)}</h1>
+          <p>{formatDigits(person.role || t(kindLabels[kind]))}</p>
         </div>
         {href ? (
           <a className="icon-button" href={href} aria-label={t("ফোন করি")}>
@@ -203,34 +243,81 @@ export function PersonPage() {
           items={menu}
         />
       </header>
-      <section className="contact-summary-card">
-        <div className="contact-paid">
-          <span>{t("টাকা দিয়েছি")}</span>
-          <strong>{money(summary.netPaid)}</strong>
+      <section
+        className={`contact-summary-card contact-summary-${kind}`}
+        aria-label={t("এই নামের মোট হিসাব")}
+      >
+        <div className="contact-summary-hero">
+          <span>{t(heroLabel)}</span>
+          <strong>{money(heroAmount)}</strong>
+          {(isPurchase && hasReturns) ||
+          (!isPurchase && summary.refunds > 0) ? (
+            <small>{t("ফেরত বাদে")}</small>
+          ) : null}
         </div>
-        <div className="contact-balance-pair">
-          <div>
-            <small>{t("দিতে বাকি")}</small>
-            <strong className={summary.payable ? "contact-due" : ""}>
-              {money(summary.payable)}
-            </strong>
+        <dl
+          className="contact-summary-metrics"
+          style={{
+            gridTemplateColumns: `repeat(${metrics.length}, minmax(0, 1fr))`,
+          }}
+        >
+          {metrics.map((metric) => (
+            <div key={metric.label}>
+              <dt>{t(metric.label)}</dt>
+              <dd className={metric.tone}>{money(metric.amount)}</dd>
+            </div>
+          ))}
+        </dl>
+        {workId || account !== defaultAccount ? (
+          <div className="contact-account-note">
+            <span>
+              {workId
+                ? formatDigits(
+                    ledger.works.find((work) => work.id === workId)!.name,
+                  )
+                : t(accountLabels[account])}
+            </span>
+            <button onClick={() => filter(workId ? "work" : "account", "")}>
+              {t(workId ? "সব কাজের হিসাব" : "মূল হিসাবে ফিরি")}
+            </button>
           </div>
-          <div>
-            <small>{t("আগাম দিয়েছি")}</small>
-            <strong className={summary.advance ? "contact-credit" : ""}>
-              {money(summary.advance)}
-            </strong>
-          </div>
-        </div>
-        <div className="contact-account-note">
-          <span>{t(accountLabels[account])}</span>
-          {account !== defaultAccount ? (
-            <button onClick={() => filter("account", "")}>
-              {t("মূল হিসাবে ফিরি")}
+        ) : null}
+      </section>
+      {account === defaultAccount ? (
+        <div className="contact-main-actions">
+          {kind === "shop" && actions.includes("purchase") ? (
+            <button className="primary-button" onClick={addPurchase}>
+              <PlusIcon size={20} />
+              {t("মাল কিনলাম")}
+            </button>
+          ) : null}
+          {actions.includes("payment") ? (
+            <button
+              className={
+                kind === "shop" && actions.includes("purchase")
+                  ? "secondary-button"
+                  : "primary-button"
+              }
+              onClick={addPayment}
+            >
+              <WalletIcon size={20} weight="duotone" />
+              {t("টাকা দিলাম")}
+            </button>
+          ) : null}
+          {kind !== "shop" && actions.includes("purchase") ? (
+            <button className="secondary-button" onClick={addPurchase}>
+              <PlusIcon size={19} />
+              {t("মাল কিনলাম")}
+            </button>
+          ) : null}
+          {actions.includes("transport") ? (
+            <button className="secondary-button" onClick={addTransport}>
+              <TruckIcon size={20} />
+              {t("আনার খরচ লিখি")}
             </button>
           ) : null}
         </div>
-      </section>
+      ) : null}
       {personContracts.length ? (
         <details className="work-agreements contact-agreements">
           <summary>{t("মজুরির চুক্তি")}</summary>
@@ -239,7 +326,9 @@ export function PersonPage() {
             return (
               <div className="wage-agreement-v3" key={c.id}>
                 <strong>
-                  {ledger.works.find((w) => w.id === c.workId)?.name}
+                  {formatDigits(
+                    ledger.works.find((w) => w.id === c.workId)?.name ?? "",
+                  )}
                 </strong>
                 <div>
                   <span>{t("ঠিক করা মোট মজুরি")}</span>
@@ -271,28 +360,11 @@ export function PersonPage() {
           )}
         </p>
       ) : null}
-      {account === defaultAccount ? (
-        <div className="contact-main-actions">
-          {actions.includes("payment") ? (
-            <button className="primary-button" onClick={addPayment}>
-              <WalletIcon size={20} weight="duotone" />
-              {t("টাকা দিলাম")}
-            </button>
-          ) : null}
-          {actions.includes("purchase") ? (
-            <button className="secondary-button" onClick={addPurchase}>
-              <PlusIcon size={19} />
-              {t("মাল কিনেছি")}
-            </button>
-          ) : null}
-          {actions.includes("transport") ? (
-            <button className="secondary-button" onClick={addTransport}>
-              <TruckIcon size={20} />
-              {t("আনার খরচ লিখি")}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      <SpendingChart
+        ledger={chartLedger}
+        personId={person.id}
+        workId={workId || undefined}
+      />
       <section className="contact-history">
         <div className="contact-history-heading">
           <div>

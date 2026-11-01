@@ -7,6 +7,8 @@ import { EntitySheet } from "./EntitySheet";
 import { LedgerSchema, type Ledger } from "../domain/model";
 vi.mock("../context/LanguageProvider", () => ({
   useLanguageContext: () => ({
+    formatDigits: String,
+    number: String,
     t: (text: string) => text,
     money: (value: number) => String(value / 100),
     language: "bn",

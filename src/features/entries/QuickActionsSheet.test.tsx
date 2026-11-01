@@ -25,7 +25,10 @@ vi.mock("../../app/NotebookProvider", () => ({
   }),
 }));
 vi.mock("../../context/LanguageProvider", () => ({
-  useLanguageContext: () => ({ t: (text: string) => text }),
+  useLanguageContext: () => ({
+    formatDigits: String,
+    t: (text: string) => text,
+  }),
 }));
 vi.mock("../../components/Sheet", () => ({
   Sheet: ({ children }: { children: ReactNode }) => <div>{children}</div>,

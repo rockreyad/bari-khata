@@ -24,6 +24,7 @@ vi.mock("../../app/NotebookProvider", () => ({
 }));
 vi.mock("../../context/LanguageProvider", () => ({
   useLanguageContext: () => ({
+    formatDigits: String,
     t: (text: string) => text,
     money: (value: number) => String(value / 100),
   }),

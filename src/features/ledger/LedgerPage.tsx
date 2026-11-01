@@ -22,7 +22,7 @@ import { historyPage } from "../history/page";
 import { pendingReviewEntries } from "../import/bulkReview";
 export function LedgerPage() {
   const { ledger, add, detail, go } = useNotebook();
-  const { t, number } = useLanguageContext();
+  const { t, number, formatDigits } = useLanguageContext();
   const [params, setParams] = useSearchParams();
   const [filterOpen, setFilterOpen] = useState(false);
   const page = Number(params.get("page") ?? "1");
@@ -191,7 +191,7 @@ export function LedgerPage() {
               onClick={() => update("person", "")}
               className="history-filter-chip"
             >
-              {contact.name}
+              {formatDigits(contact.name)}
               <XIcon size={14} />
             </button>
           ) : null}
@@ -200,7 +200,7 @@ export function LedgerPage() {
               className="history-filter-chip"
               onClick={() => update("work", "")}
             >
-              {selectedWork.name}
+              {formatDigits(selectedWork.name)}
               <XIcon size={14} />
             </button>
           ) : null}

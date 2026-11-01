@@ -12,7 +12,7 @@ import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 export function QuickActionsSheet() {
   const { add, entity, close, ledger } = useNotebook();
-  const { t } = useLanguageContext();
+  const { t, formatDigits } = useLanguageContext();
   const shortcuts = ledger.works.filter((work) => work.quickActions?.length);
   const actionNames = {
     expense: "খরচ লিখি",
@@ -30,7 +30,7 @@ export function QuickActionsSheet() {
               <article key={work.id}>
                 <div className="entry-shortcut-title">
                   <WorkMark icon={work.icon} color={work.color} size={20} />
-                  <strong>{work.name}</strong>
+                  <strong>{formatDigits(work.name)}</strong>
                 </div>
                 <div className="entry-shortcut-actions">
                   {work.quickActions!.map((action) => (

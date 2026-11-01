@@ -1,3 +1,4 @@
+import { latinDigits } from "../../lib/numerals";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router";
 import { PasswordInput } from "./PasswordInput";
@@ -57,7 +58,7 @@ function phoneError(code: string, manual = false) {
   return "লগইন হয়নি। তথ্য ও ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।";
 }
 export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
-  const { t, number } = useLanguageContext();
+  const { t, number, formatDigits } = useLanguageContext();
   const auth = useAuth();
   const location = useLocation();
   const initialEmail =
@@ -295,7 +296,7 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
                   <span>
                     {t(manual ? "ফোন নম্বর" : "এই নম্বরের কোড লিখুন")}
                   </span>
-                  <strong>{phone}</strong>
+                  <strong>{formatDigits(phone)}</strong>
                   <button
                     type="button"
                     className="text-button"
@@ -321,11 +322,11 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
                       type="tel"
                       autoComplete="tel-national"
                       inputMode="tel"
-                      value={phone}
+                      value={formatDigits(phone)}
                       disabled={busy}
                       onChange={(event) => {
                         requestScope.current++;
-                        setPhone(event.target.value);
+                        setPhone(latinDigits(event.target.value));
                         setSent(false);
                         setOtp("");
                         setError("");
@@ -359,7 +360,7 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
                     type="text"
                     inputMode="numeric"
                     autoComplete={manual ? "off" : "one-time-code"}
-                    value={otp}
+                    value={formatDigits(otp)}
                     disabled={busy}
                     onChange={(event) => {
                       setOtp(phoneCode(event.target.value));
@@ -368,7 +369,7 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
                     required
                     minLength={minimumCodeLength}
                     maxLength={8}
-                    pattern="[0-9]*"
+                    pattern="[0-9০-৯]*"
                     placeholder={t("কোড লিখুন")}
                     aria-describedby="phone-code-hint"
                   />

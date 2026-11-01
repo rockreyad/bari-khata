@@ -1,70 +1,131 @@
 .work-overview {
   border: 1px solid var(--line);
-  border-radius: 22px;
+  border-radius: 24px;
   background: var(--surface);
   overflow: hidden;
+  box-shadow: 0 8px 30px color-mix(in srgb, var(--accent) 5%, transparent);
 }
 .work-overview-total {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 23px 24px;
-  background: var(--surface-muted);
+  padding: 25px 24px 22px;
+  background: linear-gradient(125deg, var(--accent-soft), var(--surface) 90%);
 }
 .work-overview-total > div {
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
-.work-overview-total span,
-.work-overview-balances dt {
+.work-overview-total span {
   color: var(--muted);
   font-size: 13px;
 }
 .work-overview-total strong {
-  font-size: clamp(26px, 5vw, 36px);
-  line-height: 1.4;
+  font-size: clamp(34px, 6vw, 44px);
+  line-height: 1.35;
   font-weight: 650;
+  letter-spacing: -0.04em;
+}
+.work-chart-toggle {
+  width: 44px;
+  height: 44px;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.work-chart-toggle[aria-expanded="true"] {
+  background: var(--accent);
+  color: var(--primary-ink);
+}
+.work-paid-strip {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 17px 24px;
+}
+.work-paid-strip > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.work-paid-strip > strong {
+  font-size: 20px;
+  font-weight: 600;
+}
+.work-balance-disclosure {
+  border-top: 1px solid var(--line);
+}
+.work-balance-disclosure > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 14px 24px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.work-balance-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.work-balance-disclosure[open] > summary > svg {
+  transform: rotate(180deg);
 }
 .work-overview-balances {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
-  padding: 20px 24px;
+  padding: 0 24px 20px;
   gap: 16px;
 }
 .work-overview-balances > div {
   display: grid;
-  gap: 6px;
+  gap: 5px;
+}
+.work-overview-balances dt {
+  color: var(--muted);
+  font-size: 12px;
 }
 .work-overview-balances dd {
   margin: 0;
+  font-size: 19px;
   font-weight: 600;
-  font-size: clamp(15px, 2.4vw, 21px);
   overflow-wrap: anywhere;
 }
-.work-advance-note {
-  margin: 0 24px 20px;
+.notebook-card-total {
+  display: grid;
+  gap: 2px;
+  margin: -5px 0 13px;
+}
+.notebook-card-total > span {
+  font-size: 11px;
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.8;
+}
+.notebook-card-total > strong {
+  font-size: 25px;
+  line-height: 1.4;
+  font-weight: 650;
+}
+.notebook-card-v3 .notebook-amounts {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
 }
 @media (max-width: 600px) {
   .work-overview-total {
-    padding: 18px 16px;
+    padding: 21px 20px;
   }
-  .work-overview-total > .text-button {
-    font-size: 11px;
-    gap: 4px;
+  .work-paid-strip {
+    padding: 16px 20px;
+  }
+  .work-balance-disclosure > summary {
+    padding: 13px 20px;
   }
   .work-overview-balances {
-    padding: 17px 16px;
-    gap: 10px;
-  }
-  .work-overview-balances dt {
-    font-size: 11px;
-  }
-  .work-advance-note {
-    margin: 0 16px 16px;
+    padding: 0 20px 18px;
   }
 }

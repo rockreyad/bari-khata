@@ -24,7 +24,7 @@ export function StatementSheet({
   onClose: () => void;
 }) {
   const { ledger, notify } = useNotebook();
-  const { t, money, date } = useLanguageContext();
+  const { t, money, date, formatDigits, language } = useLanguageContext();
   const [notes, setNotes] = useState(false);
   const [busy, setBusy] = useState(false);
   const statement = useMemo(
@@ -38,7 +38,7 @@ export function StatementSheet({
   );
   const file = () =>
     new File(
-      [statementHtml(statement, { t, money, date })],
+      [statementHtml(statement, { t, money, date, formatDigits, language })],
       statementFilename(person.name),
       { type: "text/html" },
     );
@@ -63,7 +63,7 @@ export function StatementSheet({
   return (
     <Sheet
       title={t("হিসাবের কপি পাঠাই")}
-      subtitle={person.name}
+      subtitle={formatDigits(person.name)}
       onClose={onClose}
       footer={
         <div className="statement-buttons">
@@ -72,7 +72,13 @@ export function StatementSheet({
             onClick={() => {
               const copy = file();
               saveFile(
-                statementHtml(statement, { t, money, date }),
+                statementHtml(statement, {
+                  t,
+                  money,
+                  date,
+                  formatDigits,
+                  language,
+                }),
                 copy.name,
                 "text/html;charset=utf-8",
               );
@@ -97,7 +103,7 @@ export function StatementSheet({
         <div className="statement-person">
           <PersonMark person={person} />
           <div>
-            <strong>{person.name}</strong>
+            <strong>{formatDigits(person.name)}</strong>
             <span>{t(accountLabels[account])}</span>
           </div>
         </div>
@@ -133,7 +139,7 @@ export function StatementSheet({
             <div key={index}>
               <span>
                 <strong>
-                  {row.description ||
+                  {formatDigits(row.description) ||
                     t(
                       row.kind === "payment"
                         ? "টাকা দিয়েছি"
@@ -142,7 +148,7 @@ export function StatementSheet({
                           : "টাকা পেয়েছি",
                     )}
                 </strong>
-                <small>{row.works}</small>
+                <small>{formatDigits(row.works)}</small>
               </span>
               <strong>{money(Math.abs(row.charge || row.paid))}</strong>
             </div>

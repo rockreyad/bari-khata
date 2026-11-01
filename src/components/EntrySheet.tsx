@@ -1,3 +1,4 @@
+import { latinDigits } from "../lib/numerals";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Camera, Plus, Receipt, Trash2, Wallet, Wrench } from "lucide-react";
 import { z } from "zod";
@@ -251,7 +252,7 @@ export function EntrySheet({
   onClose,
 }: EntrySheetProps) {
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode]);
-  const { t, money, number } = useLanguageContext();
+  const { t, money, number, formatDigits } = useLanguageContext();
   const original = ledger.entries.find((entry) => entry.id === editEntryId);
   const draftKey = `entry:${editEntryId ?? `${defaultWorkId ?? "all"}:${defaultPersonId ?? "all"}:${initialKind ?? "purchase"}`}`;
   const [draft, setDraft] = useState<Draft>(() =>
@@ -1311,10 +1312,14 @@ export function EntrySheet({
                           <input
                             className="field-input"
                             inputMode="decimal"
-                            value={row.quantity}
+                            value={formatDigits(row.quantity)}
                             maxLength={60}
                             onChange={(event) =>
-                              rowField(index, "quantity", event.target.value)
+                              rowField(
+                                index,
+                                "quantity",
+                                latinDigits(event.target.value),
+                              )
                             }
                             placeholder={t("ইচ্ছা হলে লিখুন")}
                           />
@@ -1590,7 +1595,7 @@ export function EntrySheet({
           {files.map(({ id, file }) => (
             <div className="attachment-row" key={id}>
               <Receipt size={17} />
-              <span>{file.name}</span>
+              <span>{formatDigits(file.name)}</span>
               <button
                 type="button"
                 className="icon-button"

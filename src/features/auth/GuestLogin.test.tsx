@@ -21,7 +21,11 @@ vi.mock("./AuthProvider", () => ({
   }),
 }));
 vi.mock("../../context/LanguageProvider", () => ({
-  useLanguageContext: () => ({ t: (text: string) => text, number: String }),
+  useLanguageContext: () => ({
+    t: (text: string) => text,
+    formatDigits: String,
+    number: String,
+  }),
 }));
 
 beforeEach(() => {

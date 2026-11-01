@@ -1,3 +1,4 @@
+import { localizedDigits } from "../../lib/numerals";
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -10,6 +11,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 const api = vi.hoisted(() => ({
+  format: (value: string | number) => String(value),
   request: vi.fn(),
   verify: vi.fn(),
   signIn: vi.fn(),
@@ -30,6 +32,7 @@ vi.mock("../../context/LanguageProvider", () => ({
   useLanguageContext: () => ({
     t: (text: string, values?: Record<string, unknown>) =>
       text.replace(/{{(\w+)}}/g, (_, key) => String(values?.[key] ?? "")),
+    formatDigits: (value: string | number) => api.format(value),
     number: String,
   }),
 }));
@@ -60,6 +63,7 @@ async function requestCode(
   );
 }
 beforeEach(() => {
+  api.format = String;
   api.auth = { phoneOtpEnabled: true, phoneAuthMode: "mock" };
   api.request.mockResolvedValue({ retryAfter: 60 });
   api.verify.mockResolvedValue(undefined);
@@ -418,4 +422,27 @@ describe("phone sign-in", () => {
     expect(screen.queryByRole("button", { name: "ফোন নম্বর" })).toBeNull();
     expect(screen.getByLabelText("ইমেইল", { exact: true })).toBeTruthy();
   });
+});
+
+it("displays Bengali phone/code digits while submitting the unchanged canonical login credentials", async () => {
+  api.auth.phoneAuthMode = "manual";
+  api.format = (value) => localizedDigits(value, "bn");
+  const user = userEvent.setup();
+  const { onSuccess } = mount();
+  const phone = screen.getByLabelText("ফোন নম্বর", {
+    exact: true,
+  }) as HTMLInputElement;
+  await user.type(phone, "01712345678");
+  expect(phone.value).toBe("০১৭১২৩৪৫৬৭৮");
+  await user.click(screen.getByRole("button", { name: "এগিয়ে যাই" }));
+  expect(api.request).toHaveBeenCalledWith("+8801712345678");
+  const code = screen.getByLabelText("প্রবেশের কোড", {
+    exact: true,
+  }) as HTMLInputElement;
+  await user.type(code, "1318");
+  expect(code.value).toBe("১৩১৮");
+  expect(code.checkValidity()).toBe(true);
+  await user.click(screen.getByRole("button", { name: "খাতা খুলুন" }));
+  expect(api.verify).toHaveBeenCalledWith("+8801712345678", "1318");
+  expect(onSuccess).toHaveBeenCalledOnce();
 });

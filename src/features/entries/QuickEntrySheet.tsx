@@ -1,3 +1,4 @@
+import { latinDigits } from "../../lib/numerals";
 import {
   useCallback,
   useEffect,
@@ -68,7 +69,7 @@ const costNames = {
 } as const;
 export function QuickEntrySheet({ options }: { options: AddOptions }) {
   const { ledger, mode, save, close, notify } = useNotebook();
-  const { t, money } = useLanguageContext();
+  const { t, money, formatDigits } = useLanguageContext();
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode]);
   const key = `quick-v2:${options.kind ?? "expense"}:${options.workId ?? "all"}:${options.personId ?? "all"}${options.costType ? `:${options.costType}` : ""}`;
   const [draft, setDraft] = useState(() => entryContext(ledger, options));
@@ -542,13 +543,15 @@ export function QuickEntrySheet({ options }: { options: AddOptions }) {
                   ) : null}
                   {!labour && r.unit ? (
                     <label>
-                      {t("পরিমাণ")} · {r.unit}
+                      {t("পরিমাণ")} · {formatDigits(r.unit)}
                       <input
                         inputMode="decimal"
                         aria-label={t("পরিমাণ")}
-                        value={r.quantity}
+                        value={formatDigits(r.quantity)}
                         onChange={(e) =>
-                          changeRow(r.id, { quantity: e.target.value })
+                          changeRow(r.id, {
+                            quantity: latinDigits(e.target.value),
+                          })
                         }
                       />
                     </label>
@@ -619,10 +622,12 @@ export function QuickEntrySheet({ options }: { options: AddOptions }) {
                             <div className="inline-fields">
                               <input
                                 aria-label={t("পরিমাণ")}
-                                value={r.quantity}
+                                value={formatDigits(r.quantity)}
                                 inputMode="decimal"
                                 onChange={(e) =>
-                                  changeRow(r.id, { quantity: e.target.value })
+                                  changeRow(r.id, {
+                                    quantity: latinDigits(e.target.value),
+                                  })
                                 }
                               />
                               <input
@@ -701,7 +706,7 @@ export function QuickEntrySheet({ options }: { options: AddOptions }) {
                 {selectedPerson &&
                 !allowedPeople.some((p) => p.id === selectedPerson.id) ? (
                   <option value={selectedPerson.id}>
-                    {selectedPerson.name}
+                    {formatDigits(selectedPerson.name)}
                   </option>
                 ) : null}
                 <option value="__new__">{t("+ নাম লিখব")}</option>
@@ -1034,7 +1039,7 @@ export function QuickEntrySheet({ options }: { options: AddOptions }) {
               </label>
               {files.map((f) => (
                 <div className="attachment-row" key={f.id}>
-                  <span>{f.name ?? t("ভাউচার")}</span>
+                  <span>{formatDigits(f.name ?? t("ভাউচার"))}</span>
                   <button
                     type="button"
                     className="icon-button"

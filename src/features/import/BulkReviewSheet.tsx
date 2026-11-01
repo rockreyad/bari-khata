@@ -19,7 +19,7 @@ export function BulkReviewSheet({
   onSaved: () => void;
 }) {
   const { ledger, save } = useNotebook();
-  const { t, number, money } = useLanguageContext();
+  const { t, number, money, formatDigits } = useLanguageContext();
   const [originals] = useState(() => structuredClone(entries));
   const [workId, setWorkId] = useState("");
   const [costType, setCostType] = useState<CostType | "">("");
@@ -128,7 +128,7 @@ export function BulkReviewSheet({
         <div className="review-bulk-preview">
           {originals.slice(0, 6).map((entry) => (
             <div className="amount-row" key={entry.id}>
-              <span>{entry.lines[0]?.label || entry.note}</span>
+              <span>{formatDigits(entry.lines[0]?.label || entry.note)}</span>
               <strong>
                 {money(
                   entryTotal(entry) *

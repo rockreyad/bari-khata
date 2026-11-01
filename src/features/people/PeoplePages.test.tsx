@@ -24,6 +24,7 @@ vi.mock("../../app/NotebookProvider", () => ({
 vi.mock("../../context/LanguageProvider", () => ({
   useLanguageContext: () => ({
     language: "bn",
+    formatDigits: String,
     t: (text: string) => text,
     money: (value: number) => `৳${value / 100}`,
     number: String,
@@ -130,7 +131,7 @@ describe("minimal people pages", () => {
     const { container } = renderPage();
     expect(container.querySelectorAll(".history-row")).toHaveLength(5);
     expect(container.textContent).not.toContain("মিস্ত্রির মাল আলাদা");
-    expect(screen.queryByRole("button", { name: "মাল কিনেছি" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "মাল কিনলাম" })).toBeNull();
     expect(screen.queryByRole("button", { name: "মাল ফেরত লিখি" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "পুরো হিসাব" }));
     expect(state.go).toHaveBeenCalledWith(
@@ -141,11 +142,23 @@ describe("minimal people pages", () => {
     expect(rows[0].textContent).toContain("বিল 7");
     expect(rows[4].textContent).toContain("বিল 3");
   });
-  it("keeps shop purchases available and rare returns inside the menu", () => {
+  it("makes purchasing the shop primary action and keeps returns out of the main buttons", async () => {
     state.ledger = fixture();
     renderPage("/people/shop");
-    expect(screen.getByRole("button", { name: "মাল কিনেছি" })).toBeTruthy();
+    const purchase = screen.getByRole("button", { name: "মাল কিনলাম" });
+    expect(purchase.className).toBe("primary-button");
+    expect(screen.getByRole("button", { name: "টাকা দিলাম" }).className).toBe(
+      "secondary-button",
+    );
     expect(screen.queryByRole("button", { name: "মাল ফেরত লিখি" })).toBeNull();
+    await userEvent.click(purchase);
+    expect(state.add).toHaveBeenCalledWith({
+      kind: "expense",
+      personId: "shop",
+      workId: undefined,
+      account: "materials",
+      costType: "material",
+    });
   });
   it("respects a contact that has intentionally hidden all quick actions", () => {
     const ledger = fixture();
@@ -182,4 +195,70 @@ describe("minimal people pages", () => {
       screen.getByRole("button", { name: "মূল হিসাবে ফিরি" }),
     ).toBeTruthy();
   });
+});
+
+it("puts a shop's net purchases ahead of payments and shows only its own bills in the monthly chart", () => {
+  const ledger = fixture();
+  ledger.entries.push(
+    ...LedgerSchema.parse({
+      works: ledger.works,
+      people: ledger.people,
+      entries: [
+        {
+          id: "shop-bill",
+          personId: "shop",
+          kind: "expense",
+          date: "2026-11-01",
+          lines: [{ id: "s", workId: "work", label: "মাল", amount: 9300000 }],
+        },
+        {
+          id: "shop-paid",
+          personId: "shop",
+          kind: "payment",
+          date: "2026-11-01",
+          allocations: [{ workId: "work", amount: 3000000 }],
+          paymentParts: [{ amount: 3000000 }],
+        },
+      ],
+    }).entries,
+  );
+  state.ledger = ledger;
+  const { container } = renderPage("/people/shop");
+  const hero = container.querySelector(".contact-summary-hero")!;
+  expect(hero.textContent).toContain("মোট কেনাকাটা");
+  expect(hero.textContent).toContain("৳93000");
+  expect(
+    container.querySelector(".contact-summary-metrics")?.textContent,
+  ).toContain("৳63000");
+  expect(screen.queryByText("মজুরির চুক্তি")).toBeNull();
+  expect(screen.getByRole("region", { name: "মাসে মাসে খরচ" })).toBeTruthy();
+  expect(screen.queryByText("মিস্ত্রির খরচ")).toBeNull();
+});
+
+it("charts a driver's older transport account using the same scoped bills as the profile totals", () => {
+  state.ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "দরজা" }],
+    people: [{ id: "driver", name: "রনি", kind: "driver" }],
+    entries: [
+      {
+        id: "legacy-trip",
+        kind: "expense",
+        personId: "driver",
+        account: "materials",
+        date: "2026-11-01",
+        lines: [
+          {
+            id: "trip-line",
+            workId: "work",
+            label: "দরজার ভ্যান",
+            costType: "transport",
+            amount: 50000,
+          },
+        ],
+      },
+    ],
+  });
+  renderPage("/people/driver");
+  const chart = screen.getByRole("region", { name: "মাসে মাসে খরচ" });
+  expect(chart.querySelector("h2")?.textContent).toBe("৳500");
 });

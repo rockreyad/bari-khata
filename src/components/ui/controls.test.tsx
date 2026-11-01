@@ -21,6 +21,7 @@ vi.mock("../../context/LanguageProvider", () => ({
     t: (text: string) => text,
     money: (value: number) => `৳${value / 100}`,
     number: String,
+    formatDigits: String,
   }),
 }));
 

@@ -1,4 +1,11 @@
 export const entriesV4English: Record<string, string> = {
+  "তথ্য যোগ করা বাকি": "Details to add",
+  "বিলের লেনদেন": "Bill transactions",
+  "লেনদেনের বিস্তারিত": "Transaction details",
+  "মালের বিল": "Purchase bill",
+  "মূল বিল": "Original bill",
+  "ফেরতের তালিকা": "Refunds",
+  "এই বিলের সঙ্গে রাখা পরিশোধ": "Payments linked to this bill",
   "মজুরির বিল": "Labour bill",
   "এখানে শুধু দেওয়া টাকা রাখুন। মজুরির বিল আগে লেখা থাকলে আবার লিখতে হবে না।":
     "Record only the money paid here. You don't need to enter an existing labour bill again.",

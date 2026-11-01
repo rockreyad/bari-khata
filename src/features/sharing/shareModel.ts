@@ -6,7 +6,11 @@ const SafeAmount = z
   .min(-Number.MAX_SAFE_INTEGER)
   .max(Number.MAX_SAFE_INTEGER);
 export const SharedStatementSchema = z.object({
-  person: z.object({ name: z.string().max(200), role: z.string().max(200) }),
+  person: z.object({
+    name: z.string().max(200),
+    role: z.string().max(200),
+    kind: z.enum(["shop", "worker", "driver", "other"]).default("other"),
+  }),
   projectName: z.string().max(200),
   account: z.enum(["materials", "labour", "other"]),
   workName: z.string().max(200),
@@ -21,6 +25,26 @@ export const SharedStatementSchema = z.object({
     advance: SafeAmount,
     historicalCost: SafeAmount,
   }),
+  counts: z
+    .object({
+      expense: z.number().int().nonnegative().max(100000).default(0),
+      payment: z.number().int().nonnegative().max(100000).default(0),
+      expense_credit: z.number().int().nonnegative().max(100000).default(0),
+      refund: z.number().int().nonnegative().max(100000).default(0),
+    })
+    .default({ expense: 0, payment: 0, expense_credit: 0, refund: 0 }),
+  contracts: z
+    .array(
+      z.object({
+        title: z.string().max(300),
+        workName: z.string().max(200),
+        total: SafeAmount.refine((value) => value >= 0),
+        netPaid: SafeAmount,
+        remaining: SafeAmount.refine((value) => value >= 0),
+      }),
+    )
+    .max(10000)
+    .default([]),
   rows: z
     .array(
       z.object({
@@ -40,3 +64,5 @@ export const SharedStatementSchema = z.object({
     .max(60),
 });
 export type SharedStatement = z.infer<typeof SharedStatementSchema>;
+
+export type SharedKind = SharedStatement["rows"][number]["kind"];

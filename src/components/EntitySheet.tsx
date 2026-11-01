@@ -1,3 +1,4 @@
+import { latinDigits } from "../lib/numerals";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   CheckIcon,
@@ -154,7 +155,7 @@ export function EntitySheet({
   onSave,
   onClose,
 }: EntitySheetProps) {
-  const { t, money } = useLanguageContext();
+  const { t, money, formatDigits } = useLanguageContext();
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode]);
   const [draft, setDraft] = useState(() =>
     initial(kind, ledger, editId, defaultWorkId, defaultPersonId),
@@ -626,8 +627,8 @@ export function EntitySheet({
                 {t("ফোন নম্বর")}
                 <input
                   type="tel"
-                  value={draft.phone}
-                  onChange={(e) => field("phone", e.target.value)}
+                  value={formatDigits(draft.phone)}
+                  onChange={(e) => field("phone", latinDigits(e.target.value))}
                   placeholder={t("না দিলেও হবে")}
                 />
               </label>
@@ -797,8 +798,10 @@ export function EntitySheet({
                       {t(draft.basis === "sqft" ? "কত বর্গফুট" : "কত দিন")}
                       <input
                         inputMode="decimal"
-                        value={draft.quantity}
-                        onChange={(e) => field("quantity", e.target.value)}
+                        value={formatDigits(draft.quantity)}
+                        onChange={(e) =>
+                          field("quantity", latinDigits(e.target.value))
+                        }
                       />
                     </label>
                     <label>

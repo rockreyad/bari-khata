@@ -22,6 +22,7 @@ vi.mock("../../context/LanguageProvider", () => ({
     t: (text: string) => text,
     money: (value: number) => `৳${value / 100}`,
     number: String,
+    formatDigits: String,
     date: String,
     language: "bn",
   }),
@@ -103,6 +104,10 @@ it("opens a work with all payments visible, distinct cost/paid totals, and a who
     container.querySelector(".work-overview-balances")?.textContent,
   ).toContain("৳30000");
   expect(screen.getByText("শাহ আলম")).toBeTruthy();
+  expect(
+    container.querySelector(".work-balance-disclosure")?.hasAttribute("open"),
+  ).toBe(false);
+  expect(container.querySelector(".work-advance-note")).toBeNull();
   const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: "টাকা দিলাম" }));
   expect(context.add).toHaveBeenCalledWith({

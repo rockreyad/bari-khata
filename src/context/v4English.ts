@@ -1,4 +1,7 @@
 export const v4English: Record<string, string> = {
+  "মাসের খরচ দেখি": "View monthly spending",
+  "বাকি ও অগ্রিম": "Due and advance",
+  "অগ্রিম দিয়েছি": "Paid in advance",
   "এই খাতার হিসাব": "This work account",
   "এই খাতার লেনদেন": "Transactions in this work",
   "দিয়েছি (ফেরত বাদে)": "Paid, less refunds",

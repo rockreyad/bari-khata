@@ -45,6 +45,9 @@ import {
 import { themePalettes } from "../../lib/themes";
 import { useAuth } from "../auth/AuthProvider";
 import { SettingsAppearance } from "./SettingsAppearance";
+import { SettingsPassword } from "./SettingsPassword";
+import { canChangeEmailPassword } from "../auth/changePassword";
+import { getActiveOwner } from "../../data/database";
 import "./settings.css";
 
 type Panel =
@@ -105,7 +108,7 @@ function SettingsRow({
 
 export function SettingsPage() {
   const { ledger, state, mode, save, notify, go } = useNotebook();
-  const { t, language, setLanguage, number, money, date } =
+  const { t, language, setLanguage, number, money, date, formatDigits } =
     useLanguageContext();
   const auth = useAuth();
   const navigate = useNavigate();
@@ -256,7 +259,11 @@ export function SettingsPage() {
           </p>
           <h2>{ledger.project.name}</h2>
           <p className="settings-profile-account">
-            {mode === "demo" ? t("নমুনা হিসাব দেখছেন") : accountLabel}
+            {mode === "demo"
+              ? t("নমুনা হিসাব দেখছেন")
+              : phoneAccount
+                ? formatDigits(accountLabel)
+                : accountLabel}
           </p>
           <span className={`settings-sync ${pending ? "is-pending" : ""}`}>
             {auth.status === "offline" ? (
@@ -706,9 +713,31 @@ export function SettingsPage() {
                   </span>
                   <div>
                     <small>{t("নিজের অ্যাকাউন্ট")}</small>
-                    <strong>{accountLabel}</strong>
+                    <strong>
+                      {phoneAccount ? formatDigits(accountLabel) : accountLabel}
+                    </strong>
                   </div>
                 </div>
+                {mode === "real" &&
+                auth.user &&
+                canChangeEmailPassword(auth.user) ? (
+                  <SettingsPassword
+                    key={auth.user.id}
+                    user={auth.user}
+                    disabled={busy || auth.status !== "signed-in"}
+                    onBusyChange={setBusy}
+                    onSignInAgain={async () => {
+                      if (getActiveOwner() !== auth.user?.id)
+                        throw new Error("account_changed");
+                      try {
+                        await auth.signOut();
+                      } finally {
+                        if (!getActiveOwner())
+                          navigate("/login", { replace: true });
+                      }
+                    }}
+                  />
+                ) : null}
                 <div className="settings-privacy-note">
                   <ShieldCheck size={22} weight="duotone" />
                   <div>
