@@ -176,7 +176,10 @@ describe("explicit email confirmation", () => {
     );
     expect(api.confirm).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "ইমেইল নিশ্চিত করি" }));
-    expect(api.confirm).toHaveBeenCalledExactlyOnceWith("a".repeat(64));
+    expect(api.confirm).toHaveBeenCalledExactlyOnceWith({
+      kind: "token_hash",
+      tokenHash: "a".repeat(64),
+    });
     expect(
       screen.getByRole("heading", { name: "ইমেইল নিশ্চিত হয়েছে" }),
     ).toBeTruthy();
@@ -199,7 +202,10 @@ describe("explicit email confirmation", () => {
     ).toBeNull();
     api.confirm.mockRejectedValueOnce(new Error("confirmation_invalid"));
     await user.click(screen.getByRole("button", { name: "ইমেইল নিশ্চিত করি" }));
-    expect(api.confirm).toHaveBeenNthCalledWith(2, "b".repeat(64));
+    expect(api.confirm).toHaveBeenNthCalledWith(2, {
+      kind: "token_hash",
+      tokenHash: "b".repeat(64),
+    });
     expect(screen.getByRole("link", { name: "নতুন ইমেইল চাই" })).toBeTruthy();
   });
   it("ignores a late response after another confirmation link replaces its scope", async () => {
@@ -226,8 +232,76 @@ describe("explicit email confirmation", () => {
       screen.queryByRole("heading", { name: "ইমেইল নিশ্চিত হয়েছে" }),
     ).toBeNull();
     await user.click(screen.getByRole("button", { name: "ইমেইল নিশ্চিত করি" }));
-    expect(api.confirm).toHaveBeenLastCalledWith("c".repeat(64));
+    expect(api.confirm).toHaveBeenLastCalledWith({
+      kind: "token_hash",
+      tokenHash: "c".repeat(64),
+    });
   });
+  it("scrubs a default hosted callback, waits for a click, and keeps the existing owner", async () => {
+    api.auth = { user: { id: "existing-owner" }, status: "signed-in" };
+    const accessToken = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.c2lnbmF0dXJl";
+    const user = userEvent.setup();
+    renderPage(
+      `/auth/confirm#access_token=${accessToken}&refresh_token=do-not-retain&token_type=bearer&expires_in=3600&type=signup`,
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("route").textContent).toBe("/auth/confirm"),
+    );
+    expect(api.confirm).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "ইমেইল নিশ্চিত করি" }));
+    expect(api.confirm).toHaveBeenCalledExactlyOnceWith({
+      kind: "access_token",
+      accessToken,
+    });
+    expect(
+      screen.getByRole("heading", { name: "ইমেইল নিশ্চিত হয়েছে" }),
+    ).toBeTruthy();
+    expect(api.auth.user?.id).toBe("existing-owner");
+    expect(api.signIn).not.toHaveBeenCalled();
+    expect(
+      screen
+        .getByRole("link", { name: "নিজের খাতায় ফিরি" })
+        .getAttribute("href"),
+    ).toBe("/");
+  });
+  it("retries a default hosted callback after a network failure without restoring credentials to the URL", async () => {
+    const accessToken = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.c2lnbmF0dXJl";
+    api.confirm.mockRejectedValueOnce(new Error("confirmation_network"));
+    const user = userEvent.setup();
+    renderPage(`/auth/confirm#access_token=${accessToken}&type=signup`);
+    await user.click(screen.getByRole("button", { name: "ইমেইল নিশ্চিত করি" }));
+    expect(screen.getByRole("alert").textContent).toContain("লিংকটি আছে");
+    expect(screen.getByLabelText("route").textContent).toBe("/auth/confirm");
+    await user.click(screen.getByRole("button", { name: "ইমেইল নিশ্চিত করি" }));
+    expect(api.confirm).toHaveBeenNthCalledWith(2, {
+      kind: "access_token",
+      accessToken,
+    });
+    expect(
+      screen.getByRole("link", { name: "লগইন করি" }).getAttribute("href"),
+    ).toBe("/login");
+    expect(api.signIn).not.toHaveBeenCalled();
+  });
+  it.each([
+    "?code=test-code",
+    "#access_token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.c2lnbmF0dXJl&type=recovery",
+    `#token_hash=${"b".repeat(64)}&type=email&error=denied`,
+  ])(
+    "scrubs and rejects an unsupported or failed callback: %s",
+    async (credentials) => {
+      renderPage(`/auth/confirm${credentials}`);
+      await waitFor(() =>
+        expect(screen.getByLabelText("route").textContent).toBe(
+          "/auth/confirm",
+        ),
+      );
+      expect(
+        screen.getByRole("heading", { name: "লিংকটি কাজ করছে না" }),
+      ).toBeTruthy();
+      expect(api.confirm).not.toHaveBeenCalled();
+      expect(api.signIn).not.toHaveBeenCalled();
+    },
+  );
   it("rejects a recovery token without attempting confirmation", () => {
     renderPage(`/auth/confirm#token_hash=${"b".repeat(64)}&type=recovery`);
     expect(

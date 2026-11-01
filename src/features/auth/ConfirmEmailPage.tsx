@@ -8,19 +8,23 @@ import {
 } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { useAuth } from "./AuthProvider";
-import { confirmRegistration, readConfirmation } from "./registration";
+import {
+  confirmRegistration,
+  readConfirmation,
+  type Confirmation,
+} from "./registration";
 import "./registration.css";
 export function ConfirmEmailPage() {
   const { t } = useLanguageContext(),
     auth = useAuth(),
     location = useLocation(),
     navigate = useNavigate();
-  const [token, setToken] = useState(
-    () => readConfirmation(location.search, location.hash).tokenHash,
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(
+    () => readConfirmation(location.search, location.hash).confirmation,
   );
   const [state, setState] = useState<
     "ready" | "busy" | "confirmed" | "invalid"
-  >(() => (token ? "ready" : "invalid"));
+  >(() => (confirmation ? "ready" : "invalid"));
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const generation = useRef(0),
@@ -33,7 +37,7 @@ export function ConfirmEmailPage() {
     accountScope.current = owner;
     if (inFlight.current) {
       generation.current++;
-      setToken(null);
+      setConfirmation(null);
       setState("invalid");
       setError("");
     }
@@ -49,22 +53,22 @@ export function ConfirmEmailPage() {
     const input = readConfirmation(location.search, location.hash);
     if (!input.hasCredential) return;
     generation.current++;
-    setToken(input.tokenHash);
-    setState(input.tokenHash ? "ready" : "invalid");
+    setConfirmation(input.confirmation);
+    setState(input.confirmation ? "ready" : "invalid");
     setEmail("");
     setError("");
     navigate("/auth/confirm", { replace: true });
   }, [location.search, location.hash, navigate]);
   async function confirm() {
-    if (!token || inFlight.current) return;
+    if (!confirmation || inFlight.current) return;
     inFlight.current = true;
     const request = generation.current;
     setState("busy");
     setError("");
     try {
-      const verifiedEmail = await confirmRegistration(token);
+      const verifiedEmail = await confirmRegistration(confirmation);
       if (active.current && request === generation.current) {
-        setToken(null);
+        setConfirmation(null);
         setEmail(verifiedEmail);
         setState("confirmed");
       }
@@ -82,7 +86,7 @@ export function ConfirmEmailPage() {
           );
           setState("ready");
         } else {
-          setToken(null);
+          setConfirmation(null);
           setState("invalid");
         }
       }

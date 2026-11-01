@@ -98,44 +98,113 @@ export async function resendRegistration(email: string) {
   });
   if (error && error.code !== "user_already_exists") throw failure(error);
 }
+const TokenHashSchema = z.string().regex(/^[a-zA-Z0-9_-]{20,512}$/);
+const AccessTokenSchema = z
+  .string()
+  .min(20)
+  .max(16384)
+  .regex(/^[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/);
+const ConfirmationSchema = z.discriminatedUnion("kind", [
+  z
+    .object({ kind: z.literal("token_hash"), tokenHash: TokenHashSchema })
+    .strict(),
+  z
+    .object({ kind: z.literal("access_token"), accessToken: AccessTokenSchema })
+    .strict(),
+]);
+export type Confirmation = z.infer<typeof ConfirmationSchema>;
+
 export function readConfirmation(search: string, hash: string) {
   const query = new URLSearchParams(search),
     fragment = new URLSearchParams(hash.replace(/^#/, ""));
-  const hasCredential = [query, fragment].some((params) =>
-    [
-      "token_hash",
-      "type",
-      "code",
-      "access_token",
-      "refresh_token",
-      "error",
-      "error_description",
-    ].some((key) => params.has(key)),
-  );
-  const values = [
-    ...query.getAll("token_hash"),
-    ...fragment.getAll("token_hash"),
+  const keys = [
+    "token_hash",
+    "type",
+    "code",
+    "access_token",
+    "refresh_token",
+    "token_type",
+    "expires_in",
+    "expires_at",
+    "provider_token",
+    "provider_refresh_token",
+    "error",
+    "error_code",
+    "error_description",
   ];
-  const types = [...query.getAll("type"), ...fragment.getAll("type")];
-  const tokenHash =
-    values.length === 1 &&
-    types.length === 1 &&
-    types[0] === "email" &&
-    /^[a-zA-Z0-9_-]{20,512}$/.test(values[0])
-      ? values[0]
-      : null;
-  return { tokenHash, hasCredential };
+  const sources = [query, fragment].filter((params) =>
+    keys.some((key) => params.has(key)),
+  );
+  const hasCredential = sources.length > 0;
+  const invalid = { confirmation: null, hasCredential };
+  if (sources.length !== 1) return invalid;
+  const params = sources[0];
+  if (
+    keys.some((key) => params.getAll(key).length > 1) ||
+    [
+      "code",
+      "error",
+      "error_code",
+      "error_description",
+      "provider_token",
+      "provider_refresh_token",
+    ].some((key) => params.has(key))
+  )
+    return invalid;
+  if (params.has("token_hash")) {
+    if (
+      params.get("type") !== "email" ||
+      [
+        "access_token",
+        "refresh_token",
+        "token_type",
+        "expires_in",
+        "expires_at",
+      ].some((key) => params.has(key))
+    )
+      return invalid;
+    const tokenHash = TokenHashSchema.safeParse(params.get("token_hash"));
+    return tokenHash.success
+      ? {
+          confirmation: {
+            kind: "token_hash" as const,
+            tokenHash: tokenHash.data,
+          },
+          hasCredential,
+        }
+      : invalid;
+  }
+  if (
+    params !== fragment ||
+    !["signup", "email"].includes(params.get("type") ?? "") ||
+    (params.has("token_type") && params.get("token_type") !== "bearer")
+  )
+    return invalid;
+  const accessToken = AccessTokenSchema.safeParse(params.get("access_token"));
+  return accessToken.success
+    ? {
+        confirmation: {
+          kind: "access_token" as const,
+          accessToken: accessToken.data,
+        },
+        hasCredential,
+      }
+    : invalid;
 }
-export async function confirmRegistration(tokenHash: string) {
-  if (!/^[a-zA-Z0-9_-]{20,512}$/.test(tokenHash))
-    throw new Error("confirmation_invalid");
+
+export async function confirmRegistration(input: Confirmation) {
+  const parsed = ConfirmationSchema.safeParse(input);
+  if (!parsed.success) throw new Error("confirmation_invalid");
   const cloud = client();
   let result;
   try {
-    result = await cloud.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: "email",
-    });
+    result =
+      parsed.data.kind === "token_hash"
+        ? await cloud.auth.verifyOtp({
+            token_hash: parsed.data.tokenHash,
+            type: "email",
+          })
+        : await cloud.auth.getUser(parsed.data.accessToken);
   } catch {
     throw new Error("confirmation_network");
   }
@@ -151,10 +220,15 @@ export async function confirmRegistration(tokenHash: string) {
       throw new Error("confirmation_rate_limited");
     throw new Error("confirmation_invalid");
   }
-  if (!data.user || !data.session) throw new Error("confirmation_invalid");
-  const email = data.user.email ?? "";
-  await cloud.auth.signOut({ scope: "local" }).catch(() => undefined);
-  return EmailSchema.safeParse(email).success ? email : "";
+  if (parsed.data.kind === "token_hash") {
+    await cloud.auth.signOut({ scope: "local" }).catch(() => undefined);
+    if (!("session" in data) || !data.session)
+      throw new Error("confirmation_invalid");
+  }
+  const email = EmailSchema.safeParse(data.user?.email);
+  if (!data.user?.email_confirmed_at || !email.success)
+    throw new Error("confirmation_invalid");
+  return email.data;
 }
 export const registrationErrorText = (code: string) =>
   ({
