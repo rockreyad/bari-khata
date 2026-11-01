@@ -1,10 +1,16 @@
 import { z } from "zod";
 import { normalizeBangladeshPhone } from "./phone";
 
-export type PhoneAuthMode = "mock" | "sms" | "off";
+export type PhoneAuthMode = "mock" | "sms" | "manual" | "off";
 export function readPhoneAuthMode(): PhoneAuthMode {
   const value = import.meta.env.VITE_PHONE_AUTH_MODE;
-  if (value === "mock" || value === "sms" || value === "off") return value;
+  if (
+    value === "mock" ||
+    value === "sms" ||
+    value === "manual" ||
+    value === "off"
+  )
+    return value;
   return value === undefined && import.meta.env.VITE_ENABLE_PHONE_OTP === "true"
     ? "sms"
     : "off";
@@ -14,7 +20,11 @@ export function normalizePhoneCode(value: string, mode: PhoneAuthMode) {
     .trim()
     .replace(/[০-৯]/g, (digit) => String("০১২৩৪৫৬৭৮৯".indexOf(digit)));
   if (mode === "off") throw new Error("phone_otp_unavailable");
-  if (!(mode === "mock" ? /^\d{4,8}$/ : /^\d{6,8}$/).test(code))
+  if (
+    !(mode === "mock" || mode === "manual" ? /^\d{4,8}$/ : /^\d{6,8}$/).test(
+      code,
+    )
+  )
     throw new Error("invalid_otp");
   return code;
 }
@@ -32,17 +42,17 @@ const FailureSchema = z.object({
     "invalid_otp",
     "phone_rate_limited",
     "phone_requires_sms",
+    "phone_account_unavailable",
     "phone_auth_unavailable",
     "otp_expired",
     "otp_attempts_exceeded",
   ]),
-  retryAfter: z.number().int().min(1).max(300).optional(),
+  retryAfter: z.number().int().min(1).max(900).optional(),
 });
-async function mockRequest(path: "request" | "verify", body: unknown) {
-  if (readPhoneAuthMode() !== "mock") throw new Error("phone_otp_unavailable");
+async function brokerRequest(path: string, body: unknown) {
   let response: Response;
   try {
-    response = await fetch(`/api/dev-phone-otp/${path}`, {
+    response = await fetch(path, {
       method: "POST",
       credentials: "omit",
       mode: "same-origin",
@@ -70,6 +80,10 @@ async function mockRequest(path: "request" | "verify", body: unknown) {
   }
   return data;
 }
+async function mockRequest(path: "request" | "verify", body: unknown) {
+  if (readPhoneAuthMode() !== "mock") throw new Error("phone_otp_unavailable");
+  return brokerRequest(`/api/dev-phone-otp/${path}`, body);
+}
 export async function requestMockPhoneOtp(input: string) {
   const phone = normalizeBangladeshPhone(input);
   const response = await mockRequest("request", { phone });
@@ -86,6 +100,9 @@ export async function verifyMockPhoneOtp(
   const code = normalizePhoneCode(token, readPhoneAuthMode());
   if (!/^[a-f0-9]{64}$/.test(challengeId)) throw new Error("invalid_otp");
   const response = await mockRequest("verify", { phone, code, challengeId });
+  return readPhoneSession(response, phone);
+}
+function readPhoneSession(response: unknown, phone: string) {
   const parsed = SessionSchema.safeParse(response);
   if (!parsed.success) throw new Error("phone_auth_unavailable");
   try {
@@ -97,4 +114,15 @@ export async function verifyMockPhoneOtp(
     throw new Error("phone_auth_unavailable");
   }
   return parsed.data;
+}
+
+export async function verifyManualPhoneCode(input: string, token: string) {
+  if (readPhoneAuthMode() !== "manual")
+    throw new Error("phone_otp_unavailable");
+  const phone = normalizeBangladeshPhone(input);
+  const code = normalizePhoneCode(token, "manual");
+  return readPhoneSession(
+    await brokerRequest("/api/phone-login", { phone, code }),
+    phone,
+  );
 }

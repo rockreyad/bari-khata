@@ -8,7 +8,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { createClient } from "@supabase/supabase-js";
 import { normalizeBangladeshPhone } from "../src/features/auth/phone.ts";
 
-export type PhoneAuthMode = "mock" | "sms" | "off";
+export type PhoneAuthMode = "mock" | "sms" | "manual" | "off";
 export type PhoneGatewayConfig = {
   mode: PhoneAuthMode;
   url: string;
@@ -31,8 +31,8 @@ export function phoneAuthMode(
   env: Record<string, string | undefined>,
 ): PhoneAuthMode {
   const mode = env.BARI_PHONE_AUTH_MODE ?? "off";
-  if (mode !== "off" && mode !== "mock" && mode !== "sms")
-    throw new Error("BARI_PHONE_AUTH_MODE must be off, mock or sms.");
+  if (mode !== "off" && mode !== "mock" && mode !== "sms" && mode !== "manual")
+    throw new Error("BARI_PHONE_AUTH_MODE must be off, mock, manual or sms.");
   return mode;
 }
 export function phoneGatewayConfig(

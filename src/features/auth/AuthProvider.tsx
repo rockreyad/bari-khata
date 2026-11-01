@@ -30,6 +30,7 @@ import {
   normalizePhoneCode,
   requestMockPhoneOtp,
   verifyMockPhoneOtp,
+  verifyManualPhoneCode,
   type PhoneAuthMode,
 } from "./phoneAuth";
 
@@ -215,6 +216,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const attempt = accessRevision.current;
       const request = ++phoneRequest.current;
       phoneChallenge.current = null;
+      if (phoneAuthMode === "manual") {
+        phoneChallenge.current = { phone, id: "manual" };
+        return { retryAfter: 1 };
+      }
       if (phoneAuthMode === "mock") {
         const result = await requestMockPhoneOtp(phone);
         if (
@@ -271,8 +276,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       phoneLoginTarget.current = phone;
       try {
         let result;
-        if (phoneAuthMode === "mock") {
-          const session = await verifyMockPhoneOtp(phone, code, challenge.id);
+        if (phoneAuthMode === "mock" || phoneAuthMode === "manual") {
+          const session =
+            phoneAuthMode === "manual"
+              ? await verifyManualPhoneCode(phone, code)
+              : await verifyMockPhoneOtp(phone, code, challenge.id);
           if (!stillCurrent()) throw new Error("account_changed");
           result = await cloud.auth.setSession(session);
         } else

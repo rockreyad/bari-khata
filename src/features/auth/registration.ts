@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { readPhoneAuthMode } from "./phoneAuth";
 
 export const RegistrationSchema = z
   .object({
@@ -74,6 +75,8 @@ export async function registerAccount(
   password: string,
   confirmation: string,
 ) {
+  if (readPhoneAuthMode() === "manual")
+    throw new Error("registration_unavailable");
   const fields = validateRegistration(email, password, confirmation);
   const cloud = client();
   const { data, error } = await cloud.auth.signUp({
@@ -88,6 +91,8 @@ export async function registerAccount(
   }
 }
 export async function resendRegistration(email: string) {
+  if (readPhoneAuthMode() === "manual")
+    throw new Error("registration_unavailable");
   const parsed = EmailSchema.safeParse(email.trim());
   if (!parsed.success) throw new Error("invalid_email");
   const cloud = client();

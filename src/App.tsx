@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -71,6 +71,14 @@ function Login() {
   if (auth.user) return <Navigate to={target} replace />;
   return <LoginPage onSuccess={() => navigate(target, { replace: true })} />;
 }
+function EmailRegistration({ children }: { children: ReactNode }) {
+  const auth = useAuth();
+  return auth.phoneAuthMode === "manual" ? (
+    <Navigate to="/login" replace />
+  ) : (
+    children
+  );
+}
 export default function App() {
   return (
     <BrowserRouter>
@@ -78,8 +86,22 @@ export default function App() {
         <Routes>
           <Route path="/shared" element={<SharedRoute />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<RegistrationPage />} />
-          <Route path="/register/resend" element={<ResendEmailPage />} />
+          <Route
+            path="/register"
+            element={
+              <EmailRegistration>
+                <RegistrationPage />
+              </EmailRegistration>
+            }
+          />
+          <Route
+            path="/register/resend"
+            element={
+              <EmailRegistration>
+                <ResendEmailPage />
+              </EmailRegistration>
+            }
+          />
           <Route path="/auth/confirm" element={<ConfirmEmailPage />} />
           <Route
             path="/sample/*"

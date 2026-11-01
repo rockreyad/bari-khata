@@ -20,7 +20,7 @@ const phoneCode = (value: string) =>
     .replace(/[০-৯]/g, (digit) => String("০১২৩৪৫৬৭৮৯".indexOf(digit)))
     .replace(/[^0-9]/g, "")
     .slice(0, 8);
-function phoneError(code: string) {
+function phoneError(code: string, manual = false) {
   if (code === "invalid_phone") return "সঠিক বাংলাদেশি ফোন নম্বর লিখুন।";
   if (code === "invalid_otp") return "কোডটি মেলেনি। আবার চেষ্টা করুন।";
   if (
@@ -31,7 +31,9 @@ function phoneError(code: string) {
       "challenge_invalid",
     ].includes(code)
   )
-    return "কোডের মেয়াদ শেষ হয়েছে। আবার কোড নিন।";
+    return manual
+      ? "লগইন হয়নি। আবার চেষ্টা করুন।"
+      : "কোডের মেয়াদ শেষ হয়েছে। আবার কোড নিন।";
   if (/rate_limit|too_many|attempts_exceeded/.test(code))
     return "একটু অপেক্ষা করে আবার চেষ্টা করুন।";
   if (
@@ -41,9 +43,13 @@ function phoneError(code: string) {
       "phone_requires_sms",
     ].includes(code)
   )
-    return "এই নম্বরে আসল SMS দিয়ে লগইন করতে হবে।";
+    return manual
+      ? "লগইন হয়নি। আবার চেষ্টা করুন।"
+      : "এই নম্বরে আসল SMS দিয়ে লগইন করতে হবে।";
   if (/unavailable|disabled/.test(code))
-    return "ফোন দিয়ে লগইন এখন চালু নেই। ইমেইল ব্যবহার করুন।";
+    return manual
+      ? "ফোন দিয়ে লগইন এখন চালু নেই। পরে আবার চেষ্টা করুন।"
+      : "ফোন দিয়ে লগইন এখন চালু নেই। ইমেইল ব্যবহার করুন।";
   if (code === "cloud_not_configured")
     return "লগইনের সংযোগ এখনও প্রস্তুত হয়নি।";
   if (/fetch|network|offline|connection/i.test(code))
@@ -60,6 +66,7 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
       ? location.state.email
       : "";
   const mode = auth.phoneAuthMode ?? (auth.phoneOtpEnabled ? "sms" : "off");
+  const manual = mode === "manual";
   const [method, setMethod] = useState<"email" | "phone">(() =>
     initialEmail || !auth.phoneOtpEnabled ? "email" : "phone",
   );
@@ -75,7 +82,7 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
   const active = useRef(true),
     requestScope = useRef(0),
     inFlight = useRef(false);
-  const minimumCodeLength = mode === "mock" ? 4 : 6;
+  const minimumCodeLength = mode === "sms" ? 6 : 4;
   const remaining = Math.max(0, Math.ceil((retryUntil - now) / 1000));
   useEffect(() => {
     active.current = true;
@@ -116,7 +123,7 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
       "retryAfter" in response &&
       typeof response.retryAfter === "number" &&
       Number.isFinite(response.retryAfter)
-        ? Math.max(1, Math.min(300, Math.ceil(response.retryAfter)))
+        ? Math.max(1, Math.min(900, Math.ceil(response.retryAfter)))
         : 60;
     setRetryUntil(Date.now() + seconds * 1000);
     setNow(Date.now());
@@ -139,12 +146,12 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
       if (!active.current || scope !== requestScope.current) return;
       setSent(true);
       setOtp("");
-      setCooldown(response);
+      if (!manual) setCooldown(response);
     } catch (failure) {
       if (active.current && scope === requestScope.current) {
         const code = failure instanceof Error ? failure.message : "";
-        setError(t(phoneError(code)));
-        if (/rate_limit/.test(code)) setCooldown(failure);
+        setError(t(phoneError(code, manual)));
+        if (!manual && /rate_limit/.test(code)) setCooldown(failure);
       }
     } finally {
       inFlight.current = false;
@@ -153,7 +160,8 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
   }
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (inFlight.current) return;
+    if (inFlight.current || (method === "phone" && manual && remaining > 0))
+      return;
     if (method === "phone" && !sent) {
       await requestCode();
       return;
@@ -181,10 +189,11 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
           t(
             code === "email_not_confirmed"
               ? "আগে আপনার ইমেইল নিশ্চিত করুন। তারপর লগইন করুন।"
-              : phoneError(code),
+              : phoneError(code, manual),
           ),
         );
         if (
+          !manual &&
           [
             "otp_expired",
             "otp_challenge_expired",
@@ -197,6 +206,12 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
           setOtp("");
           setRetryUntil(0);
         }
+        if (
+          method === "phone" &&
+          manual &&
+          /rate_limit|too_many|attempts_exceeded/.test(code)
+        )
+          setCooldown(failure);
       }
     } finally {
       inFlight.current = false;
@@ -277,7 +292,9 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
             <>
               {sent ? (
                 <div className="auth-phone-recipient">
-                  <span>{t("এই নম্বরের কোড লিখুন")}</span>
+                  <span>
+                    {t(manual ? "ফোন নম্বর" : "এই নম্বরের কোড লিখুন")}
+                  </span>
                   <strong>{phone}</strong>
                   <button
                     type="button"
@@ -333,13 +350,15 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
               ) : null}
               {sent ? (
                 <>
-                  <label htmlFor="login-otp">{t("কোড")}</label>
+                  <label htmlFor="login-otp">
+                    {t(manual ? "প্রবেশের কোড" : "কোড")}
+                  </label>
                   <input
                     className="auth-otp-input"
                     id="login-otp"
                     type="text"
                     inputMode="numeric"
-                    autoComplete="one-time-code"
+                    autoComplete={manual ? "off" : "one-time-code"}
                     value={otp}
                     disabled={busy}
                     onChange={(event) => {
@@ -359,23 +378,27 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
                     role="status"
                   >
                     {t(
-                      mode === "mock"
-                        ? "পরীক্ষার কোডটি লিখুন।"
-                        : "ফোনে পাঠানো কোডটি লিখুন।",
+                      manual
+                        ? "আপনাকে দেওয়া প্রবেশের কোডটি লিখুন।"
+                        : mode === "mock"
+                          ? "পরীক্ষার কোডটি লিখুন।"
+                          : "ফোনে পাঠানো কোডটি লিখুন।",
                     )}
                   </p>
-                  <button
-                    type="button"
-                    className="text-button auth-phone-resend"
-                    disabled={busy || remaining > 0}
-                    onClick={() => void requestCode()}
-                  >
-                    {remaining > 0
-                      ? t("{{seconds}} সেকেন্ড পরে আবার নিন", {
-                          seconds: number(remaining),
-                        })
-                      : t("আবার কোড নিন")}
-                  </button>
+                  {!manual && (
+                    <button
+                      type="button"
+                      className="text-button auth-phone-resend"
+                      disabled={busy || remaining > 0}
+                      onClick={() => void requestCode()}
+                    >
+                      {remaining > 0
+                        ? t("{{seconds}} সেকেন্ড পরে আবার নিন", {
+                            seconds: number(remaining),
+                          })
+                        : t("আবার কোড নিন")}
+                    </button>
+                  )}
                 </>
               ) : null}
             </>
@@ -385,7 +408,8 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
               {error}
             </p>
           )}
-          {error === t("আগে আপনার ইমেইল নিশ্চিত করুন। তারপর লগইন করুন।") ? (
+          {!manual &&
+          error === t("আগে আপনার ইমেইল নিশ্চিত করুন। তারপর লগইন করুন।") ? (
             <Link className="auth-resend-link" to="/register/resend">
               {t("নিশ্চিত করার ইমেইল আবার চাই")}
             </Link>
@@ -393,17 +417,25 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
           <button
             className="primary-button auth-submit"
             type="submit"
-            disabled={busy || (method === "phone" && !sent && remaining > 0)}
+            disabled={
+              busy || (method === "phone" && remaining > 0 && (manual || !sent))
+            }
           >
             {busy
               ? t("অপেক্ষা করুন…")
-              : method === "phone" && !sent
-                ? remaining > 0
-                  ? t("{{seconds}} সেকেন্ড পরে আবার নিন", {
-                      seconds: number(remaining),
-                    })
-                  : t("কোড নিন")
-                : t("খাতা খুলুন")}
+              : method === "phone" && manual && remaining > 0
+                ? t("{{seconds}} সেকেন্ড পরে চেষ্টা করুন", {
+                    seconds: number(remaining),
+                  })
+                : method === "phone" && !sent
+                  ? manual
+                    ? t("এগিয়ে যাই")
+                    : remaining > 0
+                      ? t("{{seconds}} সেকেন্ড পরে আবার নিন", {
+                          seconds: number(remaining),
+                        })
+                      : t("কোড নিন")
+                  : t("খাতা খুলুন")}
             <ArrowRight size={20} />
           </button>
         </form>
@@ -425,10 +457,23 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
           <ShieldCheck size={18} />
           {t("লগইন ছাড়া ব্যক্তিগত হিসাব দেখা যায় না।")}
         </p>
-        <p className="auth-register-link">
-          {t("প্রথমবার এসেছেন?")}{" "}
-          <Link to="/register">{t("অ্যাকাউন্ট খুলুন")}</Link>
-        </p>
+        {manual ? (
+          method === "email" && (
+            <button
+              type="button"
+              className="text-button auth-register-link"
+              disabled={busy}
+              onClick={() => changeMethod("phone")}
+            >
+              {t("ফোন দিয়ে লগইন করুন")}
+            </button>
+          )
+        ) : (
+          <p className="auth-register-link">
+            {t("প্রথমবার এসেছেন?")}{" "}
+            <Link to="/register">{t("অ্যাকাউন্ট খুলুন")}</Link>
+          </p>
+        )}
       </section>
     </main>
   );

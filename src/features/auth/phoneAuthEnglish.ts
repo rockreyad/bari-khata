@@ -16,6 +16,14 @@ export const phoneAuthEnglish: Record<string, string> = {
   "কোড লিখুন": "Enter code",
   "পরীক্ষার কোডটি লিখুন।": "Enter the test code.",
   "{{seconds}} সেকেন্ড পরে আবার নিন": "Request again in {{seconds}} seconds",
+  "{{seconds}} সেকেন্ড পরে চেষ্টা করুন": "Try again in {{seconds}} seconds",
   "আবার কোড নিন": "Request another code",
   "কোড নিন": "Get code",
+  "এগিয়ে যাই": "Continue",
+  "প্রবেশের কোড": "Access code",
+  "আপনাকে দেওয়া প্রবেশের কোডটি লিখুন।": "Enter the access code you were given.",
+  "ফোন দিয়ে লগইন করুন": "Sign in with your phone",
+  "লগইন হয়নি। আবার চেষ্টা করুন।": "Could not sign in. Please try again.",
+  "ফোন দিয়ে লগইন এখন চালু নেই। পরে আবার চেষ্টা করুন।":
+    "Phone sign-in is unavailable. Please try again later.",
 };

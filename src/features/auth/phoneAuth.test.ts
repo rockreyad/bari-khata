@@ -4,6 +4,7 @@ import {
   readPhoneAuthMode,
   requestMockPhoneOtp,
   verifyMockPhoneOtp,
+  verifyManualPhoneCode,
 } from "./phoneAuth";
 
 const phone = "+8801712345678";
@@ -193,4 +194,73 @@ describe("mock phone session response", () => {
       ).rejects.toThrow("phone_auth_unavailable");
     },
   );
+});
+
+describe("production manual phone transport", () => {
+  beforeEach(() => vi.stubEnv("VITE_PHONE_AUTH_MODE", "manual"));
+  it("accepts a supplied Bengali four-digit code without knowing its server value", () => {
+    expect(readPhoneAuthMode()).toBe("manual");
+    expect(normalizePhoneCode(" ১৩১৮ ", "manual")).toBe("1318");
+  });
+  it("posts only the phone and supplied code to its same-origin server", async () => {
+    const session = { access_token: token(), refresh_token: "r".repeat(48) };
+    fetcher.mockResolvedValue(response(session));
+    await expect(verifyManualPhoneCode("০১৭১২৩৪৫৬৭৮", "১৩১৮")).resolves.toEqual(
+      session,
+    );
+    expect(fetcher).toHaveBeenCalledExactlyOnceWith(
+      "/api/phone-login",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "omit",
+        mode: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify({ phone, code: "1318" }),
+      }),
+    );
+    expect(
+      new Headers(fetcher.mock.calls[0][1].headers).get("Authorization"),
+    ).toBeNull();
+  });
+  it("retains a durable fifteen-minute retry delay without revealing arbitrary server output", async () => {
+    fetcher.mockResolvedValue(
+      response({ error: "phone_rate_limited", retryAfter: 900 }, 429),
+    );
+    await expect(verifyManualPhoneCode(phone, "1318")).rejects.toMatchObject({
+      message: "phone_rate_limited",
+      retryAfter: 900,
+    });
+    fetcher.mockResolvedValue(
+      response({ error: "private backend details" }, 500),
+    );
+    await expect(verifyManualPhoneCode(phone, "1318")).rejects.toThrow(
+      "phone_auth_unavailable",
+    );
+  });
+  it("rejects wrong-account tokens and does not call any broker outside manual mode", async () => {
+    fetcher.mockResolvedValue(
+      response({
+        access_token: token("8801812345678"),
+        refresh_token: "token",
+      }),
+    );
+    await expect(verifyManualPhoneCode(phone, "1318")).rejects.toThrow(
+      "phone_auth_unavailable",
+    );
+    fetcher.mockClear();
+    vi.stubEnv("VITE_PHONE_AUTH_MODE", "sms");
+    await expect(verifyManualPhoneCode(phone, "1318")).rejects.toThrow(
+      "phone_otp_unavailable",
+    );
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it("rejects invalid phone and code before sending a request", async () => {
+    await expect(verifyManualPhoneCode("invalid", "1318")).rejects.toThrow(
+      "invalid_phone",
+    );
+    await expect(verifyManualPhoneCode(phone, "bad")).rejects.toThrow(
+      "invalid_otp",
+    );
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 });

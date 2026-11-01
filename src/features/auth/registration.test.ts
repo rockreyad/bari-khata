@@ -433,3 +433,18 @@ describe("isolated email registration", () => {
     expect(sdk.signOut).not.toHaveBeenCalled();
   });
 });
+
+describe("manual access never sends registration email", () => {
+  it("blocks signup and resend before invoking the Auth SDK", async () => {
+    vi.stubEnv("VITE_PHONE_AUTH_MODE", "manual");
+    await expect(
+      registerAccount("friend@example.com", "Password8", "Password8"),
+    ).rejects.toThrow("registration_unavailable");
+    await expect(resendRegistration("friend@example.com")).rejects.toThrow(
+      "registration_unavailable",
+    );
+    expect(sdk.createClient).not.toHaveBeenCalled();
+    expect(sdk.signUp).not.toHaveBeenCalled();
+    expect(sdk.resend).not.toHaveBeenCalled();
+  });
+});
