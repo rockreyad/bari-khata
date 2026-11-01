@@ -1,19 +1,32 @@
-# UI reference and interaction decisions
+# পর্দার নকশা ও ব্যবহারপদ্ধতির সূত্র
 
-Checked 1 November2026. These references informed the interaction patterns; the Bengali construction workflow is specific to this app.
+১ নভেম্বর ২০২৬-এ যাচাই করা হয়েছে। এই সূত্রগুলো থেকে ব্যবহারপদ্ধতির ধারণা নেওয়া হয়েছে; বাড়ি তৈরির হিসাব রাখার বাংলা প্রবাহটি এই অ্যাপের জন্য তৈরি।
 
-- [Apple — Lists and tables](https://developer.apple.com/design/human-interface-guidelines/lists-and-tables): compact, aligned rows that open focused details. The main transaction list uses compact rows and a short date including year; month headers belong in full history.
-- [Linear — Issues and description history](https://linear.app/docs/creating-issues): a complete, inspectable change history. Every transaction revision remains accessible as before/after values; work status, dates and appearance changes have their own timeline.
-- [Monzo — Exporting transactions](https://monzo.com/help/budgeting-overdrafts-savings/exporting-my-transactions): select a scope before exporting. A contact statement includes only that person and the selected account; the owner previews and downloads/shares it. Live links use the same scope with revocation.
-- [Radix — Select](https://www.radix-ui.com/primitives/docs/components/select), [Popover](https://www.radix-ui.com/primitives/docs/components/popover), [Dropdown Menu](https://www.radix-ui.com/primitives/docs/components/dropdown-menu): keyboard controls, focus management, accessible labels and bounded menus, with the app's own visual styles.
-- [DayPicker — Selection modes](https://daypicker.dev/docs/selection-modes/): a custom Bengali calendar. Small screens use a centred dialog so the month/year controls and final actions remain visible.
+- [Apple — তালিকা ও ছক](https://developer.apple.com/design/human-interface-guidelines/lists-and-tables): ছোট, গোছানো সারি থেকে নির্দিষ্ট তথ্যের বিস্তারিত খোলে। মূল লেনদেনের তালিকায় ছোট সারি ও বছরসহ সংক্ষিপ্ত তারিখ থাকে; মাসের শিরোনাম থাকে পূর্ণ ইতিহাসে।
+- [Linear — কাজ ও বিবরণের পরিবর্তনের ইতিহাস](https://linear.app/docs/creating-issues): প্রতিটি পরিবর্তনের পূর্ণ ইতিহাস দেখা ও পরীক্ষা করা যায়। প্রতিটি লেনদেনের সংশোধনের আগের ও পরের মান দেখা যায়; কাজের অবস্থা, তারিখ ও সাজের পরিবর্তনের নিজস্ব ঘটনাক্রম থাকে।
+- [Monzo — লেনদেন রপ্তানি](https://monzo.com/help/budgeting-overdrafts-savings/exporting-my-transactions): রপ্তানির আগে কোন হিসাব নেওয়া হবে তা বাছাই করা হয়। পরিচিতির বিবরণীতে শুধু সেই ব্যক্তি ও বেছে নেওয়া খাতা থাকে; মালিক আগে দেখে নিয়ে তা ডাউনলোড বা শেয়ার করেন। অনলাইনে দেখা যায় এমন লিংকেও একই সীমা থাকে এবং পরে সেই লিংক বন্ধ করা যায়।
+- [Radix — নির্বাচন তালিকা](https://www.radix-ui.com/primitives/docs/components/select), [ভাসমান প্যানেল](https://www.radix-ui.com/primitives/docs/components/popover), [খুলে যাওয়া মেনু](https://www.radix-ui.com/primitives/docs/components/dropdown-menu): কিবোর্ডে নিয়ন্ত্রণ, ফোকাস সামলানো, সহায়ক প্রযুক্তির উপযোগী নাম এবং জায়গার মধ্যে থাকা মেনু; সাজ অ্যাপের নিজস্ব।
+- [DayPicker — তারিখ বাছাইয়ের ধরন](https://daypicker.dev/docs/selection-modes/): অ্যাপের নিজস্ব বাংলা ক্যালেন্ডার। ছোট পর্দায় মাঝখানে ডায়ালগ খোলে, যাতে মাস / বছর বদলানোর নিয়ন্ত্রণ ও শেষের বোতামগুলো দেখা যায়।
 
-The daily actions are expense and payment. Returns are a shop-specific secondary action. Materials, wages, transport/unloading and other costs have separate report tabs. A new contact's type and chosen quick actions control the visible shortcuts. A work notebook can also choose its own shortcuts.
+প্রতিদিনের প্রধান কাজ খরচ ও টাকা দেওয়ার হিসাব লেখা। মাল ফেরত দোকানের জন্য আলাদা গৌণ কাজ। মাল, মজুরি, পরিবহন / মাল নামানো এবং অন্যান্য খরচের আলাদা রিপোর্ট ট্যাব আছে। নতুন পরিচিতির ধরন ও বেছে নেওয়া দ্রুত কাজ অনুযায়ী বোতাম দেখা যায়। কাজের খাতার জন্যও আলাদা দ্রুত কাজ বেছে নেওয়া যায়।
 
-Money fields have an inline calculator. Arithmetic uses exact rational values and rounds once to integer poisha. Invalid expressions, division by zero, negative results and unsafe amounts cannot be applied.
+টাকার ঘরেই ক্যালকুলেটর আছে। ভগ্নাংশের নির্ভুল মান দিয়ে হিসাব হয় এবং শেষে একবার পূর্ণসংখ্যা পয়সায় গোল করা হয়। ভুল রাশি, শূন্য দিয়ে ভাগ, ঋণাত্মক ফল ও নিরাপদ সীমার বাইরের টাকা বসানো যায় না।
 
-## Palette revision
+## রঙের সাজের পরিবর্তন
 
-[Color Hunt — 2C3930 / 3F4F44 / A27B5C / DCD7C9](https://colorhunt.co/palette/2c39303f4f44a27b5cdcd7c9) supplies the earth-and-green foundation: dark green for text/actions, earthy brown for review notices and lighter derived beige for backgrounds. Four selectable palettes and light/dark/system appearance remain available. The previous internal `ocean` preference key stays compatible; its visible name is now “মাটি ও সবুজ”. Semantic material/wage/status colours remain distinguishable.
+Color Hunt থেকে চারটি বেছে নেওয়া যায় এমন প্যালেট এসেছে:
 
-The calculator starts at zero, shows a large live money result and keeps the expression above it. Incomplete expressions show a dash; invalid expressions cannot be applied.
+- [নীলিমা — 213555 / 3E5879 / D8C4B6 / F5EFE7](https://colorhunt.co/palette/2135553e5879d8c4b6f5efe7): নীল ও উষ্ণ হালকা রঙের সাজ।
+- [বনলতা — 2C3930 / 3F4F44 / A27B5C / DCD7C9](https://colorhunt.co/palette/2c39303f4f44a27b5cdcd7c9): মাটি ও সবুজের সাজ; লেখা ও বোতামে গাঢ় সবুজ, পর্যালোচনার বার্তায় মাটির বাদামি এবং পটভূমিতে হালকা বেইজের ব্যবহার।
+- [অপরাজিতা — 441752 / 8174A0 / A888B5 / EFB6C8](https://colorhunt.co/palette/4417528174a0a888b5efb6c8): বেগুনি ও গোলাপির নরম সাজ।
+- [গোধূলি — 2A1A0E / D4621A / F4AE52 / FEF3E2](https://colorhunt.co/palette/fef3e2f4ae52d4621a2a1a0e): বিকেলের উষ্ণ কমলা ও সোনালি সাজ।
+
+প্রতিটি প্যালেটে হালকা, গাঢ় ও ফোনের সঙ্গে বদলানো সাজ আছে। আগের সংরক্ষিত `ocean` পছন্দের মানের সঙ্গে সামঞ্জস্য থাকে; বর্তমান দৃশ্যমান নাম “নীলিমা”। মাল, মজুরি ও অবস্থার অর্থ বোঝানো রং আলাদা করে চেনা যায়।
+
+ক্যালকুলেটর শূন্য থেকে শুরু হয়, বড় করে সঙ্গে সঙ্গে টাকার ফল দেখায় এবং তার ওপরে রাশিটি রাখে। অসম্পূর্ণ রাশিতে ড্যাশ দেখা যায়; ভুল রাশির ফল বসানো যায় না।
+
+## ইতিহাস ও সেটিংস
+
+পূর্ণ ইতিহাসে প্রথমে ৩০টি রেকর্ড দেখা যায়; আরও দেখার বোতামে পরের ৩০টি আগেরগুলোর নিচে যোগ হয়। কাজের পাতায় সর্বশেষ দশটি এবং পরিচিতির পাতায় সর্বশেষ পাঁচটি রেকর্ডের সংক্ষিপ্ত তালিকা থাকে; সম্পূর্ণ ইতিহাস আলাদাভাবে খোলা যায়।
+
+সেটিংস **আপনার পছন্দ**, **হিসাব ও সংরক্ষণ** এবং **আরও কিছু** দলে সাজানো। তালিকার ছোট সারি থেকে প্রয়োজনের বিস্তারিত প্যানেল খোলে। লগইন পাতায় অ্যাকাউন্ট ছাড়াই অতিথি হিসেবে নমুনা খাতা দেখার পথ আছে; নমুনার হিসাব ও নিজের খাতা আলাদা থাকে।

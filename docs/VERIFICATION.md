@@ -1,152 +1,151 @@
-# Verification record
+# যাচাইয়ের নথি
 
-Checked on 1 November 2026, Asia/Dhaka. The v2 migration and security checks are recorded below. Older v1 browser examples use isolated sample data.
+এই নথিতে পরীক্ষা ও পরিবর্তনের সময়ক্রম রাখা হয়েছে। পুরোনো অংশের কোনো সীমাবদ্ধতা পরে বদলাতে পারে; বর্তমান অবস্থার জন্য নিচের সর্বশেষ অংশগুলো দেখুন।
 
-## Automated checks
+1 নভেম্বর 2026, Asia/Dhaka সময় অনুযায়ী পরীক্ষা করা হয়েছে। v2-এর মাইগ্রেশন ও নিরাপত্তা যাচাই নিচে নথিভুক্ত আছে। পুরোনো v1-এর ব্রাউজারভিত্তিক উদাহরণগুলোতে আলাদা নমুনা ডেটা ব্যবহার করা হয়েছে।
 
-- TypeScript compilation and production build pass.
-- 29 tests pass (16 domain, 11 data and 2 report tests).
-- Dependency audit reports zero known vulnerabilities after removing unused build dependencies.
-- Tests cover integer-poisha totals, contracts versus earned bills, payment allocation, material/wage separation, unnamed suppliers, refunds, safe edits, corrupt input, concurrent local mutations, draft voucher bytes, complete backup restore and sync retry/conflict behavior.
+## স্বয়ংক্রিয় যাচাই
 
-A final review also found and fixed work-filtered CSV exports counting an entire shared transaction instead of its selected work allocation. The report tests cover both scoped and whole-house exports.
+- TypeScript কম্পাইল ও প্রোডাকশন বিল্ড সফল হয়েছে।
+- 29টি পরীক্ষা সফল হয়েছে: ডোমেইনের 16টি, ডেটার 11টি এবং প্রতিবেদনের 2টি।
+- অব্যবহৃত বিল্ড-নির্ভরতা সরানোর পর নির্ভরতার নিরাপত্তা নিরীক্ষায় কোনো পরিচিত দুর্বলতা পাওয়া যায়নি।
+- পরীক্ষাগুলোতে পূর্ণসংখ্যা পয়সায় মোট হিসাব, চুক্তির বিপরীতে অর্জিত বিল, পরিশোধ বণ্টন, মালামাল ও মজুরি আলাদা রাখা, নামহীন সরবরাহকারী, ফেরত পাওয়া টাকা, নিরাপদ সম্পাদনা, নষ্ট ইনপুট, একই সময়ে স্থানীয় পরিবর্তন, খসড়া ভাউচারের বাইট, সম্পূর্ণ ব্যাকআপ পুনরুদ্ধার এবং সিঙ্কের পুনরায় চেষ্টা ও দ্বন্দ্বের আচরণ অন্তর্ভুক্ত।
 
-## Actual local backend
+শেষ পর্যালোচনায় আরও একটি সমস্যা ধরা পড়ে এবং ঠিক করা হয়: কাজ দিয়ে ছাঁকা CSV রপ্তানিতে নির্বাচিত কাজের বরাদ্দের বদলে পুরো যৌথ লেনদেন গণনা করা হচ্ছিল। প্রতিবেদনের পরীক্ষায় নির্দিষ্ট কাজের এবং পুরো বাড়ির—উভয় ধরনের রপ্তানি অন্তর্ভুক্ত আছে।
 
-The isolated Supabase Docker stack is running with four migrations applied. `node scripts/backend-check.mjs` verifies:
+## প্রকৃত স্থানীয় ব্যাকএন্ড
 
-- Email/password sign-in works; public signup is disabled.
-- Two users cannot read each other's ledger or private vouchers.
-- A request retried with the same ID does not increment the revision twice.
-- A stale revision returns a conflict without overwriting the current document.
-- Invalid amounts, invalid document relationships and invalid contract/settlement links reject without changing data.
-- Private receipt access and wrong-owner upload restrictions work.
+আলাদা Supabase Docker স্ট্যাকটি চারটি মাইগ্রেশন প্রয়োগ করা অবস্থায় চলছে। `node scripts/backend-check.mjs` দিয়ে নিচের বিষয়গুলো যাচাই করা হয়েছে:
 
-Disposable test accounts and files are removed by the check script.
+- ইমেইল ও পাসওয়ার্ড দিয়ে সাইন-ইন কাজ করে; সবার জন্য নিবন্ধন বন্ধ আছে।
+- দুই ব্যবহারকারী একে অন্যের খতিয়ান বা ব্যক্তিগত ভাউচার পড়তে পারেন না।
+- একই ID দিয়ে কোনো অনুরোধ আবার পাঠালে রিভিশন দ্বিতীয়বার বাড়ে না।
+- পুরোনো রিভিশন পাঠালে বর্তমান নথি প্রতিস্থাপন না করে দ্বন্দ্বের ফল ফেরত আসে।
+- ভুল টাকার পরিমাণ, নথির অবৈধ সম্পর্ক এবং চুক্তি/সমন্বয়ের অবৈধ সংযোগ ডেটা পরিবর্তন ছাড়াই প্রত্যাখ্যাত হয়।
+- ব্যক্তিগত রসিদে প্রবেশাধিকার এবং অন্য মালিকের জায়গায় আপলোডের নিষেধাজ্ঞা কাজ করে।
 
-## Browser checks
+যাচাইয়ের স্ক্রিপ্ট অস্থায়ী পরীক্ষামূলক অ্যাকাউন্ট ও ফাইল মুছে দেয়।
 
-Using the production build in the desktop in-app browser:
+## ব্রাউজারে যাচাই
 
-1. Added a new sample worker and a ৳1,500 worker-funded purchase. Cost increased by ৳1,500, payments stayed unchanged and the worker became payable ৳1,500.
-2. Paid that worker ৳1,700. His screen showed cost ৳1,500, paid ৳1,700, payable zero and credit ৳200. Screenshot: `screenshots/reimbursement.png`.
-3. Stopped the frontend server, then reloaded the app. The service-worker-cached app loaded and the saved purchase/payment remained visible.
-4. With the frontend server still stopped, opened the tiles notebook and adhesive drilldown. It showed only matching purchase entries, including the new ৳1,500 test voucher; payment entries were excluded.
-5. Reviewed the 390px phone layout in a preview frame. This verifies responsive layout, not a physical iPhone's Safari, keyboard or camera behavior.
+ডেস্কটপ অ্যাপের ভেতরের ব্রাউজারে প্রোডাকশন বিল্ড ব্যবহার করে:
 
-## Before production use
+1. নতুন একজন নমুনা কর্মী এবং তাঁর নিজের টাকায় কেনা ৳1,500-এর মালামাল যোগ করা হয়েছে। খরচ ৳1,500 বেড়েছে, পরিশোধ অপরিবর্তিত থেকেছে এবং কর্মীর প্রাপ্য হয়েছে ৳1,500।
+2. ওই কর্মীকে ৳1,700 দেওয়া হয়েছে। তাঁর পর্দায় খরচ ৳1,500, পরিশোধ ৳1,700, প্রাপ্য শূন্য এবং অগ্রিম ৳200 দেখিয়েছে। স্ক্রিনশট: `screenshots/reimbursement.png`।
+3. ফ্রন্টএন্ড সার্ভার বন্ধ করে অ্যাপ আবার লোড করা হয়েছে। সার্ভিস ওয়ার্কারে ক্যাশ করা অ্যাপ খুলেছে এবং সংরক্ষিত কেনাকাটা ও পরিশোধ দেখা গেছে।
+4. ফ্রন্টএন্ড সার্ভার বন্ধ থাকা অবস্থাতেই টাইলসের খাতা ও আঠার বিস্তারিত খোলা হয়েছে। নতুন ৳1,500-এর পরীক্ষামূলক ভাউচারসহ শুধু সংশ্লিষ্ট কেনাকাটার এন্ট্রি দেখিয়েছে; পরিশোধের এন্ট্রি দেখায়নি।
+5. প্রিভিউ ফ্রেমে 390px ফোনের বিন্যাস দেখা হয়েছে। এতে পর্দার আকার অনুযায়ী বিন্যাস যাচাই হয়েছে; প্রকৃত iPhone-এর Safari, কিবোর্ড বা ক্যামেরার আচরণ যাচাই হয়নি।
 
-Real iPhone HTTPS/Home Screen installation, airplane-mode cold launch, actual camera uploads, mobile keyboard behavior and an app update with a draft still require physical-device checks. A hosted Supabase account and deployment are intentionally deferred until the user is ready for real use. The local Docker stack is development-only.
+## বাস্তব ব্যবহারের আগে
 
-The requested historical import is complete; unknown dates, mixed contractor records and the summary/detail reconciliation remain explicitly visible for user review.
+প্রকৃত iPhone-এ HTTPS/Home Screen ইনস্টল, বিমান মোডে সম্পূর্ণ বন্ধ অবস্থা থেকে অ্যাপ চালু করা, ক্যামেরা দিয়ে সত্যিকারের আপলোড, মোবাইল কিবোর্ডের আচরণ এবং খসড়া থাকা অবস্থায় অ্যাপ হালনাগাদ—এসব এখনো হাতে থাকা যন্ত্রে যাচাই করতে হবে। ব্যবহারকারী বাস্তব ব্যবহারের জন্য প্রস্তুত না হওয়া পর্যন্ত হোস্ট করা Supabase অ্যাকাউন্ট ও ডিপ্লয়মেন্ট ইচ্ছাকৃতভাবে স্থগিত আছে। স্থানীয় Docker স্ট্যাক শুধু ডেভেলপমেন্টের জন্য।
 
-## Version 2 verification — current implementation
+অনুরোধ করা পুরোনো হিসাব আমদানি সম্পন্ন হয়েছে; অজানা তারিখ, একসঙ্গে মিশে থাকা ঠিকাদারের নথি এবং সারাংশের সঙ্গে বিস্তারিত হিসাবের মিল-অমিল ব্যবহারকারীর পর্যালোচনার জন্য স্পষ্টভাবে দৃশ্যমান রাখা হয়েছে।
 
-The sections above record the earlier version. Their statements that the personal exports were not imported, the notebook starts empty and there are four migrations are superseded by this section.
+## সংস্করণ 2-এর যাচাই — বর্তমান বাস্তবায়ন
 
-- The actual private import now contains 326 historical entries; the exact reconciled totals stay in the private verification artifacts. Imported cost does not fabricate cash paid, dues or advances; all imported entries remain reviewable.
-- A newly provisioned local owner received the validated ledger through the authenticated snapshot RPC. Authenticated read-back matched the canonical SHA-256 checksum after the final conservative classification refresh. The refresh guard requires an unchanged previously verified server document and identical original source row IDs/checksums.
-- Six additive database migrations are applied. Taxonomy/provenance checks reject missing material references, invalid reference types, invalid historical/review states and malformed source metadata.
-- Email/password authentication succeeds; anonymous snapshot requests and public signup requests reject. Disposable friend accounts see an empty own notebook, cannot select the owner's document and cannot read or upload into the owner's private receipt folder. Disposable users/vouchers are removed.
-- Account switching uses separate physical IndexedDB databases. Tests cover records, voucher bytes, drafts, outbox, backups, recovery copies, captured operations after account switching and cancellation of a pending export/voucher result after access changes.
-- Explicit logout clears remembered access synchronously, persists a logout lock and prevents late SDK session refreshes from reopening the account. Offline use is available only for a previously remembered account that has not logged out.
-- The current full suite passed 66 tests at the security audit checkpoint; later feature checks may add tests. Authentication/data-specific tests passed 29 tests without unhandled rejections.
-- Development HTTP checks on port 5180 returned 200 for `/login` and source modules, and 403 for `/private/migration/ledger.json`, `/private/LOCAL_ACCESS.txt`, arbitrary `/private/*` paths and the equivalent project-private `/@fs/` paths. Absolute `/private/tmp/.../src/` paths remain usable by Vite.
-- The app has URL routes and an account-gated real notebook; `/sample` uses a separate database. Local preview is port 4180. Root browser verification and the final production bundle exclusion check are recorded separately.
+ওপরের অংশগুলো আগের সংস্করণের নথি। ব্যক্তিগত রপ্তানিকৃত ডেটা আমদানি করা হয়নি, খাতা খালি অবস্থায় শুরু হয় এবং চারটি মাইগ্রেশন আছে—ওপরের ওই বক্তব্যগুলোর বদলে এই অংশের তথ্য প্রযোজ্য।
 
-This verifies the local test stack. A hosted production Supabase project has not been provisioned or audited. SMS OTP remains disabled and no actual SMS-delivery test is claimed.
+- প্রকৃত ব্যক্তিগত আমদানিতে এখন 326টি পুরোনো এন্ট্রি আছে; মিলিয়ে দেখা সুনির্দিষ্ট মোট হিসাব ব্যক্তিগত যাচাই-ফাইলে রাখা আছে। আমদানি করা খরচ থেকে অনুমান করে নগদ পরিশোধ, বকেয়া বা অগ্রিম তৈরি করা হয় না; আমদানি করা সব এন্ট্রি পর্যালোচনা করা যায়।
+- নতুনভাবে তৈরি স্থানীয় মালিক অ্যাকাউন্টে প্রমাণীকৃত স্ন্যাপশট RPC দিয়ে যাচাইকৃত খতিয়ান পাঠানো হয়েছে। শেষবার সতর্ক শ্রেণিবিন্যাস হালনাগাদের পর প্রমাণীকৃতভাবে আবার পড়ে পাওয়া ডেটা মূল SHA-256 চেকসামের সঙ্গে মিলে গেছে। এই হালনাগাদের সুরক্ষা-শর্ত হলো: আগে যাচাই করা সার্ভার নথি অপরিবর্তিত থাকতে হবে এবং মূল উৎসের সারির ID ও চেকসাম অভিন্ন হতে হবে।
+- আগের কাঠামোর সঙ্গে যোগ হওয়া ছয়টি ডেটাবেস মাইগ্রেশন প্রয়োগ করা হয়েছে। শ্রেণিবিন্যাস ও উৎস-তথ্যের যাচাইয়ে অনুপস্থিত মালামালের রেফারেন্স, অবৈধ রেফারেন্সের ধরন, অবৈধ ঐতিহাসিক/পর্যালোচনা অবস্থা এবং ভুল গঠনের উৎস মেটাডেটা প্রত্যাখ্যাত হয়।
+- ইমেইল ও পাসওয়ার্ড দিয়ে প্রমাণীকরণ সফল হয়; পরিচয়বিহীন স্ন্যাপশট অনুরোধ এবং সবার জন্য নিবন্ধনের অনুরোধ প্রত্যাখ্যাত হয়। অস্থায়ী বন্ধু অ্যাকাউন্টে নিজের খালি খাতা দেখা যায়; তারা মালিকের নথি নির্বাচন করতে পারে না এবং মালিকের ব্যক্তিগত রসিদের ফোল্ডারে পড়তে বা আপলোড করতে পারে না। অস্থায়ী ব্যবহারকারী ও ভাউচার মুছে দেওয়া হয়েছে।
+- অ্যাকাউন্ট বদলানোর সময় বাস্তবে আলাদা IndexedDB ডেটাবেস ব্যবহার করা হয়। পরীক্ষায় রেকর্ড, ভাউচারের বাইট, খসড়া, আউটবক্স, ব্যাকআপ, পুনরুদ্ধারযোগ্য কপি, অ্যাকাউন্ট বদলের পর আগে ধরে রাখা কার্যক্রম এবং প্রবেশাধিকার বদলালে চলমান রপ্তানি/ভাউচারের ফল বাতিল হওয়া অন্তর্ভুক্ত।
+- সরাসরি লগআউট করলে মনে রাখা প্রবেশাধিকার সঙ্গে সঙ্গে মুছে যায়, লগআউটের তালা স্থায়ীভাবে সংরক্ষিত হয় এবং পরে আসা SDK সেশন রিফ্রেশ অ্যাকাউন্ট আবার খুলতে পারে না। শুধু আগে মনে রাখা এবং লগআউট না করা অ্যাকাউন্টেই অফলাইন ব্যবহার করা যায়।
+- নিরাপত্তা নিরীক্ষার সময়কার পূর্ণ পরীক্ষামালায় 66টি পরীক্ষা সফল হয়েছে; পরের সুবিধাগুলোর যাচাইয়ে আরও পরীক্ষা যোগ হতে পারে। প্রমাণীকরণ ও ডেটার নির্দিষ্ট 29টি পরীক্ষাও সামলানো হয়নি এমন কোনো Promise প্রত্যাখ্যান ছাড়াই সফল হয়েছে।
+- ডেভেলপমেন্টের HTTP যাচাইয়ে 5180 পোর্টে `/login` ও সোর্স মডিউলের জন্য 200 এবং `/private/migration/ledger.json`, `/private/LOCAL_ACCESS.txt`, যেকোনো `/private/*` পথ ও সমতুল্য প্রকল্পের ব্যক্তিগত `/@fs/` পথগুলোর জন্য 403 পাওয়া গেছে। `/private/tmp/.../src/`-এর পূর্ণ পথগুলো Vite-এ ব্যবহারযোগ্য রয়েছে।
+- অ্যাপে URL রুট এবং অ্যাকাউন্টের প্রবেশাধিকার-সাপেক্ষ প্রকৃত খাতা আছে; `/sample` আলাদা ডেটাবেস ব্যবহার করে। স্থানীয় প্রিভিউয়ের পোর্ট 4180। মূল ব্রাউজার যাচাই এবং শেষ প্রোডাকশন বান্ডলে ব্যক্তিগত তথ্য বাদ থাকার যাচাই আলাদাভাবে নথিভুক্ত আছে।
 
-## Final version 2 checks
+এতে স্থানীয় পরীক্ষার স্ট্যাক যাচাই হয়েছে। হোস্ট করা প্রোডাকশন Supabase প্রকল্প তৈরি বা নিরীক্ষা করা হয়নি। SMS OTP বন্ধ আছে এবং সত্যিকারের SMS পৌঁছানোর কোনো পরীক্ষা করা হয়েছে বলে দাবি করা হচ্ছে না।
 
-- Final project: `~/workspace/bari-khata`. All 76 tests in 13 files passed; TypeScript and the production build pass. Dependency installation audit reported zero known vulnerabilities.
-- Quick-entry tests include anonymous paid purchases, worker reimbursement, shop credit and returns, independent refunds, future material groups, invalid amounts/dates and preserving a failed draft with its voucher. A cash settlement/refund requires a work so it cannot silently settle into an unrelated general notebook.
-- In the browser, a two-field sample purchase was entered using Bengali digits, closed, restored and saved. Cost and payments increased exactly once; existing due and credit remained unchanged. The real owner's imported records were not changed by this test.
-- The owner account displayed all migrated records. A cement notebook opened at its own `/works/...` URL, survived a refresh with the frontend server stopped, and browser Back returned to the cached overview with its records intact. This tests cached frontend delivery; it does not claim a physical iPhone airplane-mode test.
-- The app update prompt was applied and retained the owner records. A 390px phone preview showed horizontal swiping beyond the first two notebooks, the new bottom drawer, independent refund work/account controls, the cross-work steel report, and four palettes with dark mode.
-- Every one of the 39 production/offline assets returned successfully, including lazy route chunks, Bengali fonts and the bundled bKash identifying icon. The development phone frame is excluded from production.
-- Final production output scan found no private owner credential, imported row ID/checksum, private migration file or service-role key. Private files remain Git-ignored; credentials and ledgers have permission0600.
+## সংস্করণ 2-এর চূড়ান্ত যাচাই
 
-Physical iPhone Safari/Home Screen installation, camera/keyboard behavior, full loss-of-connectivity cold launch and hosted production auth/SMS remain future device/deployment checks. No production service has been provisioned.
+- চূড়ান্ত প্রকল্প: `~/workspace/bari-khata`। 13টি ফাইলে 76টি পরীক্ষার সবগুলো সফল হয়েছে; TypeScript ও প্রোডাকশন বিল্ড সফল হয়েছে। নির্ভরতা ইনস্টলের নিরাপত্তা নিরীক্ষায় কোনো পরিচিত দুর্বলতা পাওয়া যায়নি।
+- দ্রুত এন্ট্রির পরীক্ষায় নামহীন ব্যক্তির পরিশোধিত কেনাকাটা, কর্মীর নিজের খরচ ফেরত দেওয়া, দোকানের বাকিতে কেনা ও মাল ফেরত, স্বাধীনভাবে টাকা ফেরত পাওয়া, ভবিষ্যতের মালামালের দল, ভুল পরিমাণ/তারিখ এবং ব্যর্থ খসড়ার সঙ্গে ভাউচার সংরক্ষণ অন্তর্ভুক্ত। নগদ সমন্বয় বা টাকা ফেরতের জন্য একটি কাজ বেছে নিতে হয়, যাতে অজান্তে অসংশ্লিষ্ট সাধারণ খাতায় সমন্বয় না হয়।
+- ব্রাউজারে বাংলা অঙ্ক দিয়ে দুই ঘরের একটি নমুনা কেনাকাটা লেখা, বন্ধ করা, ফিরিয়ে আনা এবং সংরক্ষণ করা হয়েছে। খরচ ও পরিশোধ ঠিক একবার করে বেড়েছে; আগের বকেয়া ও অগ্রিম অপরিবর্তিত থেকেছে। এই পরীক্ষায় প্রকৃত মালিকের আমদানি করা রেকর্ড পরিবর্তন করা হয়নি।
+- মালিক অ্যাকাউন্টে স্থানান্তর করা সব রেকর্ড দেখা গেছে। সিমেন্টের খাতা তার নিজস্ব `/works/...` URL-এ খুলেছে, ফ্রন্টএন্ড সার্ভার বন্ধ থাকা অবস্থায় রিফ্রেশের পরও থেকেছে এবং ব্রাউজারের পেছনে যাওয়ার বোতাম দিয়ে রেকর্ড অক্ষত রেখে ক্যাশ করা সারাংশে ফেরা গেছে। এতে ক্যাশ থেকে ফ্রন্টএন্ড পাওয়া যাচাই হয়েছে; প্রকৃত iPhone-এ বিমান মোডের পরীক্ষা হয়েছে বলে দাবি করা হচ্ছে না।
+- অ্যাপের হালনাগাদের বার্তা থেকে হালনাগাদ প্রয়োগের পর মালিকের রেকর্ড অক্ষত ছিল। 390px ফোনের প্রিভিউতে প্রথম দুই খাতার পরও আড়াআড়ি সোয়াইপ করা, নতুন নিচের ড্রয়ার, টাকা ফেরতের জন্য স্বতন্ত্র কাজ/অ্যাকাউন্টের নিয়ন্ত্রণ, একাধিক কাজজুড়ে স্টিলের প্রতিবেদন এবং গাঢ় মোডসহ চারটি রঙের বিন্যাস দেখা গেছে।
+- প্রোডাকশন/অফলাইনের 39টি সম্পদের সবগুলো সফলভাবে পাওয়া গেছে; এর মধ্যে প্রয়োজনের সময় লোড হওয়া রুটের অংশ, বাংলা ফন্ট এবং সঙ্গে থাকা bKash শনাক্তকরণ আইকন আছে। ডেভেলপমেন্টের ফোন ফ্রেম প্রোডাকশন থেকে বাদ আছে।
+- চূড়ান্ত প্রোডাকশন আউটপুট পরীক্ষা করে মালিকের ব্যক্তিগত লগইন তথ্য, আমদানি করা সারির ID/চেকসাম, ব্যক্তিগত মাইগ্রেশন ফাইল বা service-role key পাওয়া যায়নি। ব্যক্তিগত ফাইলগুলো Git-এ উপেক্ষিত আছে; লগইন তথ্য ও খতিয়ানের অনুমতি 0600।
 
-## UI and history revision
+প্রকৃত iPhone-এর Safari/Home Screen ইনস্টল, ক্যামেরা/কিবোর্ডের আচরণ, সংযোগ সম্পূর্ণ বিচ্ছিন্ন অবস্থায় বন্ধ থেকে চালু করা এবং হোস্ট করা প্রোডাকশনের প্রমাণীকরণ/SMS এখনো ভবিষ্যতের যন্ত্র ও ডিপ্লয়মেন্ট যাচাইয়ের অংশ। কোনো প্রোডাকশন সেবা তৈরি করা হয়নি।
 
-- Custom select, date, menu, material combobox and money-calculator controls replace visible browser defaults. Calculator uses exact rational arithmetic, with one final integer-poisha rounding; zero division, negative results and unsafe totals reject.
-- The full suite passes149tests in23files, covering keyboard/focus, small-screen nested dialogs, free text and Bengali composition, separate shop/worker/driver workflows, two suppliers for doors, anonymous van fees, independent wage/material accounts, scoped report math, legacy records and full audit history. Final counts may increase as regressions are added.
-- Local additive migration007 is applied. Standard backend checks and backend-v3-check passed using disposable users only. Old-client missing work history, history mutation/truncation, invalid dates/presets and destructive backup rollback reject without changing the owner's data.
-- In a390px phone frame, the plus menu shows expense/payment first. The new work form displays20icons in a grid and10colours with large touch targets. Bengali calendar/month/year menus remain within the viewport; Escape preserves the work form. The calculator evaluated `(500+250-150)*2/3` as400and applied400to the amount field without saving a transaction.
-- In the isolated sample notebook, a work was created, changed from planned to ongoing to complete, and given start/end dates through the calendar. All3activity events remained visible with their actual Asia/Dhaka timestamps and old/new values. No start/completion date was inferred for old owner records.
-- Report browser checks confirmed materials default, independent labour/transport tabs, custom filter/calendar menus and chronology. Two sample amount/note edits retained1500→1600→1700and all snapshots. A fresh paid purchase displayed one compact row; its linked cash record remained accessible in details. Bank/voided payments remain visible in audit but excluded from active paid totals.
-- People browser checks confirmed minimal rows, worker-only relevant actions, last5records and complete oldest-first history. A downloaded worker statement was inspected: selected wages only, with no other people, owner credentials or import identifiers. Driver legacy unlinked cash is included only for an unambiguous transport-only settlement bucket.
+## পর্দা ও ইতিহাসের সংশোধন
 
-All added sample transactions and activities were kept in isolated sample workspaces. The actual owner ledger was not reseeded or rewritten. Physical-device Safari keyboard/camera/Home Screen checks remain separate from these responsive-browser checks.
+- দৃশ্যমান ব্রাউজার-ডিফল্ট নিয়ন্ত্রণের বদলে নিজস্ব নির্বাচন, তারিখ, মেনু, মালামালের কম্বোবক্স ও টাকার ক্যালকুলেটর ব্যবহার করা হয়েছে। ক্যালকুলেটর সুনির্দিষ্ট মূলদ সংখ্যার পাটিগণিত ব্যবহার করে এবং শেষে একবার পূর্ণসংখ্যা পয়সায় পূর্ণায়ন করে; শূন্য দিয়ে ভাগ, ঋণাত্মক ফল এবং নিরাপদ সীমার বাইরের মোট প্রত্যাখ্যাত হয়।
+- পূর্ণ পরীক্ষামালায় 23টি ফাইলে 149টি পরীক্ষা সফল হয়েছে। এর মধ্যে কিবোর্ড/ফোকাস, ছোট পর্দায় একটি ডায়ালগের ভেতর আরেকটি ডায়ালগ, ইচ্ছামতো লেখা ও বাংলা লেখা গঠনের সময়কার ইনপুট, দোকান/কর্মী/চালকের আলাদা কার্যধারা, দরজার দুই সরবরাহকারী, নামহীন ভ্যানভাড়া, স্বতন্ত্র মজুরি/মালামাল অ্যাকাউন্ট, নির্দিষ্ট পরিসরের প্রতিবেদনের অঙ্ক, পুরোনো রেকর্ড এবং সম্পূর্ণ পরিবর্তন-ইতিহাস আছে। ত্রুটি ফিরে আসা ঠেকানোর পরীক্ষা যোগ হলে চূড়ান্ত সংখ্যা বাড়তে পারে।
+- স্থানীয় সংযোজনমূলক `migration007` প্রয়োগ করা হয়েছে। সাধারণ ব্যাকএন্ড যাচাই ও backend-v3-check শুধু অস্থায়ী ব্যবহারকারী দিয়ে সফল হয়েছে। পুরোনো ক্লায়েন্টের অনুপস্থিত কাজের ইতিহাস, ইতিহাস বদলানো/ছেঁটে ফেলা, ভুল তারিখ/পূর্বনির্ধারিত মান এবং ব্যাকআপ দিয়ে ক্ষতিকরভাবে পুরোনো অবস্থায় ফেরানো—এসব মালিকের ডেটা পরিবর্তন ছাড়াই প্রত্যাখ্যাত হয়।
+- 390px ফোন ফ্রেমে যোগ করার মেনুতে প্রথমে খরচ/পরিশোধ দেখা যায়। নতুন কাজের ফর্মে ছক আকারে 20টি আইকন এবং বড় স্পর্শযোগ্য জায়গাসহ 10টি রং আছে। বাংলা ক্যালেন্ডার/মাস/বছরের মেনু দৃশ্যমান পর্দার ভেতরে থাকে; Escape চাপলে কাজের ফর্মের তথ্য থাকে। ক্যালকুলেটর `(500+250-150)*2/3`-এর ফল 400 করেছে এবং কোনো লেনদেন সংরক্ষণ ছাড়াই পরিমাণের ঘরে 400 বসিয়েছে।
+- আলাদা নমুনা খাতায় একটি কাজ তৈরি করে পরিকল্পিত থেকে চলমান, তারপর সম্পন্ন করা হয়েছে এবং ক্যালেন্ডার দিয়ে শুরুর/শেষের তারিখ দেওয়া হয়েছে। 3টি কার্যক্রমের সবগুলোতে প্রকৃত Asia/Dhaka সময় এবং আগের/পরের মান দেখা গেছে। মালিকের পুরোনো রেকর্ডের জন্য কোনো শুরুর/শেষের তারিখ অনুমান করে বসানো হয়নি।
+- প্রতিবেদনের ব্রাউজার যাচাইয়ে মালামাল পূর্বনির্ধারিত থাকা, স্বাধীন শ্রম/পরিবহন ট্যাব, নিজস্ব ছাঁকনি/ক্যালেন্ডার মেনু এবং সময়ক্রম নিশ্চিত হয়েছে। নমুনার পরিমাণ/নোট দুইবার সম্পাদনার পর 1500→1600→1700 এবং সব স্ন্যাপশট অক্ষত ছিল। নতুন পরিশোধিত কেনাকাটা একটি সংক্ষিপ্ত সারিতে দেখিয়েছে; এর সঙ্গে যুক্ত নগদের রেকর্ড বিস্তারিত অংশে পাওয়া গেছে। ব্যাংক/বাতিল পরিশোধ পরিবর্তন-ইতিহাসে দৃশ্যমান থাকে, তবে সক্রিয় পরিশোধের মোট থেকে বাদ থাকে।
+- ব্যক্তিদের পাতার ব্রাউজার যাচাইয়ে সংক্ষিপ্ত সারি, শুধু কর্মীর জন্য প্রাসঙ্গিক কার্যক্রম, শেষ 5টি রেকর্ড এবং পুরোনো থেকে নতুন ক্রমে সম্পূর্ণ ইতিহাস নিশ্চিত হয়েছে। ডাউনলোড করা কর্মীর বিবরণী পরীক্ষা করা হয়েছে: তাতে শুধু নির্বাচিত মজুরি ছিল; অন্য ব্যক্তি, মালিকের লগইন তথ্য বা আমদানির শনাক্তকারী ছিল না। চালকের পুরোনো অসংযুক্ত নগদ শুধু তখনই অন্তর্ভুক্ত হয়, যখন সমন্বয়ের দলটি দ্ব্যর্থহীনভাবে কেবল পরিবহনের।
 
-Final target checks:149/149tests passed in23files, production build passed, dependency audit reportedzero known vulnerabilities, and34/34offline assets loaded. Private file URLs returned403. The final production PWA update was applied in the browser and retained the authenticated owner records. The neighbouring emochi-web checkout stayed unchanged.
+যোগ করা সব নমুনা লেনদেন ও কার্যক্রম আলাদা নমুনা কর্মক্ষেত্রে রাখা হয়েছে। প্রকৃত মালিকের খতিয়ান আবার প্রাথমিক ডেটা দিয়ে ভরা বা নতুন করে লেখা হয়নি। হাতে থাকা যন্ত্রে Safari কিবোর্ড/ক্যামেরা/Home Screen যাচাই এসব পর্দার আকারভিত্তিক ব্রাউজার যাচাই থেকে আলাদা রয়ে গেছে।
 
-## Current refinement — 1 November 2026
+চূড়ান্ত লক্ষ্যমাত্রার যাচাই: 23টি ফাইলে 149/149 পরীক্ষা সফল, প্রোডাকশন বিল্ড সফল, নির্ভরতার নিরাপত্তা নিরীক্ষায় কোনো পরিচিত দুর্বলতা পাওয়া যায়নি এবং 34/34টি অফলাইন সম্পদ লোড হয়েছে। ব্যক্তিগত ফাইলের URL-এ 403 পাওয়া গেছে। ব্রাউজারে চূড়ান্ত প্রোডাকশন PWA হালনাগাদ প্রয়োগ করা হয়েছে এবং প্রমাণীকৃত মালিকের রেকর্ড অক্ষত ছিল। পাশের emochi-web চেকআউট অপরিবর্তিত ছিল।
 
-- All 176 tests in 34 files pass, including context defaults, custom payment purposes, optional fixed worker contracts, backup field-loss guards, account-aware detail navigation, bulk historical review and paged history. TypeScript and production build pass. Production dependency audit reports zero known vulnerabilities.
-- Migrations008 and009 are applied locally and recorded in migration history. Standard backend, work-history, payment-purpose and live-share checks all pass using disposable accounts; no owner records are reseeded.
-- Public share browser QA opened a disposable worker statement without signing in, then refreshed the same saved link after another payment. Paid changed৳30,000→৳40,000 and payable৳95,400→৳85,400. Revoking the link and refreshing removed its previously visible statement. The disposable account and token file were removed after verification.
-- Sand shortcut choices survived save/reload; configured expense/transport actions appeared without payment, and an intentional empty selection stayed empty. A minimum-entry sample expense was saved and reopened. Cement context tests verify work/material/unit defaults with only amount and bags entered and no guessed brand.
-- Bulk browser QA selected30 of65 synthetic pending rows and applied a work classification. Pending fell65→35; total historical cost remained৳85,800. Thirty-row history pages kept their URL page/filter state and showed compact dates with years. Work notebooks show only the10most recent cost rows, with the complete total unchanged and a dedicated full-history link.
-- A legacy material payment's person link now preserves its material account. The receiving profile shows the relevant payment/advance instead of defaulting to an empty wage account. Changes appear only after a transaction has revisions and start collapsed.
-- Global drawer overflow uses `clip`; the inner content alone scrolls. At440×956, focusing lower fields left outer scrollTop0, header at top and footer at the viewport bottom. Both long bulk review and ordinary expense form were checked. Responsive390px dashboard/calculator and desktop dark palette were visually checked.
-- The main JavaScript chunk is approximately848KB (241KB gzip), with separate lazy route/form chunks. Owner sync still uses a versioned whole-document JSON snapshot: visible history is paged, but owner network transfer is not bounded per page. Live contact responses are projected/paged server-side (40 rows, maximum60) while the server still reads the document snapshot. Normalized transaction storage remains needed for much larger production workspaces.
-- No hosted production service or SMS provider has been configured. Localhost sharing links work only where the same local frontend/backend can be reached. Real iPhone Safari/Home Screen, keyboard and camera checks remain physical-device work.
+## বর্তমান পরিমার্জন — 1 নভেম্বর 2026
 
-Screenshots are kept in ignored `private/screenshots/v4-*.png`; no personal ledger or credential belongs in public build output.
+- 34টি ফাইলে 176টি পরীক্ষার সবগুলো সফল হয়েছে। এর মধ্যে প্রসঙ্গের পূর্বনির্ধারিত মান, নিজস্ব পরিশোধের উদ্দেশ্য, কর্মীর ঐচ্ছিক নির্ধারিত চুক্তি, ব্যাকআপে ঘর হারানো ঠেকানো, অ্যাকাউন্ট বুঝে বিস্তারিত পাতায় যাওয়া, পুরোনো হিসাব একসঙ্গে পর্যালোচনা এবং পাতাভাগ করা ইতিহাস আছে। TypeScript ও প্রোডাকশন বিল্ড সফল হয়েছে। প্রোডাকশনের নির্ভরতার নিরাপত্তা নিরীক্ষায় কোনো পরিচিত দুর্বলতা পাওয়া যায়নি।
+- মাইগ্রেশন 008 ও 009 স্থানীয়ভাবে প্রয়োগ করে মাইগ্রেশনের ইতিহাসে রাখা হয়েছে। সাধারণ ব্যাকএন্ড, কাজের ইতিহাস, পরিশোধের উদ্দেশ্য এবং তাৎক্ষণিক শেয়ার যাচাই অস্থায়ী অ্যাকাউন্ট ব্যবহার করে সবগুলো সফল হয়েছে; মালিকের কোনো রেকর্ড আবার প্রাথমিক ডেটা দিয়ে ভরা হয়নি।
+- প্রকাশ্য শেয়ারের ব্রাউজার যাচাইয়ে সাইন-ইন ছাড়াই একজন অস্থায়ী কর্মীর বিবরণী খোলা হয়েছে, তারপর আরেকটি পরিশোধের পর একই সংরক্ষিত লিংক রিফ্রেশ করা হয়েছে। পরিশোধ ৳30,000→৳40,000 এবং প্রাপ্য ৳95,400→৳85,400 হয়েছে। লিংক বাতিল করে রিফ্রেশ করার পর আগে দৃশ্যমান বিবরণী আর দেখা যায়নি। যাচাই শেষে অস্থায়ী অ্যাকাউন্ট ও টোকেনের ফাইল সরিয়ে দেওয়া হয়েছে।
+- বালুর দ্রুত ব্যবহারের পছন্দগুলো সংরক্ষণ ও পুনরায় লোডের পরও ছিল; পরিশোধ ছাড়া নির্ধারিত খরচ/পরিবহনের কার্যক্রম দেখা গেছে এবং ইচ্ছাকৃত খালি নির্বাচন খালিই থেকেছে। অল্পতম তথ্যের একটি নমুনা খরচ সংরক্ষণ করে আবার খোলা হয়েছে। সিমেন্টের প্রসঙ্গভিত্তিক পরীক্ষায় শুধু পরিমাণ ও বস্তার সংখ্যা লিখলে কাজ/মালামাল/এককের পূর্বনির্ধারিত মান থাকে এবং কোনো ব্র্যান্ড অনুমান করে বসানো হয় না—এটি যাচাই হয়েছে।
+- একসঙ্গে পর্যালোচনার ব্রাউজার যাচাইয়ে কৃত্রিম 65টি অপেক্ষমাণ সারির মধ্যে 30টি বেছে একটি কাজের শ্রেণিতে রাখা হয়েছে। অপেক্ষমাণ সংখ্যা 65→35 হয়েছে; পুরোনো হিসাবের মোট খরচ ৳85,800 অপরিবর্তিত থেকেছে। 30 সারির ইতিহাসের পাতাগুলো URL-এ পাতা/ছাঁকনির অবস্থা রেখেছে এবং বছরসহ সংক্ষিপ্ত তারিখ দেখিয়েছে। কাজের খাতায় সাম্প্রতিক 10টি খরচের সারি দেখা যায়; সম্পূর্ণ মোট অপরিবর্তিত থাকে এবং পুরো ইতিহাসের জন্য আলাদা লিংক আছে।
+- পুরোনো মালামালের পরিশোধে ব্যক্তির লিংক এখন তার মালামালের অ্যাকাউন্ট ধরে রাখে। যে প্রোফাইলে যাওয়া হয়, সেখানে খালি মজুরির অ্যাকাউন্ট পূর্বনির্ধারিতভাবে দেখানোর বদলে প্রাসঙ্গিক পরিশোধ/অগ্রিম দেখা যায়। কোনো লেনদেনের সংশোধন থাকলেই শুধু পরিবর্তনগুলো দেখা যায় এবং শুরুতে ভাঁজ করা থাকে।
+- সামগ্রিক ড্রয়ারের বাইরে বের হওয়া অংশ সামলাতে `clip` ব্যবহার করা হয়; শুধু ভেতরের বিষয়বস্তু স্ক্রল করে। 440×956 মাপে নিচের ঘরে ফোকাস করার পরও বাইরের `scrollTop` 0 থেকেছে, শিরোনাম ওপরে এবং নিচের অংশ দৃশ্যমান পর্দার তলায় ছিল। দীর্ঘ একসঙ্গে পর্যালোচনা ও সাধারণ খরচের ফর্ম—দুটিই পরীক্ষা করা হয়েছে। 390px ড্যাশবোর্ড/ক্যালকুলেটরের মানিয়ে নেওয়া বিন্যাস এবং ডেস্কটপের গাঢ় রঙের বিন্যাস চোখে দেখে পরীক্ষা করা হয়েছে।
+- প্রধান JavaScript অংশটি প্রায় 848KB (gzip-এ 241KB); রুট/ফর্মের আলাদা অংশ প্রয়োজনের সময় লোড হয়। মালিকের সিঙ্ক এখনো সংস্করণযুক্ত সম্পূর্ণ নথির JSON স্ন্যাপশট ব্যবহার করে: দৃশ্যমান ইতিহাস পাতাভাগ করা হলেও মালিকের নেটওয়ার্কে ডেটা আদানপ্রদান প্রতিটি পাতার সীমায় বাঁধা নয়। ব্যক্তির তাৎক্ষণিক বিবরণীর উত্তর সার্ভারে প্রয়োজনীয় ঘর বেছে পাতাভাগ করে পাঠানো হয় (40 সারি, সর্বোচ্চ 60), তবে সার্ভার এখনো নথির স্ন্যাপশট পড়ে। অনেক বড় প্রোডাকশন কর্মক্ষেত্রের জন্য লেনদেন স্বাভাবিকীকৃত কাঠামোয় সংরক্ষণ করা এখনো প্রয়োজন।
+- হোস্ট করা কোনো প্রোডাকশন সেবা বা SMS সেবাদাতা কনফিগার করা হয়নি। Localhost-এর শেয়ার লিংক শুধু একই স্থানীয় ফ্রন্টএন্ড/ব্যাকএন্ডে পৌঁছানো যায় এমন জায়গায় কাজ করে। প্রকৃত iPhone-এর Safari/Home Screen, কিবোর্ড ও ক্যামেরার যাচাই হাতে থাকা যন্ত্রে করতে হবে।
 
-Final local build:37of37assets loaded; private file routes returned403. The owner financial-record checksum matched its pre-update baseline.
+স্ক্রিনশটগুলো উপেক্ষিত `private/screenshots/v4-*.png`-এ রাখা আছে; কোনো ব্যক্তিগত খতিয়ান বা লগইন তথ্য প্রকাশ্য বিল্ডের আউটপুটে থাকা চলবে না।
 
-The final production PWA update was activated at127.0.0.1:4180. The actual cement form prefilledসিমেন্ট,সিমেন্ট কেনাandবস্তা; it was closed without saving a transaction. Work preview showed10rows after activation; the overview retained its recorded total.
+চূড়ান্ত স্থানীয় বিল্ডে 37টির মধ্যে 37টি সম্পদ লোড হয়েছে; ব্যক্তিগত ফাইলের রুটে 403 পাওয়া গেছে। মালিকের আর্থিক রেকর্ডের চেকসাম হালনাগাদের আগের যাচাইকৃত মানের সঙ্গে মিলে গেছে।
 
-## Registration and input refinement — 1 November 2026
+চূড়ান্ত প্রোডাকশন PWA হালনাগাদ 127.0.0.1:4180-এ সক্রিয় করা হয়েছে। প্রকৃত সিমেন্টের ফর্মে আগে থেকেই সিমেন্ট, সিমেন্ট কেনা এবং বস্তা পূরণ করা ছিল; কোনো লেনদেন সংরক্ষণ ছাড়াই সেটি বন্ধ করা হয়েছে। সক্রিয় করার পর কাজের প্রিভিউতে 10টি সারি দেখা গেছে; সারাংশে নথিভুক্ত মোট অক্ষত ছিল।
 
-- All195tests in36files pass; TypeScript and production build pass. The19new tests cover registration validation, generic duplicate responses, confirmation-only signup, invalid/replayed tokens, explicit confirmation, connection retry, resend cooldown, password visibility and preservation of an existing account's storage/session.
-- Email/password self-registration is enabled locally with email confirmation, minimum8characters, a60second resend interval and server rate limits. The local confirmation email uses an allowlisted callback URL with its token in the fragment; the confirmation screen removes the token from the URL and requires an explicit confirmation action.
-- The real browser signup form created a disposable account. Login before confirmation was rejected; opening its actual Mailpit email link and pressing confirm succeeded, followed by explicit password sign-in. The new notebook showed zero cost and no entries or works. The disposable account was signed out, then its account/messages/fixture were removed.
-- Backend registration checks passed actual mail delivery, malformed input, pre-confirm denial, single-use tokens, unsafe redirect fallback, confirmed sign-in, duplicate-registration handling, empty own workspace and cross-owner ledger/voucher denial. Standard backend checks also pass.
-- Local Supabase was restarted without reset or owner reseed to apply auth configuration. Existing ledger documents, revisions and timestamps matched exactly before/after.
-- Input, search, amount and auth wrappers now use one thin focus border and a soft theme-aware halo. Nested fields no longer add another outline. Keyboard focus, errors, reduced motion and forced-colour focus remain visible. Desktop,390px mobile and dark inputs were visually checked;22existing control/combobox tests pass.
-- Local emails are captured at127.0.0.1:55434and do not reach a real inbox. Hosted production SMTP/templates and HTTPS callback URLs remain future deployment configuration; no production service was provisioned. SeeREGISTRATION.md.
+## নিবন্ধন ও ইনপুটের পরিমার্জন — 1 নভেম্বর 2026
 
-The final production preview exposes/registerandthe owner PWA update was activated without signing out the owner. All37offline/build assets loaded and the public bundle/private-route checks passed.
+- 36টি ফাইলে 195টি পরীক্ষার সবগুলো সফল হয়েছে; TypeScript ও প্রোডাকশন বিল্ড সফল হয়েছে। নতুন 19টি পরীক্ষায় নিবন্ধনের তথ্য যাচাই, একই নিবন্ধনের জন্য সাধারণ উত্তর, শুধু নিশ্চিতকরণের মাধ্যমে নিবন্ধন, অবৈধ/পুনর্ব্যবহৃত টোকেন, সরাসরি নিশ্চিতকরণ, সংযোগের পুনরায় চেষ্টা, আবার পাঠানোর অপেক্ষাকাল, পাসওয়ার্ড দেখা এবং বিদ্যমান অ্যাকাউন্টের সংরক্ষণাগার/সেশন অক্ষত রাখা অন্তর্ভুক্ত।
+- স্থানীয়ভাবে ইমেইল নিশ্চিতকরণসহ ইমেইল/পাসওয়ার্ড দিয়ে নিজের নিবন্ধন চালু আছে; পাসওয়ার্ড ন্যূনতম 8 অক্ষর, আবার পাঠানোর বিরতি 60 সেকেন্ড এবং সার্ভারে অনুরোধের হারসীমা আছে। স্থানীয় নিশ্চিতকরণ ইমেইলে অনুমোদিত callback URL ব্যবহার করা হয় এবং টোকেন থাকে ফ্র্যাগমেন্টে; নিশ্চিতকরণের পর্দা URL থেকে টোকেন সরিয়ে দেয় এবং সরাসরি নিশ্চিত করার পদক্ষেপ চায়।
+- প্রকৃত ব্রাউজারের নিবন্ধন ফর্ম দিয়ে একটি অস্থায়ী অ্যাকাউন্ট তৈরি করা হয়েছে। নিশ্চিত করার আগে লগইন প্রত্যাখ্যাত হয়েছে; এর প্রকৃত Mailpit ইমেইলের লিংক খুলে নিশ্চিত করার বোতাম চাপলে সফল হয়েছে, তারপর সরাসরি পাসওয়ার্ড দিয়ে সাইন-ইন করা হয়েছে। নতুন খাতায় শূন্য খরচ এবং কোনো এন্ট্রি বা কাজ ছিল না। অস্থায়ী অ্যাকাউন্ট থেকে সাইন-আউট করে পরে তার অ্যাকাউন্ট/বার্তা/পরীক্ষার প্রস্তুত ডেটা সরিয়ে দেওয়া হয়েছে।
+- ব্যাকএন্ডে নিবন্ধনের যাচাইয়ে প্রকৃত ইমেইল পৌঁছানো, ভুল গঠনের ইনপুট, নিশ্চিত করার আগে প্রবেশ নিষিদ্ধ থাকা, একবার ব্যবহারযোগ্য টোকেন, অনিরাপদ পুনর্নির্দেশের বদলে নিরাপদ বিকল্প, নিশ্চিত করার পর সাইন-ইন, একই নিবন্ধনের অনুরোধ সামলানো, নিজের খালি কর্মক্ষেত্র এবং অন্য মালিকের খতিয়ান/ভাউচারে প্রবেশ নিষিদ্ধ থাকা সফল হয়েছে। সাধারণ ব্যাকএন্ড যাচাইও সফল হয়েছে।
+- প্রমাণীকরণের কনফিগারেশন প্রয়োগ করতে স্থানীয় Supabase পুনরায় চালু করা হয়েছে; রিসেট বা মালিকের প্রাথমিক ডেটা আবার বসানো হয়নি। আগের খতিয়ানের নথি, রিভিশন এবং সময়চিহ্ন আগে/পরে হুবহু মিলেছে।
+- ইনপুট, অনুসন্ধান, পরিমাণ এবং প্রমাণীকরণের মোড়কগুলো এখন ফোকাসে একটি পাতলা রেখা ও থিম অনুযায়ী নরম আভা ব্যবহার করে। ভেতরের ঘর আর বাড়তি রেখা যোগ করে না। কিবোর্ড ফোকাস, ভুল, কমানো নড়াচড়া এবং বাধ্যতামূলক রঙের ফোকাস দৃশ্যমান থাকে। ডেস্কটপ, 390px মোবাইল ও গাঢ় মোডের ইনপুট চোখে দেখে পরীক্ষা করা হয়েছে; নিয়ন্ত্রণ/কম্বোবক্সের আগের 22টি পরীক্ষা সফল হয়েছে।
+- স্থানীয় ইমেইল 127.0.0.1:55434-এ ধরা হয় এবং প্রকৃত ইনবক্সে পৌঁছায় না। হোস্ট করা প্রোডাকশনের SMTP/টেমপ্লেট ও HTTPS callback URL ভবিষ্যতের ডিপ্লয়মেন্ট কনফিগারেশনের কাজ; কোনো প্রোডাকশন সেবা তৈরি করা হয়নি। `REGISTRATION.md` দেখুন।
 
-## Configurable local phone OTP — 1 November 2026
+চূড়ান্ত প্রোডাকশন প্রিভিউতে `/register` পাওয়া যায় এবং মালিককে সাইন-আউট না করেই তাঁর PWA হালনাগাদ সক্রিয় করা হয়েছে। অফলাইন/বিল্ডের 37টি সম্পদের সবগুলো লোড হয়েছে এবং প্রকাশ্য বান্ডল/ব্যক্তিগত রুটের যাচাই সফল হয়েছে।
 
-- All 238 tests in 40 files pass. New checks cover phone UI, mode gates, Bengali digits, challenge/request response validation, twelve-character refresh tokens, stale account/logout races and gateway controls. TypeScript and production build pass.
-- The configured local OTP is checked by a server-only gateway. It produces real Supabase phone sessions, keeps each phone in its own workspace and preserves the same phone identity when the configured code changes. Requests require a random phone-bound challenge with expiry, one-time use, five-attempt limit, resend cooldown and rate limits.
-- Actual backend integration verified correct/wrong code, replay/expiry/cross-phone denial, changing OTP while retaining the same ledger, independent phone identities and rejection of existing real phone users without changing their passwords. Hosted/LAN/cross-origin mock requests fail closed. No SMS provider or message delivery was activated.
-- Production-preview browser QA rejected an incorrect code, then accepted Bengali digits for the configured code. It opened a separate empty notebook with zero cost and no prior entries. A discovered over-strict refresh-token length check was corrected and its regression test added.
-- The current local Supabase CLI disables its native phone provider without an SMS sender. A local-only db:start wrapper reapplies the native phone flag on the auth container while preserving its config, network settings and labels, with rollback. Database containers/volumes are not changed. All existing ledger documents/revisions/timestamps matched before and after. No placeholder OAuth configuration or test-number sentinel remains.
-- Standard backend checks pass and preserve all private phone environment values, including the stable identity key. The public bundle audit also checks that key and the local administrative key are absent.
-- Mode is controlled by BARI_PHONE_AUTH_MODE (mock/sms/off); the code is BARI_DEV_PHONE_OTP. These are server settings in private .env.local. Only the public mode reaches the browser. SMS mode requires a configured real provider; mock mode is local development/preview only. See docs/PHONE-OTP.md.
+## কনফিগারযোগ্য স্থানীয় ফোন OTP — 1 নভেম্বর 2026
 
-Final target verification: 238/238 tests passed in 40 files; build and private-secret scan passed. All 37 assets loaded. The new login route shows phone/email selection. An update is ready for existing PWA tabs; the user's open owner profile was left in place. Temporary phone identity/fixture and test previews were removed.
+- 40টি ফাইলে 238টি পরীক্ষার সবগুলো সফল হয়েছে। নতুন যাচাইয়ে ফোনের পর্দা, মোড অনুযায়ী অনুমতি, বাংলা অঙ্ক, চ্যালেঞ্জ/অনুরোধের উত্তর যাচাই, বারো অক্ষরের রিফ্রেশ টোকেন, পুরোনো অ্যাকাউন্ট/লগআউটের সমসাময়িক দ্বন্দ্ব এবং গেটওয়ের নিয়ন্ত্রণ অন্তর্ভুক্ত। TypeScript ও প্রোডাকশন বিল্ড সফল হয়েছে।
+- কনফিগার করা স্থানীয় OTP শুধু সার্ভারে চলা গেটওয়ে দিয়ে পরীক্ষা করা হয়। এটি প্রকৃত Supabase ফোন সেশন তৈরি করে, প্রতিটি ফোনকে নিজস্ব কর্মক্ষেত্রে রাখে এবং কনফিগার করা কোড বদলালেও একই ফোনের পরিচয় অক্ষত রাখে। অনুরোধে ফোনের সঙ্গে বাঁধা এলোমেলো চ্যালেঞ্জ লাগে; এর মেয়াদ, একবার ব্যবহারের নিয়ম, পাঁচবার চেষ্টার সীমা, আবার পাঠানোর অপেক্ষাকাল এবং অনুরোধের হারসীমা আছে।
+- প্রকৃত ব্যাকএন্ড সমন্বয় পরীক্ষায় সঠিক/ভুল কোড, পুনর্ব্যবহার/মেয়াদোত্তীর্ণ/অন্য ফোনের চ্যালেঞ্জ প্রত্যাখ্যান, একই খতিয়ান রেখে OTP বদলানো, আলাদা ফোনের স্বাধীন পরিচয় এবং বিদ্যমান প্রকৃত ফোন ব্যবহারকারীর পাসওয়ার্ড না বদলে তাঁদের প্রত্যাখ্যান করা যাচাই হয়েছে। হোস্ট করা/LAN/ভিন্ন উৎসের মক অনুরোধ অনুমতি না দিয়ে বন্ধ হয়। কোনো SMS সেবাদাতা বা বার্তা পৌঁছানো চালু করা হয়নি।
+- প্রোডাকশন প্রিভিউয়ের ব্রাউজার যাচাইয়ে ভুল কোড প্রত্যাখ্যাত হয়েছে, তারপর কনফিগার করা কোডের বাংলা অঙ্ক গ্রহণ করেছে। এতে শূন্য খরচ ও আগের কোনো এন্ট্রি ছাড়া আলাদা খালি খাতা খুলেছে। রিফ্রেশ টোকেনের দৈর্ঘ্যের অতিরিক্ত কঠোর একটি যাচাই ধরা পড়ে; সেটি ঠিক করে ত্রুটি ফিরে আসা ঠেকানোর পরীক্ষা যোগ করা হয়েছে।
+- বর্তমান স্থানীয় Supabase CLI-তে SMS পাঠানোর ব্যবস্থা ছাড়া নিজস্ব ফোন সেবাদাতা বন্ধ থাকে। শুধু স্থানীয় `db:start` মোড়ক প্রমাণীকরণের কনটেইনারে নিজস্ব ফোনের ফ্ল্যাগ আবার প্রয়োগ করে; কনফিগারেশন, নেটওয়ার্কের সেটিংস ও লেবেল অক্ষত রাখে এবং ব্যর্থ হলে আগের অবস্থায় ফেরে। ডেটাবেসের কনটেইনার/ভলিউম বদলানো হয় না। বিদ্যমান খতিয়ানের সব নথি/রিভিশন/সময়চিহ্ন আগে ও পরে মিলে গেছে। কোনো বিকল্প নামমাত্র OAuth কনফিগারেশন বা পরীক্ষার নম্বরের বিশেষ চিহ্ন অবশিষ্ট নেই।
+- সাধারণ ব্যাকএন্ড যাচাই সফল হয়েছে এবং স্থায়ী পরিচয়ের key-সহ ফোনের সব ব্যক্তিগত পরিবেশগত মান অক্ষত রেখেছে। প্রকাশ্য বান্ডলের নিরীক্ষায় ওই key ও স্থানীয় প্রশাসনিক key অনুপস্থিত থাকার বিষয়ও যাচাই করা হয়।
+- মোড নিয়ন্ত্রণ করে `BARI_PHONE_AUTH_MODE` (mock/sms/off); কোডটি হলো `BARI_DEV_PHONE_OTP`। এগুলো ব্যক্তিগত `.env.local`-এ সার্ভারের সেটিংস। শুধু প্রকাশ্য মোড ব্রাউজারে যায়। SMS মোডের জন্য কনফিগার করা প্রকৃত সেবাদাতা প্রয়োজন; মক মোড শুধু স্থানীয় ডেভেলপমেন্ট/প্রিভিউয়ের জন্য। `docs/PHONE-OTP.md` দেখুন।
 
+চূড়ান্ত লক্ষ্যমাত্রার যাচাই: 40টি ফাইলে 238/238 পরীক্ষা সফল; বিল্ড ও ব্যক্তিগত গোপন তথ্যের অনুসন্ধান সফল হয়েছে। 37টি সম্পদের সবগুলো লোড হয়েছে। নতুন লগইন রুটে ফোন/ইমেইল নির্বাচন দেখা যায়। বিদ্যমান PWA ট্যাবগুলোর জন্য হালনাগাদ প্রস্তুত আছে; ব্যবহারকারীর খোলা মালিক প্রোফাইল আগের অবস্থায় রাখা হয়েছে। অস্থায়ী ফোনের পরিচয়/পরীক্ষার প্রস্তুত ডেটা এবং পরীক্ষার প্রিভিউ সরিয়ে দেওয়া হয়েছে।
 
-## Complete theme refresh — 1 November 2026
+## থিমের সম্পূর্ণ নবায়ন — 1 নভেম্বর 2026
 
-- Four Color Hunt palettes now have Bengali names: নীলিমা (blue/cream), বনলতা (green/earth), অপরাজিতা (plum/lavender/blush), and গোধূলি (amber/terracotta). Each changes the page wash, raised surfaces, total-card gradient, primary actions, navigation accents and authentication screen. The settings cards show miniature previews and link to the selected source palette.
-- Dark appearance uses neutral #101113 backgrounds, #191b1f cards and #23262b inset surfaces for every palette. Off-white text, quieter gradients and semantic warning/success/error colours retain readable controls without a green page cast. Light/dark/device remain independent of palette selection.
-- Existing persisted palette IDs and language preferences are preserved. Device appearance changes update the browser status bar without adding duplicate listeners. No ledger, authentication or environment data changes are involved.
-- All 249 tests in 41 files pass, including 11 appearance preference and device-change cases. TypeScript and production build pass. Text on light primary gradient endpoints has contrast of at least 5.28:1; dark primary actions at least 9.24:1; muted light text on palette backgrounds at least 5.48:1.
-- Browser checks at 390px verified all eight light/dark palette combinations, no horizontal overflow, saved preference restoration, dashboard gradients, expense drawer, dropdown and calculator. Dark surfaces remained neutral for all four palettes. Desktop layout was also inspected. Physical-device display and Safari checks remain separate from responsive browser verification.
+- চারটি Color Hunt রঙের বিন্যাসের এখন বাংলা নাম আছে: নীলিমা (নীল/ক্রিম), বনলতা (সবুজ/মাটির রং), অপরাজিতা (প্লাম/ল্যাভেন্ডার/হালকা গোলাপি) এবং গোধূলি (অ্যাম্বার/পোড়ামাটির রং)। প্রতিটি পাতার হালকা পটভূমি, উঁচু তল, মোট হিসাবের কার্ডের গ্রেডিয়েন্ট, প্রধান কাজের বোতাম, নেভিগেশনের রং ও প্রমাণীকরণের পর্দা বদলায়। সেটিংসের কার্ডে ছোট প্রিভিউ দেখা যায় এবং নির্বাচিত রঙের উৎসে লিংক থাকে।
+- প্রতিটি রঙের বিন্যাসের গাঢ় চেহারায় নিরপেক্ষ #101113 পটভূমি, #191b1f কার্ড এবং #23262b ভেতরে বসানো তল ব্যবহার করা হয়েছে। সাদাটে লেখা, শান্ত গ্রেডিয়েন্ট এবং সতর্কতা/সাফল্য/ভুলের অর্থবহ রং নিয়ন্ত্রণগুলো পাঠযোগ্য রাখে; পাতায় সবুজ আভা পড়ে না। হালকা/গাঢ়/যন্ত্র অনুযায়ী চেহারা রঙের বিন্যাস নির্বাচন থেকে স্বাধীন থাকে।
+- আগে স্থায়ীভাবে সংরক্ষিত রঙের বিন্যাসের ID ও ভাষার পছন্দ অক্ষত থাকে। যন্ত্রের চেহারা বদলালে বাড়তি শ্রোতা যোগ না করেই ব্রাউজারের স্ট্যাটাস বারের রং হালনাগাদ হয়। এতে খতিয়ান, প্রমাণীকরণ বা পরিবেশের ডেটা বদলায় না।
+- 41টি ফাইলে 249টি পরীক্ষার সবগুলো সফল হয়েছে; এর মধ্যে চেহারার পছন্দ ও যন্ত্রের চেহারা বদলানোর 11টি পরীক্ষা আছে। TypeScript ও প্রোডাকশন বিল্ড সফল হয়েছে। হালকা মোডের প্রধান গ্রেডিয়েন্টের প্রান্তের রঙে লেখার বৈপরীত্য অন্তত 5.28:1; গাঢ় মোডের প্রধান কাজের বোতামে অন্তত 9.24:1; রঙের বিন্যাসের হালকা পটভূমিতে মৃদু লেখার বৈপরীত্য অন্তত 5.48:1।
+- 390px-এ ব্রাউজার যাচাইয়ে হালকা/গাঢ়ের আটটি রঙের সমন্বয়, আড়াআড়ি উপচে না পড়া, সংরক্ষিত পছন্দ ফিরিয়ে আনা, ড্যাশবোর্ডের গ্রেডিয়েন্ট, খরচের ড্রয়ার, ড্রপডাউন ও ক্যালকুলেটর পরীক্ষা করা হয়েছে। চারটি রঙের বিন্যাসেই গাঢ় তলগুলো নিরপেক্ষ ছিল। ডেস্কটপের বিন্যাসও দেখা হয়েছে। প্রকৃত যন্ত্রের পর্দা ও Safari যাচাই পর্দার আকার অনুযায়ী ব্রাউজার যাচাই থেকে আলাদা রয়ে গেছে।
 
-Final production verification: all 37 build/offline asset URLs are served on port4180 and the private bundle audit passes. Direct production-browser selection/reload retained বনলতা + dark with neutral #101113/#191b1f surfaces and no console errors. Existing owner tabs were not reloaded or signed out. The local preview is running on port4180; old PWA copies require their normal update action. Screenshot: ignored private/screenshots/v7-themes.png.
+চূড়ান্ত প্রোডাকশন যাচাই: 37টি বিল্ড/অফলাইন সম্পদের URL-এর সবগুলো 4180 পোর্টে পাওয়া যায় এবং ব্যক্তিগত তথ্যের বান্ডল নিরীক্ষা সফল হয়েছে। প্রোডাকশন ব্রাউজারে সরাসরি নির্বাচন/পুনরায় লোডের পর বনলতা + গাঢ় মোড, নিরপেক্ষ #101113/#191b1f তল এবং ত্রুটিহীন কনসোল অক্ষত ছিল। মালিকের বিদ্যমান ট্যাব পুনরায় লোড বা সাইন-আউট করা হয়নি। স্থানীয় প্রিভিউ 4180 পোর্টে চলছে; পুরোনো PWA কপির জন্য স্বাভাবিক হালনাগাদের পদক্ষেপ প্রয়োজন। স্ক্রিনশট: উপেক্ষিত `private/screenshots/v7-themes.png`।
 
+## প্রয়োজন হলে আরও লোড — 2 নভেম্বর 2026
 
-## Conditional load more — 2 November 2026
+- ইতিহাস ও পুরোনো হিসাবের পর্যালোচনায় এখন প্রথমে 30টি সারি দেখায় এবং প্রতিটি অনুরোধে আরও 30টি যোগ হয়। আগের/পরের বোতাম ও পরিসরের গণনা সরানো হয়েছে; ফল খালি, কম, শেষ ব্যাচের সমান বা সম্পূর্ণ লোড হয়ে গেলে আরও লোড করার মোড়ক দেখানো হয় না। ইতিহাস ওপরে স্ক্রল না করে আগে থেকে থাকা URL অবস্থায় জমা হওয়া ব্যাচগুলো রাখে। ছাঁকনি/অনুসন্ধান/ক্রম বদলালে লোড করা পরিসর নতুন করে শুরু হয়।
+- সঙ্গে সঙ্গে হওয়া কেনাকাটা/পরিশোধের জোড়া ব্যাচের সীমানায়ও একসঙ্গে থাকে। পর্যালোচনার একসঙ্গে নির্বাচন এখনো 100টিতে সীমিত, 100টির বেশি সারি লোড করার পর নির্বাচন পরিষ্কার করা যায় এবং আংশিক নির্বাচনে মিশ্র অবস্থার চেকবক্স দেখায়।
+- 43টি ফাইলে 260টি পরীক্ষার সবগুলো সফল হয়েছে। এর মধ্যে যোগ করা/আগের অংশ অক্ষত রাখা, 0/2/30 সারির তালিকা, শেষ ফল পর্যন্ত লোড হওয়া, অনুসন্ধান/ক্রমে নতুন করে শুরু, সংযুক্ত পরিশোধ একত্রে রাখা, পর্যালোচনার ছাঁকনি বদলানো এবং 100টি নির্বাচনের সীমা আছে।
+- ব্রাউজার যাচাইয়ে 5190 পোর্টের আলাদা নমুনা কর্মক্ষেত্রে স্বাভাবিক ব্যাকআপ পর্দা দিয়ে কৃত্রিম 65টি এন্ট্রি পুনরুদ্ধার করা হয়েছে। এতে 30→60→65টি সারি দেখিয়েছে, তারপর বোতাম ছিল না; একটিমাত্র ফলের অনুসন্ধানেও বোতাম ছিল না। প্রকৃত মালিকের রেকর্ড বা প্রমাণীকরণ/পরিবেশের কনফিগারেশন বদলানো হয়নি। শেয়ার করা বিবরণী ও প্রতিবেদন আগে থেকেই প্রয়োজন হলে অনুরোধে আরও যোগ করার নিয়ন্ত্রণ ব্যবহার করে; সেগুলো অপরিবর্তিত রাখা হয়েছে।
 
-- History and historical review now render30 rows initially and append30 on each request. Previous/next buttons and range counters are removed; no load-more wrapper is rendered for empty, short, exact-final or exhausted results. History keeps accumulated batches in its existing URL state without scrolling to the top. Filters/search/order reset the loaded window.
-- Immediate purchase/payment pairs stay together at batch boundaries. Review bulk selection still caps100, supports clearing selections after loading more than100rows and shows a mixed checkbox for partial selection.
-- All260 tests in43files pass, including append/prefix preservation,0/2/30row lists, final exhaustion, search/order resets, linked payment grouping, review filter changes and the100selection limit.
-- Browser verification used65 synthetic entries restored through the normal backup UI into an isolated sample workspace on port5190. It showed30→60→65rows, then no button; a one-result search also showed no button. No real owner records or authentication/environment configuration were changed. Shared statements and reports already use conditional append-on-request controls and were left unchanged.
+## গোছানো সেটিংস ও অতিথির প্রবেশ — 2 নভেম্বর 2026
 
-
-## Organized settings and guest entry — 2 November 2026
-
-- Settings now uses a compact profile, selected-theme preview and grouped rows. Appearance, language, rename, backup, save status, account and install instructions open dedicated sheets. Conflicts remain visible on the overview, and each row exposes its description/value for assistive technology. Touch targets remain at least44px and focus indicators stay visible.
-- The sample entry moved to the sign-in page as a separate ‘নমুনা দেখুন’ card outside the form. It opens the existing isolated sample notebook without submitting credentials or contacting sign-in/OTP methods. Registration and phone/email sign-in remain unchanged. Guest settings offers a route back to the user’s own notebook or login.
-- All270 tests in45files pass. New tests cover guest navigation in phone/email/phone-disabled modes, compact real/guest settings, phone-only profile, theme/language preservation, trimmed rename, scoped backup download, restore confirmation/error retry, visible conflicts and both resolution actions. TypeScript and production build pass.
-- Browser QA at390×680 confirmed guest access without credentials, its visibility in both sign-in methods, appearance drawer containment with zero horizontal overflow, language changes, and a single backup→preview drawer. Restore remained disabled until explicit confirmation; cancelling returned to the backup actions. The sample backup was only previewed, never restored. Real owner data/auth/environment settings were not changed.
+- সেটিংসে এখন সংক্ষিপ্ত প্রোফাইল, নির্বাচিত থিমের প্রিভিউ এবং দলবদ্ধ সারি ব্যবহার করা হয়। চেহারা, ভাষা, নাম বদল, ব্যাকআপ, সংরক্ষণের অবস্থা, অ্যাকাউন্ট ও ইনস্টলের নির্দেশনা আলাদা শিটে খোলে। দ্বন্দ্বগুলো সারাংশে দৃশ্যমান থাকে এবং প্রতিটি সারি সহায়ক প্রযুক্তির কাছে তার বিবরণ/মান প্রকাশ করে। স্পর্শযোগ্য জায়গা অন্তত 44px থাকে এবং ফোকাসের চিহ্ন দৃশ্যমান থাকে।
+- নমুনায় প্রবেশের পথ সাইন-ইন পাতায় ফর্মের বাইরে আলাদা ‘নমুনা দেখুন’ কার্ডে নেওয়া হয়েছে। এতে লগইন তথ্য জমা না দিয়ে বা সাইন-ইন/OTP পদ্ধতিতে যোগাযোগ না করেই বিদ্যমান আলাদা নমুনা খাতা খোলে। নিবন্ধন ও ফোন/ইমেইল সাইন-ইন অপরিবর্তিত থাকে। অতিথির সেটিংস থেকে ব্যবহারকারীর নিজস্ব খাতা বা লগইনে ফেরার পথ আছে।
+- 45টি ফাইলে 270টি পরীক্ষার সবগুলো সফল হয়েছে। নতুন পরীক্ষায় ফোন/ইমেইল/ফোন বন্ধ মোডে অতিথির চলাচল, প্রকৃত/অতিথির সংক্ষিপ্ত সেটিংস, শুধু ফোনের প্রোফাইল, থিম/ভাষা অক্ষত রাখা, বাড়তি ফাঁক বাদ দিয়ে নাম বদল, নির্দিষ্ট অ্যাকাউন্টের ব্যাকআপ ডাউনলোড, পুনরুদ্ধারের নিশ্চিতকরণ/ভুলের পর আবার চেষ্টা, দৃশ্যমান দ্বন্দ্ব এবং সমাধানের দুটি পদক্ষেপ অন্তর্ভুক্ত। TypeScript ও প্রোডাকশন বিল্ড সফল হয়েছে।
+- 390×680 মাপে ব্রাউজার যাচাইয়ে লগইন তথ্য ছাড়াই অতিথির প্রবেশ, সাইন-ইনের দুই পদ্ধতিতেই তা দেখা যাওয়া, চেহারার ড্রয়ারের ভেতরে সব থাকা ও আড়াআড়ি উপচে না পড়া, ভাষা বদল এবং একটিমাত্র ব্যাকআপ→প্রিভিউ ড্রয়ার নিশ্চিত হয়েছে। সরাসরি নিশ্চিত না করা পর্যন্ত পুনরুদ্ধার বন্ধ ছিল; বাতিল করলে ব্যাকআপের কার্যক্রমে ফিরেছে। নমুনার ব্যাকআপ শুধু প্রিভিউ করা হয়েছে, পুনরুদ্ধার করা হয়নি। প্রকৃত মালিকের ডেটা/প্রমাণীকরণ/পরিবেশের সেটিংস বদলানো হয়নি।

@@ -1,14 +1,14 @@
-# Registration
+# নিবন্ধন
 
-The app now supports self-service email/password registration at `/register`. Registration does not grant access until the email address is confirmed. A new account starts with its own empty notebook; the existing owner records and private vouchers remain protected by owner-only RLS.
+অ্যাপে `/register` পাতায় নিজের ইমেইল ও পাসওয়ার্ড দিয়ে নিবন্ধন করা যায়। ইমেইল ঠিকানা নিশ্চিত না করা পর্যন্ত নিবন্ধন করেও প্রবেশ করা যায় না। নতুন অ্যাকাউন্টের নিজস্ব খালি খাতা থাকে; আগের মালিকদের হিসাব ও ব্যক্তিগত ভাউচার শুধু নিজ নিজ মালিককে অনুমতি দেওয়ার RLS দিয়ে সুরক্ষিত থাকে।
 
-The local backend has email signup enabled, email confirmation required, an eight-character minimum password, a one-minute resend interval and a one-hour confirmation-token lifetime. Phone registration remains disabled. Sign-in/signup and token-verification requests are limited to30per5minutes perIP; the configured email limit is30perhour where enforced by the SMTP service. Production delivery and abuse limits need configuration on the hosted project.
+স্থানীয় ব্যাকএন্ডে ইমেইলে নিবন্ধন চালু আছে এবং ইমেইল নিশ্চিত করা বাধ্যতামূলক। পাসওয়ার্ডে অন্তত আটটি অক্ষর লাগে, আবার ইমেইল পাঠানোর ব্যবধান এক মিনিট এবং নিশ্চিত করার টোকেনের মেয়াদ এক ঘণ্টা। ফোন নম্বরে প্রবেশ ও SMS-এর সেটিং [ফোনে প্রবেশের নথিতে](PHONE-OTP.md) আছে। প্রতি IP থেকে প্রবেশ বা নিবন্ধন এবং টোকেন যাচাইয়ের অনুরোধ প্রতি পাঁচ মিনিটে 30টিতে সীমিত। SMTP সেবা যেখানে সীমাটি কার্যকর করে, সেখানে কনফিগার করা ইমেইলের সীমা ঘণ্টায় 30টি। সরাসরি ব্যবহারের জন্য ইমেইল পাঠানো ও অপব্যবহার ঠেকানোর সীমা অনলাইনে থাকা প্রকল্পে কনফিগার করতে হবে।
 
-The confirmation email sends the user to an allowlisted `/auth/confirm` URL. The hashed token is in the URL fragment so it is not part of the HTTP request or referrer. Confirmation is explicit: the page verifies the token through an isolated, nonpersistent client, and the user then signs in with their email/password. No returned confirmation session replaces an already open owner account or its drafts.
+নিশ্চিত করার ইমেইল ব্যবহারকারীকে অনুমোদিত তালিকায় থাকা `/auth/confirm` URL-এ নিয়ে যায়। টোকেনের হ্যাশ URL-এর ফ্র্যাগমেন্টে থাকে, তাই তা HTTP অনুরোধ বা রেফারারের অংশ হয় না। ব্যবহারকারীকে নিজে নিশ্চিত করতে হয়: পাতা আলাদা, সেশন সংরক্ষণ না করা ক্লায়েন্ট দিয়ে টোকেন যাচাই করে; তারপর ব্যবহারকারী নিজের ইমেইল ও পাসওয়ার্ড দিয়ে প্রবেশ করেন। নিশ্চিত করার পর ফেরত আসা সেশন আগে থেকে খোলা মালিকের অ্যাকাউন্ট বা তার খসড়ার জায়গা নেয় না।
 
-Local emails are captured at `http://127.0.0.1:55434`; they are not sent to an actual inbox. For production, configure Supabase SMTP, enable email signup and confirmation, set the exact hosted callback URL, and install the template in `supabase/templates/confirmation.html` in the hosted Email Templates settings. Local TOML/template settings do not configure a hosted project.
+স্থানীয় ইমেইল `http://127.0.0.1:55434`-এ জমা হয়; আসল ইমেইল ইনবক্সে পাঠানো হয় না। সরাসরি ব্যবহারের জন্য Supabase SMTP কনফিগার করুন, ইমেইলে নিবন্ধন ও নিশ্চিত করা চালু করুন, অনলাইনে থাকা সাইটের সঠিক কলব্যাক URL দিন এবং অনলাইনের Email Templates সেটিংয়ে `supabase/templates/confirmation.html`-এর টেমপ্লেট বসান। স্থানীয় TOML বা টেমপ্লেটের সেটিং দিয়ে অনলাইনে থাকা প্রকল্প কনফিগার হয় না।
 
-The template uses:
+টেমপ্লেটে ব্যবহৃত অংশ:
 
 ```html
 <a href="{{ .RedirectTo }}#token_hash={{ .TokenHash }}&amp;type=email"
@@ -16,20 +16,20 @@ The template uses:
 >
 ```
 
-Allow only trusted frontend callback URLs in Supabase. The current local configuration includes ports4180,5180and5186onlocalhost/127.0.0.1. Remove staging URLs when preparing a hosted production project.
+Supabase-এ শুধু বিশ্বস্ত ফ্রন্টএন্ডের কলব্যাক URL অনুমোদন করুন। বর্তমান স্থানীয় কনফিগারেশনে localhost/127.0.0.1-এর 4180, 5180 ও 5186 পোর্ট আছে। সরাসরি ব্যবহারের অনলাইন প্রকল্প প্রস্তুত করার সময় পরীক্ষার পরিবেশের URL সরিয়ে দিন।
 
-## Verification
+## যাচাই
 
-Run `./node_modules/.bin/tsx scripts/backend-registration-check.ts` against the local stack. It creates disposable accounts and verifies:
+স্থানীয় ব্যবস্থার জন্য `./node_modules/.bin/tsx scripts/backend-registration-check.ts` চালান। এটি সাময়িক অ্যাকাউন্ট তৈরি করে এবং নিচের বিষয়গুলো যাচাই করে:
 
-- Server-side password validation and malformed-email rejection.
-- Actual Mailpit confirmation delivery, fragment-only token links and callback allowlisting.
-- Unconfirmed sign-in denial, invalid token rejection and single-use confirmation.
-- Password sign-in after confirmation and duplicate-registration handling without a new session.
-- An empty independent notebook for a new account, cross-owner ledger/private-voucher denial and anonymous denial.
+- সার্ভারে পাসওয়ার্ড যাচাই ও ভুল গঠনের ইমেইল প্রত্যাখ্যান।
+- Mailpit-এ নিশ্চিত করার ইমেইল পৌঁছানো, শুধু ফ্র্যাগমেন্টে টোকেন থাকা লিংক এবং কলব্যাকের অনুমোদিত তালিকা।
+- ইমেইল নিশ্চিত না হলে প্রবেশ ঠেকানো, ভুল টোকেন প্রত্যাখ্যান এবং নিশ্চিত করার টোকেন একবারই ব্যবহার করা।
+- নিশ্চিত করার পর পাসওয়ার্ডে প্রবেশ এবং নতুন সেশন না বানিয়ে একই ইমেইলে আবার নিবন্ধনের অনুরোধ সামলানো।
+- নতুন অ্যাকাউন্টে আলাদা খালি খাতা, অন্য মালিকের খাতা বা ব্যক্তিগত ভাউচার ব্যবহার ঠেকানো এবং পরিচয়হীন অনুরোধ ঠেকানো।
 
-Disposable users, uploaded voucher and test confirmation messages are removed at the end. Do not run this script against a hosted project: it refuses nonlocal API and mail URLs.
+শেষে সাময়িক ব্যবহারকারী, আপলোড করা ভাউচার ও পরীক্ষার নিশ্চিতকরণ ইমেইল মুছে ফেলা হয়। অনলাইনে থাকা প্রকল্পে এই স্ক্রিপ্ট চালাবেন না: এটি স্থানীয় নয় এমন API ও ইমেইল URL গ্রহণ করে না।
 
-The configuration was applied locally using `supabase stop` followed by `supabase start` without `--no-backup`. Existing ledger documents, revisions and timestamps matched their pre-restart snapshot exactly. No database reset or owner reseed was performed.
+স্থানীয়ভাবে কনফিগারেশন প্রয়োগের সময় `supabase stop`-এর পর `supabase start` চালানো হয়েছিল; `--no-backup` ব্যবহার করা হয়নি। আগের খাতার নথি, সংস্করণ ও সময়ের তথ্য পুনরায় চালুর আগের স্ন্যাপশটের সঙ্গে হুবহু মিলেছিল। ডেটাবেস নতুন করে খালি করা হয়নি বা মালিকের প্রাথমিক তথ্য আবার বসানো হয়নি।
 
-References: [Supabase signup](https://supabase.com/docs/reference/javascript/auth-signup), [CLI configuration](https://supabase.com/docs/guides/local-development/cli/config), [local email templates](https://supabase.com/docs/guides/local-development/customizing-email-templates), [email templates](https://supabase.com/docs/guides/auth/auth-email-templates).
+তথ্যসূত্র: [Supabase-এ নিবন্ধন](https://supabase.com/docs/reference/javascript/auth-signup), [CLI কনফিগারেশন](https://supabase.com/docs/guides/local-development/cli/config), [স্থানীয় ইমেইল টেমপ্লেট](https://supabase.com/docs/guides/local-development/customizing-email-templates), [ইমেইল টেমপ্লেট](https://supabase.com/docs/guides/auth/auth-email-templates)।

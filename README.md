@@ -1,14 +1,32 @@
 # বাড়ির খাতা
 
-A Bengali-first construction ledger for personal use, built as an iPhone-friendly, local-first PWA. Record materials, labour, transport, unloading, worker purchases, instalments, shop credit, returns and refunds. Work notebooks are optional at entry time. Material groups, brands and uses let reports answer questions across different works.
+বাড়ি তৈরির প্রতিটি খরচ ও লেনদেন সহজ বাংলায় রাখার ব্যক্তিগত খাতা। আইফোনে অ্যাপের মতো ব্যবহার করা যায়। মালামাল, মজুরি, গাড়িভাড়া, মাল নামানো, কিস্তি, দোকানের বাকি, অগ্রিম ও মাল ফেরতের হিসাব আলাদা থাকে। একবার লগইন করে হিসাব নামানো থাকলে ইন্টারনেট ছাড়াও কাজ করা যায়।
 
-Users can create their own email/password account at `/register`, confirm their email and sign in. `/sample` opens an independent example notebook. Each account has its own physical IndexedDB database, drafts, vouchers, outbox and recovery copies. Supabase protects cloud documents and private vouchers with owner-only RLS.
+## কী কী হিসাব রাখা যায়
 
-## Run locally
+- **মালামাল:** ইট, সিমেন্ট, রড, বালু, টাইলস, আঠা, কেমিক্যাল, রং, বিদ্যুৎ ও পানির লাইনের মাল—প্রয়োজনে নতুন নাম, ব্র্যান্ড ও ব্যবহার যোগ করা যায়।
+- **কাজের খাতা:** টাইলস, প্লাস্টার বা দরজার মতো প্রতিটি কাজের মাল, মজুরি, আনা-নামানো ও অন্য খরচ আলাদা করে দেখা যায়। খরচ লেখার সময় কাজের খাতা বেছে নেওয়া বাধ্যতামূলক নয়।
+- **ব্যক্তি ও দোকান:** কাকে কত টাকা দেওয়া হয়েছে, কত বাকি বা অগ্রিম আছে এবং শুরু থেকে সব লেনদেন দেখা যায়। মিস্ত্রি, দোকান ও গাড়ির লোকের জন্য প্রাসঙ্গিক অপশন দেখায়।
+- **আলাদা মজুরির হিসাব:** চুক্তি, শেষ করা কাজের বিল ও টাকা দেওয়া আলাদা ঘটনা। চুক্তি চাইলে যোগ করা যায়; মাল কেনার জন্য মজুরির চুক্তি লাগে না।
+- **দ্রুত লেখা:** ‘খরচ লিখি’ ও ‘টাকা দিলাম’ থেকে অল্প তথ্য দিয়ে হিসাব রাখা যায়। খাতা বা ব্যক্তির পাতা থেকে লিখলে জানা তথ্য আগে থেকেই বসে যায়।
+- **খুঁজে দেখা:** মাল, ব্র্যান্ড, ব্যবহার, ব্যক্তি, কাজ বা তারিখ ধরে খোঁজা যায়। প্রথমে ৩০টি হিসাব দেখায়; ‘আরও দেখুন’ চাপলে পরেরগুলো যোগ হয়। আর হিসাব না থাকলে বোতাম দেখায় না।
+- **হিসাব করার সুবিধা:** টাকার ঘর থেকেই যোগ, বিয়োগ, গুণ ও ভাগ করা যায়। তারিখ, তালিকা ও অপশনের জন্য নিজস্ব নিয়ন্ত্রণ আছে।
+- **পছন্দের সাজ:** নীলিমা, বনলতা, অপরাজিতা ও গোধূলি—চারটি রং। দিনের আলো, গভীর রাত বা ফোনের সেটিং আলাদাভাবে বেছে নেওয়া যায়।
+- **নিজের তথ্যের নিয়ন্ত্রণ:** ভাউচারসহ খাতার কপি নামানো, আগে দেখে ফিরিয়ে আনা এবং অনলাইনের সঙ্গে হিসাব মেলানোর সুবিধা আছে।
 
-Requires Node 22.12+, npm and Docker for local Supabase.
+## লগইন ছাড়াই ঘুরে দেখুন
+
+লগইন পাতার **‘নমুনা দেখুন’** থেকে নমুনা খাতা খোলা যায়। সরাসরি `/sample` ঠিকানাতেও ঢোকা যায়। সেটিংস দেখতে `/sample/settings` খুলুন।
+
+নমুনা খাতা ও নিজের হিসাব সম্পূর্ণ আলাদা। নমুনায় লেখা বা বদলানো তথ্য ব্যক্তিগত খাতায় যায় না। নিজের অ্যাকাউন্ট খুলতে `/register` ব্যবহার করুন।
+
+## নিজের কম্পিউটারে চালান
+
+প্রয়োজন: **Node.js 22.12 বা পরের সংস্করণ**, **npm** এবং স্থানীয় Supabase চালানোর জন্য **Docker**।
 
 ```sh
+git clone https://github.com/rockreyad/bari-khata.git
+cd bari-khata
 npm ci
 npm run db:start
 npx supabase migration up --local
@@ -16,7 +34,11 @@ node scripts/backend-check.mjs
 npm run dev
 ```
 
-Open `http://localhost:5180/login`. The existing local owner credentials are in `private/LOCAL_ACCESS.txt`, with filesystem permissions `0600`. They are ignored by Git and blocked by the development server. Do not copy credentials into chat, frontend code or public files.
+এরপর `http://localhost:5180/login` খুলুন। স্থানীয় Docker ব্যবস্থায় Supabase-এর জন্য ৫৫৪৩১–৫৫৪৩৪ পোর্ট ব্যবহার হয়। ইমেইল নিশ্চিত করার চিঠি পরীক্ষার জন্য `http://127.0.0.1:55434`-এ দেখা যায়; সেগুলো বাইরের ইমেইল ঠিকানায় পাঠানো হয় না।
+
+এই কম্পিউটারে আগে তৈরি স্থানীয় অ্যাকাউন্টের তথ্য `private/LOCAL_ACCESS.txt`-এ থাকে; ফাইলের অনুমতি `0600`। এটি Git-এ যায় না এবং ডেভেলপমেন্ট সার্ভার থেকে খোলা যায় না। নতুন করে রিপো নামালে ব্যক্তিগত ফাইলগুলো পাওয়া যাবে না। নিজের অ্যাকাউন্ট অ্যাপ থেকেই খুলুন।
+
+### পরীক্ষা ও প্রস্তুত বিল্ড
 
 ```sh
 npm test
@@ -24,70 +46,103 @@ npm run build
 npm run preview
 ```
 
-A development-only 390px phone frame is available at `http://localhost:5180/phone-preview.html`; it is excluded from the production build.
+প্রস্তুত বিল্ডের স্থানীয় ঠিকানা `http://localhost:4180`। ওই বিল্ডেই অফলাইনের জন্য Service Worker চালু হয়। ৩৯০ পিক্সেল চওড়া ফোনের নমুনা দেখতে ডেভেলপমেন্ট সার্ভারে `http://localhost:5180/phone-preview.html` খুলুন; এই পরীক্ষার পাতাটি প্রস্তুত বিল্ডে থাকে না।
 
-Production preview uses `http://localhost:4180`. Service workers run in the production build. `/sample/settings` lets visitors explore appearance settings without access to private records.
+## অ্যাকাউন্ট ও তথ্যের গোপনীয়তা
 
-Only public Supabase URL and anon/publishable key may use the `VITE_` prefix. The local phone gateway also reads private `BARI_` settings from ignored `.env.local`; those server-only values must never be exposed with a `VITE_` prefix. Administrative helpers retain private values without printing them, and the production bundle audit checks they are absent.
+ইমেইল ও অন্তত আট অক্ষরের পাসওয়ার্ড দিয়ে `/register`-এ অ্যাকাউন্ট খুলুন। ইমেইলে পাওয়া লিংক দিয়ে ঠিকানা নিশ্চিত করার পর নিজে লগইন করুন। নিশ্চিত করার পাতা অন্য কারও খোলা খাতায় নতুন অ্যাকাউন্টের সেশন বসায় না।
 
-## Historical import
+প্রতিটি অ্যাকাউন্টের আলাদা IndexedDB ডেটাবেস, অসমাপ্ত লেখা, ভাউচার, পাঠানোর অপেক্ষায় থাকা তথ্য ও উদ্ধার কপি থাকে। নতুন অ্যাকাউন্ট ফাঁকা খাতা থেকে শুরু হয়। Supabase-এর RLS দিয়ে অনলাইনের হিসাব ও ব্যক্তিগত ভাউচারে শুধু মালিকের প্রবেশাধিকার রাখা হয়। আলাদা ইমেইল ও ফোনের অ্যাকাউন্ট নিজে থেকে এক করা হয় না।
 
-The supplied Personal Wallet exports have been migrated into the local owner's authenticated notebook: 326 historical entries. The server read-back was validated against a canonical SHA-256 checksum. Original source documents, normalized ledger and reconciliation reports stay under ignored `private/migration/`; they are not bundled with the app.
+স্থানীয় পরীক্ষার জন্য প্রয়োজনে নিচের প্রশাসনিক সহায়ক ব্যবহার করা যায়। এটি শুধু স্থানীয় ৫৫৪৩১ পোর্টে কাজ করে এবং পাসওয়ার্ড কমান্ডের সঙ্গে না নিয়ে আলাদাভাবে চায়। সাধারণ ব্যবহারকারীরা অ্যাপ থেকেই নিবন্ধন করবেন।
 
-Imported rows retain source file, sheet, cell and checksum. Unknown dates stay unknown. Historical cost does not invent payments, outstanding dues or advances. Imported entries remain marked for review in `/review`, including uncertain work/material classifications. The original anonymous IndexedDB database is preserved and is never automatically attached to a new account.
+```sh
+node scripts/backend-create-user.mjs friend@example.com
+```
 
-The local provisioning/import helper is repeatable:
+## ফোন নম্বর ও পরীক্ষার কোড
+
+স্থানীয় পরীক্ষায় ফোন দিয়ে লগইন করা যায়। `.env.local`-এ `BARI_PHONE_AUTH_MODE=mock` ও `BARI_DEV_PHONE_OTP=1318` ব্যবহার করলে সার্ভার ওই কোড মিলিয়ে দেখে। কোড বদলালে ডেভেলপমেন্ট বা প্রিভিউ সার্ভার আবার চালু করুন। আগে তৈরি ব্যক্তিগত HMAC কী একই রাখুন, যাতে ফোনের আগের অ্যাকাউন্টের পরিচয় ঠিক থাকে।
+
+```sh
+node scripts/configure-phone-auth.mjs mock
+node scripts/configure-phone-auth.mjs sms
+node scripts/configure-phone-auth.mjs off
+```
+
+পদ্ধতি বদলালে নতুন করে সামনের অংশের বিল্ড এবং সার্ভার চালু করতে হয়। `mock` কেবল স্থানীয় একই ঠিকানার অনুরোধ ও স্থানীয় Docker ব্যাকএন্ডে কাজ করে। অনলাইনে `sms` ব্যবহার করতে Supabase-এ আসল SMS সেবা প্রস্তুত থাকতে হবে। স্থানীয় পরীক্ষার কোডের ব্যবস্থা Vercel-এর স্থির ফাইলের হোস্টিংয়ে চলে না। বিস্তারিত আছে [ফোন লগইনের নির্দেশনায়](docs/PHONE-OTP.md) ও [Supabase-এর ফোন লগইনের নথিতে](https://supabase.com/docs/guides/auth/phone-login)।
+
+## Vercel-এ প্রকাশ করুন
+
+Vercel-এ `rockreyad/bari-khata` রিপো নিয়ে নতুন প্রকল্প তৈরি করুন।
+
+| সেটিং               | মান             |
+| ------------------- | --------------- |
+| ফ্রেমওয়ার্ক         | `Vite`          |
+| বিল্ডের কমান্ড      | `npm run build` |
+| তৈরি ফাইলের ফোল্ডার | `dist`          |
+| প্রকাশের ব্রাঞ্চ    | `main`          |
+
+পরিবেশের সেটিং ছাড়াই বিল্ড ও নমুনা খাতা চলে। নিজের হিসাবের লগইন ও অনলাইনে সংরক্ষণের জন্য প্রস্তুত Supabase প্রকল্পের নিচের মানগুলো লাগবে:
+
+```dotenv
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+```
+
+আসল ফোন লগইন প্রস্তুত হলে `BARI_PHONE_AUTH_MODE=sms` দিতে পারেন। পরিবেশের মান বদলানোর পর আবার প্রকাশ করতে হবে। স্থানীয় `.env.local` বা প্রশাসনিক কী আপলোড করবেন না।
+
+শুধু Supabase-এর প্রকাশ্য URL এবং anon বা publishable কী-এর নামেই `VITE_` ব্যবহার করা যাবে। স্থানীয় ফোন গেটওয়ের গোপন `BARI_` মানগুলো সার্ভারের জন্য; এগুলোর সামনে `VITE_` বসানো যাবে না। সহায়ক স্ক্রিপ্টগুলো গোপন মান না দেখিয়েই রাখে এবং প্রস্তুত বিল্ডে সেগুলো নেই কি না যাচাই করা হয়। `.env.example`-এ শুধু সেটিংয়ের নাম ও নিরাপদ নমুনা আছে।
+
+অনলাইনে নিজের খাতা ব্যবহারের আগে Supabase-এর মাইগ্রেশন, RLS ও ব্যক্তিগত ভাউচার ফোল্ডারের নীতি প্রয়োগ করুন। ইমেইল নিশ্চিতকরণ, SMTP, চিঠির টেমপ্লেট, প্রকাশিত অ্যাপের অনুমোদিত callback URL ও Auth-এর অনুরোধসীমা ঠিক করুন। মালিক, অন্য ব্যবহারকারী ও লগইন ছাড়া প্রবেশের নিয়ম যাচাই করুন। ফোন থেকে ব্যবহারের জন্য পৌঁছানো যায় এমন HTTPS ঠিকানার সামনের অংশ ও ব্যাকএন্ড লাগবে; এই Mac-এর স্থানীয় Docker ব্যবস্থা আলাদা থাকবে।
+
+## আগের হিসাব আনা
+
+আগে দেওয়া Personal Wallet ফাইল থেকে ৩২৬টি পুরোনো হিসাব স্থানীয় মালিকের খাতায় আনা হয়েছে। সার্ভার থেকে আবার পড়ে নির্দিষ্ট SHA-256 checksum-এর সঙ্গে মেলানো হয়েছে। মূল ফাইল, সাজানো হিসাব ও মিলিয়ে দেখার রিপোর্ট Git-এর বাইরে `private/migration/`-এ থাকে; অ্যাপের বিল্ডে যায় না।
+
+প্রতিটি পুরোনো হিসাবের সঙ্গে ফাইল, শিট, সেল ও checksum-এর পরিচয় থাকে। অজানা তারিখ অজানাই থাকে। পুরোনো খরচ দেখে টাকা দেওয়া, বাকি বা অগ্রিম ধরে নেওয়া হয় না। কাজ বা মাল চেনায় সন্দেহ থাকলে `/review` থেকে তথ্য দেখা ও ঠিক করা যায়। আগের নামবিহীন IndexedDB ডেটাবেস রাখা হয়; নতুন অ্যাকাউন্টের সঙ্গে নিজে থেকে জোড়া হয় না।
 
 ```sh
 node --import tsx scripts/backend-bootstrap-owner.ts private/migration/ledger.json
 ```
 
-It reuses the privately saved account, refuses to overwrite a different notebook and verifies authenticated read-back and disposable-friend isolation. Its guarded `--refresh-import` option is limited to an unchanged previously verified import with exactly the same source row IDs/checksums.
+এই সহায়ক আগে ব্যক্তিগতভাবে রাখা অ্যাকাউন্ট ব্যবহার করে, আলাদা খাতা মুছে বসাতে অস্বীকার করে এবং সার্ভার থেকে তথ্য মিলিয়ে দেখে। পরীক্ষার আলাদা ব্যবহারকারীর হিসাবও বিচ্ছিন্ন আছে কি না যাচাই করে। এর সীমিত `--refresh-import` কেবল আগে যাচাই করা অপরিবর্তিত আমদানি এবং একই মূল সারির ID ও checksum-এর ক্ষেত্রে ব্যবহার করা যায়।
 
-## Create another account
+## টাকা, বাকি ও উদ্ধার কপির নিয়ম
 
-Open `/register`, enter an email and a password of at least eight characters, then confirm the email using the link sent to that address. The confirmation screen never signs another person into an already open notebook; sign in explicitly after confirmation. Each new account starts with its own empty notebook and isolated device database.
+- টাকা পূর্ণসংখ্যার পয়সায় রাখা হয়। Zod দিয়ে সংরক্ষিত তথ্য, ব্যাকআপ ও তথ্যের পারস্পরিক সম্পর্ক যাচাই হয়।
+- খরচ ও টাকা দেওয়া আলাদা ঘটনা। বাকিতে মাল কিনলেই পরিশোধ হয়েছে ধরে নেওয়া হয় না; বিল মেটালে আবার খরচ যোগ হয় না।
+- মিস্ত্রি ১,৫০০ টাকার মাল কিনে পরে ১,৭০০ টাকা পেলে ২০০ টাকা অগ্রিম থাকে; খরচ বাড়ে না। তাঁর কেনা মালকে নিজে থেকে মজুরি ধরা হয় না।
+- মজুরির চুক্তি, কাজের বিল ও পরিশোধ আলাদা। চুক্তি শুধু মজুরির জন্য এবং চাইলে যোগ করা যায়।
+- মাল ফেরত দিলে খরচ ও দোকানের পাওনা কমে। নগদ টাকা ফেরত পাওয়া আলাদা করে লিখতে হয়।
+- হিসাব ও ভাউচারের ফাইল একই সংরক্ষণে একসঙ্গে লেখা হয়। অসমাপ্ত লেখা ফোনে থাকে।
+- JSON ব্যাকআপে খাতা ও ভাউচার থাকে। ফিরিয়ে আনার আগে ফাইল দেখা ও নিশ্চিত করা লাগে; আগের তথ্যের উদ্ধার কপি রাখা হয়। CSV রিপোর্ট পূর্ণ ব্যাকআপ নয়।
+- অনলাইনে মেলানোর সময় সংস্করণ ও একই পুনঃচেষ্টার ID ব্যবহার হয়। দুই কপি আলাদা হলে ব্যবহারকারীকে একটি বেছে নিতে হয়; নীরবে ওপর দিয়ে লেখা হয় না। অন্য অ্যাকাউন্ট খুললেও চলমান কাজ আগের অ্যাকাউন্টের সীমানায় থাকে।
+- আগে লগইন করে তথ্য নামানো থাকলে অফলাইনে কাজ করা যায়। নিজে লগআউট করলে অফলাইনসহ অ্যাপে প্রবেশ বন্ধ হয়; পরে নিজের অ্যাকাউন্টে ফেরার জন্য সংরক্ষিত তথ্য রাখা থাকে।
 
-The local Docker setup captures confirmation mail at `http://127.0.0.1:55434`. This mailbox is for local testing; it does not deliver messages to Gmail or another external inbox. A production deployment needs hosted Supabase Auth, its confirmation template/allowed frontend callback URLs and a configured mail sender.
+## খুঁজে দেখা, ভাগ করে দেওয়া ও পরিবর্তনের ইতিহাস
 
-The existing `node scripts/backend-create-user.mjs friend@example.com` helper remains available for disposable local administration. It targets only port55431 and prompts for the password without a shell argument. Normal users register in the app.
+আগের হিসাবের তালিকা থেকেই বেশির ভাগ খোঁজ করা যায়। মাল, মজুরি, আনা-নামানো ও অন্য খরচের রিপোর্ট আলাদা; শুরুতে মালের হিসাব দেখায়। দ্রুত লেখায় খরচ ও পরিশোধ সামনে থাকে। দোকানের মেনুতে মাল ফেরতের মতো কম ব্যবহৃত কাজ পাওয়া যায়। ব্যক্তি বা খাতার শর্টকাট নিজের মতো বেছে রাখা যায়।
 
-The local stack uses ports55431–55434. Loopback URLs work on this Mac. Phone testing needs a reachable HTTPS frontend and backend; the local Docker stack stays private.
+একটি হিসাব খুললে সেখান থেকে সরাসরি ব্যক্তি বা দোকান এবং কাজের খাতায় যাওয়া যায়। বদলানো হলে তবেই ভাঁজ করা পরিবর্তনের ইতিহাস দেখায়। তালিকায় ছোট করে সালসহ তারিখ থাকে। ব্যক্তির পাতায় সাম্প্রতিক পাঁচটি, কাজের পাতায় দশটি এবং পুরো ইতিহাসে প্রথমে ৩০টি হিসাব দেখায়; প্রয়োজন হলে আরও আনা যায়। কাজ শুরুর ও শেষের তারিখসহ আলাদা কার্যক্রমের ইতিহাস থাকে। পুরোনো অ্যাপ বা ব্যাকআপ দিয়ে আগের কাজের ইতিহাস বাদ দেওয়া যায় না। হিসাব লেখার ফর্ম বন্ধ হলে অ্যাপের আপডেট দেখায় এবং অসমাপ্ত লেখা রাখা হয়।
 
-## Accounting and recovery
+ব্যক্তির পাতা থেকে তাঁর নির্দিষ্ট খাতার শুধু পড়ার কপি দেওয়া যায়। HTML কপি ছাপানো যায়; সংরক্ষণ করা লিংক খুলে রিফ্রেশ করলে নতুন হিসাব দেখা যায়। লিংক থামানো বা বদলানো যায় এবং সার্ভারে কেবল তার hash রাখা হয়। মালিকের লগইন, ব্যক্তিগত নোট, ভাউচার, মূল ফাইলের পরিচয় বা অন্য ব্যক্তির হিসাব এই কপিতে থাকে না। বিস্তারিত দেখুন [হিসাবের কপি ও লিংক](docs/LIVE-SHARING.md)।
 
-- Money is integer poisha. Zod validates stored data, backups and references.
-- Costs and cash movements stay separate. Credit purchases do not imply payment.
-- A worker's ৳1,500 purchase followed by a ৳1,700 reimbursement leaves ৳200 advance without increasing cost.
-- Labour agreements, earned bills and payments are separate. An agreement is optional and only applies to labour.
-- Material returns reduce cost and supplier balance; actual cash refunds are logged separately.
-- Ledger changes and voucher bytes commit atomically. Drafts persist on the device.
-- Backup JSON includes ledger and vouchers. Restore previews the file and keeps a recovery copy. CSV is a report, not a full backup.
-- Cloud sync uses optimistic revisions and frozen retry IDs. Conflicts require a choice. Async work remains bound to its original account when another account signs in.
-- Previously authenticated users can continue offline after records have downloaded. Explicit logout immediately removes app access, including offline access, while retaining the account's stored data for a future login.
+ড্যাশবোর্ডে মোট লেখা খরচ, মাল ও মজুরি আলাদা এবং আনা-নামানোর খরচ ছোট করে দেখায়। কোন খাতা থেকে খরচ লেখা হচ্ছে জানা থাকলে নিশ্চিতভাবে চেনা মাল ও একক বসে যায়। নিশ্চিত তথ্য না থাকলে ব্র্যান্ড, কাজ বা চুক্তি অনুমান করে না। টাকার কারণের নতুন নাম যোগ করলেও সেটি স্থায়ী মালের, মজুরির বা অন্য হিসাবের সঙ্গে যুক্ত থাকে। পুরোনো তথ্য একসঙ্গে ঠিক করার সময় টাকা, তারিখ ও মূল পরিচয় বদলায় না।
 
-## Production later
+## বড় খাতা ও ফোনে যাচাই
 
-No hosted Supabase database, production account or deployment has been created. Production preparation must enable email signup with confirmation, configure SMTP and the confirmation template, allow only the deployed callback URLs, keep the Auth rate limits enabled, apply the migrations/RLS/private bucket policies and use only public frontend keys. Recheck owner/friend/anonymous access against the hosted project before use.
+পর্দায় প্রয়োজনমতো হিসাব আনা হলেও নিজের খাতার অনলাইন আদান-প্রদানে এখনও সংস্করণসহ পুরো খাতার JSON যায়। এটি সার্ভার থেকে অল্প অল্প করে নিজের হিসাব নামানোর ব্যবস্থা নয়। ভাগ করা ব্যক্তির বিবরণ সার্ভারে বেছে পাতাভিত্তিক দেওয়া হয়। বহু বছরের বড় খাতার জন্য লেনদেন আলাদা করে সূচিসহ রাখার ব্যবস্থা প্রয়োজন।
 
-Email/password registration and Bangladesh phone login work in the local test app. Phone login currently uses the server-configured test code, with `BARI_PHONE_AUTH_MODE=mock` and `BARI_DEV_PHONE_OTP=1318` in private `.env.local`. Change the code and restart the dev/preview server; keep its generated private HMAC key stable. The code is checked by the local server and normal Supabase sessions protect each phone's own notebook. Different email/phone accounts are not automatically merged.
+প্রতিদিন ব্যবহার শুরুর আগে পুরোনো হিসাব দেখুন, ব্যাকআপ ফিরিয়ে আনা পরীক্ষা করুন এবং আসল আইফোনে HTTPS থেকে হোম স্ক্রিনে যোগ করা, বন্ধ অ্যাপ অফলাইনে খোলা, ক্যামেরা, কিবোর্ড ও অসমাপ্ত লেখাসহ আপডেট যাচাই করুন। কম্পিউটারের ফোন-আকারের প্রিভিউ দিয়ে আসল যন্ত্রের সব আচরণ নিশ্চিত করা যায় না।
 
-Use `node scripts/configure-phone-auth.mjs mock|sms|off` to choose the mode. Switching mode requires a frontend rebuild and a server restart. The mock gateway runs only against the loopback Docker backend and accepts only local same-origin requests. `sms` uses the native Supabase OTP flow after a real provider is configured; no actual SMS delivery is activated now. See [phone configuration](docs/PHONE-OTP.md) and [Supabase phone login](https://supabase.com/docs/guides/auth/phone-login).
+## বিস্তারিত নথি
 
-Before replacing the spreadsheet workflow, review imported entries, rehearse backup restore and test a real iPhone's HTTPS Home Screen installation, offline cold launch, camera, keyboard and app updates with a draft. The desktop browser preview cannot establish those physical-device behaviours.
-
-## Current interaction model
-
-History is the primary browsing flow. Material, labour, transport/unloading and other reports are separate; materials are the default. Only expense and payment are primary quick actions. Returns belong in a shop's menu. Contact and work shortcut presets are optional and show no irrelevant counters.
-
-Money inputs contain a four-operation calculator. Selects, editable material suggestions, action menus and Bengali date pickers use custom accessible controls. Small-screen date/calculator popups stay centred inside the viewport.
-
-Transaction details link directly to the person/store and work, and show a collapsed change history only after an edit. Lists include a compact date and year. Complete contact history opens its own filtered, 30-row page instead of expanding the profile. Work start/end dates and changes have a separate activity timeline. Older clients and backup restores cannot truncate existing work history. App updates are offered after financial forms close, preserving their drafts.
-
-A person can receive a scoped read-only statement through the profile's copy/share action. The HTML copy is a printable snapshot. The live link shows only that contact and selected account/work, with fresh records after a refresh. Links use random server-hashed tokens and can be revoked or replaced. No owner credentials, vouchers, private notes, provenance or other contacts are included. See [live sharing](docs/LIVE-SHARING.md).
-
-The dashboard shows total recorded cost, with materials and wages separate and transport/unloading secondary. Work context pre-fills a uniquely identified material group and unit; worker/shop context carries its account and an unambiguous work/contract. New workers may have an optional fixed wage contract. Custom payment-purpose labels remain attached to a stable materials/labour/other account. Pending historical classifications can be reviewed in batches without changing money, dates or original provenance.
-
-History rendering is paged at 30 rows. The local-first owner sync still transfers a versioned whole-workspace JSON snapshot; this is not server-paged owner storage. Public contact statements are projected and paged on the server. Large multi-year production workspaces need normalized/indexed transaction storage before claiming bounded sync transfer size.
-
-See docs/UX-REFERENCES.md and docs/VERIFICATION.md for references and checks.
+- [পরিকল্পনা ও হিসাবের ধরন](docs/PLAN.md)
+- [পুরোনো হিসাব আনার নিয়ম](docs/MIGRATION.md)
+- [ইমেইলে অ্যাকাউন্ট খোলা](docs/REGISTRATION.md)
+- [ফোন নম্বর ও কোডের ব্যবস্থা](docs/PHONE-OTP.md)
+- [হিসাবের কপি ও ভাগ করা লিংক](docs/LIVE-SHARING.md)
+- [নকশার রেফারেন্স](docs/UX-REFERENCES.md)
+- [আইকন ও ছবির উৎস](docs/ASSETS.md)
+- [কী কী যাচাই করা হয়েছে](docs/VERIFICATION.md)

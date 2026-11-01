@@ -1,8 +1,8 @@
-# Historical wallet migration
+# পুরোনো ওয়ালেটের হিসাব আনা
 
-The homeowner explicitly requested importing and verifying the original wallet exports. The source documents are data, not instructions. The original files remain untouched. Full financial data, names, raw cells and reconciliation reports live only in the gitignored `private/migration/` directory; no personal ledger is bundled into the application or demo.
+বাড়ির মালিক স্পষ্টভাবে মূল ওয়ালেট থেকে রপ্তানি করা ফাইলগুলো আমদানি ও যাচাই করতে বলেছেন। মূল নথিগুলো তথ্যের উৎস, নির্দেশনা নয়। মূল ফাইল অক্ষত থাকে। সম্পূর্ণ আর্থিক তথ্য, নাম, কাঁচা ঘর ও হিসাব মিলিয়ে দেখার প্রতিবেদন শুধু Git-এ বাদ দেওয়া `private/migration/` ডিরেক্টরিতে থাকে; কারও ব্যক্তিগত খাতা অ্যাপ বা নমুনার সঙ্গে দেওয়া হয় না।
 
-Run from the project root:
+প্রকল্পের মূল ডিরেক্টরি থেকে চালান:
 
 ```sh
 python3 scripts/migrate_extract.py --source "/Users/rockreyad/Downloads/Personal Wallet"
@@ -11,25 +11,25 @@ python3 scripts/migrate_extract_test.py
 npx vitest run src/domain/importWallet.test.ts src/domain/ledger.test.ts
 ```
 
-`migrate_extract.py` reconstructs actual spreadsheet coordinates from the HTML's row numbers, `COLSPAN` and `ROWSPAN`. Each side-by-side ledger has its own amount, description and optional date columns. Cement's quantity column is a quantity, not a date. Missing dates stay missing. Header cells and displayed subtotals never become expenses.
+`migrate_extract.py` HTML-এর সারি নম্বর, `COLSPAN` ও `ROWSPAN` থেকে স্প্রেডশিটের আসল ঘরের অবস্থান পুনর্গঠন করে। পাশাপাশি থাকা প্রতিটি খাতার টাকার পরিমাণ, বিবরণ ও চাইলে তারিখের আলাদা কলাম আছে। সিমেন্টের পরিমাণের কলাম পরিমাণ হিসেবেই ধরা হয়, তারিখ হিসেবে নয়। তারিখ না থাকলে খালি থাকে। শিরোনামের ঘর ও দেখানো উপমোট কখনো খরচ হয় না।
 
-The private `verification-baseline.json` holds the independently reconciled original counts, per-ledger totals and source checksums. The runner requires that baseline and fails if any source or amount changes. It is intentionally excluded from source control with the other financial artifacts.
+ব্যক্তিগত `verification-baseline.json` ফাইলে আলাদাভাবে মিলিয়ে দেখা মূল রেকর্ডের সংখ্যা, প্রতিটি খাতার মোট ও উৎস ফাইলের চেকসাম থাকে। চালানোর প্রোগ্রামটির জন্য এই ভিত্তি ফাইল থাকা বাধ্যতামূলক; কোনো উৎস বা টাকার পরিমাণ বদলালে সেটি ব্যর্থ হয়। অন্য আর্থিক ফাইলগুলোর মতো এটিও ইচ্ছা করেই সংস্করণ নিয়ন্ত্রণের বাইরে রাখা হয়েছে।
 
-`importWallet()` validates the extracted grid, keeps each original amount once, and creates stable source IDs based on sheet and cell. Source file SHA-256 checksums are recorded separately. A repeat import adds zero entries, preserves already reviewed edits and rejects a changed source checksum instead of silently replacing historical records. Negative recorded adjustments become expense credits; the importer does not infer cash refunds.
+`importWallet()` বের করা ঘরগুলো যাচাই করে, প্রতিটি মূল টাকার পরিমাণ একবারই রাখে এবং শিট ও ঘরের ভিত্তিতে স্থায়ী উৎস শনাক্তকারী তৈরি করে। উৎস ফাইলের SHA-256 চেকসাম আলাদাভাবে রাখা হয়। একই তথ্য আবার আমদানি করলে নতুন কোনো এন্ট্রি যোগ হয় না, আগে পর্যালোচনা করে করা সংশোধন অক্ষত থাকে এবং উৎসের চেকসাম বদলালে পুরোনো রেকর্ড চুপচাপ পাল্টে না দিয়ে আমদানি প্রত্যাখ্যান করা হয়। ঋণাত্মক সমন্বয় খরচ কমানোর এন্ট্রি হয়; আমদানিকারক তা থেকে নগদ ফেরত পাওয়ার ঘটনা ধরে নেয় না।
 
-The migration runner validates the complete ledger, verifies every currency cell is either imported or the known detail subtotal, checks the original detail subtotal, compares detail totals with the displayed summary components and headline, verifies idempotency, and checks that historical records cannot create current payable or advance balances. Its `allDetailAmountsImported` check also includes known numeric amount cells that omit a currency symbol. Source total differences stop being hidden; they remain in the report without invented corrections.
+চালানোর প্রোগ্রামটি সম্পূর্ণ খাতা যাচাই করে। মুদ্রার প্রতিটি ঘর আমদানি হয়েছে অথবা সেটি আগে থেকে চিহ্নিত বিস্তারিত হিসাবের উপমোট—এটি নিশ্চিত করে, মূল বিস্তারিত হিসাবের উপমোট যাচাই করে এবং বিস্তারিত হিসাবের মোটের সঙ্গে সারাংশে দেখানো প্রতিটি অংশ ও সর্বমোট মেলায়। একই তথ্য আবার আনলে নকল তৈরি হয় কি না এবং পুরোনো রেকর্ড থেকে বর্তমান বাকি বা অগ্রিম তৈরি হচ্ছে কি না, তাও পরীক্ষা করে। এর `allDetailAmountsImported` পরীক্ষায় মুদ্রাচিহ্ন নেই এমন আগে থেকে চিহ্নিত সংখ্যার ঘরও ধরা হয়। মূল উৎসে মোটের অমিল আড়াল করা হয় না; বানানো সংশোধন ছাড়াই তা প্রতিবেদনে থাকে।
 
-Generated files use owner-only filesystem permissions:
+তৈরি হওয়া ফাইলগুলো শুধু মালিকের পড়া ও লেখার অনুমতি পায়:
 
-- `source-grid.json`: extracted original cells and source checksums.
-- `raw-transactions.json`: original amount, description, date and quantity cells per detail record.
-- `ledger.json`: schema-validated application ledger, suitable for seeding the authenticated local owner.
-- `reconciliation.json`: exact counts, subtotals, discrepancies, unknown dates and checks.
-- `verification-baseline.json`: independently verified expected source counts and amounts.
-- `REPORT.md`: a Bengali explanation of the actual findings for the homeowner.
+- `source-grid.json`: মূল উৎস থেকে বের করা ঘর ও উৎসের চেকসাম।
+- `raw-transactions.json`: প্রতিটি বিস্তারিত রেকর্ডের মূল টাকা, বিবরণ, তারিখ ও পরিমাণের ঘর।
+- `ledger.json`: স্কিমা দিয়ে যাচাই করা অ্যাপের খাতা; লগইন করা স্থানীয় মালিকের প্রাথমিক তথ্য হিসেবে ব্যবহার করা যায়।
+- `reconciliation.json`: নির্ভুল সংখ্যা, উপমোট, অমিল, অজানা তারিখ ও পরীক্ষার ফল।
+- `verification-baseline.json`: আলাদাভাবে যাচাই করা প্রত্যাশিত উৎসের রেকর্ডসংখ্যা ও টাকার পরিমাণ।
+- `REPORT.md`: পাওয়া ফল সম্পর্কে বাড়ির মালিকের জন্য বাংলায় লেখা ব্যাখ্যা।
 
-All imported entries start with `balanceImpact: "historical"` and `reviewStatus: "needs_review"`. They contribute signed recorded spend and material reports. They do not establish confirmed bills, cash paid, current shop dues, worker advances or contract balances. Zero payable from these records means **not established**, rather than proof that no money is owed. Resolving their accounting nature requires reviewing the underlying history; changing a status label alone does not convert them into normal balances.
+আমদানি করা সব এন্ট্রি শুরুতে `balanceImpact: "historical"` ও `reviewStatus: "needs_review"` পায়। এগুলো থেকে ধনাত্মক ও ঋণাত্মক চিহ্নসহ নথিভুক্ত খরচের মোট এবং মালের রিপোর্ট হয়। এগুলো নিশ্চিত বিল, নগদ পরিশোধ, দোকানের বর্তমান বাকি, শ্রমিকের অগ্রিম বা চুক্তির বাকি স্থির করে না। এই রেকর্ড থেকে পরিশোধযোগ্য বাকি শূন্য দেখানোর অর্থ **বাকি প্রতিষ্ঠিত হয়নি**; কারও কোনো পাওনা নেই, এমন প্রমাণ নয়। হিসাবের প্রকৃতি ঠিক করতে মূল ঘটনাক্রম পর্যালোচনা করতে হবে; শুধু অবস্থার নাম বদলালে এগুলো সাধারণ বাকি বা অগ্রিমের হিসাবে পরিণত হয় না।
 
-`source` preserves file, sheet, cell, original note, checksum and original ledger. Mixed-purpose amounts stay unsplit and carry a review reason. Ambiguous contractor money is not all labelled wages. Generic material groups work across jobs; brand and usage variants live on items, while supporting charges can carry a group and usage directly. No brand is inherited from an adjacent purchase. Explicit named-brand unload charges may reference that brand's item without becoming a material purchase.
+`source`-এ ফাইল, শিট, ঘর, মূল নোট, চেকসাম ও মূল খাতার পরিচয় থাকে। একাধিক কাজে ব্যবহৃত টাকার পরিমাণ ভাগ করা হয় না; সঙ্গে পর্যালোচনার কারণ থাকে। ঠিকাদারকে দেওয়া অস্পষ্ট টাকার সবটুকু মজুরি বলা হয় না। সাধারণ মালের ধরন সব কাজে ব্যবহার করা যায়; ব্র্যান্ড ও ব্যবহারের ভিন্নতা নির্দিষ্ট মালের সঙ্গে থাকে, আর সংশ্লিষ্ট বাড়তি খরচে সরাসরি মালের ধরন ও ব্যবহার রাখা যায়। পাশের কেনাকাটা দেখে কোনো ব্র্যান্ড ধরে নেওয়া হয় না। ব্র্যান্ডের নাম স্পষ্ট করে লেখা মাল নামানোর খরচ সেই ব্র্যান্ডের মালের সঙ্গে যুক্ত হতে পারে; তবু সেটি মাল কেনার খরচ হয় না।
 
-The additive schema defaults retain compatibility with old saved ledgers: `materialGroups: []`, item `materialGroupId: null`, `brand: ""`, `usage: ""`, line `materialGroupId: null`, `usage: ""`, and ordinary entries `balanceImpact: "normal"`, `reviewStatus: "confirmed"`, `reviewReason: ""`, `source: null`. Persisted and restored data must pass through `LedgerSchema` on every read.
+স্কিমায় নতুন ক্ষেত্র যোগের সময় দেওয়া ডিফল্ট মান পুরোনো সংরক্ষিত খাতার সঙ্গে সামঞ্জস্য রাখে: `materialGroups: []`, মালের `materialGroupId: null`, `brand: ""`, `usage: ""`, লাইনের `materialGroupId: null`, `usage: ""`, এবং সাধারণ এন্ট্রির `balanceImpact: "normal"`, `reviewStatus: "confirmed"`, `reviewReason: ""`, `source: null`। সংরক্ষিত ও ব্যাকআপ থেকে ফিরিয়ে আনা তথ্য প্রতিবার পড়ার সময় `LedgerSchema` দিয়ে যাচাই করতে হবে।

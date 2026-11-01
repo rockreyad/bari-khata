@@ -1,10 +1,11 @@
 # বাড়ির খাতা
 
-- This is a separate React/Vite PWA; do not modify neighboring projects.
-- All user-facing app strings go through `useLanguageContext()` from `src/context/LanguageProvider.tsx`. Use simple, conversational Bengali; keep technical terms out of normal product flows.
-- Amounts are integer poisha. Purchases/work bills, money handed over, reimbursements, advances and refunds are distinct events. Paying a bill never creates a second expense. Never classify a worker's material purchases as wages automatically.
-- Local disk and backup files are untrusted input. Validate with Zod and reject corrupt/inconsistent financial records before committing. Do not store the ledger in localStorage.
-- Keep demo data clearly labelled and isolated from the real ledger. Import personal source files only when the user explicitly requests migration; keep raw data and generated financial artifacts in gitignored private/, never public/ or bundled source.
-- No silent conflict overwrites or clearing unsynced records when auth expires. An app update must preserve drafts.
-- Use short comments only for non-obvious constraints.
-- Verify monetary calculations, IndexedDB persistence, backup restore and the UI save/reopen flow. Run `npm test` and `npm run build`.
+- এটি আলাদা React/Vite PWA প্রকল্প। পাশের অন্য প্রকল্পে পরিবর্তন করবেন না।
+- অ্যাপের ব্যবহারকারীর জন্য লেখা সব কথা `src/context/LanguageProvider.tsx`-এর `useLanguageContext()` দিয়ে দেখান। সহজ, কথ্য বাংলা ব্যবহার করুন; সাধারণ ব্যবহারকারীর কাজের মধ্যে প্রযুক্তির অপ্রয়োজনীয় শব্দ আনবেন না।
+- README ও প্রকল্পের ডকুমেন্টেশনের ব্যাখ্যা বাংলায় লিখুন। কমান্ড, env-এর নাম, API identifier ও ফাইলের পথ হুবহু রাখুন।
+- টাকা পূর্ণসংখ্যার পয়সায় থাকে। মাল বা কাজের বিল, টাকা দেওয়া, অন্যের কেনা মালের টাকা মেটানো, অগ্রিম ও ফেরত পাওয়া আলাদা ঘটনা। বিল মেটালে দ্বিতীয়বার খরচ তৈরি হবে না। মিস্ত্রির কেনা মালকে নিজে থেকে মজুরি ধরবেন না।
+- স্থানীয় ডিস্ক ও ব্যাকআপের তথ্যকে যাচাই না করা ইনপুট হিসেবে ধরুন। Zod দিয়ে যাচাই করে নষ্ট বা পরস্পরবিরোধী আর্থিক তথ্য সংরক্ষণের আগে বাতিল করুন। খাতার হিসাব localStorage-এ রাখবেন না।
+- নমুনা তথ্য স্পষ্টভাবে চিহ্নিত করে আসল খাতা থেকে আলাদা রাখুন। ব্যবহারকারী স্পষ্টভাবে পুরোনো তথ্য আনার অনুরোধ করলেই ব্যক্তিগত মূল ফাইল নেবেন। মূল তথ্য ও তৈরি আর্থিক ফাইল Git-এ বাদ থাকা `private/`-এ রাখুন; `public/` বা অ্যাপের সঙ্গে যাওয়া সোর্সে নয়।
+- হিসাবের দুই কপি আলাদা হলে নীরবে ওপর দিয়ে লিখবেন না। লগইনের মেয়াদ শেষ হলে অনলাইনে না যাওয়া তথ্য মুছবেন না। অ্যাপের আপডেটে অসমাপ্ত লেখা অক্ষত থাকতে হবে।
+- কোডে সহজে বোঝা যায় না এমন সীমাবদ্ধতার কারণ জানাতেই শুধু ছোট মন্তব্য লিখুন।
+- টাকার হিসাব, IndexedDB-তে তথ্য থাকা, ব্যাকআপ ফিরিয়ে আনা এবং পর্দা থেকে তথ্য রেখে আবার খোলার কাজ যাচাই করুন। `npm test` ও `npm run build` চালান।

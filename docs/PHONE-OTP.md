@@ -1,10 +1,10 @@
-# Phone login
+# ফোন নম্বর দিয়ে প্রবেশ
 
-Phone login supports Bangladesh numbers, including local `01…`, `+880…` and Bengali digits. The current test mode accepts the server-configured four-digit code after a login request. Each phone gets its own real Supabase identity and private notebook; phone login never merges an existing email notebook.
+বাংলাদেশের ফোন নম্বর দিয়ে প্রবেশ করা যায়; স্থানীয় `01…`, `+880…` এবং বাংলা অঙ্কে লেখা নম্বরও চলে। পরীক্ষার মোডে প্রবেশের অনুরোধ করার পর সার্ভারে ঠিক করা চার অঙ্কের কোড গ্রহণ করা হয়। প্রতিটি ফোন নম্বরের জন্য আলাদা প্রকৃত Supabase পরিচয় ও ব্যক্তিগত খাতা থাকে; ফোনে প্রবেশ করলে আগে থেকে থাকা ইমেইলের খাতার সঙ্গে তা মিশে যায় না।
 
-## Local fixed code
+## স্থানীয় পরীক্ষার নির্দিষ্ট কোড
 
-The current `.env.local` contains these **server-only** settings:
+স্থানীয় পরীক্ষার জন্য `.env.local`-এ নিচের **শুধু সার্ভারে ব্যবহারের** সেটিংগুলো লাগে:
 
 ```dotenv
 BARI_PHONE_AUTH_MODE=mock
@@ -13,24 +13,24 @@ BARI_DEV_PHONE_AUTH_SECRET=<random stable private key>
 BARI_DEV_SUPABASE_SERVICE_ROLE_KEY=<local server key>
 ```
 
-Do not prefix the code or private keys with `VITE_`. Only the public mode is passed to the browser. The app sends the submitted code to the local server; it does not compare an embedded browser constant. Change `BARI_DEV_PHONE_OTP`, then restart the dev/preview server. Keep the private HMAC key stable so the same test phone continues to open the same notebook.
+কোড বা গোপন চাবির নামের আগে `VITE_` যোগ করবেন না। শুধু প্রকাশযোগ্য মোডটি ব্রাউজারে পাঠানো হয়। অ্যাপ জমা দেওয়া কোড স্থানীয় সার্ভারে পাঠায়; ব্রাউজারের কোডে বসানো কোনো নির্দিষ্ট মানের সঙ্গে মেলায় না। `BARI_DEV_PHONE_OTP` বদলানোর পর উন্নয়ন বা প্রিভিউ সার্ভার আবার চালু করুন। একই পরীক্ষার নম্বর দিয়ে যেন একই খাতা খোলে, সে জন্য গোপন HMAC চাবি অপরিবর্তিত রাখুন।
 
-`node scripts/configure-phone-auth.mjs mock` prepares the local settings, retaining existing public configuration and generating the private HMAC key once. It also enables native local phone sessions without an SMS sender. It reads the administrative key from local Supabase status without printing it. `sms` and `off` select the other modes. The helper refuses a hosted backend in mock mode.
+`node scripts/configure-phone-auth.mjs mock` আগের প্রকাশযোগ্য কনফিগারেশন রেখে স্থানীয় সেটিং তৈরি করে এবং গোপন HMAC চাবি একবারই বানায়। এটি SMS পাঠানোর ব্যবস্থা ছাড়াই স্থানীয় Supabase-এর নিজস্ব ফোন সেশন চালু করে। স্থানীয় Supabase-এর অবস্থা থেকে প্রশাসনিক চাবি পড়ে, তবে তা পর্দায় দেখায় না। অন্য মোড বেছে নিতে `sms` ও `off` ব্যবহার করা হয়। `mock` মোডে এই সহায়ক স্ক্রিপ্ট অনলাইনে স্থাপিত ব্যাকএন্ড গ্রহণ করে না।
 
-The installed Supabase CLI disables native phone auth when no SMS provider is configured, even when a test-number mapping is present. `npm run db:start` therefore runs `scripts/start-local-backend.mjs`: after normal CLI startup, `enable-local-phone-provider.mjs` enables the documented native GoTrue phone flag only when local mock mode is configured. It recreates only the stateless auth container, preserves its configuration, labels and network aliases, and retains an automatic rollback until the new container passes its health check. It never alters database containers or volumes and never invents SMS-provider credentials. Temporary recovery material is private and removed after success. The API phone settings are verified by the integration check.
+ইনস্টল করা Supabase CLI-তে SMS সেবাদাতা কনফিগার করা না থাকলে Supabase-এর নিজস্ব ফোন যাচাই বন্ধ থাকে, এমনকি পরীক্ষার নম্বরের সঙ্গে কোডের মিল দেওয়া থাকলেও। তাই `npm run db:start` চালালে `scripts/start-local-backend.mjs` চলে: CLI স্বাভাবিকভাবে চালু হওয়ার পর, শুধু স্থানীয় `mock` মোড কনফিগার করা থাকলে `enable-local-phone-provider.mjs` নথিভুক্ত GoTrue ফোন-সুবিধার ফ্ল্যাগ চালু করে। এটি শুধু স্থায়ী তথ্যবিহীন পরিচয় যাচাইয়ের কনটেইনার নতুন করে তৈরি করে; তার কনফিগারেশন, লেবেল ও নেটওয়ার্কের বিকল্প নাম ধরে রাখে। নতুন কনটেইনারের স্বাস্থ্য পরীক্ষা সফল না হওয়া পর্যন্ত স্বয়ংক্রিয়ভাবে আগের অবস্থায় ফেরার ব্যবস্থা রাখে। ডেটাবেসের কনটেইনার বা ভলিউম বদলায় না এবং SMS সেবাদাতার কোনো বানানো পরিচয়পত্র ব্যবহার করে না। সাময়িক পুনরুদ্ধারের তথ্য গোপন থাকে এবং সফল হলে মুছে ফেলা হয়। সমন্বিত পরীক্ষায় API-এর ফোন সেটিং যাচাই করা হয়।
 
-The mock API exists only in the Vite development server and its local production preview. It requires a loopback request, exact same origin and a loopback Supabase API on port55431. It rejects hosted backend URLs, cross-origin requests and LAN callers. Static hosted deployments have no mock API. Email registration and its confirmation flow remain available.
+পরীক্ষার API শুধু Vite উন্নয়ন সার্ভার ও তার স্থানীয় উৎপাদন-বিল্ড প্রিভিউতে থাকে। অনুরোধ একই যন্ত্রের লুপব্যাক ঠিকানা থেকে এবং হুবহু একই উৎস থেকে আসতে হয়; Supabase API-ও লুপব্যাক ঠিকানার 55431 পোর্টে থাকতে হয়। অনলাইনে স্থাপিত ব্যাকএন্ডের URL, ভিন্ন উৎসের অনুরোধ এবং LAN-এর অন্য যন্ত্রের অনুরোধ প্রত্যাখ্যান করা হয়। Vercel-সহ স্থির ফাইল হিসেবে অনলাইনে স্থাপিত অ্যাপে এই পরীক্ষার API থাকে না। ইমেইলে নিবন্ধন ও ইমেইল নিশ্চিত করার পদ্ধতি ব্যবহার করা যায়।
 
-A request creates a random, phone-bound challenge lasting five minutes. Resends wait60seconds; a resend invalidates the previous challenge. Five incorrect guesses lock that challenge; successful use consumes it before creating a session. Requests and verification are rate limited. Sessions use `Cache-Control: no-store` and are issued by Supabase, keeping normal logout, refresh and owner-only RLS.
+অনুরোধ করলে ওই ফোন নম্বরের জন্য দৈবভাবে একটি যাচাই-চ্যালেঞ্জ তৈরি হয়, যার মেয়াদ পাঁচ মিনিট। আবার পাঠানোর আগে 60 সেকেন্ড অপেক্ষা করতে হয়; আবার পাঠালে আগের চ্যালেঞ্জ অকার্যকর হয়। পাঁচবার ভুল কোড দিলে ওই চ্যালেঞ্জ বন্ধ হয়; সঠিক কোড দিলে সেশন তৈরির আগেই চ্যালেঞ্জটি ব্যবহৃত হিসেবে বাতিল হয়। অনুরোধ ও যাচাইয়ের সংখ্যায় সীমা আছে। সেশনে `Cache-Control: no-store` থাকে এবং Supabase সেশন দেয়; ফলে স্বাভাবিকভাবে বের হওয়া, সেশন নবায়ন এবং শুধু মালিককে অনুমতি দেওয়ার RLS চালু থাকে।
 
-The server creates only a new phone identity carrying a protected development marker and a password derived from its private HMAC key. A repeat login reuses that identity. An existing phone identity created elsewhere is rejected; the gateway never resets its password, changes its details or silently attaches it to another notebook. Those phone identities require real SMS.
+সার্ভার শুধু নতুন ফোন পরিচয় তৈরি করে, যাতে সুরক্ষিত উন্নয়ন-চিহ্ন ও তার গোপন HMAC চাবি থেকে তৈরি পাসওয়ার্ড থাকে। আবার প্রবেশ করলে একই পরিচয় ব্যবহার হয়। অন্যভাবে আগে তৈরি ফোন পরিচয় প্রত্যাখ্যান করা হয়; এই মধ্যবর্তী সেবা কখনো তার পাসওয়ার্ড নতুন করে ঠিক করে না, তথ্য বদলায় না বা নীরবে অন্য খাতার সঙ্গে জুড়ে দেয় না। সেসব ফোন পরিচয়ের জন্য প্রকৃত SMS লাগে।
 
-## Real SMS later
+## পরে প্রকৃত SMS চালু করা
 
-Set `BARI_PHONE_AUTH_MODE=sms` and rebuild/restart the frontend. This removes the local shared-code gateway; the existing Supabase `signInWithOtp` and `verifyOtp` path is used. Configure a supported SMS provider, phone signup, delivery settings and rate limits on the hosted Supabase project. No real SMS provider or message delivery has been activated by this local change. Setting `off` hides phone login entirely.
+`BARI_PHONE_AUTH_MODE=sms` ঠিক করে ফ্রন্টএন্ড আবার বিল্ড বা চালু করুন। এতে স্থানীয় একই-কোডের মধ্যবর্তী সেবা বাদ যায়; আগে থেকে থাকা Supabase-এর `signInWithOtp` ও `verifyOtp` পদ্ধতি ব্যবহার হয়। অনলাইনে থাকা Supabase প্রকল্পে সমর্থিত SMS সেবাদাতা, ফোনে নিবন্ধন, বার্তা পৌঁছানোর সেটিং ও অনুরোধের সীমা কনফিগার করতে হবে। স্থানীয় এই পরিবর্তনে কোনো প্রকৃত SMS সেবাদাতা বা বার্তা পাঠানো চালু করা হয়নি। `off` দিলে ফোনে প্রবেশের সুবিধা পুরোপুরি লুকানো থাকে।
 
-Supabase's native `auth.sms.test_otp` supports exact phone-number mappings, not every Bangladesh number. A four-digit test code is accepted for configured numbers, but arbitrary-number fixed-code testing therefore uses the local gateway described above.
+Supabase-এর নিজস্ব `auth.sms.test_otp`-এ নির্দিষ্ট ফোন নম্বরের সঙ্গে কোড মেলাতে হয়; বাংলাদেশের সব নম্বরের জন্য একসঙ্গে তা কাজ করে না। কনফিগার করা নম্বরগুলোর জন্য চার অঙ্কের পরীক্ষার কোড গ্রহণ করা হয়। যেকোনো নম্বরে একই কোড দিয়ে স্থানীয় পরীক্ষা করতে তাই ওপরে বলা মধ্যবর্তী সেবা ব্যবহার হয়।
 
-Verification: `npm test -- server/phoneOtp.test.ts` and `./node_modules/.bin/tsx scripts/backend-phone-otp-check.ts`. The backend script uses disposable phone identities and removes them afterward. `scripts/qa-phone-fixture.mjs prepare|cleanup` supports browser verification with a privately saved, previously unused test number.
+যাচাই: `npm test -- server/phoneOtp.test.ts` এবং `./node_modules/.bin/tsx scripts/backend-phone-otp-check.ts`। ব্যাকএন্ডের স্ক্রিপ্ট সাময়িক ফোন পরিচয় ব্যবহার করে এবং শেষে তা মুছে দেয়। `scripts/qa-phone-fixture.mjs prepare|cleanup` দিয়ে আগে ব্যবহার না করা, গোপনে সংরক্ষিত পরীক্ষার নম্বর দিয়ে ব্রাউজারে যাচাই করা যায়।
 
-References: [Supabase phone login](https://supabase.com/docs/guides/auth/phone-login), [testing auth flows](https://supabase.com/docs/guides/auth/testing-auth-flows), [native OTP lookup](https://github.com/supabase/auth/blob/master/internal/conf/configuration.go).
+তথ্যসূত্র: [Supabase-এ ফোন দিয়ে প্রবেশ](https://supabase.com/docs/guides/auth/phone-login), [পরিচয় যাচাইয়ের পদ্ধতি পরীক্ষা](https://supabase.com/docs/guides/auth/testing-auth-flows), [নিজস্ব OTP খোঁজার কোড](https://github.com/supabase/auth/blob/master/internal/conf/configuration.go)।
