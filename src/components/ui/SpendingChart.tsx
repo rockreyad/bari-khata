@@ -43,7 +43,7 @@ export function SpendingChart({
   const low = Math.min(0, ...values),
     high = Math.max(0, ...values);
   const range = high - low || 1;
-  const x = (index: number) => 14 + index * 59.2;
+  const x = (index: number) => 27 + index * 54;
   const y = (value: number) => 114 - ((value - low) / range) * 98;
   const baseline = y(0);
   const monthName = (month: string, long = false) =>
@@ -69,6 +69,7 @@ export function SpendingChart({
       <svg
         className="spending-chart-plot"
         viewBox="0 0 324 135"
+        preserveAspectRatio="none"
         role="img"
         aria-label={t("মাসভিত্তিক খরচের রেখাচিত্র")}
       >
@@ -129,15 +130,9 @@ export function SpendingChart({
                 fill="none"
                 stroke={`var(--chart-${category})`}
                 strokeWidth="2.5"
+                vectorEffect="non-scaling-stroke"
                 strokeLinecap="round"
                 className="spending-chart-line"
-              />
-              <circle
-                cx={x(selectedIndex)}
-                cy={y(selected[category])}
-                r="4.5"
-                fill={`var(--chart-${category})`}
-                className="spending-chart-dot"
               />
             </g>
           );
