@@ -31,6 +31,7 @@ import { WorkMark, workIconChoices, workColorChoices } from "./ui/Icons";
 import { AppSelect } from "./ui/AppSelect";
 import { AppDatePicker } from "./ui/AppDatePicker";
 import { MoneyInput } from "./ui/MoneyInput";
+import { ContactImport } from "./contacts/ContactImport";
 type Kind = "work" | "person" | "contract";
 export type EntitySheetProps = {
   kind: Kind;
@@ -630,6 +631,16 @@ export function EntitySheet({
                   placeholder={t("না দিলেও হবে")}
                 />
               </label>
+              <ContactImport
+                onPick={({ name, phone }) => {
+                  setError("");
+                  setDraft((current) => ({
+                    ...current,
+                    name: current.name.trim() ? current.name : name,
+                    phone,
+                  }));
+                }}
+              />
               {!editId && draft.contactKind === "worker" ? (
                 <details className="entity-extra">
                   <summary>{t("মোট মজুরি ঠিক করা আছে?")}</summary>

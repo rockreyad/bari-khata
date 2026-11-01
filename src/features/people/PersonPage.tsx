@@ -133,6 +133,17 @@ export function PersonPage() {
     ...(kind === "worker"
       ? [
           {
+            label: t("মজুরির বিল লিখি"),
+            onSelect: () =>
+              add({
+                kind: "wage",
+                personId: person.id,
+                workId: workId || undefined,
+                account: "labour",
+                costType: "labour",
+              }),
+          },
+          {
             label: t("মজুরির চুক্তি রাখি"),
             onSelect: () =>
               entity("contract", undefined, workId || undefined, person.id),

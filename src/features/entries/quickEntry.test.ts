@@ -776,4 +776,31 @@ describe("role-specific quick entries", () => {
       next.entries.find((entry) => entry.kind === "expense")?.lines[0].costType,
     ).toBe("labour");
   });
+  it("honours an unpaid or partial wage bill without silently paying the full bill", () => {
+    for (const [payment, paid, cash] of [
+      ["due", "", 0],
+      ["partial", "3000", 300000],
+    ] as const) {
+      const next = buildQuickEntry(
+        fixture(),
+        draft({
+          kind: "wage",
+          personId: "worker",
+          amount: "16000",
+          payment,
+          paid,
+        }),
+      );
+      expect(summarize(next, "tiles")).toMatchObject({
+        cost: 1600000,
+        paid: cash,
+      });
+      expect(personSummary(next, "worker")).toMatchObject({
+        payable: 1600000 - cash,
+      });
+      expect(
+        next.entries.filter((entry) => entry.kind === "payment"),
+      ).toHaveLength(payment === "due" ? 0 : 1);
+    }
+  });
 });

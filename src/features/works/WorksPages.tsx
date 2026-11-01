@@ -10,7 +10,7 @@ import {
 } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
-import { summarize, entryWorkIds, contractSummary } from "../../domain/ledger";
+import { summarize, contractSummary } from "../../domain/ledger";
 import type { Ledger, Work, WorkSnapshot } from "../../domain/model";
 import { workChanges } from "../../domain/workActivity";
 import {
@@ -20,7 +20,13 @@ import {
 } from "../../components/ui/Icons";
 import { EntryList } from "../../components/ui/EntryList";
 import { AppSelect } from "../../components/ui/AppSelect";
-import { sortHistory } from "../history/history";
+import {
+  recentWorkEntries,
+  workEntryAmount,
+  workTabEntries,
+  type WorkTab,
+} from "./workEntries";
+import "./works.css";
 import { AppMenu } from "../../components/ui/AppMenu";
 const statusNames = {
   planned: "শুরু হয়নি",
@@ -169,12 +175,17 @@ export function WorkPage() {
   const { ledger, go, entity, add, detail } = useNotebook();
   const { t, money, date, language } = useLanguageContext();
   const [params, setParams] = useSearchParams();
-  const raw = params.get("tab") ?? "material";
-  const tab = ["material", "labour", "transport", "other", "activity"].includes(
-    raw,
-  )
-    ? raw
-    : "material";
+  const raw = params.get("tab") ?? "all";
+  const tab: WorkTab = [
+    "all",
+    "material",
+    "labour",
+    "transport",
+    "other",
+    "activity",
+  ].includes(raw)
+    ? (raw as WorkTab)
+    : "all";
   const work = ledger.works.find((w) => w.id === workId);
   if (!work)
     return (
@@ -192,43 +203,38 @@ export function WorkPage() {
         : tab === "other"
           ? ["rental", "other"].includes(type)
           : type === "material";
-  const costEntries = s.entries.filter((e) =>
-    e.lines.some((l) => l.workId === work.id && typeMatches(l.costType)),
-  );
+  const scoped = workTabEntries(s.entries, work.id, tab);
   const account =
     tab === "labour"
       ? "labour"
       : ["transport", "other"].includes(tab)
         ? "other"
         : "materials";
-  const entries = sortHistory(costEntries).slice(0, 10);
+  const entries = recentWorkEntries(scoped);
   const amounts = Object.fromEntries(
-    costEntries.map((e) => [
-      e.id,
-      e.lines
-        .filter((l) => l.workId === work.id && typeMatches(l.costType))
-        .reduce((sum, l) => sum + l.amount, 0) *
-        (e.kind === "expense_credit" ? -1 : 1),
-    ]),
+    scoped.map((entry) => [entry.id, workEntryAmount(entry, work.id, tab)]),
   );
   const titles = Object.fromEntries(
-    costEntries.map((e) => [
-      e.id,
-      e.lines
-        .filter((l) => l.workId === work.id && typeMatches(l.costType))
-        .map((l) => l.label)
-        .join(" · "),
-    ]),
+    scoped
+      .filter((entry) => entry.lines.length)
+      .map((entry) => [
+        entry.id,
+        entry.lines
+          .filter(
+            (line) =>
+              line.workId === work.id &&
+              (tab === "all" || typeMatches(line.costType)),
+          )
+          .map((line) => line.label)
+          .join(" · "),
+      ]),
   );
-  const amount = costEntries.reduce(
-    (sum, e) =>
-      sum +
-      e.lines
-        .filter((l) => l.workId === work.id && typeMatches(l.costType))
-        .reduce((n, l) => n + l.amount, 0) *
-        (e.kind === "expense_credit" ? -1 : 1),
-    0,
-  );
+  const amount = scoped
+    .filter(
+      (entry) => entry.kind === "expense" || entry.kind === "expense_credit",
+    )
+    .reduce((sum, entry) => sum + workEntryAmount(entry, work.id, tab), 0);
+  const historyPath = `/ledger?work=${work.id}${tab === "all" ? "" : `&account=${account}`}`;
   const actions = work.quickActions ?? ["expense", "payment"];
   const timestamp = (at: string) =>
     new Intl.DateTimeFormat(language === "bn" ? "bn-BD" : "en-BD", {
@@ -310,9 +316,46 @@ export function WorkPage() {
           ]}
         />
       </header>
-      <div className="work-tabs-v3">
+      <section className="work-overview" aria-label={t("এই খাতার হিসাব")}>
+        <div className="work-overview-total">
+          <div>
+            <span>{t("মোট খরচ")}</span>
+            <strong>{money(s.cost)}</strong>
+          </div>
+          <button
+            className="text-button"
+            onClick={() => go(`/reports?work=${work.id}`)}
+          >
+            {t("বিস্তারিত হিসাব")}
+            <ArrowRightIcon size={15} />
+          </button>
+        </div>
+        <dl className="work-overview-balances">
+          <div>
+            <dt>{t(s.refunds ? "দিয়েছি (ফেরত বাদে)" : "টাকা দিয়েছি")}</dt>
+            <dd>{money(s.netPaid)}</dd>
+          </div>
+          <div>
+            <dt>{t("দিতে বাকি")}</dt>
+            <dd>{money(s.payable)}</dd>
+          </div>
+          <div>
+            <dt>{t("আগাম দিয়েছি")}</dt>
+            <dd>{money(s.advance)}</dd>
+          </div>
+        </dl>
+        {s.advance > 0 ? (
+          <p className="work-advance-note">
+            {t(
+              "বিলের চেয়ে বেশি দেওয়া টাকা আগাম হিসেবে আছে। কাজের বিল লিখলে সেটি খরচে যোগ হবে।",
+            )}
+          </p>
+        ) : null}
+      </section>
+      <div className="work-tabs-v3" aria-label={t("খাতার লেনদেন বেছে দেখুন")}>
         {(
           [
+            ["all", "সব লেনদেন"],
             ["material", "মাল"],
             ["labour", "মজুরি"],
             ["transport", "আনা-নামানো"],
@@ -325,7 +368,13 @@ export function WorkPage() {
             key={id}
             aria-pressed={tab === id}
             className={tab === id ? "selected" : ""}
-            onClick={() => setParams({ tab: id })}
+            onClick={() =>
+              setParams((previous) => {
+                const next = new URLSearchParams(previous);
+                next.set("tab", id);
+                return next;
+              })
+            }
           >
             {t(label)}
           </button>
@@ -413,27 +462,29 @@ export function WorkPage() {
         </>
       ) : (
         <>
-          <section className="work-scope-summary">
-            <span>
-              {t(
-                tab === "labour"
-                  ? "মজুরির খরচ"
-                  : tab === "transport"
-                    ? "আনা-নামানোর খরচ"
-                    : tab === "other"
-                      ? "অন্য খরচ"
-                      : "মাল কেনার খরচ",
-              )}
-            </span>
-            <strong>{money(amount)}</strong>
-            <button
-              className="text-button"
-              onClick={() => go(`/reports?section=${tab}&work=${work.id}`)}
-            >
-              {t("বিস্তারিত হিসাব")}
-              <ArrowRightIcon size={15} />
-            </button>
-          </section>
+          {tab !== "all" ? (
+            <section className="work-scope-summary">
+              <span>
+                {t(
+                  tab === "labour"
+                    ? "মজুরির খরচ"
+                    : tab === "transport"
+                      ? "আনা-নামানোর খরচ"
+                      : tab === "other"
+                        ? "অন্য খরচ"
+                        : "মাল কেনার খরচ",
+                )}
+              </span>
+              <strong>{money(amount)}</strong>
+              <button
+                className="text-button"
+                onClick={() => go(`/reports?section=${tab}&work=${work.id}`)}
+              >
+                {t("বিস্তারিত হিসাব")}
+                <ArrowRightIcon size={15} />
+              </button>
+            </section>
+          ) : null}
           <div className="work-action-buttons">
             {actions.includes("expense") ? (
               <button
@@ -461,7 +512,11 @@ export function WorkPage() {
               <button
                 className="secondary-button"
                 onClick={() =>
-                  add({ kind: "payment", workId: work.id, account })
+                  add({
+                    kind: "payment",
+                    workId: work.id,
+                    account: tab === "all" ? undefined : account,
+                  })
                 }
               >
                 {t("টাকা দিলাম")}
@@ -478,7 +533,7 @@ export function WorkPage() {
                   })
                 }
               >
-                {t("মজুরি লিখি")}
+                {t("মজুরির বিল")}
               </button>
             ) : null}
             {actions.includes("transport") ? (
@@ -531,18 +586,18 @@ export function WorkPage() {
           ) : null}
           <section className="panel">
             <div className="section-heading">
-              <h2>{t("সাম্প্রতিক হিসাব")}</h2>
-              <button
-                className="text-button"
-                onClick={() => go(`/ledger?work=${work.id}&account=${account}`)}
-              >
-                {t("সব লেনদেন")}
+              <h2>
+                {t(tab === "all" ? "এই খাতার লেনদেন" : "সাম্প্রতিক হিসাব")}
+              </h2>
+              <button className="text-button" onClick={() => go(historyPath)}>
+                {t("পুরো হিসাব")}
                 <ArrowRightIcon size={15} />
               </button>
             </div>
             <EntryList
               ledger={ledger}
-              entries={entries.filter((e) => entryWorkIds(e).includes(work.id))}
+              entries={entries}
+              showKind
               workId={work.id}
               amounts={amounts}
               titles={titles}

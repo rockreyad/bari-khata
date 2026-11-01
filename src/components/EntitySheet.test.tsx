@@ -123,3 +123,61 @@ describe("notebook quick action settings", () => {
       ).toBe("false");
   });
 });
+
+describe("contact import in a person's form", () => {
+  it.each(["", "দরজার দোকান"])(
+    "fills a chosen phone and keeps an existing name: %s",
+    async (existingName) => {
+      const user = userEvent.setup();
+      const select = vi
+        .fn()
+        .mockResolvedValue([{ name: ["শাহ আলম"], tel: ["01700000091"] }]);
+      Object.defineProperty(window, "isSecureContext", {
+        configurable: true,
+        value: true,
+      });
+      Object.defineProperty(navigator, "contacts", {
+        configurable: true,
+        value: { select },
+      });
+      const onSave = vi.fn(async (_value: Ledger) => {});
+      try {
+        render(
+          <EntitySheet
+            kind="person"
+            ledger={LedgerSchema.parse({})}
+            onSave={onSave}
+            onClose={() => {}}
+            mode="demo"
+          />,
+        );
+        await waitFor(() =>
+          expect(
+            screen
+              .getByRole("button", { name: "রাখুন" })
+              .hasAttribute("disabled"),
+          ).toBe(false),
+        );
+        if (existingName)
+          await user.type(screen.getByLabelText("দোকানের নাম"), existingName);
+        await user.click(
+          screen.getByRole("button", { name: "কন্টাক্ট থেকে নিন" }),
+        );
+        expect(
+          (screen.getByLabelText("ফোন নম্বর") as HTMLInputElement).value,
+        ).toBe("01700000091");
+        expect(
+          (screen.getByLabelText("দোকানের নাম") as HTMLInputElement).value,
+        ).toBe(existingName || "শাহ আলম");
+        await user.click(screen.getByRole("button", { name: "রাখুন" }));
+        await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+        expect(onSave.mock.calls[0][0].people[0]).toMatchObject({
+          name: existingName || "শাহ আলম",
+          phone: "01700000091",
+        });
+      } finally {
+        Reflect.deleteProperty(navigator, "contacts");
+      }
+    },
+  );
+});

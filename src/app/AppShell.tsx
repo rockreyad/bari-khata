@@ -1,11 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import {
-  NavLink,
-  Route,
-  Routes,
-  useLocation,
-  useSearchParams,
-} from "react-router";
+import { Route, Routes, useLocation, useSearchParams } from "react-router";
 import {
   BookOpenIcon,
   ChartBarIcon,
@@ -18,6 +12,7 @@ import {
   RowsIcon,
   UsersThreeIcon,
 } from "@phosphor-icons/react";
+import { NotebookNavLink, notebookSectionActive } from "./navigation";
 import { useNotebook, type AddOptions } from "./NotebookProvider";
 import { useLanguageContext } from "../context/LanguageProvider";
 import { HomePage } from "../features/home/HomePage";
@@ -132,15 +127,8 @@ export function AppShell() {
         </button>
         <p className="sidebar-caption">{t("আমার হিসাব")}</p>
         <nav>
-          {nav.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={`${base}${to}`} end={to === "/"}>
-              <Icon size={23} weight="duotone" />
-              <span>{t(label)}</span>
-              {to === "/review" &&
-              ledger.entries.some((e) => e.reviewStatus === "needs_review") ? (
-                <i />
-              ) : null}
-            </NavLink>
+          {nav.map((item) => (
+            <NotebookNavLink key={item.to} {...item} base={base} />
           ))}
         </nav>
         <div className="sidebar-bottom">
@@ -151,10 +139,13 @@ export function AppShell() {
               <small>{ledger.project.name}</small>
             </span>
           </div>
-          <NavLink to={`${base}/settings`}>
-            <GearSixIcon size={22} weight="duotone" />
-            {t("সেটিংস")}
-          </NavLink>
+          <NotebookNavLink
+            to="/settings"
+            base={base}
+            label="সেটিংস"
+            icon={GearSixIcon}
+            size={22}
+          />
         </div>
       </aside>
       <div className="app-main">
@@ -191,11 +182,23 @@ export function AppShell() {
               </span>
             </button>
             <button
-              className="icon-button settings-link"
+              className={`icon-button settings-link ${notebookSectionActive(location.pathname, base, "/settings") ? "active" : ""}`}
+              aria-current={
+                notebookSectionActive(location.pathname, base, "/settings")
+                  ? "page"
+                  : undefined
+              }
               onClick={() => go("/settings")}
               aria-label={t("সেটিংস")}
             >
-              <GearSixIcon size={24} weight="duotone" />
+              <GearSixIcon
+                size={24}
+                weight={
+                  notebookSectionActive(location.pathname, base, "/settings")
+                    ? "fill"
+                    : "regular"
+                }
+              />
             </button>
           </div>
         </header>
@@ -242,11 +245,8 @@ export function AppShell() {
         </main>
       </div>
       <nav className="mobile-bottom-nav" aria-label={t("প্রধান মেনু")}>
-        {[nav[0], nav[1]].map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={`${base}${to}`} end={to === "/"}>
-            <Icon size={23} weight="duotone" />
-            <span>{t(label)}</span>
-          </NavLink>
+        {[nav[0], nav[1]].map((item) => (
+          <NotebookNavLink key={item.to} {...item} base={base} />
         ))}
         <button
           className="mobile-add"
@@ -255,11 +255,8 @@ export function AppShell() {
         >
           <PlusIcon size={27} weight="bold" />
         </button>
-        {[nav[2], nav[3]].map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={`${base}${to}`}>
-            <Icon size={23} weight="duotone" />
-            <span>{t(label)}</span>
-          </NavLink>
+        {[nav[2], nav[3]].map((item) => (
+          <NotebookNavLink key={item.to} {...item} base={base} />
         ))}
       </nav>
       {pwa.needRefresh[0] && !formOpen ? (

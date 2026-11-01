@@ -3,6 +3,7 @@ import { useLanguageContext } from "../../context/LanguageProvider";
 import { entryWorkAmount } from "../../domain/ledger";
 import type { Entry, Ledger } from "../../domain/model";
 import {
+  entryKindLabels,
   historySubtitle,
   historyTitle,
   historyGroups,
@@ -18,6 +19,7 @@ export type EntryListProps = {
   onEntry: (id: string) => void;
   order?: HistoryOrder;
   grouped?: boolean;
+  showKind?: boolean;
   hidePerson?: boolean;
   hideWork?: boolean;
   amounts?: Record<string, number>;
@@ -31,6 +33,7 @@ export function EntryList({
   onEntry,
   order = "newest",
   grouped = false,
+  showKind = false,
   hidePerson = false,
   hideWork = false,
   amounts,
@@ -103,6 +106,12 @@ export function EntryList({
                       : t("তারিখ দেওয়া নেই")}
                   </time>
                   <span aria-hidden="true">·</span>
+                  {showKind && subtitle !== entryKindLabels[entry.kind] ? (
+                    <>
+                      <span>{t(entryKindLabels[entry.kind])}</span>
+                      <span aria-hidden="true">·</span>
+                    </>
+                  ) : null}
                   <span>{t(subtitle)}</span>
                 </small>
               </span>

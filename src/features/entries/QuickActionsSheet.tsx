@@ -17,7 +17,7 @@ export function QuickActionsSheet() {
   const actionNames = {
     expense: "খরচ লিখি",
     payment: "টাকা দিলাম",
-    labour: "মজুরি লিখি",
+    labour: "মজুরির বিল",
     transport: "আনার খরচ",
   };
   return (

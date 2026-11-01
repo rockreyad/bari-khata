@@ -1,0 +1,55 @@
+.contact-import {
+  display: grid;
+  gap: 10px;
+  margin-top: -8px;
+}
+.contact-import-trigger,
+.contact-import-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+.contact-import-help {
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface-alt, var(--bg));
+  display: grid;
+  gap: 10px;
+}
+.contact-import-help p,
+.contact-number-choices p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+  margin: 0;
+}
+.contact-file-input {
+  display: none;
+}
+.contact-number-choices {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.contact-number-choices p {
+  width: 100%;
+}
+.contact-number-choices button {
+  padding: 9px 13px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  min-height: 42px;
+}
+.contact-number-choices .contact-import-cancel {
+  color: var(--muted);
+  background: var(--surface-alt, var(--bg));
+}

@@ -1,3 +1,4 @@
+import { contactImportEnglish } from "../components/contacts/contactImportEnglish";
 import { phoneAuthEnglish } from "../features/auth/phoneAuthEnglish";
 import { authRegistrationEnglish } from "../features/auth/authRegistrationEnglish";
 import { historyV4English } from "../features/history/historyV4English";
@@ -34,6 +35,7 @@ import {
 
 type Language = "bn" | "en";
 const english: Record<string, string> = {
+  ...contactImportEnglish,
   ...v3English,
   ...v4English,
   ...historyV4English,

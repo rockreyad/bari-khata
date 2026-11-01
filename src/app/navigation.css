@@ -1,0 +1,9 @@
+.mobile-bottom-nav a.active {
+  background: var(--accent-soft);
+  border-radius: 14px;
+  font-weight: 700;
+}
+.settings-link.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}

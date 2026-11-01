@@ -1,4 +1,12 @@
 export const entriesV4English: Record<string, string> = {
+  "মজুরির বিল": "Labour bill",
+  "এখানে শুধু দেওয়া টাকা রাখুন। মজুরির বিল আগে লেখা থাকলে আবার লিখতে হবে না।":
+    "Record only the money paid here. You don't need to enter an existing labour bill again.",
+  "কাজের যত টাকার বিল হয়েছে, তা লিখুন। নিচে কত টাকা দিয়েছেন বেছে নিন।":
+    "Enter the amount of work billed, then choose how much you have paid below.",
+  "+ নতুন খাতা খুলব": "+ Create a notebook",
+  "নতুন কাজের খাতা খুলব": "Create a work notebook",
+  "আগে কাজের খাতা খুলুন": "Create a work notebook first",
   "পছন্দের খাতার বোতাম": "Your notebook shortcuts",
   "মজুরির চুক্তি রাখি": "Add a wage agreement",
   "মজুরির চুক্তি": "Wage agreements",

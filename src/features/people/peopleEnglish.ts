@@ -1,4 +1,5 @@
 export const peopleEnglish: Record<string, string> = {
+  "মজুরির বিল লিখি": "Record a labour bill",
   "{{name}}-এর তথ্য বদলাই": "Edit {{name}}'s details",
   "অগ্রিম / ফেরত পাওনা": "Advance / return credit",
   "নতুন হিসাবে বাকি নেই": "No payable in new entries",

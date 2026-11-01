@@ -384,7 +384,7 @@ export function buildQuickEntry(
       if (refund > total) throw new Error("refund");
       if (refund) addCash(draft.refundId, refund, "refund");
     } else if (
-      wage ||
+      (draft.kind === "payment" && draft.purpose === "wage") ||
       draft.payment === "full" ||
       draft.payment === "partial"
     ) {

@@ -1,5 +1,5 @@
 import type { AddOptions } from "../../app/NotebookProvider";
-import type { Ledger } from "../../domain/model";
+import type { CostType, Ledger } from "../../domain/model";
 import { defaultContactAccount, personKind } from "../../domain/contacts";
 import { QuickDraftSchema } from "./quickEntry";
 import { defaultTaxonomy } from "../../domain/importWallet";
@@ -10,9 +10,12 @@ const normalize = (value: string) =>
 export function entryContext(ledger: Ledger, options: AddOptions) {
   const person = ledger.people.find((p) => p.id === options.personId);
   const account =
-    options.account ?? (person ? defaultContactAccount(person) : "materials");
+    options.kind === "wage"
+      ? "labour"
+      : (options.account ??
+        (person ? defaultContactAccount(person) : "materials"));
   const costType =
-    options.costType ??
+    (options.kind === "wage" ? "labour" : options.costType) ??
     (account === "labour"
       ? "labour"
       : person && personKind(person) === "driver"
@@ -86,10 +89,11 @@ export function entryContext(ledger: Ledger, options: AddOptions) {
     costType,
     contractId,
     date: todayDhaka(),
+    payment: options.kind === "wage" ? "due" : "full",
     rows: [
       {
         id: crypto.randomUUID(),
-        label: costType === "labour" ? "মজুরি" : (group?.name ?? ""),
+        label: group?.name ?? "",
         groupId: group
           ? ledger.materialGroups.some((g) => g.id === group.id)
             ? group.id
@@ -159,5 +163,38 @@ export function entryContactChange(
     contractId: context.contractId,
     paymentPurposeId: "",
     paymentPurposeName: "",
+  };
+}
+
+export function changeEntryType(
+  ledger: Ledger,
+  draft: ReturnType<typeof entryContext>,
+  costType: CostType,
+) {
+  if (draft.costType === costType) return draft;
+  const context = entryContext(ledger, {
+    kind: draft.kind,
+    workId: draft.workId || undefined,
+    costType,
+  });
+  return {
+    ...draft,
+    costType,
+    account:
+      costType === "labour"
+        ? ("labour" as const)
+        : costType === "material"
+          ? ("materials" as const)
+          : ("other" as const),
+    personId: "",
+    contractId: "",
+    paymentPurposeId: "",
+    paymentPurposeName: "",
+    payment: draft.payment === "worker" ? ("full" as const) : draft.payment,
+    rows: draft.rows.map((row) => ({
+      ...context.rows[0],
+      id: row.id,
+      amount: row.amount,
+    })),
   };
 }

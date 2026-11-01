@@ -5,13 +5,17 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { LedgerSchema, type Ledger } from "../../domain/model";
 import { PeoplePage, PersonPage } from "./PeoplePages";
-const state = vi.hoisted(() => ({ ledger: null as unknown, go: vi.fn() }));
+const state = vi.hoisted(() => ({
+  ledger: null as unknown,
+  go: vi.fn(),
+  add: vi.fn(),
+}));
 vi.mock("../../app/NotebookProvider", () => ({
   useNotebook: () => ({
     ledger: state.ledger as Ledger,
     mode: "demo",
     go: state.go,
-    add: vi.fn(),
+    add: state.add,
     entity: vi.fn(),
     detail: vi.fn(),
     notify: vi.fn(),
@@ -29,6 +33,7 @@ vi.mock("../../context/LanguageProvider", () => ({
 afterEach(() => {
   cleanup();
   state.go.mockClear();
+  state.add.mockClear();
 });
 function renderPage(path = "/people/worker") {
   return render(
@@ -81,6 +86,36 @@ function fixture() {
   });
 }
 describe("minimal people pages", () => {
+  it("opens an earned wage bill from a worker with the selected work context and never offers it for a shop", async () => {
+    state.ledger = fixture();
+    const user = userEvent.setup();
+    for (const workId of [undefined, "work"]) {
+      const view = renderPage(
+        `/people/worker${workId ? `?work=${workId}` : ""}`,
+      );
+      screen.getByRole("button", { name: "আরও" }).focus();
+      await user.keyboard("{Enter}");
+      await user.click(
+        await screen.findByRole("menuitem", { name: "মজুরির বিল লিখি" }),
+      );
+      expect(state.add).toHaveBeenLastCalledWith({
+        kind: "wage",
+        personId: "worker",
+        workId,
+        account: "labour",
+        costType: "labour",
+      });
+      view.unmount();
+    }
+    renderPage("/people/shop");
+    screen.getByRole("button", { name: "আরও" }).focus();
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("menu")).toBeTruthy();
+    expect(
+      screen.queryByRole("menuitem", { name: "মজুরির বিল লিখি" }),
+    ).toBeNull();
+    expect(state.add).toHaveBeenCalledTimes(2);
+  });
   it("shows simple contact rows without payment, return, edit or date controls on every contact", () => {
     state.ledger = fixture();
     const { container } = renderPage("/people");

@@ -4,6 +4,7 @@ import {
   entryContext,
   entryContactChange,
   restoreEntryContext,
+  changeEntryType,
 } from "./entryContext";
 import { buildQuickEntry } from "./quickEntry";
 import { summarize } from "../../domain/ledger";
@@ -145,5 +146,51 @@ describe("entry context", () => {
     expect(
       entryContext(ledger, { kind: "payment", personId: "worker" }).workId,
     ).toBe("");
+  });
+  it("starts a wage bill unpaid and keeps payments separate", () => {
+    const ledger = base();
+    const draft = entryContext(ledger, {
+      kind: "wage",
+      workId: "other",
+      personId: "worker",
+    });
+    expect(draft).toMatchObject({
+      account: "labour",
+      costType: "labour",
+      payment: "due",
+    });
+    draft.amount = "16000";
+    const next = buildQuickEntry(ledger, draft);
+    expect(next.entries).toHaveLength(1);
+    expect(next.entries[0]).toMatchObject({
+      kind: "expense",
+      account: "labour",
+    });
+    expect(summarize(next, "other")).toMatchObject({ cost: 1600000, paid: 0 });
+  });
+  it("clears incompatible subject details while retaining money when changing cost type", () => {
+    const ledger = base();
+    const material = entryContext(ledger, { workId: "wallet-cement" });
+    material.rows[0].amount = "5000";
+    material.rows[0].quantity = "10";
+    const labour = changeEntryType(ledger, material, "labour");
+    expect(labour).toMatchObject({
+      account: "labour",
+      rows: [
+        expect.objectContaining({
+          label: "",
+          groupId: "",
+          unit: "",
+          quantity: "",
+          amount: "5000",
+        }),
+      ],
+    });
+    labour.rows[0].label = "মজুরি";
+    expect(changeEntryType(ledger, labour, "material").rows[0]).toMatchObject({
+      label: "সিমেন্ট",
+      groupId: "cement",
+      amount: "5000",
+    });
   });
 });

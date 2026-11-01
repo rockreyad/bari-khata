@@ -1,4 +1,4 @@
-import type { Item } from "../../domain/model";
+import type { Item, Ledger } from "../../domain/model";
 type SuggestedRow = { autoItemName?: string };
 export function materialSuggestion(
   items: Item[],
@@ -32,4 +32,21 @@ export function materialSuggestion(
         autoItemName: "",
       }
     : { label: value };
+}
+
+export function materialItems(ledger: Ledger) {
+  const materials = new Set<string>();
+  const otherCosts = new Set<string>();
+  for (const entry of ledger.entries) {
+    if (entry.voided) continue;
+    for (const line of entry.lines) {
+      if (line.itemId)
+        (line.costType === "material" ? materials : otherCosts).add(
+          line.itemId,
+        );
+    }
+  }
+  return ledger.items.filter(
+    (item) => !otherCosts.has(item.id) || materials.has(item.id),
+  );
 }

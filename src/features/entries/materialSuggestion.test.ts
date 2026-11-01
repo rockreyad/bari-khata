@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { ItemSchema } from "../../domain/model";
-import { materialSuggestion } from "./materialSuggestion";
+import { EntrySchema, ItemSchema, LedgerSchema } from "../../domain/model";
+import { materialItems, materialSuggestion } from "./materialSuggestion";
 describe("material suggestions", () => {
   it("does not guess a brand when the same material name has different brands", () => {
     const items = ["Crown", "Shah"].map((brand) =>
@@ -34,5 +34,33 @@ describe("material suggestions", () => {
     expect(materialSuggestion([], "আঠা + ক্লিপ", { autoItemName: "" })).toEqual(
       { label: "আঠা + ক্লিপ" },
     );
+  });
+  it("does not suggest items used only for wages as things to buy", () => {
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "work", name: "দরজা" }],
+      items: [
+        { id: "wage", name: "মজুরি" },
+        { id: "door", name: "দরজা" },
+      ],
+    });
+    ledger.entries.push(
+      EntrySchema.parse({
+        id: "bill",
+        date: "2026-11-02",
+        kind: "expense",
+        account: "labour",
+        lines: [
+          {
+            id: "line",
+            workId: "work",
+            itemId: "wage",
+            costType: "labour",
+            label: "মজুরি",
+            amount: 100,
+          },
+        ],
+      }),
+    );
+    expect(materialItems(ledger).map((item) => item.name)).toEqual(["দরজা"]);
   });
 });
