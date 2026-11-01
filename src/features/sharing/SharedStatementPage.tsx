@@ -387,7 +387,9 @@ export function SharedStatementPage() {
                   </div>
                   <div className={`shared-row-amount shared-kind-${row.kind}`}>
                     <strong>{money(Math.abs(row.charge || row.paid))}</strong>
-                    <small>{t(kinds[row.kind])}</small>
+                    {row.description ? (
+                      <small>{t(kinds[row.kind])}</small>
+                    ) : null}
                   </div>
                 </article>
               ))
@@ -415,7 +417,7 @@ export function SharedStatementPage() {
           <footer className="shared-footer">
             <p>
               {t("শেষ হালনাগাদ")} ·{" "}
-              {date(statement.updatedAt.slice(0, 10), {
+              {date(statement.updatedAt, {
                 day: "numeric",
                 month: "short",
                 year: "numeric",

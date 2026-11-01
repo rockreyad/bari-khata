@@ -196,14 +196,20 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(
           value,
         ),
-      date: (date, options) =>
-        date
+      date: (date, options) => {
+        if (!date) return t("তারিখ জানা নেই");
+        const value = new Date(
+          date.length > 10 ? date : `${date}T12:00:00+06:00`,
+        );
+        return Number.isFinite(value.getTime())
           ? new Intl.DateTimeFormat(locale, {
+              timeZone: "Asia/Dhaka",
               day: "numeric",
               month: "short",
               ...options,
-            }).format(new Date(`${date.slice(0, 10)}T12:00:00+06:00`))
-          : t("তারিখ জানা নেই"),
+            }).format(value)
+          : t("তারিখ জানা নেই");
+      },
     }),
     [language, locale, t],
   );

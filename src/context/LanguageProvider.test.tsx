@@ -23,6 +23,9 @@ function Probe() {
       <p data-testid="money">{money(125050)}</p>
       <p data-testid="number">{number(2026)}</p>
       <p data-testid="date">{date("2026-11-02", { year: "numeric" })}</p>
+      <p data-testid="instant">
+        {date("2026-11-01T20:30:00Z", { year: "numeric" })}
+      </p>
       <MoneyInput
         aria-label="Amount"
         value={amount}
@@ -51,6 +54,9 @@ it("switches text, amounts, dates and editable money digits live while keeping c
     "২০২৬".slice(0, 1),
   );
   expect(screen.getByTestId("date").textContent).toContain("২০২৬");
+  expect(screen.getByTestId("instant").textContent).toBe(
+    screen.getByTestId("date").textContent,
+  );
   const input = screen.getByRole("textbox", {
     name: "Amount",
   }) as HTMLInputElement;
@@ -62,6 +68,9 @@ it("switches text, amounts, dates and editable money digits live while keeping c
   expect(screen.getByTestId("label").textContent).toBe("8টি দরজা 12");
   expect(screen.getByTestId("copy").textContent).toContain("12");
   expect(screen.getByTestId("date").textContent).toContain("2026");
+  expect(screen.getByTestId("instant").textContent).toBe(
+    screen.getByTestId("date").textContent,
+  );
   expect(input.value).toBe("93.5");
   await userEvent.click(screen.getByRole("button", { name: "বাংলা" }));
   expect(input.value).toBe("৯৩.৫");
