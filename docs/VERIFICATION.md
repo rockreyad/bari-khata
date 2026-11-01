@@ -159,6 +159,9 @@
 ## SMS ছাড়া অনলাইনের প্রবেশের কোড
 
 - আলাদা `manual` পদ্ধতিতে server-এর env-এর কোড মিলিয়ে Supabase-এর আসল session নেওয়া হয়। Browser-এ কোড, HMAC কী বা প্রশাসনিক কী তৈরি বিল্ডে যায় না। UI-তে SMS পাঠানো, resend বা পরীক্ষার কোডের দাবি থাকে না।
-- 47টি ফাইলে 341টি test, TypeScript ও production build পাস করেছে। Manual transport, আগের account অক্ষত রাখা, logout-এর সময় চলতে থাকা gateway/SDK অনুরোধ, server cooldown, email না পাঠানো ও ভুল ফোনের session প্রত্যাখ্যান অন্তর্ভুক্ত।
+- 47টি ফাইলে 346টি test, TypeScript ও production build পাস করেছে। Manual transport, আগের account অক্ষত রাখা, logout-এর সময় চলতে থাকা gateway/SDK অনুরোধ, server cooldown, email না পাঠানো ও ভুল ফোনের session প্রত্যাখ্যান অন্তর্ভুক্ত।
 - স্থানীয় আসল Supabase-এ ভুল/সঠিক কোড, একই account-এ বারবার প্রবেশ, কোড বদলেও একই UUID, ফোনের ব্যবহারসীমা, বিশটি সমান্তরাল অনুরোধে ঠিক পাঁচটি অনুমোদন এবং আলাদা client-এ ওই সীমা বহাল থাকা যাচাই হয়েছে। Anon ও authenticated client limiter RPC ব্যবহার করতে পারেনি; পরীক্ষার account অন্য মালিকের ledger পড়তে পারেনি। আগের আলাদা account-এর password বদলায়নি। তৈরি করা দুটি স্থানীয় পরীক্ষার account শেষে সরানো হয়েছে।
 - আলাদা পরিষ্কার staging-এ manual mode-এর build থেকে server code/HMAC/admin-key sentinel ও server env-এর নাম পাওয়া যায়নি। Browser-এ ফোন লেখা থেকে code-এর পর্দায় যেতে network/OTP অনুরোধ লাগে না; সরাসরি `/register` থেকে login-এ ফেরত যায়।
+
+- Supabase dashboard SMS credentials ছাড়া Phone provider চালু করতে দেয়নি। তাই server ফোনের সঙ্গে HMAC-এ তৈরি, চিঠি পাঠানো যায় না এমন ভিতরের ঠিকানা দিয়ে session নেয়; admin account তৈরিতে phone ও ওই পরিচয় নিশ্চিত হয়। ব্যবহারকারী ফোনই দেখেন। শুধু সঠিক marker ও নির্দিষ্ট ভিতরের ঠিকানা হলে ইমেইল আড়াল হয়; আসল email অক্ষত থাকার পাঁচটি নতুন provider পরীক্ষা আছে।
+- Hosted database-এ নতুন limiter migration ও তার history একই transaction-এ বসেছে। Service role-এর RPC অনুমতি, anon/authenticated নিষেধ, private table RLS, দশটি migration record ও মূল SQL-এর checksum—ছয়টি যাচাই পাস করেছে।

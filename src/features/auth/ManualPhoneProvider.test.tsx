@@ -104,9 +104,13 @@ let auth: ReturnType<typeof useAuth>;
 function Probe() {
   auth = useAuth();
   return (
-    <output aria-label="account">
-      {auth.status}:{auth.user?.id ?? ""}
-    </output>
+    <>
+      <output aria-label="account">
+        {auth.status}:{auth.user?.id ?? ""}
+      </output>
+      <output aria-label="account-email">{auth.user?.email ?? ""}</output>
+      <output aria-label="account-phone">{auth.user?.phone ?? ""}</output>
+    </>
   );
 }
 async function mountSignedOut() {
@@ -232,6 +236,63 @@ describe("manual phone session boundaries", () => {
     expect(isAccountLocked()).toBe(true);
     expect(readRememberedAccount()).toBeNull();
   });
+
+  it.each([
+    [true, `${"a".repeat(64)}@phone.bari.invalid`, null],
+    [true, "person@example.com", "person@example.com"],
+    [
+      undefined,
+      `${"a".repeat(64)}@phone.bari.invalid`,
+      `${"a".repeat(64)}@phone.bari.invalid`,
+    ],
+    [
+      "true",
+      `${"a".repeat(64)}@phone.bari.invalid`,
+      `${"a".repeat(64)}@phone.bari.invalid`,
+    ],
+    [
+      true,
+      `${"g".repeat(64)}@phone.bari.invalid`,
+      `${"g".repeat(64)}@phone.bari.invalid`,
+    ],
+  ] as const)(
+    "maps the verified profile email for manual marker %s and address %s",
+    async (manualMarker, email, expectedEmail) => {
+      const user: User = {
+        ...phoneUser,
+        email,
+        app_metadata:
+          manualMarker === undefined
+            ? {}
+            : { bari_manual_phone_auth: manualMarker },
+      };
+      sdk.verifyManual.mockResolvedValue(tokensFor(user));
+      sdk.setSession.mockResolvedValue({
+        data: { session: session(user), user },
+        error: null,
+      });
+      await mountSignedOut();
+      await requestPhone();
+      await act(async () => {
+        await auth.verifyPhoneOtp(phone, "9876");
+      });
+      const expectedAccount = {
+        id: phoneUser.id,
+        email: expectedEmail,
+        phone: phoneUser.phone,
+      };
+      expect(auth.user).toEqual(expectedAccount);
+      expect(readRememberedAccount()).toEqual(expectedAccount);
+      expect(screen.getByLabelText("account-email").textContent).toBe(
+        expectedEmail ?? "",
+      );
+      expect(screen.getByLabelText("account-phone").textContent).toBe(
+        phoneUser.phone,
+      );
+      expect(sdk.owner).toBe(phoneUser.id);
+      expect(isAccountLocked()).toBe(false);
+    },
+  );
 
   it.each(["logout", "another account"] as const)(
     "does not install stale manual tokens after %s while verification is pending",

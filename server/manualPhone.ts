@@ -18,7 +18,7 @@ export type ManualPhoneSession = {
   access_token: string;
   refresh_token: string;
 };
-type AuthUser = Pick<User, "id" | "phone" | "app_metadata">;
+type AuthUser = Pick<User, "id" | "email" | "phone" | "app_metadata">;
 type SignInResult = {
   data: { session: ManualPhoneSession | null; user: AuthUser | null };
   error: { code?: string } | null;
@@ -26,7 +26,7 @@ type SignInResult = {
 type AuthClient = {
   auth: {
     signInWithPassword: (credentials: {
-      phone: string;
+      email: string;
       password: string;
     }) => Promise<SignInResult>;
     signOut: (options: { scope: "local" }) => Promise<unknown>;
@@ -37,8 +37,10 @@ type AdminClient = {
     admin: {
       createUser: (attributes: {
         phone: string;
+        email: string;
         password: string;
         phone_confirm: true;
+        email_confirm: true;
         app_metadata: { bari_manual_phone_auth: true };
       }) => Promise<{ error: { code?: string } | null }>;
     };
@@ -136,35 +138,41 @@ export function createManualPhoneBackend(
       return result.data;
     },
     async authenticate(phone) {
+      const email = `${createHmac("sha256", config.secret)
+        .update(`bari-manual-email-v1:${phone}`)
+        .digest("hex")}@phone.bari.invalid`;
       const password =
         createHmac("sha256", config.secret)
           .update(`bari-manual-phone-v1:${phone}`)
           .digest("base64url") + "Aa9!";
       const auth = createAuth();
-      let result = await auth.auth.signInWithPassword({ phone, password });
+      let result = await auth.auth.signInWithPassword({ email, password });
       if (result.error) {
         if (result.error.code !== "invalid_credentials") throw unavailable();
         const created = await admin.auth.admin.createUser({
           phone,
+          email,
           password,
           phone_confirm: true,
+          email_confirm: true,
           app_metadata: { bari_manual_phone_auth: true },
         });
         if (
           created.error &&
-          !["phone_exists", "user_already_exists"].includes(
+          !["phone_exists", "email_exists", "user_already_exists"].includes(
             created.error.code ?? "",
           )
         )
           throw unavailable();
         // A second request may have created this phone while we were signing in.
-        result = await auth.auth.signInWithPassword({ phone, password });
+        result = await auth.auth.signInWithPassword({ email, password });
       }
       let matches = false;
       try {
         matches = Boolean(
           !result.error &&
           result.data.user?.app_metadata.bari_manual_phone_auth === true &&
+          result.data.user.email === email &&
           normalizeBangladeshPhone(result.data.user.phone ?? "") === phone,
         );
       } catch {

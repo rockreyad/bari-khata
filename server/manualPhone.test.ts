@@ -65,11 +65,12 @@ function setup(change: Partial<ManualPhoneConfig> = {}) {
   });
   return { handler, consumeAttempt, authenticate };
 }
-function cloud() {
+function cloud(collisionCode = "phone_exists") {
   const accounts = new Map<
     string,
     {
       id: string;
+      email: string;
       phone: string;
       password: string;
       app_metadata: { bari_manual_phone_auth?: boolean };
@@ -77,14 +78,10 @@ function cloud() {
   >();
   const signOut = vi.fn(async () => undefined);
   const signInWithPassword = vi.fn(
-    async ({
-      phone: target,
-      password,
-    }: {
-      phone: string;
-      password: string;
-    }) => {
-      const user = accounts.get(target);
+    async ({ email, password }: { email: string; password: string }) => {
+      const user = [...accounts.values()].find(
+        (account) => account.email === email,
+      );
       if (!user || user.password !== password)
         return {
           data: { session: null, user: null },
@@ -96,12 +93,19 @@ function cloud() {
   const createUser = vi.fn(
     async (attributes: {
       phone: string;
+      email: string;
       password: string;
       phone_confirm: true;
+      email_confirm: true;
       app_metadata: { bari_manual_phone_auth: true };
     }) => {
-      if (accounts.has(attributes.phone))
-        return { error: { code: "phone_exists" } };
+      if (
+        accounts.has(attributes.phone) ||
+        [...accounts.values()].some(
+          (account) => account.email === attributes.email,
+        )
+      )
+        return { error: { code: collisionCode } };
       accounts.set(attributes.phone, {
         id,
         ...attributes,
@@ -326,7 +330,7 @@ describe("manual phone request boundary", () => {
 });
 
 describe("manual phone Supabase identity broker", () => {
-  it("uses password auth and confirmed phone creation while changing the shared code preserves identity", async () => {
+  it("uses an opaque email and confirmed phone without sending messages, preserving identity when the shared code changes", async () => {
     const c = cloud();
     const first = createManualPhoneHandler(
       config(),
@@ -345,15 +349,20 @@ describe("manual phone Supabase identity broker", () => {
     const created = c.createUser.mock.calls[0][0];
     expect(created).toEqual({
       phone,
+      email: expect.stringMatching(/^[a-f0-9]{64}@phone\.bari\.invalid$/),
       password: expect.any(String),
       phone_confirm: true,
+      email_confirm: true,
       app_metadata: { bari_manual_phone_auth: true },
     });
     expect(created.password.length).toBeGreaterThan(32);
     expect(created.password).not.toBe("1318");
     expect(
       c.signInWithPassword.mock.calls.every(
-        ([credentials]) => credentials.password === created.password,
+        ([credentials]) =>
+          credentials.email === created.email &&
+          credentials.password === created.password &&
+          !("phone" in credentials),
       ),
     ).toBe(true);
     expect(c.rpc).toHaveBeenCalledWith("consume_manual_phone_login_attempt", {
@@ -361,21 +370,28 @@ describe("manual phone Supabase identity broker", () => {
       p_ip_key: expect.stringMatching(/^[a-f0-9]{64}$/),
     });
   });
-  it("handles a concurrent first-create collision by signing in again without resetting either identity", async () => {
-    const c = cloud();
-    const one = createManualPhoneBackend(config(), c.clients);
-    const two = createManualPhoneBackend(config(), c.clients);
-    expect(
-      await Promise.all([one.authenticate(phone), two.authenticate(phone)]),
-    ).toEqual([tokens, tokens]);
-    expect(c.accounts.size).toBe(1);
-    expect(c.createUser).toHaveBeenCalledTimes(2);
-    expect(c.signInWithPassword).toHaveBeenCalledTimes(4);
+  it("handles concurrent phone or email creation collisions without resetting either identity", async () => {
+    for (const collision of [
+      "phone_exists",
+      "email_exists",
+      "user_already_exists",
+    ]) {
+      const c = cloud(collision);
+      const one = createManualPhoneBackend(config(), c.clients);
+      const two = createManualPhoneBackend(config(), c.clients);
+      expect(
+        await Promise.all([one.authenticate(phone), two.authenticate(phone)]),
+      ).toEqual([tokens, tokens]);
+      expect(c.accounts.size).toBe(1);
+      expect(c.createUser).toHaveBeenCalledTimes(2);
+      expect(c.signInWithPassword).toHaveBeenCalledTimes(4);
+    }
   });
   it("refuses an existing account with another password and leaves its attributes intact", async () => {
     const c = cloud();
     const existing = {
       id,
+      email: "existing@example.com",
       phone: phone.slice(1),
       password: "existing-private-password",
       app_metadata: {},
@@ -386,23 +402,27 @@ describe("manual phone Supabase identity broker", () => {
     ).rejects.toMatchObject({ status: 503, code: "phone_auth_unavailable" });
     expect(c.accounts.get(phone)).toEqual(existing);
   });
-  it("refuses an unmarked or different-phone session and signs out that isolated client", async () => {
-    for (const user of [
-      { id, phone: phone.slice(1), app_metadata: {} },
-      {
-        id,
-        phone: otherPhone.slice(1),
-        app_metadata: { bari_manual_phone_auth: true },
-      },
+  it("refuses an unmarked, different-phone or different-alias session and signs out that isolated client", async () => {
+    for (const change of [
+      { app_metadata: {} },
+      { phone: otherPhone.slice(1) },
+      { email: "wrong@phone.bari.invalid" },
+      { email: "" },
     ]) {
       const c = cloud();
+      const backend = createManualPhoneBackend(config(), c.clients);
+      await backend.authenticate(phone);
+      c.createUser.mockClear();
       c.signInWithPassword.mockResolvedValue({
-        data: { session: tokens, user: { password: "unused", ...user } },
+        data: {
+          session: tokens,
+          user: { ...c.accounts.get(phone)!, ...change },
+        },
         error: null,
       });
-      await expect(
-        createManualPhoneBackend(config(), c.clients).authenticate(phone),
-      ).rejects.toMatchObject({ status: 503 });
+      await expect(backend.authenticate(phone)).rejects.toMatchObject({
+        status: 503,
+      });
       expect(c.signOut).toHaveBeenCalledWith({ scope: "local" });
       expect(c.createUser).not.toHaveBeenCalled();
     }
@@ -411,7 +431,7 @@ describe("manual phone Supabase identity broker", () => {
     const c = cloud();
     c.signInWithPassword.mockResolvedValue({
       data: { session: null, user: null },
-      error: { code: "phone_provider_disabled" },
+      error: { code: "email_provider_disabled" },
     });
     const backend = createManualPhoneBackend(config(), c.clients);
     await expect(backend.authenticate(phone)).rejects.toMatchObject({

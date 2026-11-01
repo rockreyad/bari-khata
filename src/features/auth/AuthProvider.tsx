@@ -51,11 +51,17 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 const phoneAuthMode = readPhoneAuthMode();
 const phoneOtpEnabled = phoneAuthMode !== "off";
-const userDetails = (user: User): AccountUser => ({
-  id: user.id,
-  email: user.email?.trim() || null,
-  phone: user.phone?.trim() || null,
-});
+const userDetails = (user: User): AccountUser => {
+  const email = user.email?.trim() || null;
+  const manualAlias =
+    user.app_metadata.bari_manual_phone_auth === true &&
+    /^[a-f0-9]{64}@phone\.bari\.invalid$/.test(email ?? "");
+  return {
+    id: user.id,
+    email: manualAlias ? null : email,
+    phone: user.phone?.trim() || null,
+  };
+};
 const offline = () => typeof navigator !== "undefined" && !navigator.onLine;
 const networkError = (error: unknown) =>
   error instanceof Error &&
