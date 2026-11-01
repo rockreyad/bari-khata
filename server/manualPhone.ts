@@ -2,7 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { isIP } from "node:net";
 import { createClient, type User } from "@supabase/supabase-js";
 import { z } from "zod";
-import { normalizeBangladeshPhone } from "../src/features/auth/phone.ts";
+import { normalizeBangladeshPhone } from "../src/features/auth/phone.js";
 
 export type ManualPhoneConfig = {
   mode: string;

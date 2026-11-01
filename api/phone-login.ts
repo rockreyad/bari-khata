@@ -1,7 +1,7 @@
 import {
   createManualPhoneHandler,
   manualPhoneConfig,
-} from "../server/manualPhone.ts";
+} from "../server/manualPhone.js";
 
 export default {
   fetch(request: Request) {

@@ -165,3 +165,5 @@
 
 - Supabase dashboard SMS credentials ছাড়া Phone provider চালু করতে দেয়নি। তাই server ফোনের সঙ্গে HMAC-এ তৈরি, চিঠি পাঠানো যায় না এমন ভিতরের ঠিকানা দিয়ে session নেয়; admin account তৈরিতে phone ও ওই পরিচয় নিশ্চিত হয়। ব্যবহারকারী ফোনই দেখেন। শুধু সঠিক marker ও নির্দিষ্ট ভিতরের ঠিকানা হলে ইমেইল আড়াল হয়; আসল email অক্ষত থাকার পাঁচটি নতুন provider পরীক্ষা আছে।
 - Hosted database-এ নতুন limiter migration ও তার history একই transaction-এ বসেছে। Service role-এর RPC অনুমতি, anon/authenticated নিষেধ, private table RLS, দশটি migration record ও মূল SQL-এর checksum—ছয়টি যাচাই পাস করেছে।
+
+- Live function-এ `.ts` path থেকে module খুঁজে না পাওয়ার ত্রুটি ধরা পড়েছিল। Production import-এ emitted `.js` path ঠিক করা হয়েছে। এখন প্রতিটি `npm run build`-এ আলাদা NodeNext compilation এবং তৈরি JavaScript সরাসরি Node-এ import করে Web handler চালানো বাধ্যতামূলক; disabled configuration-এ কোনো backend request ছাড়াই 404 দিতে হয়। Vite-এর TypeScript resolution দিয়ে এই packaging ত্রুটি আড়াল হয় না।
