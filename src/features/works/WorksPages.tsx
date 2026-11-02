@@ -419,11 +419,13 @@ export function WorkPage() {
       costType: "labour",
     });
   const timestamp = (at: string) =>
-    new Intl.DateTimeFormat(language === "bn" ? "bn-BD" : "en-BD", {
-      timeZone: "Asia/Dhaka",
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(at));
+    formatDigits(
+      new Intl.DateTimeFormat(language === "bn" ? "bn-BD" : "en-BD", {
+        timeZone: "Asia/Dhaka",
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(at)),
+    );
   const showValue = (key: keyof WorkSnapshot, value: unknown) =>
     key === "status"
       ? t(statusNames[value as keyof typeof statusNames])

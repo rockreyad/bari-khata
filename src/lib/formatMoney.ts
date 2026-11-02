@@ -22,8 +22,16 @@ export function formatMoney(
   compact = false,
 ): string {
   const exact = poishaDecimal(poisha);
-  if (compact) return `${taka}${shortened[language].format(poisha / 100)}`;
+  // Intl locale data can fall back to another digit script on the device.
+  if (compact)
+    return localizedDigits(
+      `${taka}${shortened[language].format(poisha / 100)}`,
+      language,
+    );
   const negative = exact.startsWith("-");
   const [whole, tail] = exact.replace(/^-/, "").split(".");
-  return `${taka}${negative ? "-" : ""}${grouped[language].format(BigInt(whole))}${tail ? `.${localizedDigits(tail, language)}` : ""}`;
+  return localizedDigits(
+    `${taka}${negative ? "-" : ""}${grouped[language].format(BigInt(whole))}${tail ? `.${tail}` : ""}`,
+    language,
+  );
 }

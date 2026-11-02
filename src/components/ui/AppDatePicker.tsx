@@ -62,7 +62,7 @@ export function AppDatePicker({
   "aria-invalid": invalid,
   ...props
 }: AppDatePickerProps) {
-  const { t, language } = useLanguageContext();
+  const { t, language, formatDigits } = useLanguageContext();
   const [internal, setInternal] = useState(String(defaultValue ?? ""));
   const dateValue = String(value === undefined ? internal : value);
   const selected = calendarDate(dateValue);
@@ -173,7 +173,7 @@ export function AppDatePicker({
             <CalendarBlankIcon size={19} weight="duotone" />
             <span>
               {selected
-                ? shortDate.format(selected)
+                ? formatDigits(shortDate.format(selected))
                 : (placeholder ?? t("তারিখ বেছে নিন"))}
             </span>
             <span className="date-trigger-dot" />
@@ -214,7 +214,7 @@ export function AppDatePicker({
           >
             {months.map((name, index) => (
               <option key={index} value={index}>
-                {name}
+                {formatDigits(name)}
               </option>
             ))}
           </AppSelect>
@@ -232,7 +232,7 @@ export function AppDatePicker({
               (_, index) => firstYear + index,
             ).map((year) => (
               <option key={year} value={year}>
-                {yearNumber.format(year)}
+                {formatDigits(yearNumber.format(year))}
               </option>
             ))}
           </AppSelect>
@@ -281,11 +281,13 @@ export function AppDatePicker({
             disabled: "calendar-disabled",
           }}
           labels={{
-            labelDayButton: (date) => longDate.format(date),
-            labelGrid: (date) => monthDate.format(date),
+            labelDayButton: (date) => formatDigits(longDate.format(date)),
+            labelGrid: (date) => formatDigits(monthDate.format(date)),
           }}
           formatters={{
-            formatDay: (date) => yearNumber.format(date.getDate()),
+            formatDay: (date) =>
+              formatDigits(yearNumber.format(date.getDate())),
+            formatCaption: (date) => formatDigits(monthDate.format(date)),
           }}
         />
         <div className="calendar-footer">

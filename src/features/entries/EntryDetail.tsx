@@ -261,11 +261,13 @@ export function EntryDetail({ id }: { id: string }) {
   const stamp = (value: string) => {
     const parsed = new Date(value);
     return value && Number.isFinite(parsed.getTime())
-      ? new Intl.DateTimeFormat(language === "bn" ? "bn-BD" : "en-BD", {
-          timeZone: "Asia/Dhaka",
-          dateStyle: "medium",
-          timeStyle: "short",
-        }).format(parsed)
+      ? formatDigits(
+          new Intl.DateTimeFormat(language === "bn" ? "bn-BD" : "en-BD", {
+            timeZone: "Asia/Dhaka",
+            dateStyle: "medium",
+            timeStyle: "short",
+          }).format(parsed),
+        )
       : t("সময় লেখা নেই");
   };
   async function receipt(id: string, name: string) {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { useState } from "react";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LanguageProvider, useLanguageContext } from "./LanguageProvider";
@@ -9,6 +9,7 @@ import { MoneyInput } from "../components/ui/MoneyInput";
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  vi.restoreAllMocks();
 });
 function Probe() {
   const { t, formatDigits, money, number, date, setLanguage } =
@@ -76,3 +77,56 @@ it("switches text, amounts, dates and editable money digits live while keeping c
   await userEvent.click(screen.getByRole("button", { name: "বাংলা" }));
   expect(input.value).toBe("৯৩.৫");
 });
+
+it.each(["bn", "en"] as const)(
+  "keeps %s money, counts and dates consistent when native Intl digits fall back",
+  async (language) => {
+    const view = render(
+      <LanguageProvider>
+        <Probe />
+      </LanguageProvider>,
+    );
+    if (language === "en")
+      await userEvent.click(screen.getByRole("button", { name: "English" }));
+    const fields = ["money", "number", "date", "instant"];
+    const expected = fields.map(
+      (field) => screen.getByTestId(field).textContent,
+    );
+    const script = language === "bn" ? "en" : "bn";
+    const nativeNumber = Object.getOwnPropertyDescriptor(
+      Intl.NumberFormat.prototype,
+      "format",
+    )!.get!;
+    vi.spyOn(
+      Intl.NumberFormat.prototype as unknown as { format: unknown },
+      "format",
+      "get",
+    ).mockImplementation(function (this: Intl.NumberFormat) {
+      const format = nativeNumber.call(this) as Intl.NumberFormat["format"];
+      return (value: number | bigint) => localizedDigits(format(value), script);
+    });
+    const nativeDate = Object.getOwnPropertyDescriptor(
+      Intl.DateTimeFormat.prototype,
+      "format",
+    )!.get!;
+    vi.spyOn(
+      Intl.DateTimeFormat.prototype as unknown as { format: unknown },
+      "format",
+      "get",
+    ).mockImplementation(function (this: Intl.DateTimeFormat) {
+      const format = nativeDate.call(this) as Intl.DateTimeFormat["format"];
+      return (value?: number | Date) => localizedDigits(format(value), script);
+    });
+    view.rerender(
+      <LanguageProvider>
+        <Probe />
+      </LanguageProvider>,
+    );
+    fields.forEach((field, index) => {
+      const shown = screen.getByTestId(field).textContent;
+      expect(shown).toBe(expected[index]);
+      expect(shown).not.toMatch(language === "bn" ? /[0-9]/ : /[০-৯]/);
+    });
+    expect(screen.getByTestId("stored").textContent).toBe("1250.50");
+  },
+);
