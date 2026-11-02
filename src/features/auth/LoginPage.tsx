@@ -1,4 +1,5 @@
 import { NumericInput } from "../../components/ui/NumericInput";
+import { PwaUpdateNotice } from "../../components/PwaUpdateNotice";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { PasswordInput } from "./PasswordInput";
@@ -254,6 +255,12 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
       <section
         className={`auth-card auth-login-card ${method === "phone" ? "auth-phone-card" : ""}`}
       >
+        <PwaUpdateNotice
+          blocked={
+            busy ||
+            Boolean(email || password || phone || otp || sent || pinRoute)
+          }
+        />
         <header className="login-topbar">
           {pinPage ? (
             <button

@@ -7,4 +7,5 @@ export const loginRefreshEnglish: Record<string, string> = {
   "PIN লিখুন": "Enter your PIN",
   "বাংলাদেশের কোড": "Bangladesh country code",
   বাংলাদেশ: "Bangladesh",
+  "নতুন সংস্করণ প্রস্তুত।": "An update is ready.",
 };
