@@ -286,6 +286,45 @@ try {
     401,
     "A deleted account token was still accepted.",
   );
+  const stalePath = `${own.id}/stale-token-probe.pdf`;
+  own.receipts.push(stalePath);
+  const staleUpload = await own.client.storage
+    .from("bari-receipts")
+    .upload(
+      stalePath,
+      new TextEncoder().encode("%PDF-1.1\nStale token\n%%EOF"),
+      {
+        contentType: "application/pdf",
+      },
+    );
+  assert.ok(staleUpload.error, "A deleted account token recreated a receipt.");
+  const staleError = staleUpload.error as { statusCode?: string | number };
+  assert.ok(
+    ["400", "403"].includes(String(staleError.statusCode)),
+    "The deleted account upload was not rejected by Storage access control.",
+  );
+  await receiptAbsent(stalePath);
+  const metadata = execFileSync(
+    "docker",
+    [
+      "exec",
+      container,
+      "psql",
+      "-U",
+      "postgres",
+      "-d",
+      "postgres",
+      "-X",
+      "-Atc",
+      `select count(*) from storage.objects where bucket_id='bari-receipts' and name='${stalePath}'`,
+    ],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  ).trim();
+  assert.equal(
+    metadata,
+    "0",
+    "The rejected stale upload left object metadata.",
+  );
   const share = success(
     await admin.rpc("read_contact_share", { p_token: own.shareToken }),
     "Checking removed share",
@@ -300,6 +339,28 @@ try {
   assert.deepEqual(await rows("ledger_documents", guard.id), guardLedger);
   assert.deepEqual(await rows("ledger_operations", guard.id), guardOperations);
   assert.deepEqual(await rows("contact_share_links", guard.id), guardLinks);
+  const guardPath = `${guard.id}/active-token-probe.pdf`;
+  guard.receipts.push(guardPath);
+  const guardBytes = new TextEncoder().encode(
+    "%PDF-1.1\nActive account\n%%EOF",
+  );
+  success(
+    await guard.client.storage
+      .from("bari-receipts")
+      .upload(guardPath, guardBytes, {
+        contentType: "application/pdf",
+      }),
+    "Uploading a receipt for an unrelated active account",
+  );
+  const guardDownload = success(
+    await guard.client.storage.from("bari-receipts").download(guardPath),
+    "Downloading the unrelated active account's new receipt",
+  );
+  assert.ok(guardDownload, "The active account's receipt was not returned.");
+  assert.deepEqual(
+    new Uint8Array(await guardDownload.arrayBuffer()),
+    guardBytes,
+  );
   for (const path of guard.receipts)
     success(
       await guard.client.storage.from("bari-receipts").download(path),
@@ -311,7 +372,7 @@ try {
       "Checking unrelated guard assistant file",
     );
   console.log(
-    "Local account deletion: verified bearer identity, exact DELETE, scoped nested receipts and assistant staging/chunks, Auth/ledger/share deletion, rejected old token and untouched guard account/files verified.",
+    "Local account deletion: verified bearer identity, exact DELETE, scoped nested receipts and assistant staging/chunks, Auth/ledger/share deletion, rejected old token including direct Storage upload, and active guard receipt upload/download verified.",
   );
 } finally {
   let cleanupFailed = false;
@@ -343,6 +404,11 @@ try {
         success(
           await admin.storage.from("bari-mcp-staging").remove(own.staging),
           "Cleaning deleted disposable account's assistant files",
+        );
+      if (!result.data.user && own.receipts.length)
+        success(
+          await admin.storage.from("bari-receipts").remove(own.receipts),
+          "Cleaning deleted disposable account's receipt probes",
         );
       await own.client.auth.signOut({ scope: "local" }).catch(() => {});
       await absent(own.id);

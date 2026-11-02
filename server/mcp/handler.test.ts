@@ -77,6 +77,7 @@ class MemoryStore implements McpStore {
   assets = new Map<string, Asset & { connectionId: string }>();
   files = new Map<string, Uint8Array>();
   storageWrites: string[] = [];
+  storageReads: string[] = [];
   calls: { action: string; data: Record<string, unknown> }[] = [];
   loseNextSaveResponse = false;
   constructor(scopes: string[] = [...MCP_SCOPES]) {
@@ -362,6 +363,7 @@ class MemoryStore implements McpStore {
     this.files.set(path, bytes.slice());
   }
   async download(path: string): Promise<Uint8Array> {
+    this.storageReads.push(path);
     const bytes = this.files.get(path);
     if (!bytes) throw new McpError("file_not_found", 404);
     return bytes.slice();
@@ -490,6 +492,42 @@ function receiptFixture(
     bytes,
   );
   return { asset, bytes };
+}
+function ordinaryReceiptFixture(
+  h: ReturnType<typeof harness>,
+  id: string,
+  fromRevision = false,
+) {
+  const bytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 4]);
+  const receipt = {
+    id,
+    name: "old-bill.png",
+    mime: "image/png",
+    size: bytes.length,
+  };
+  const core = {
+    id: "ordinary-bill",
+    kind: "expense",
+    date: "2026-11-02",
+    lines: [
+      { id: "ordinary-line", workId: "roof", label: "সিমেন্ট", amount: 10000 },
+    ],
+    receipts: [receipt],
+  };
+  h.store.snapshots.get(owner)!.document = LedgerSchema.parse({
+    ...ledgerFixture(),
+    entries: [
+      {
+        ...core,
+        receipts: fromRevision ? [] : [receipt],
+        revisions: fromRevision
+          ? [{ at: "2026-11-02T11:00:00.000Z", before: core }]
+          : [],
+      },
+    ],
+  });
+  h.store.files.set(`${owner}/${id}`, bytes);
+  return { receipt, bytes };
 }
 async function form(
   app: (request: Request) => Promise<Response>,
@@ -912,6 +950,84 @@ describe("MCP HTTP security and protocol integration", () => {
 });
 
 describe("MCP receipt HTTP security", () => {
+  it.each([
+    "../victim/private-file",
+    "..\\victim\\private-file",
+    "folder/private-file",
+    "%2e%2e%2fvictim%2fprivate-file",
+    "%252e%252e%252fvictim%252fprivate-file",
+    "https://other.example/private-file",
+    "receipt?other=private-file",
+    "receipt#private-file",
+  ])(
+    "rejects a caller-written receipt object path %s before storage access",
+    async (id) => {
+      const h = harness();
+      ordinaryReceiptFixture(h, id);
+      for (const name of ["get_receipt", "read_receipt_chunk"]) {
+        const result = await h.tool(name, { receipt_id: id });
+        expect(result.body.result.isError).toBe(true);
+        expect(toolValue(result.body)).toMatchObject({
+          error: "invalid_receipt",
+        });
+      }
+      const response = await h.app(
+        new Request(
+          `${origin}/api/mcp-file?${new URLSearchParams({ receipt: id })}`,
+          {
+            headers: { authorization: `Bearer ${personal}` },
+          },
+        ),
+      );
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: "invalid_receipt" });
+      expect(h.store.storageReads).toEqual([]);
+      expect(h.store.calls.some(({ action }) => action === "asset")).toBe(
+        false,
+      );
+    },
+  );
+  it.each([false, true])(
+    "keeps safe ordinary receipt IDs readable, including revision receipts: %s",
+    async (fromRevision) => {
+      const h = harness();
+      const id = "old_bill-2026_01";
+      const { receipt, bytes } = ordinaryReceiptFixture(h, id, fromRevision);
+      const metadata = toolValue(
+        (await h.tool("get_receipt", { receipt_id: id })).body,
+      );
+      expect(metadata.receipt).toMatchObject({
+        ...receipt,
+        path: `${owner}/${id}`,
+        immutable: false,
+      });
+      const chunk = toolValue(
+        (await h.tool("read_receipt_chunk", { receipt_id: id })).body,
+      );
+      expect(Buffer.from(chunk.data, "base64")).toEqual(Buffer.from(bytes));
+      const response = await h.app(
+        new Request(`${origin}/api/mcp-file?receipt=${id}`, {
+          headers: { authorization: `Bearer ${personal}` },
+        }),
+      );
+      expect(response.status).toBe(200);
+      expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+      expect(
+        h.store.storageReads.every((path) => path === `${owner}/${id}`),
+      ).toBe(true);
+    },
+  );
+  it("rejects inconsistent MCP receipt ownership metadata before storage access", async () => {
+    const h = harness();
+    const { asset } = receiptFixture(h);
+    h.store.assets.get(asset.id)!.path = `other-owner/${asset.id}`;
+    const result = await h.tool("read_receipt_chunk", { receipt_id: asset.id });
+    expect(result.body.result.isError).toBe(true);
+    expect(toolValue(result.body)).toMatchObject({
+      error: "file_integrity_error",
+    });
+    expect(h.store.storageReads).toEqual([]);
+  });
   it("rejects another connection's pending upload before writing chunks or final bytes", async () => {
     const h = harness();
     const { asset, bytes } = receiptFixture(h, "pending", randomUUID());

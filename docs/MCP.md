@@ -129,6 +129,8 @@ npm run dev
 
 স্থানীয় database চালু না থাকলে আগে `npm run db:start` চালান। MCP migration `supabase/migrations/202611020007_mcp.sql`, `supabase/migrations/202611020008_mcp_intents.sql` ও `supabase/migrations/202611020009_mcp_upload_cleanup.sql`। স্থানীয় middleware `localhost` ও loopback address নেয়; প্রকাশিত সংযোগে HTTPS origin লাগবে।
 
+এরপর `supabase/migrations/202611020010_active_receipt_account.sql` প্রয়োগ করুন। Account মুছে দেওয়ার পরে পুরোনো login token দিয়ে ভাউচারের storage-এ আবার file রাখা বা পড়া এই নিয়ম আটকায়। সক্রিয় account-এর নিজের file ব্যবহারের নিয়ম বহাল থাকে।
+
 এই পরিবর্তন থেকে production migration বা deployment নিজে থেকে করা হয় না। প্রকাশের আগে server-এর পরিবেশ, database migration, metadata route, login callback এবং লক্ষ্য client-এর সঙ্গে সংযোগ যাচাই করুন। Remote HTTP/OAuth সমর্থন থাকা client লক্ষ্য; কোনো নির্দিষ্ট তৃতীয় পক্ষের client পরীক্ষা ছাড়া তার image/voice বা attachment সমর্থন নিশ্চিত ধরে নেবেন না।
 
 ## পরীক্ষা এবং সমস্যা দেখা
