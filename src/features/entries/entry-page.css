@@ -1,0 +1,145 @@
+.entry-page-form .entry-fields-v3 {
+  gap: 24px;
+  min-width: 0;
+}
+.entry-page-form .entry-assignment {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+}
+.entry-page-form .expense-sections {
+  background: var(--surface);
+  border-radius: 18px;
+}
+.entry-page-form .entry-amount-wrap {
+  border-radius: 22px;
+  min-height: 102px;
+  background: var(--accent-soft);
+}
+.entry-page-form .purchase-line-v3 {
+  gap: 18px;
+}
+.entry-worker-flow,
+.entry-wage-basis {
+  display: grid;
+  gap: 16px;
+}
+.entry-intent-options {
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft, var(--surface));
+  border-radius: 16px;
+}
+.entry-intent-options > button {
+  flex: 1;
+  min-height: 43px;
+  padding: 9px 10px;
+  border-radius: 11px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.entry-intent-options > button.selected {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+.entry-balance-preview,
+.entry-contract-progress {
+  padding: 20px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 20px;
+}
+.entry-contract-progress > h3 {
+  margin: 0 0 16px;
+  font-size: 14px;
+}
+.entry-balance-items {
+  margin: 0 0 16px;
+  display: grid;
+  gap: 10px;
+}
+.entry-balance-items > div,
+.entry-balance-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+}
+.entry-balance-items dt,
+.entry-balance-result > span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.entry-balance-items dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.entry-balance-result {
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.entry-balance-result > strong {
+  font-size: 23px;
+  font-weight: 650;
+  color: var(--accent-strong);
+  overflow-wrap: anywhere;
+}
+.entry-page-form .cash-purpose-v3 {
+  margin: 0;
+}
+.entry-page-form .entry-more-toggle {
+  min-height: 48px;
+}
+@media (max-width: 600px) {
+  .entry-page-form .entry-fields-v3 {
+    gap: 20px;
+  }
+  .entry-page-form .entry-assignment {
+    padding: 15px;
+    gap: 16px;
+  }
+  .entry-balance-preview,
+  .entry-contract-progress {
+    padding: 17px;
+  }
+  .entry-intent-options > button {
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+}
+
+.entry-cash-reason > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding-block: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.entry-cash-reason > summary::-webkit-details-marker {
+  display: none;
+}
+.entry-cash-reason[open] > summary > svg {
+  transform: rotate(180deg);
+}
+.entry-cash-reason > label {
+  margin-top: 8px;
+}
+
+.entry-contract-progress > .balance-progress {
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 0;
+}

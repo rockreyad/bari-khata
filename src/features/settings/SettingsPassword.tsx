@@ -29,11 +29,13 @@ const errors: Record<string, string> = {
 };
 export function SettingsPassword({
   user,
+  presentation = "disclosure",
   disabled = false,
   onBusyChange,
   onSignInAgain,
 }: {
   user: AccountUser;
+  presentation?: "disclosure" | "page";
   disabled?: boolean;
   onBusyChange: (busy: boolean) => void;
   onSignInAgain: () => Promise<void>;
@@ -102,6 +104,97 @@ export function SettingsPassword({
       onBusyChange(false);
     }
   }
+  const content = complete ? (
+    <div className="settings-password-success" role="status">
+      <CheckCircleIcon size={30} weight="duotone" />
+      <strong>{t("পাসওয়ার্ড বদলেছে")}</strong>
+      <p>
+        {t(
+          "এবার নতুন পাসওয়ার্ড দিয়ে আবার লগইন করুন। আপনার হিসাব একই খাতায় থাকবে।",
+        )}
+      </p>
+      <button
+        type="button"
+        className="primary-button"
+        disabled={busy}
+        onClick={() => void signInAgain()}
+      >
+        {t("নতুন পাসওয়ার্ড দিয়ে ঢুকি")}
+      </button>
+      {error ? (
+        <p className="settings-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  ) : (
+    <form
+      onSubmit={(event) => void submit(event)}
+      className="settings-password-form"
+    >
+      <p className="settings-hint">
+        {t(
+          "এখনকার পাসওয়ার্ড মিলিয়ে নতুনটি রাখুন। ইমেইলে কোনো কোড পাঠানো হবে না।",
+        )}
+      </p>
+      <label>
+        {t("এখনকার পাসওয়ার্ড")}
+        <PasswordInput
+          aria-label={t("এখনকার পাসওয়ার্ড")}
+          autoComplete="current-password"
+          required
+          maxLength={128}
+          disabled={busy || disabled}
+          value={fields.currentPassword}
+          onChange={(event) => field("currentPassword", event.target.value)}
+        />
+      </label>
+      <label>
+        {t("নতুন পাসওয়ার্ড")}
+        <PasswordInput
+          aria-label={t("নতুন পাসওয়ার্ড")}
+          autoComplete="new-password"
+          required
+          minLength={8}
+          maxLength={128}
+          disabled={busy || disabled}
+          value={fields.password}
+          onChange={(event) => field("password", event.target.value)}
+        />
+      </label>
+      <label>
+        {t("নতুন পাসওয়ার্ড আবার লিখুন")}
+        <PasswordInput
+          aria-label={t("নতুন পাসওয়ার্ড আবার লিখুন")}
+          autoComplete="new-password"
+          required
+          minLength={8}
+          maxLength={128}
+          disabled={busy || disabled}
+          value={fields.confirmation}
+          onChange={(event) => field("confirmation", event.target.value)}
+        />
+      </label>
+      {error ? (
+        <p className="settings-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <button
+        className="primary-button"
+        type="submit"
+        disabled={busy || disabled}
+      >
+        {t(busy ? "বদলাচ্ছি…" : "নতুন পাসওয়ার্ড রাখুন")}
+      </button>
+    </form>
+  );
+  if (presentation === "page")
+    return (
+      <section className="settings-password settings-password-page">
+        {content}
+      </section>
+    );
   return (
     <details
       className="settings-password"
@@ -121,91 +214,7 @@ export function SettingsPassword({
         <span>{t("পাসওয়ার্ড পরিবর্তন")}</span>
         <CaretDownIcon size={17} />
       </summary>
-      {complete ? (
-        <div className="settings-password-success" role="status">
-          <CheckCircleIcon size={30} weight="duotone" />
-          <strong>{t("পাসওয়ার্ড বদলেছে")}</strong>
-          <p>
-            {t(
-              "এবার নতুন পাসওয়ার্ড দিয়ে আবার লগইন করুন। আপনার হিসাব একই খাতায় থাকবে।",
-            )}
-          </p>
-          <button
-            type="button"
-            className="primary-button"
-            disabled={busy}
-            onClick={() => void signInAgain()}
-          >
-            {t("নতুন পাসওয়ার্ড দিয়ে ঢুকি")}
-          </button>
-          {error ? (
-            <p className="settings-error" role="alert">
-              {error}
-            </p>
-          ) : null}
-        </div>
-      ) : (
-        <form
-          onSubmit={(event) => void submit(event)}
-          className="settings-password-form"
-        >
-          <p className="settings-hint">
-            {t(
-              "এখনকার পাসওয়ার্ড মিলিয়ে নতুনটি রাখুন। ইমেইলে কোনো কোড পাঠানো হবে না।",
-            )}
-          </p>
-          <label>
-            {t("এখনকার পাসওয়ার্ড")}
-            <PasswordInput
-              aria-label={t("এখনকার পাসওয়ার্ড")}
-              autoComplete="current-password"
-              required
-              maxLength={128}
-              disabled={busy || disabled}
-              value={fields.currentPassword}
-              onChange={(event) => field("currentPassword", event.target.value)}
-            />
-          </label>
-          <label>
-            {t("নতুন পাসওয়ার্ড")}
-            <PasswordInput
-              aria-label={t("নতুন পাসওয়ার্ড")}
-              autoComplete="new-password"
-              required
-              minLength={8}
-              maxLength={128}
-              disabled={busy || disabled}
-              value={fields.password}
-              onChange={(event) => field("password", event.target.value)}
-            />
-          </label>
-          <label>
-            {t("নতুন পাসওয়ার্ড আবার লিখুন")}
-            <PasswordInput
-              aria-label={t("নতুন পাসওয়ার্ড আবার লিখুন")}
-              autoComplete="new-password"
-              required
-              minLength={8}
-              maxLength={128}
-              disabled={busy || disabled}
-              value={fields.confirmation}
-              onChange={(event) => field("confirmation", event.target.value)}
-            />
-          </label>
-          {error ? (
-            <p className="settings-error" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <button
-            className="primary-button"
-            type="submit"
-            disabled={busy || disabled}
-          >
-            {t(busy ? "বদলাচ্ছি…" : "নতুন পাসওয়ার্ড রাখুন")}
-          </button>
-        </form>
-      )}
+      {content}
     </details>
   );
 }

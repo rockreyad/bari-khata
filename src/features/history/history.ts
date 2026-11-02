@@ -1,3 +1,5 @@
+import { poishaDecimal } from "../../domain/money";
+import { effectiveAccounts } from "../../domain/effectiveAccounts";
 import type { Entry, Ledger } from "../../domain/model";
 import { entryTotal, entryWorkIds } from "../../domain/ledger";
 export type HistoryOrder = "newest" | "oldest";
@@ -41,6 +43,7 @@ export function sortHistory(entries: Entry[], order: HistoryOrder = "newest") {
   });
 }
 export function filterHistory(ledger: Ledger, filters: HistoryFilters = {}) {
+  const accounts = effectiveAccounts(ledger);
   const people = new Map(ledger.people.map((p) => [p.id, p.name]));
   const works = new Map(ledger.works.map((w) => [w.id, w.name]));
   const items = new Map(ledger.items.map((i) => [i.id, i]));
@@ -56,7 +59,8 @@ export function filterHistory(ledger: Ledger, filters: HistoryFilters = {}) {
     if (filters.personId && entry.personId !== filters.personId) return false;
     if (filters.workId && !entryWorkIds(entry).includes(filters.workId))
       return false;
-    if (filters.account && entry.account !== filters.account) return false;
+    if (filters.account && accounts.get(entry.id) !== filters.account)
+      return false;
     if (filters.kind && entry.kind !== filters.kind) return false;
     if (
       filters.costType &&
@@ -73,7 +77,7 @@ export function filterHistory(ledger: Ledger, filters: HistoryFilters = {}) {
         entry.source?.note,
         entry.paymentPurposeId ? purposes.get(entry.paymentPurposeId) : "",
         entry.personId ? people.get(entry.personId) : "",
-        String(entryTotal(entry) / 100),
+        poishaDecimal(entryTotal(entry)),
         ...entryWorkIds(entry).map((id) => works.get(id)),
         ...entry.lines.flatMap((line) => {
           const item = line.itemId ? items.get(line.itemId) : undefined;

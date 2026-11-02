@@ -1,5 +1,16 @@
+import { contractAppliesToWork } from "../domain/contracts";
+import { EntryFrame } from "./EntryFrame";
+import { numericDraftText, moneyInputValue } from "../lib/numericFields";
+import { NumericInput } from "./ui/NumericInput";
 import { latinDigits } from "../lib/numerals";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { Camera, Plus, Receipt, Trash2, Wallet, Wrench } from "lucide-react";
 import { z } from "zod";
 import { useLanguageContext } from "../context/LanguageProvider";
@@ -11,7 +22,7 @@ import {
   type Ledger,
 } from "../domain/model";
 import { canAssignContact } from "../domain/contacts";
-import { replaceEntry } from "../domain/ledger";
+import { parseAmount, replaceEntry } from "../domain/ledger";
 import { AppCombobox } from "./ui/AppCombobox";
 import { AppSelect } from "./ui/AppSelect";
 import { AppDatePicker } from "./ui/AppDatePicker";
@@ -46,7 +57,7 @@ const kindNames: Record<FormKind, string> = {
 };
 const MethodSchema = z.object({
   method: z.enum(["cash", "bkash", "bank", "other"]),
-  amount: z.string(),
+  amount: numericDraftText(),
 });
 const RowSchema = z.object({
   id: z.string(),
@@ -54,8 +65,8 @@ const RowSchema = z.object({
   name: z.string(),
   itemId: z.string(),
   costType: z.enum(costTypes),
-  amount: z.string(),
-  quantity: z.string(),
+  amount: numericDraftText(),
+  quantity: numericDraftText(),
   unit: z.string(),
 });
 const DraftSchema = z.object({
@@ -68,11 +79,11 @@ const DraftSchema = z.object({
   personId: z.string(),
   contractId: z.string(),
   account: z.enum(["materials", "labour", "other"]),
-  amount: z.string(),
+  amount: numericDraftText(),
   note: z.string(),
   workerPaid: z.boolean(),
   paidNow: z.boolean(),
-  paidAmount: z.string(),
+  paidAmount: numericDraftText(),
   split: z.boolean().default(false),
   newPersonId: z.string().default(""),
   newPersonName: z.string().default(""),
@@ -88,6 +99,7 @@ export type EntryAttachments = {
   files: Array<{ id: string; file: File }>;
 };
 export type EntrySheetProps = {
+  presentation?: "sheet" | "page";
   ledger: Ledger;
   defaultWorkId?: string;
   defaultPersonId?: string;
@@ -109,18 +121,12 @@ function today() {
   return `${parts.find((part) => part.type === "year")?.value}-${parts.find((part) => part.type === "month")?.value}-${parts.find((part) => part.type === "day")?.value}`;
 }
 
-function normalized(value: string) {
-  return value
-    .replace(/[০-৯]/g, (digit) => String("০১২৩৪৫৬৭৮৯".indexOf(digit)))
-    .replace(/[,৳\s]/g, "");
-}
-
 function poisha(value: string) {
-  const input = normalized(value);
-  if (!/^\d+(\.\d{1,2})?$/.test(input)) return NaN;
-  const [whole, fraction = ""] = input.split(".");
-  const result = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
-  return Number.isSafeInteger(result) ? result : NaN;
+  try {
+    return parseAmount(value);
+  } catch {
+    return NaN;
+  }
 }
 
 function newRow(
@@ -210,8 +216,8 @@ function editDraft(entry: Entry): Draft {
     account: entry.account,
     note: entry.note,
     paidNow: false,
-    amount: String(
-      entry.paymentParts.reduce((sum, part) => sum + part.amount, 0) / 100,
+    amount: moneyInputValue(
+      entry.paymentParts.reduce((sum, part) => sum + part.amount, 0),
     ),
     split: entry.allocations.length > 1,
     rows: entry.lines.length
@@ -221,26 +227,27 @@ function editDraft(entry: Entry): Draft {
           name: line.label,
           itemId: line.itemId ?? "",
           costType: line.costType,
-          amount: String(line.amount / 100),
+          amount: moneyInputValue(line.amount),
           quantity: line.quantity,
           unit: line.unit,
         }))
       : entry.allocations.length
         ? entry.allocations.map((allocation) => ({
             ...newRow(allocation.workId),
-            amount: String(allocation.amount / 100),
+            amount: moneyInputValue(allocation.amount),
           }))
         : initial.rows,
     methods: entry.paymentParts.length
       ? entry.paymentParts.map((part) => ({
           method: part.method,
-          amount: String(part.amount / 100),
+          amount: moneyInputValue(part.amount),
         }))
       : initial.methods,
   };
 }
 
 export function EntrySheet({
+  presentation = "sheet",
   ledger,
   defaultWorkId,
   defaultPersonId,
@@ -259,7 +266,9 @@ export function EntrySheet({
     original
       ? editDraft(original)
       : startDraft(
-          defaultWorkId ?? ledger.works[0]?.id ?? "",
+          defaultWorkId ??
+            ledger.works.find((work) => !work.archivedAt)?.id ??
+            "",
           defaultPersonId ?? "",
           initialKind,
           initialAccount,
@@ -269,10 +278,31 @@ export function EntrySheet({
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const [draftNotice, setDraftNotice] = useState("");
+  const [draftConflict, setDraftConflict] = useState<
+    "changed" | "mismatch" | null
+  >(null);
   const [saving, setSaving] = useState(false);
   const [processingFiles, setProcessingFiles] = useState(false);
   const lock = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const mounted = useRef(false);
+  const hydrated = useRef(false);
+  const finished = useRef(false);
+  const queue = useRef(Promise.resolve());
+  const latest = useRef({ draft, files });
+  latest.current = { draft, files };
+  const queueDraft = useCallback(
+    (value: { draft: Draft; files: Array<{ id: string; file: File }> }) => {
+      const next = queue.current
+        .catch(() => {})
+        .then(async () => {
+          await storage.saveDraft(draftKey, value);
+        });
+      queue.current = next;
+      return next;
+    },
+    [draftKey, storage],
+  );
   const isCash = draft.kind === "payment" || draft.kind === "refund";
   const isLabour =
     draft.kind === "labour" || (!isCash && draft.account === "labour");
@@ -285,11 +315,14 @@ export function EntrySheet({
       ? lineTotal
       : poisha(draft.amount) || 0
     : draft.paidNow
-      ? poisha(draft.paidAmount.trim() || String(lineTotal / 100)) || 0
+      ? poisha(draft.paidAmount.trim() || moneyInputValue(lineTotal)) || 0
       : 0;
   const eligibleContracts = ledger.contracts.filter(
     (contract) =>
-      contract.workId === draft.workId && contract.personId === draft.personId,
+      (!contract.archivedAt ||
+        (Boolean(original) && contract.id === original?.contractId)) &&
+      contractAppliesToWork(contract, draft.workId) &&
+      contract.personId === draft.personId,
   );
   const selectedContractId =
     draft.contractId === "__none__"
@@ -311,21 +344,37 @@ export function EntrySheet({
   );
 
   useEffect(() => {
+    mounted.current = true;
     let active = true;
+    let read = false;
     void storage
       .readDraft<unknown>(draftKey)
       .then((value) => {
-        if (!active || !value || typeof value !== "object") return;
+        if (!active) return;
+        read = true;
+        if (!value || typeof value !== "object") return;
         const saved = value as { draft?: unknown; files?: unknown };
         const parsed = DraftSchema.safeParse(saved.draft);
         if (!parsed.success) return;
         if (
           original &&
           (parsed.data.id !== original.id ||
-            parsed.data.kind !== editDraft(original).kind ||
-            parsed.data.entryUpdatedAt !== original.updatedAt)
-        )
+            parsed.data.kind !== editDraft(original).kind)
+        ) {
+          read = false;
+          setDraftConflict("mismatch");
+          setDraftNotice(
+            t("অসমাপ্ত লেখাটি এই হিসাবের সঙ্গে মিলছে না। আগের লেখা রাখা আছে।"),
+          );
           return;
+        }
+        const changed = Boolean(
+          original && parsed.data.entryUpdatedAt !== original.updatedAt,
+        );
+        if (changed) {
+          read = false;
+          setDraftConflict("changed");
+        }
         if (
           !original &&
           ledger.entries.some((entry) => entry.id === parsed.data.id)
@@ -354,32 +403,42 @@ export function EntrySheet({
             })),
           );
         }
-        setDraftNotice(t("আগের অসমাপ্ত হিসাবটি ফিরিয়ে আনা হয়েছে।"));
+        setDraftNotice(
+          t(
+            changed
+              ? "এই হিসাব অন্য জায়গায় বদলেছে। আপনার অসমাপ্ত লেখা রাখা আছে।"
+              : "আগের অসমাপ্ত হিসাবটি ফিরিয়ে আনা হয়েছে।",
+          ),
+        );
       })
       .catch(() => {
         if (active) setDraftNotice(t("আগের অসমাপ্ত হিসাবটি খোলা যায়নি।"));
       })
       .finally(() => {
-        if (active) setReady(true);
+        if (active && read) {
+          hydrated.current = true;
+          setReady(true);
+        }
       });
     return () => {
       active = false;
+      mounted.current = false;
+      if (hydrated.current && !finished.current)
+        void queueDraft(latest.current).catch(() => {});
     };
-  }, [draftKey, mode, storage, t]);
+  }, [draftKey, mode, storage, queueDraft]);
 
   useEffect(() => {
-    if (!ready || saving) return;
+    if (!ready || saving || finished.current) return;
     const timer = window.setTimeout(() => {
-      void storage
-        .saveDraft(draftKey, { draft, files })
-        .catch(() =>
-          setDraftNotice(
-            t("অসমাপ্ত হিসাবটি রাখা যায়নি। বন্ধ করার আগে সংরক্ষণ করুন।"),
-          ),
-        );
+      void queueDraft({ draft, files }).catch(() =>
+        setDraftNotice(
+          t("অসমাপ্ত হিসাবটি রাখা যায়নি। বন্ধ করার আগে সংরক্ষণ করুন।"),
+        ),
+      );
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [draft, files, ready, saving, draftKey, mode, storage, t]);
+  }, [draft, files, ready, saving, queueDraft, t]);
 
   function field<K extends keyof Draft>(key: K, value: Draft[K]) {
     setError("");
@@ -458,6 +517,31 @@ export function EntrySheet({
     try {
       const now = new Date().toISOString();
       let next = structuredClone(ledger);
+      if (
+        ledger.works.some(
+          (work) =>
+            work.archivedAt &&
+            (work.id === draft.workId ||
+              draft.rows.some((row) => row.workId === work.id)) &&
+            !original?.lines.some((line) => line.workId === work.id) &&
+            !original?.allocations.some(
+              (allocation) => allocation.workId === work.id,
+            ),
+        ) ||
+        ledger.people.some(
+          (person) =>
+            person.archivedAt &&
+            person.id === draft.personId &&
+            person.id !== original?.personId,
+        ) ||
+        ledger.contracts.some(
+          (job) =>
+            job.archivedAt &&
+            job.id === draft.contractId &&
+            job.id !== original?.contractId,
+        )
+      )
+        throw new Error(t("মুছে রাখা নাম, খাতা বা কাজ আগে ফিরিয়ে আনুন।"));
       if (editEntryId && (!original || original.id !== draft.id))
         throw new Error(
           t("যে হিসাবটি বদলাতে চেয়েছেন, সেটি খুঁজে পাওয়া যায়নি।"),
@@ -643,7 +727,7 @@ export function EntrySheet({
             label,
             costType: isLabour ? ("labour" as const) : row.costType,
             amount,
-            quantity: normalized(row.quantity),
+            quantity: latinDigits(row.quantity.trim()),
             unit: row.unit.trim(),
           };
         });
@@ -675,7 +759,9 @@ export function EntrySheet({
             );
         }
         if (!original && draft.paidNow && draft.kind !== "return") {
-          const paid = poisha(draft.paidAmount.trim() || String(total / 100));
+          const paid = poisha(
+            draft.paidAmount.trim() || moneyInputValue(total),
+          );
           if (!Number.isSafeInteger(paid) || paid <= 0)
             throw new Error(t("এখন কত টাকা দিয়েছেন, তা সঠিকভাবে লিখুন।"));
           if (paid !== total && !personId)
@@ -736,16 +822,19 @@ export function EntrySheet({
           t("হিসাবটি মিলছে না। কাজ, ব্যক্তি ও টাকার পরিমাণ আবার দেখুন।"),
         );
       next = checked.data;
+      await queueDraft(latest.current);
       await onSave(
         next,
         files.length ? { entryId: entry.id, files } : undefined,
       );
+      finished.current = true;
+      await queue.current.catch(() => {});
       try {
         await storage.removeDraft(draftKey);
       } catch {
         /* the saved entry keeps its stable id if a draft remains */
       }
-      onClose();
+      if (mounted.current) onClose();
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "";
       setError(
@@ -813,6 +902,24 @@ export function EntrySheet({
     }
   }
 
+  const useSavedChanges = () => {
+    if (!original || draftConflict !== "changed") return;
+    if (draft.id !== original.id || draft.kind !== editDraft(original).kind) {
+      setDraftConflict("mismatch");
+      setDraftNotice(
+        t("অসমাপ্ত লেখাটি এই হিসাবের সঙ্গে মিলছে না। আগের লেখা রাখা আছে।"),
+      );
+      return;
+    }
+    const rebased = { ...draft, entryUpdatedAt: original.updatedAt };
+    latest.current = { draft: rebased, files };
+    setDraft(rebased);
+    setDraftConflict(null);
+    setDraftNotice(t("আপনার লেখা ব্যবহার হচ্ছে। মিলিয়ে নিয়ে রাখুন।"));
+    hydrated.current = true;
+    setReady(true);
+  };
+
   const close = () => {
     if (lock.current || processingFiles) return;
     if (!ready) {
@@ -821,9 +928,11 @@ export function EntrySheet({
     }
     lock.current = true;
     setSaving(true);
-    void storage
-      .saveDraft(draftKey, { draft, files })
-      .then(onClose)
+    void queueDraft(latest.current)
+      .then(() => {
+        finished.current = true;
+        if (mounted.current) onClose();
+      })
       .catch(() => {
         setError(
           t(
@@ -837,17 +946,32 @@ export function EntrySheet({
   const discard = () => {
     if (lock.current || processingFiles) return;
     lock.current = true;
+    finished.current = true;
     setSaving(true);
-    void storage
-      .removeDraft(draftKey)
-      .then(onClose)
+    void queue.current
+      .catch(() => {})
+      .then(() => storage.removeDraft(draftKey))
+      .then(() => {
+        finished.current = true;
+        if (mounted.current) onClose();
+      })
       .catch(() => {
         setError(t("অসমাপ্ত লেখা বাদ দেওয়া যায়নি। আবার চেষ্টা করুন।"));
+        finished.current = false;
         lock.current = false;
         setSaving(false);
       });
   };
-  const workOptions = ledger.works.map((work) => (
+  const availableWorks = ledger.works.filter(
+    (work) =>
+      !work.archivedAt ||
+      (Boolean(original) &&
+        (original?.lines.some((line) => line.workId === work.id) ||
+          original?.allocations.some(
+            (allocation) => allocation.workId === work.id,
+          ))),
+  );
+  const workOptions = availableWorks.map((work) => (
     <option key={work.id} value={work.id}>
       {work.name}
     </option>
@@ -859,8 +983,9 @@ export function EntrySheet({
     other: "অন্য মাধ্যমে",
   };
 
+  const Frame = presentation === "page" ? EntryFrame : Sheet;
   return (
-    <Sheet
+    <Frame
       title={t(original ? "হিসাব বদলান" : "নতুন হিসাব")}
       subtitle={t("ছোট ছোট হিসাব, এক জায়গায়।")}
       onClose={close}
@@ -869,7 +994,9 @@ export function EntrySheet({
           type="submit"
           form="entry-form"
           className="primary-button full-width"
-          disabled={saving || processingFiles || !ready || !ledger.works.length}
+          disabled={
+            saving || processingFiles || !ready || !availableWorks.length
+          }
         >
           {saving
             ? t("সংরক্ষণ হচ্ছে…")
@@ -887,11 +1014,23 @@ export function EntrySheet({
         }}
       >
         {draftNotice ? (
-          <p className="muted form-hint" role="status">
-            {draftNotice}
-          </p>
+          <div
+            className="muted form-hint"
+            role={draftConflict ? "alert" : "status"}
+          >
+            <p>{draftNotice}</p>
+            {draftConflict === "changed" ? (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={useSavedChanges}
+              >
+                {t("আমার লেখা ব্যবহার করি")}
+              </button>
+            ) : null}
+          </div>
         ) : null}
-        {!ledger.works.length ? (
+        {!availableWorks.length ? (
           <p className="error-message">{t("প্রথমে একটি কাজ যোগ করুন")}</p>
         ) : null}
         {!original ? (
@@ -986,12 +1125,18 @@ export function EntrySheet({
               }}
             >
               <option value="">{t("নাম ছাড়া রাখব")}</option>
-              {ledger.people.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name}
-                  {person.role ? ` · ${person.role}` : ""}
-                </option>
-              ))}
+              {ledger.people
+                .filter(
+                  (person) =>
+                    !person.archivedAt ||
+                    (Boolean(original) && person.id === original?.personId),
+                )
+                .map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name}
+                    {person.role ? ` · ${person.role}` : ""}
+                  </option>
+                ))}
               <option value="__new__">{t("নতুন নাম লিখব")}</option>
             </AppSelect>
           </label>
@@ -1195,7 +1340,7 @@ export function EntrySheet({
                         field("rows", [
                           { ...newRow(draft.workId), amount: draft.amount },
                         ]);
-                      else field("amount", String(lineTotal / 100));
+                      else field("amount", moneyInputValue(lineTotal));
                     }}
                   />
                   {t("একাধিক কাজে ভাগ করব")}
@@ -1309,17 +1454,13 @@ export function EntrySheet({
                       <div className="form-grid">
                         <label className="field">
                           <span className="field-label">{t("পরিমাণ")}</span>
-                          <input
+                          <NumericInput
                             className="field-input"
                             inputMode="decimal"
-                            value={formatDigits(row.quantity)}
+                            value={row.quantity}
                             maxLength={60}
                             onChange={(event) =>
-                              rowField(
-                                index,
-                                "quantity",
-                                latinDigits(event.target.value),
-                              )
+                              rowField(index, "quantity", event.target.value)
                             }
                             placeholder={t("ইচ্ছা হলে লিখুন")}
                           />
@@ -1430,7 +1571,7 @@ export function EntrySheet({
                           onChange={(event) =>
                             field("paidAmount", event.target.value)
                           }
-                          placeholder={String(lineTotal / 100)}
+                          placeholder={moneyInputValue(lineTotal)}
                         />
                       </div>
                     </label>
@@ -1537,7 +1678,7 @@ export function EntrySheet({
                   field("methods", [
                     ...draft.methods.map((part) =>
                       draft.methods.length === 1
-                        ? { ...part, amount: String(cashTotal / 100) }
+                        ? { ...part, amount: moneyInputValue(cashTotal) }
                         : part,
                     ),
                     { method: "bkash", amount: "" },
@@ -1624,7 +1765,7 @@ export function EntrySheet({
           </p>
         ) : null}
       </form>
-    </Sheet>
+    </Frame>
   );
 }
 

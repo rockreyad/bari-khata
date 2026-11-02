@@ -121,3 +121,47 @@ describe("history load more", () => {
     expect(screen.queryByRole("button", { name: "আরও দেখুন" })).toBeNull();
   });
 });
+
+it("shows the legacy driver's bill and current payment when opening its full history link", async () => {
+  state.ledger = LedgerSchema.parse({
+    works: [{ id: "door", name: "দরজা" }],
+    people: [{ id: "driver", name: "রনি", kind: "driver" }],
+    entries: [
+      {
+        id: "trip",
+        kind: "expense",
+        account: "materials",
+        personId: "driver",
+        date: "2026-11-01",
+        lines: [
+          {
+            id: "t",
+            workId: "door",
+            label: "পুরোনো ভ্যানের বিল",
+            costType: "transport",
+            amount: 100000,
+          },
+        ],
+      },
+      {
+        id: "paid",
+        kind: "payment",
+        account: "other",
+        personId: "driver",
+        date: "2026-11-02",
+        allocations: [{ workId: "door", amount: 100000 }],
+        paymentParts: [{ amount: 100000 }],
+      },
+    ],
+  });
+  const { container } = open(
+    "/ledger?person=driver&account=other&work=door&order=oldest",
+  );
+  const rows = [...container.querySelectorAll(".history-row")];
+  expect(rows).toHaveLength(2);
+  expect(rows[0].textContent).toContain("পুরোনো ভ্যানের বিল");
+  expect(rows[1].textContent).toContain("টাকা দিয়েছি");
+  expect(rows[1].textContent).toContain("৳1000");
+  await userEvent.click(rows[0]);
+  expect(state.detail).toHaveBeenCalledWith("trip");
+});

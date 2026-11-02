@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import { accountPlugin } from "./server/accountPlugin.ts";
 import { phoneOtpPlugin } from "./server/phoneOtpPlugin.ts";
 import { phoneAuthMode } from "./server/phoneOtp.ts";
 
@@ -107,7 +108,13 @@ export default defineConfig(({ mode }) => {
         String(phoneMode !== "off"),
       ),
     },
-    plugins: [privateFiles(), phoneOtpPlugin(env), react(), offlineShell()],
+    plugins: [
+      privateFiles(),
+      phoneOtpPlugin(env),
+      accountPlugin(env),
+      react(),
+      offlineShell(),
+    ],
     server: {
       port: 5180,
       strictPort: true,

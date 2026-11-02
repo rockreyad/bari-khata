@@ -128,6 +128,12 @@ describe("entry context", () => {
       total: 60000000,
       title: "",
       notes: "",
+      scope: "work",
+      status: null,
+      archivedAt: null,
+      removalHistory: [],
+      agreedOn: null,
+      activity: [],
       history: [],
     });
     expect(
@@ -193,4 +199,106 @@ describe("entry context", () => {
       amount: "5000",
     });
   });
+});
+
+it("prefills a requested worker job and keeps wrong-person or incompatible notebook jobs unselected", () => {
+  const ledger = base();
+  ledger.people.push({
+    ...ledger.people[0],
+    id: "second-worker",
+    name: "অন্য মিস্ত্রি",
+  });
+  ledger.contracts = LedgerSchema.parse({
+    ...ledger,
+    contracts: [
+      { id: "house-job", scope: "house", personId: "worker", total: 60000000 },
+      {
+        id: "specific-job",
+        workId: "other",
+        personId: "worker",
+        total: 2000000,
+      },
+      {
+        id: "foreign-job",
+        scope: "house",
+        personId: "second-worker",
+        total: 1000000,
+      },
+    ],
+  }).contracts;
+  const before = JSON.stringify(ledger);
+  expect(
+    entryContext(ledger, {
+      kind: "payment",
+      personId: "worker",
+      contractId: "specific-job",
+    }),
+  ).toMatchObject({
+    account: "labour",
+    workId: "other",
+    contractId: "specific-job",
+    purpose: "settle",
+  });
+  expect(
+    entryContext(ledger, {
+      kind: "payment",
+      personId: "worker",
+      workId: "wallet-cement",
+      contractId: "house-job",
+    }),
+  ).toMatchObject({ contractId: "house-job", workId: "wallet-cement" });
+  for (const id of ["foreign-job", "missing-job", "specific-job"])
+    expect(
+      entryContext(ledger, {
+        kind: "payment",
+        personId: "worker",
+        workId: "wallet-cement",
+        contractId: id,
+      }).contractId,
+    ).toBe("");
+  expect(
+    entryContext(ledger, {
+      kind: "payment",
+      personId: "worker",
+      account: "materials",
+      contractId: "house-job",
+    }).contractId,
+  ).toBe("");
+  expect(JSON.stringify(ledger)).toBe(before);
+});
+
+it("does not assign a new unlinked job to another job's notebook just because the worker used it before", () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "plaster", name: "প্লাস্টার" }],
+    people: [{ id: "worker", name: "মিস্ত্রি", kind: "worker" }],
+    contracts: [
+      { id: "old", scope: "house", personId: "worker", total: 500000 },
+      { id: "new", scope: "house", personId: "worker", total: 200000 },
+    ],
+    entries: [
+      {
+        id: "paid",
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        contractId: "old",
+        allocations: [{ workId: "plaster", amount: 50000 }],
+        paymentParts: [{ amount: 50000 }],
+      },
+    ],
+  });
+  expect(
+    entryContext(ledger, {
+      personId: "worker",
+      kind: "payment",
+      contractId: "new",
+    }),
+  ).toMatchObject({ contractId: "new", workId: "" });
+  expect(
+    entryContext(ledger, {
+      personId: "worker",
+      kind: "payment",
+      contractId: "old",
+    }),
+  ).toMatchObject({ contractId: "old", workId: "plaster" });
 });

@@ -1,3 +1,5 @@
+import { parseMoneyText } from "./money";
+import { effectiveAccounts } from "./effectiveAccounts";
 import type { Account, CostType, Entry, Ledger } from "./model";
 import { EntryCoreSchema, validateLedger } from "./model";
 
@@ -67,6 +69,7 @@ const emptyBalance = (): Balance => ({
 
 function accountBalances(
   entries: Entry[],
+  effective: Map<string, Account>,
   workId?: string,
 ): Map<string, Balance> {
   const balances = new Map<string, Balance>();
@@ -81,8 +84,8 @@ function accountBalances(
         entry.personId ?? `anonymous:${entry.relatedEntryId ?? entry.id}`;
       const key = JSON.stringify([
         party,
-        entry.account,
-        part.workId,
+        effective.get(entry.id) ?? entry.account,
+        workId ? part.workId : null,
         entry.contractId,
       ]);
       const balance = balances.get(key) ?? emptyBalance();
@@ -151,9 +154,12 @@ export function summarize(ledger: Ledger, workId?: string) {
       }
     }
   }
-  const balances = [...accountBalances(entries, workId).values()];
+  const balances = [
+    ...accountBalances(entries, effectiveAccounts(ledger), workId).values(),
+  ];
   const contracts = ledger.contracts.filter(
-    (contract) => !workId || contract.workId === workId,
+    (contract) =>
+      !workId || (contract.scope === "work" && contract.workId === workId),
   );
   const contractSummaries = contracts.map((contract) =>
     contractSummary(ledger, contract.id),
@@ -204,11 +210,13 @@ export function personSummary(
   const entries = activeEntries(ledger, workId).filter(
     (entry) => entry.personId === personId,
   );
+  const effective = effectiveAccounts(ledger);
   const accountsResult = Object.fromEntries(
     accounts.map((account) => {
       const balances = [
         ...accountBalances(
-          entries.filter((entry) => entry.account === account),
+          entries.filter((entry) => effective.get(entry.id) === account),
+          effective,
           workId,
         ).values(),
       ];
@@ -227,7 +235,7 @@ export function personSummary(
       const historicalCost = entries
         .filter(
           (entry) =>
-            entry.account === account &&
+            effective.get(entry.id) === account &&
             entry.balanceImpact === "historical" &&
             (entry.kind === "expense" || entry.kind === "expense_credit"),
         )
@@ -278,6 +286,33 @@ export function personSummary(
     accounts: accountsResult,
     entries,
   };
+}
+
+export function partyAccountBalance(
+  ledger: Ledger,
+  personId: string,
+  account: Account,
+  contractId: string | null = null,
+) {
+  const effective = effectiveAccounts(ledger);
+  const entries = activeEntries(ledger).filter(
+    (entry) =>
+      entry.personId === personId &&
+      effective.get(entry.id) === account &&
+      entry.contractId === contractId,
+  );
+  return [...accountBalances(entries, effective).values()].reduce(
+    (sum, balance) => ({
+      cost: sum.cost + balance.cost,
+      paid: sum.paid + balance.paid,
+      refunds: sum.refunds + balance.refunds,
+      netPaid: sum.netPaid + balance.netPaid,
+      balance: sum.balance + balance.balance,
+      payable: sum.payable + balance.payable,
+      advance: sum.advance + balance.advance,
+    }),
+    emptyBalance(),
+  );
 }
 
 export function contractSummary(ledger: Ledger, contractId: string) {
@@ -385,14 +420,5 @@ export function replaceEntry(ledger: Ledger, replacement: Entry): Ledger {
 }
 
 export function parseAmount(value: string): number {
-  const digits = "০১২৩৪৫৬৭৮৯";
-  const normalized = value
-    .replace(/[০-৯]/g, (digit) => String(digits.indexOf(digit)))
-    .replace(/[,৳\s]/g, "");
-  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized))
-    throw new Error("Invalid amount");
-  const [whole, fraction = ""] = normalized.split(".");
-  const amount = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
-  if (!Number.isSafeInteger(amount)) throw new Error("Amount is too large");
-  return amount;
+  return parseMoneyText(value);
 }

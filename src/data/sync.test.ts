@@ -1,7 +1,8 @@
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it } from "vitest";
 import { createEmptyLedger } from "../domain/demo";
-import { validateLedger, type Ledger } from "../domain/model";
+import { ContractSchema, validateLedger, type Ledger } from "../domain/model";
+import { saveContractChange } from "../domain/contracts";
 import { LedgerDatabase, type OutboxRow } from "./database";
 import { LedgerRepository } from "./repository";
 import {
@@ -194,3 +195,54 @@ describe("recoverable cloud synchronization", () => {
     expect(cloud.writes()).toBe(2);
   });
 });
+
+it.each(["initial", "confirmed"] as const)(
+  "preserves contract audit history when a newer cloud %s response drops it",
+  async (phase) => {
+    const repo = await makeRepository();
+    const initial = validateLedger({
+      ...createEmptyLedger(),
+      people: [{ id: "worker", name: "মিস্ত্রি", kind: "worker" }],
+    });
+    const local = saveContractChange(
+      initial,
+      ContractSchema.parse({
+        id: "house",
+        scope: "house",
+        personId: "worker",
+        total: 60000000,
+      }),
+    );
+    await repo.save(local);
+    const cloud = memoryCloud();
+    await synchronizeWorkspace(cloud.transport, repo);
+    const remote = validateLedger({
+      ...local,
+      contracts: local.contracts.map((contract) => ({
+        ...contract,
+        activity: [],
+      })),
+    });
+    let loads = 0;
+    const transport: CloudTransport = {
+      ownerId: "owner-one",
+      save: cloud.transport.save,
+      load: async () => {
+        loads++;
+        return phase === "confirmed" && loads === 1
+          ? { revision: 1, document: local, updatedAt: null }
+          : { revision: 2, document: remote, updatedAt: null };
+      },
+    };
+    expect(await synchronizeWorkspace(transport, repo)).toMatchObject({
+      status: "conflict",
+    });
+    expect((await repo.read())?.ledger.contracts[0].activity).toEqual(
+      local.contracts[0].activity,
+    );
+    expect(
+      (await repo.database.conflicts.get("real"))?.ledger.contracts[0].activity,
+    ).toEqual([]);
+    expect(cloud.writes()).toBe(1);
+  },
+);

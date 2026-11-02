@@ -298,32 +298,29 @@ describe("organized settings", () => {
   });
 });
 
-it("shows password change only for a real email account, keeping phone-code and demo accounts untouched", async () => {
+it("opens account settings on a separate page for either real sign-in method", async () => {
   const user = userEvent.setup();
-  api.user = {
-    id: "00000000-0000-4000-8000-000000000001",
-    email: "owner@example.com",
-    phone: null,
-  };
-  const first = mount();
-  await user.click(screen.getByRole("button", { name: "অ্যাকাউন্ট" }));
-  expect(screen.getByText("পাসওয়ার্ড পরিবর্তন")).toBeTruthy();
-  first.unmount();
-  api.user = {
-    id: "00000000-0000-4000-8000-000000000001",
-    email: null,
-    phone: "+8801700000091",
-  };
-  const phone = mount();
-  await user.click(screen.getByRole("button", { name: "অ্যাকাউন্ট" }));
-  expect(screen.queryByText("পাসওয়ার্ড পরিবর্তন")).toBeNull();
-  phone.unmount();
-  api.mode = "demo";
-  api.user = {
-    id: "00000000-0000-4000-8000-000000000001",
-    email: "owner@example.com",
-    phone: null,
-  };
-  mount();
-  expect(screen.queryByText("পাসওয়ার্ড পরিবর্তন")).toBeNull();
+  for (const email of [null, "owner@example.com"]) {
+    api.user = {
+      id: "00000000-0000-4000-8000-000000000001",
+      email,
+      phone: email ? null : "+8801700000091",
+    };
+    const page = mount();
+    await user.click(screen.getByRole("button", { name: "অ্যাকাউন্ট" }));
+    expect(api.go).toHaveBeenLastCalledWith("/settings/account");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByText("পাসওয়ার্ড পরিবর্তন")).toBeNull();
+    page.unmount();
+  }
 });
+it.each(["real", "demo"] as const)(
+  "opens removed-record recovery in %s mode",
+  async (mode) => {
+    api.mode = mode;
+    const user = userEvent.setup();
+    mount();
+    await user.click(screen.getByRole("button", { name: "মুছে রাখা তথ্য" }));
+    expect(api.go).toHaveBeenLastCalledWith("/settings/removed");
+  },
+);

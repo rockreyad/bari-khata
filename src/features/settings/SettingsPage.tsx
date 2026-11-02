@@ -1,6 +1,7 @@
 import { useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import {
+  Archive,
   ArrowDown,
   ArrowUp,
   ArrowUpRight,
@@ -10,7 +11,6 @@ import {
   CloudCheck,
   CloudSlash,
   DeviceMobile,
-  Envelope,
   FloppyDisk,
   Globe,
   House,
@@ -18,9 +18,7 @@ import {
   Moon,
   Palette,
   PencilSimple,
-  Phone,
   ShieldCheck,
-  SignOut,
   Sun,
   Warning,
 } from "@phosphor-icons/react";
@@ -45,19 +43,9 @@ import {
 import { themePalettes } from "../../lib/themes";
 import { useAuth } from "../auth/AuthProvider";
 import { SettingsAppearance } from "./SettingsAppearance";
-import { SettingsPassword } from "./SettingsPassword";
-import { canChangeEmailPassword } from "../auth/changePassword";
-import { getActiveOwner } from "../../data/database";
 import "./settings.css";
 
-type Panel =
-  | "appearance"
-  | "language"
-  | "name"
-  | "backup"
-  | "sync"
-  | "account"
-  | "install";
+type Panel = "appearance" | "language" | "name" | "backup" | "sync" | "install";
 
 function SettingsRow({
   title,
@@ -169,12 +157,15 @@ export function SettingsPage() {
       setError(
         t(
           error instanceof Error &&
-            error.message === "payment_purpose_would_be_lost"
-            ? "এই কপিতে টাকার কারণের আগের তথ্য নেই। নতুন কপি বেছে নিন।"
+            error.message === "removal_history_would_be_lost"
+            ? "এই কপিতে সরানো তথ্যের ইতিহাস নেই। নতুন কপি বেছে নিন।"
             : error instanceof Error &&
-                error.message === "work_history_would_be_lost"
-              ? "এই কপিতে কাজের আগের তথ্য নেই। ইতিহাস রাখতে নতুন কপি বেছে নিন।"
-              : "কাজটি পুরো শেষ হয়নি। আবার চেষ্টা করুন।",
+                error.message === "payment_purpose_would_be_lost"
+              ? "এই কপিতে টাকার কারণের আগের তথ্য নেই। নতুন কপি বেছে নিন।"
+              : error instanceof Error &&
+                  error.message === "work_history_would_be_lost"
+                ? "এই কপিতে কাজের আগের তথ্য নেই। ইতিহাস রাখতে নতুন কপি বেছে নিন।"
+                : "কাজটি পুরো শেষ হয়নি। আবার চেষ্টা করুন।",
         ),
       );
     } finally {
@@ -225,9 +216,7 @@ export function SettingsPage() {
                 ? "হিসাবের কপি"
                 : panel === "sync"
                   ? "সংরক্ষণের অবস্থা"
-                  : panel === "account"
-                    ? "অ্যাকাউন্ট"
-                    : "ফোনে অ্যাপ রাখুন",
+                  : "ফোনে অ্যাপ রাখুন",
       );
   const sheetError = error ? (
     <p className="settings-error" role="alert">
@@ -405,9 +394,16 @@ export function SettingsPage() {
                   description={t("লগইন ও গোপনীয়তা")}
                   icon={<LockKey size={21} weight="duotone" />}
                   tone="violet"
-                  onClick={() => openPanel("account")}
+                  onClick={() => go("/settings/account")}
                 />
               )}
+              <SettingsRow
+                title={t("মুছে রাখা তথ্য")}
+                description={t("সরানো খাতা ও নাম ফিরিয়ে আনুন")}
+                icon={<Archive size={21} weight="duotone" />}
+                tone="amber"
+                onClick={() => go("/settings/removed")}
+              />
               <SettingsRow
                 title={t("ফোনে অ্যাপ রাখুন")}
                 description={t("এক ট্যাপেই নিজের খাতা খুলুন")}
@@ -700,78 +696,6 @@ export function SettingsPage() {
                   </div>
                 )}
                 {sheetError}
-              </>
-            ) : panel === "account" ? (
-              <>
-                <div className="settings-account-line">
-                  <span className="settings-row-icon is-violet">
-                    {phoneAccount ? (
-                      <Phone size={23} weight="duotone" />
-                    ) : (
-                      <Envelope size={23} weight="duotone" />
-                    )}
-                  </span>
-                  <div>
-                    <small>{t("নিজের অ্যাকাউন্ট")}</small>
-                    <strong>
-                      {phoneAccount ? formatDigits(accountLabel) : accountLabel}
-                    </strong>
-                  </div>
-                </div>
-                {mode === "real" &&
-                auth.user &&
-                canChangeEmailPassword(auth.user) ? (
-                  <SettingsPassword
-                    key={auth.user.id}
-                    user={auth.user}
-                    disabled={busy || auth.status !== "signed-in"}
-                    onBusyChange={setBusy}
-                    onSignInAgain={async () => {
-                      if (getActiveOwner() !== auth.user?.id)
-                        throw new Error("account_changed");
-                      try {
-                        await auth.signOut();
-                      } finally {
-                        if (!getActiveOwner())
-                          navigate("/login", { replace: true });
-                      }
-                    }}
-                  />
-                ) : null}
-                <div className="settings-privacy-note">
-                  <ShieldCheck size={22} weight="duotone" />
-                  <div>
-                    <strong>{t("প্রত্যেকের হিসাব আলাদা")}</strong>
-                    <p>
-                      {t(
-                        "নিজের অ্যাকাউন্ট দিয়ে আপনার ব্যক্তিগত খাতা খুলবেন। প্রত্যেকের হিসাব আলাদা থাকে।",
-                      )}
-                    </p>
-                  </div>
-                </div>
-                <p className="settings-hint">
-                  {t(
-                    "একবার লগইন করে হিসাব নামানো থাকলে ইন্টারনেট ছাড়াও ব্যবহার করতে পারবেন। লগআউট করলে আবার লগইন করতে হবে।",
-                  )}
-                </p>
-                {sheetError}
-                <button
-                  className="settings-signout"
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    void action(async () => {
-                      try {
-                        await auth.signOut();
-                      } finally {
-                        navigate("/login", { replace: true });
-                      }
-                    })
-                  }
-                >
-                  <SignOut size={21} />
-                  {t("লগআউট")}
-                </button>
               </>
             ) : panel === "install" ? (
               <>

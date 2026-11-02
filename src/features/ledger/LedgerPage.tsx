@@ -256,6 +256,7 @@ export function LedgerPage() {
       </div>
       <section className="history-surface">
         <EntryList
+          showKind
           ledger={ledger}
           entries={result.rows}
           workId={work || undefined}

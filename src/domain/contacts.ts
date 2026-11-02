@@ -7,26 +7,10 @@ import type {
   PersonKind,
 } from "./model";
 import { personSummary } from "./ledger";
+import { personKind } from "./contactKind";
+import { effectiveAccounts } from "./effectiveAccounts";
+export { personKind } from "./contactKind";
 
-export function personKind(person: Person): PersonKind {
-  if (person.kind) return person.kind;
-  const description = `${person.role} ${person.name}`;
-  if (
-    /দোকান|স্টোর|হার্ডওয়্যার|ট্রেড|সাপ্লাই|এন্টারপ্রাইজ|shop|store|trading|enterprise|supplier|hardware/i.test(
-      description,
-    )
-  )
-    return "shop";
-  if (/চালক|ড্রাইভার|ভ্যান|driver|transport|truck|van/i.test(description))
-    return "driver";
-  if (
-    /মিস্ত্রি|মিস্রি|মিস্তিরি|শ্রমিক|ঠিকাদার|লেবার|contractor|worker|electrician|plumber|mistri/i.test(
-      description,
-    )
-  )
-    return "worker";
-  return "other";
-}
 export const roleActions: Record<PersonKind, ContactAction[]> = {
   worker: ["payment"],
   shop: ["payment", "purchase", "return"],
@@ -56,6 +40,7 @@ export function contactAccountLedger(
   account = defaultContactAccount(person),
 ): Ledger {
   const own = ledger.entries.filter((entry) => entry.personId === person.id);
+  const effective = effectiveAccounts(ledger);
   if (personKind(person) === "driver" && account === "other") {
     const transportBills = new Set(
       own
@@ -67,46 +52,21 @@ export function contactAccountLedger(
         )
         .map((entry) => entry.id),
     );
-    const pureBuckets = new Map<string, boolean>();
-    for (const entry of own) {
-      if (entry.kind !== "expense" && entry.kind !== "expense_credit") continue;
-      for (const line of entry.lines) {
-        const key = JSON.stringify([entry.account, line.workId]);
-        pureBuckets.set(
-          key,
-          (pureBuckets.get(key) ?? true) && line.costType === "transport",
-        );
-      }
-    }
-    const legacyTransportCash = (entry: Entry) =>
-      !entry.relatedEntryId &&
-      entry.account === "materials" &&
-      (entry.kind === "payment" || entry.kind === "refund") &&
-      entry.allocations.length > 0 &&
-      entry.allocations.every(
-        (part) =>
-          pureBuckets.get(JSON.stringify([entry.account, part.workId])) ===
-          true,
-      );
     return {
       ...ledger,
       entries: own.filter(
         (entry) =>
           ((entry.kind === "payment" || entry.kind === "refund") &&
-            entry.account === "other" &&
+            effective.get(entry.id) === "other" &&
             (!entry.relatedEntryId ||
               transportBills.has(entry.relatedEntryId))) ||
-          transportBills.has(entry.id) ||
-          legacyTransportCash(entry) ||
-          Boolean(
-            entry.relatedEntryId && transportBills.has(entry.relatedEntryId),
-          ),
+          transportBills.has(entry.id),
       ),
     };
   }
   return {
     ...ledger,
-    entries: own.filter((entry) => entry.account === account),
+    entries: own.filter((entry) => effective.get(entry.id) === account),
   };
 }
 export function sortContactEntries(

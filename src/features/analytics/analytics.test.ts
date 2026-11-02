@@ -287,3 +287,49 @@ describe("separate report accounts", () => {
     expect(sectionRows(all, "other")).toHaveLength(0);
   });
 });
+
+it("searches legacy descriptions and numeric labels in either script without changing their saved identities", () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "bn-work-16", name: "কাজ ১৬" }],
+    entries: [
+      {
+        id: "bn",
+        kind: "expense",
+        lines: [
+          {
+            id: "bn-line",
+            workId: "bn-work-16",
+            label: "Rod ১৬ mm",
+            amount: 16200,
+          },
+        ],
+      },
+      {
+        id: "en",
+        kind: "expense",
+        lines: [
+          {
+            id: "en-line",
+            workId: "bn-work-16",
+            label: "Pipe 8 inch",
+            amount: 80000,
+          },
+        ],
+      },
+    ],
+  });
+  const rows = costRows(ledger);
+  expect(
+    filterCostRows(rows, { query: "Rod 16" }).map((row) => row.entry.id),
+  ).toEqual(["bn"]);
+  expect(
+    filterCostRows(rows, { query: "Pipe ৮" }).map((row) => row.entry.id),
+  ).toEqual(["en"]);
+  expect(
+    filterCostRows(rows, { itemId: "label:Rod ১৬ mm" }).map(
+      (row) => row.entry.id,
+    ),
+  ).toEqual(["bn"]);
+  expect(ledger.entries[0].lines[0].label).toBe("Rod ১৬ mm");
+  expect(ledger.works[0].id).toBe("bn-work-16");
+});

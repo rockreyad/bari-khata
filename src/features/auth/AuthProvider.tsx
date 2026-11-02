@@ -1,7 +1,8 @@
+import { AuthContext, type AuthStatus } from "./AuthContext";
+export { useAuth } from "./AuthContext";
+export type { AuthStatus } from "./AuthContext";
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -31,24 +32,8 @@ import {
   requestMockPhoneOtp,
   verifyMockPhoneOtp,
   verifyManualPhoneCode,
-  type PhoneAuthMode,
 } from "./phoneAuth";
 
-export type AuthStatus = "loading" | "signed-out" | "signed-in" | "offline";
-type AuthContextValue = {
-  status: AuthStatus;
-  user: AccountUser | null;
-  signIn: (email: string, password: string) => Promise<void>;
-  signOut: () => Promise<void>;
-  requestPhoneOtp: (
-    phone: string,
-    captchaToken?: string,
-  ) => Promise<{ retryAfter: number }>;
-  verifyPhoneOtp: (phone: string, token: string) => Promise<void>;
-  phoneOtpEnabled: boolean;
-  phoneAuthMode: PhoneAuthMode;
-};
-const AuthContext = createContext<AuthContextValue | null>(null);
 const phoneAuthMode = readPhoneAuthMode();
 const phoneOtpEnabled = phoneAuthMode !== "off";
 const userDetails = (user: User): AccountUser => {
@@ -330,10 +315,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [state, signIn, signOut, requestPhoneOtp, verifyPhoneOtp],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const auth = useContext(AuthContext);
-  if (!auth) throw new Error("AuthProvider_missing");
-  return auth;
 }

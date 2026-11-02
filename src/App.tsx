@@ -9,6 +9,7 @@ import {
 } from "react-router";
 import { AuthProvider, useAuth } from "./features/auth/AuthProvider";
 import { LoginPage } from "./features/auth/LoginPage";
+import { loginTarget } from "./features/auth/loginTarget";
 import { RegistrationPage } from "./features/auth/RegistrationPage";
 import { ConfirmEmailPage } from "./features/auth/ConfirmEmailPage";
 import { ResendEmailPage } from "./features/auth/ResendEmailPage";
@@ -57,17 +58,7 @@ function Login() {
   const auth = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from;
-  const target =
-    typeof from === "string" &&
-    from.startsWith("/") &&
-    !from.startsWith("//") &&
-    !/[\\\x00-\x1f]/.test(from) &&
-    !["/login", "/register", "/auth/confirm"].some(
-      (path) => from.split(/[?#]/)[0] === path,
-    )
-      ? from
-      : "/";
+  const target = loginTarget(location.state?.from);
   if (auth.user) return <Navigate to={target} replace />;
   return <LoginPage onSuccess={() => navigate(target, { replace: true })} />;
 }
@@ -85,7 +76,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/shared" element={<SharedRoute />} />
-          <Route path="/login" element={<Login />} />
+          <Route path="/login/*" element={<Login />} />
           <Route
             path="/register"
             element={

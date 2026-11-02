@@ -1,49 +1,13 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { NotebookContext, type NotebookContextValue } from "./NotebookContext";
+export { useNotebook } from "./NotebookContext";
+export type { AddOptions } from "./NotebookContext";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
+import { entryReturn, entryUrl, contractUrl, isEntryPage } from "./entryRoutes";
 import { useLedger } from "../data/useLedger";
 import { getActiveOwner } from "../data/database";
-import type { Ledger, Account, CostType } from "../domain/model";
-import type { ReceiptInput } from "../data/repository";
 import { useLanguageContext } from "../context/LanguageProvider";
 
-export type AddOptions = {
-  kind?: "expense" | "payment" | "refund" | "return" | "wage";
-  workId?: string;
-  personId?: string;
-  editId?: string;
-  account?: Account;
-  costType?: CostType;
-};
-type NotebookContext = {
-  ledger: Ledger;
-  state: ReturnType<typeof useLedger>;
-  mode: "real" | "demo";
-  base: string;
-  go: (path: string) => void;
-  add: (options?: AddOptions) => void;
-  quick: () => void;
-  entity: (
-    kind: "work" | "person" | "contract",
-    id?: string,
-    workId?: string,
-    personId?: string,
-  ) => void;
-  detail: (id: string) => void;
-  close: () => void;
-  save: (
-    change: Ledger | ((ledger: Ledger) => Ledger),
-    files?: ReceiptInput[],
-  ) => Promise<void>;
-  notify: (text: string, error?: boolean) => void;
-};
-const Context = createContext<NotebookContext | null>(null);
 export function NotebookProvider({
   mode,
   children,
@@ -103,6 +67,14 @@ export function NotebookProvider({
   const ledger = state.ledger;
   const close = () => {
     if (!currentScope()) return;
+    const currentParams = new URLSearchParams(location.search);
+    if (
+      isEntryPage(location.pathname) &&
+      !["_entity", "_entry", "_quick"].some((key) => currentParams.has(key))
+    ) {
+      navigate(entryReturn(currentParams.get("back"), base), { replace: true });
+      return;
+    }
     setSearch(
       (previous) => {
         const next = new URLSearchParams(previous);
@@ -115,6 +87,7 @@ export function NotebookProvider({
           "_edit",
           "_account",
           "_type",
+          "_purpose",
           "_quick",
         ].forEach((key) => next.delete(key));
         return next;
@@ -122,13 +95,13 @@ export function NotebookProvider({
       { replace: true },
     );
   };
-  const value: NotebookContext = {
+  const value: NotebookContextValue = {
     ledger,
     state,
     mode,
     base,
-    go: (path) => {
-      if (currentScope()) navigate(`${base}${path}`);
+    go: (path, options) => {
+      if (currentScope()) navigate(`${base}${path}`, options);
     },
     close,
     notify,
@@ -152,29 +125,25 @@ export function NotebookProvider({
     },
     add: (options) => {
       if (!currentScope()) return;
-      setSearch((previous) => {
-        const next = new URLSearchParams(previous);
-        [
-          "_entry",
-          "_entity",
-          "_edit",
-          "_work",
-          "_person",
-          "_account",
-          "_type",
-          "_quick",
-        ].forEach((key) => next.delete(key));
-        next.set("_add", options?.kind ?? "expense");
-        if (options?.workId) next.set("_work", options.workId);
-        if (options?.personId) next.set("_person", options.personId);
-        if (options?.editId) next.set("_edit", options.editId);
-        if (options?.account) next.set("_account", options.account);
-        if (options?.costType) next.set("_type", options.costType);
-        return next;
-      });
+      const previous = isEntryPage(location.pathname)
+        ? (new URLSearchParams(location.search).get("back") ?? `${base}/`)
+        : `${location.pathname}${location.search}`;
+      navigate(entryUrl(base, options, previous));
     },
     entity: (kind, id, workId, personId) => {
       if (!currentScope()) return;
+      if (kind === "contract") {
+        navigate(
+          contractUrl(
+            base,
+            id,
+            workId,
+            personId,
+            `${location.pathname}${location.search}`,
+          ),
+        );
+        return;
+      }
       setSearch((previous) => {
         const next = new URLSearchParams(previous);
         [
@@ -185,6 +154,7 @@ export function NotebookProvider({
           "_person",
           "_account",
           "_type",
+          "_purpose",
           "_quick",
         ].forEach((key) => next.delete(key));
         next.set("_entity", kind);
@@ -206,6 +176,7 @@ export function NotebookProvider({
           "_person",
           "_account",
           "_type",
+          "_purpose",
           "_quick",
         ].forEach((key) => next.delete(key));
         next.set("_entry", id);
@@ -225,7 +196,7 @@ export function NotebookProvider({
     },
   };
   return (
-    <Context.Provider value={value}>
+    <NotebookContext.Provider value={value}>
       {children}
       {toast ? (
         <div
@@ -235,11 +206,6 @@ export function NotebookProvider({
           {toast.text}
         </div>
       ) : null}
-    </Context.Provider>
+    </NotebookContext.Provider>
   );
-}
-export function useNotebook() {
-  const value = useContext(Context);
-  if (!value) throw new Error("NotebookProvider is missing");
-  return value;
 }

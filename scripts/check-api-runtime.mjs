@@ -20,6 +20,7 @@ try {
   run([
     path.join(root, "node_modules/typescript/bin/tsc"),
     "api/phone-login.ts",
+    "api/account-delete.ts",
     "--module",
     "NodeNext",
     "--moduleResolution",
@@ -47,6 +48,9 @@ try {
     "dir",
   );
   const entry = pathToFileURL(path.join(output, "api/phone-login.js")).href;
+  const accountEntry = pathToFileURL(
+    path.join(output, "api/account-delete.js"),
+  ).href;
   run(
     [
       "--input-type=module",
@@ -57,6 +61,10 @@ try {
   const response=await route.default.fetch(new Request('https://bari.invalid/api/phone-login',{method:'POST'}));
   assert.equal(response.status,404);
   assert.deepEqual(await response.json(),{error:'phone_auth_unavailable'});
+  const accountRoute=await import(${JSON.stringify(accountEntry)});
+  const accountResponse=await accountRoute.default.fetch(new Request('https://bari.invalid/api/account-delete',{method:'POST'}));
+  assert.equal(accountResponse.status,404);
+  assert.deepEqual(await accountResponse.json(),{error:'account_delete_unavailable'});
   console.log('API runtime imports verified.');
  `,
     ],

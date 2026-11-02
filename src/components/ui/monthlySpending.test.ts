@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { EntrySchema, LedgerSchema } from "../../domain/model";
-import { monthlySpending, smoothSpendingPath } from "./monthlySpending";
+import {
+  monthlyCashSpending,
+  monthlySpending,
+  smoothSpendingPath,
+} from "./monthlySpending";
 
 export function spendingFixture() {
   return LedgerSchema.parse({
@@ -146,5 +150,67 @@ describe("monthly incurred spending", () => {
     ]);
     expect(path).toContain("C ");
     expect(path).not.toMatch(/NaN|Infinity/);
+  });
+});
+
+describe("monthly money actually paid", () => {
+  it("matches paid totals without requiring the same payment to be written as a bill", () => {
+    const ledger = spendingFixture();
+    const rows = monthlyCashSpending(ledger, { workId: "door" });
+    expect(rows.at(-1)).toEqual({
+      month: "2026-11",
+      material: 25000,
+      labour: 0,
+      other: 0,
+      total: 25000,
+    });
+    expect(rows.reduce((sum, row) => sum + row.total, 0)).toBe(25000);
+    expect(monthlyCashSpending(ledger, { workId: "tiles" })).toEqual([]);
+  });
+  it("keeps split work amounts and cash refunds exact while ignoring unpaid bills and voided money", () => {
+    const ledger = LedgerSchema.parse({
+      works: [
+        { id: "roof", name: "ছাদ" },
+        { id: "door", name: "দরজা" },
+      ],
+      entries: [
+        {
+          id: "paid",
+          kind: "payment",
+          account: "labour",
+          date: "2026-11-01",
+          allocations: [
+            { workId: "roof", amount: 16200 },
+            { workId: "door", amount: 100 },
+          ],
+          paymentParts: [{ amount: 16300 }],
+        },
+        {
+          id: "refund",
+          kind: "refund",
+          account: "labour",
+          date: "2026-11-02",
+          allocations: [{ workId: "roof", amount: 100 }],
+          paymentParts: [{ amount: 100 }],
+        },
+        {
+          id: "void",
+          kind: "payment",
+          voided: true,
+          date: "2026-11-02",
+          allocations: [{ workId: "roof", amount: 99900 }],
+          paymentParts: [{ amount: 99900 }],
+        },
+        {
+          id: "bill",
+          kind: "expense",
+          lines: [{ id: "line", workId: "roof", amount: 99900 }],
+        },
+      ],
+    });
+    expect(
+      monthlyCashSpending(ledger, { workId: "roof" }).at(-1),
+    ).toMatchObject({ labour: 16100, total: 16100 });
+    expect(monthlyCashSpending(ledger).at(-1)?.total).toBe(16200);
   });
 });

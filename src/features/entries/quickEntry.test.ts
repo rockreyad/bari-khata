@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import { EntrySchema, LedgerSchema, type Ledger } from "../../domain/model";
-import { personSummary, summarize } from "../../domain/ledger";
+import { personSummary, summarize, contractSummary } from "../../domain/ledger";
 import {
   costRows,
   filterCostRows,
@@ -194,6 +194,12 @@ describe("quick homeowner entries", () => {
       rate: 500000,
       total: 500000,
       notes: "",
+      scope: "work",
+      status: null,
+      archivedAt: null,
+      removalHistory: [],
+      agreedOn: null,
+      activity: [],
       history: [],
     });
     let next = buildQuickEntry(
@@ -803,4 +809,200 @@ describe("role-specific quick entries", () => {
       ).toHaveLength(payment === "due" ? 0 : 1);
     }
   });
+});
+
+describe("canonical numeric drafts and old English records", () => {
+  it.each(["162", "১৬২", "1৬2"])(
+    "keeps %s taka as 16200 paisa, then adds a new bill without rescaling the old one",
+    (amount) => {
+      const old = purchase(fixture(), "162");
+      const restored = LedgerSchema.parse(JSON.parse(JSON.stringify(old)));
+      const next = buildQuickEntry(
+        restored,
+        draft({
+          personId: "shop",
+          rows: [
+            {
+              id: crypto.randomUUID(),
+              label: "নতুন মাল",
+              amount,
+              quantity: "৮",
+            },
+          ],
+        }),
+      );
+      expect(
+        next.entries
+          .filter((entry) => entry.kind === "expense")
+          .map((entry) => entry.lines[0].amount),
+      ).toEqual([16200, 16200]);
+      expect(next.entries.at(-2)!.lines[0].quantity).toBe("8");
+      expect(summarize(next)).toMatchObject({
+        cost: 32400,
+        paid: 32400,
+        payable: 0,
+        advance: 0,
+      });
+      expect(old.entries[0].lines[0].amount).toBe(16200);
+    },
+  );
+  it("rehydrates a Bengali draft to ASCII fields and saves a 93000 bill with 30000 paid exactly", () => {
+    const saved = QuickSavedDraftSchema.parse({
+      draft: draft({
+        personId: "shop",
+        payment: "partial",
+        paid: "৩০০০০",
+        amount: "৯৩০০০",
+        refund: "০",
+        rows: [
+          {
+            id: crypto.randomUUID(),
+            label: "দরজা",
+            amount: "৯৩০০০",
+            quantity: "৮",
+          },
+        ],
+      }),
+    });
+    expect(saved.draft).toMatchObject({
+      amount: "93000",
+      paid: "30000",
+      refund: "0",
+    });
+    expect(saved.draft.rows[0]).toMatchObject({
+      amount: "93000",
+      quantity: "8",
+    });
+    const next = buildQuickEntry(fixture(), saved.draft);
+    expect(summarize(next)).toMatchObject({
+      cost: 9300000,
+      paid: 3000000,
+      payable: 6300000,
+      advance: 0,
+    });
+  });
+  it("rejects an unsafe new bill instead of corrupting the existing ledger", () => {
+    const old = purchase(fixture(), "162");
+    const before = JSON.stringify(old);
+    expect(() => purchase(old, "90071992547409.92")).toThrow();
+    expect(JSON.stringify(old)).toBe(before);
+  });
+});
+
+it("reuses a digit-equivalent legacy material instead of creating a duplicate or rewriting its saved name", () => {
+  const initial = fixture();
+  const ledger = LedgerSchema.parse({
+    ...initial,
+    materialGroups: [...initial.materialGroups, { id: "rod-16", name: "রড" }],
+    items: [
+      {
+        id: "legacy-rod-16",
+        name: "Rod ১৬ mm",
+        materialGroupId: "rod-16",
+        brand: "Grade ৬০",
+        usage: "Door ২",
+        unit: "kg",
+      },
+    ],
+  });
+  const before = structuredClone(ledger.items);
+  const saved = buildQuickEntry(
+    ledger,
+    draft({
+      personId: "shop",
+      rows: [
+        {
+          id: "new-rod-line",
+          label: "Rod 16 mm",
+          groupId: "rod-16",
+          brand: "Grade 60",
+          usage: "Door 2",
+          unit: "kg",
+          quantity: "8",
+          amount: "162",
+        },
+      ],
+    }),
+  );
+  expect(saved.items).toEqual(before);
+  expect(saved.entries[0].lines[0]).toMatchObject({
+    itemId: "legacy-rod-16",
+    label: "Rod 16 mm",
+    amount: 16200,
+    materialGroupId: "rod-16",
+  });
+  expect(ledger.items).toEqual(before);
+});
+
+it.each([false, true])(
+  "records an unlinked job payment in the general notebook without changing another job (existing general: %s)",
+  (hasGeneral) => {
+    const ledger = LedgerSchema.parse({
+      ...fixture(),
+      works: [
+        ...fixture().works,
+        ...(hasGeneral ? [{ id: "general", name: "সাধারণ খরচ" }] : []),
+      ],
+      contracts: [
+        { id: "house", scope: "house", personId: "worker", total: 2000000 },
+        {
+          id: "other-job",
+          scope: "house",
+          personId: "worker",
+          total: 60000000,
+        },
+      ],
+    });
+    const before = JSON.stringify(ledger);
+    const next = buildQuickEntry(
+      ledger,
+      draft({
+        kind: "payment",
+        personId: "worker",
+        account: "labour",
+        costType: "labour",
+        contractId: "house",
+        workId: "",
+        amount: "5000",
+      }),
+    );
+    const general = next.works.find((work) => work.name === "সাধারণ খরচ")!;
+    expect(next.entries).toHaveLength(1);
+    expect(next.entries[0]).toMatchObject({
+      kind: "payment",
+      contractId: "house",
+      allocations: [{ workId: general.id, amount: 500000 }],
+    });
+    expect(contractSummary(next, "house")).toMatchObject({
+      netPaid: 500000,
+      remaining: 1500000,
+    });
+    expect(contractSummary(next, "other-job").netPaid).toBe(0);
+    expect(summarize(next).cost).toBe(0);
+    expect(JSON.stringify(ledger)).toBe(before);
+  },
+);
+it("still requires a notebook for unrelated cash and a notebook-specific job", () => {
+  const ledger = LedgerSchema.parse({
+    ...fixture(),
+    contracts: [
+      { id: "specific", personId: "worker", workId: "tiles", total: 2000000 },
+    ],
+  });
+  const before = JSON.stringify(ledger);
+  for (const contractId of ["", "specific", "unknown"])
+    expect(() =>
+      buildQuickEntry(
+        ledger,
+        draft({
+          kind: "payment",
+          personId: "worker",
+          account: "labour",
+          contractId,
+          workId: "",
+          amount: "5000",
+        }),
+      ),
+    ).toThrow("work");
+  expect(JSON.stringify(ledger)).toBe(before);
 });

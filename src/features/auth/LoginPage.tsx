@@ -1,9 +1,10 @@
-import { latinDigits } from "../../lib/numerals";
+import { NumericInput } from "../../components/ui/NumericInput";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { PasswordInput } from "./PasswordInput";
 import {
-  House,
+  HouseLine,
+  LockKey,
   Envelope,
   Phone,
   ArrowRight,
@@ -13,7 +14,7 @@ import {
 } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { useAuth } from "./AuthProvider";
-import { normalizeBangladeshPhone } from "./phone";
+import { nationalPhoneInput, normalizeBangladeshPhone } from "./phone";
 import "./phone-login.css";
 
 const phoneCode = (value: string) =>
@@ -61,6 +62,7 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
   const { t, number, formatDigits } = useLanguageContext();
   const auth = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const initialEmail =
     typeof location.state?.email === "string" &&
     location.state.email.length <= 254
@@ -76,6 +78,14 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [sent, setSent] = useState(false);
+  const pinRoute = location.pathname === "/login/pin";
+  const pinPage = pinRoute && sent && method === "phone";
+  const navigationState = {
+    ...(typeof location.state?.from === "string"
+      ? { from: location.state.from }
+      : {}),
+    ...(initialEmail ? { email: initialEmail } : {}),
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [retryUntil, setRetryUntil] = useState(0);
@@ -102,6 +112,13 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
     return () => window.clearInterval(timer);
   }, [retryUntil]);
   useEffect(() => {
+    if (!pinRoute) setOtp("");
+  }, [pinRoute]);
+  useEffect(() => {
+    if (pinRoute && (!sent || method !== "phone" || !auth.phoneOtpEnabled))
+      navigate("/login", { replace: true, state: navigationState });
+  }, [pinRoute, sent, method, auth.phoneOtpEnabled, navigate]);
+  useEffect(() => {
     if (!auth.phoneOtpEnabled && method === "phone") {
       requestScope.current++;
       setMethod("email");
@@ -116,6 +133,10 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
     setMethod(value);
     setOtp("");
     setError("");
+    navigate(value === "phone" && sent ? "/login/pin" : "/login", {
+      replace: true,
+      state: navigationState,
+    });
   };
   const setCooldown = (response: unknown) => {
     const seconds =
@@ -147,6 +168,7 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
       if (!active.current || scope !== requestScope.current) return;
       setSent(true);
       setOtp("");
+      if (!pinRoute) navigate("/login/pin", { state: navigationState });
       if (!manual) setCooldown(response);
     } catch (failure) {
       if (active.current && scope === requestScope.current) {
@@ -163,7 +185,7 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
     event.preventDefault();
     if (inFlight.current || (method === "phone" && manual && remaining > 0))
       return;
-    if (method === "phone" && !sent) {
+    if (method === "phone" && !pinPage) {
       await requestCode();
       return;
     }
@@ -219,24 +241,83 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
       if (active.current && scope === requestScope.current) setBusy(false);
     }
   };
+  const editNumber = () => {
+    if (busy) return;
+    requestScope.current++;
+    setSent(false);
+    setOtp("");
+    setError("");
+    navigate("/login", { replace: true, state: navigationState });
+  };
   return (
-    <main className="auth-page">
+    <main className={`auth-page login-page ${pinPage ? "login-pin-page" : ""}`}>
       <section
         className={`auth-card auth-login-card ${method === "phone" ? "auth-phone-card" : ""}`}
       >
-        <div className="auth-brand">
-          <House size={34} weight="duotone" />
-          <span>{t("বাড়ির খাতা")}</span>
+        <header className="login-topbar">
+          {pinPage ? (
+            <button
+              type="button"
+              className="login-back"
+              onClick={editNumber}
+              disabled={busy}
+              aria-label={t("ফিরুন")}
+            >
+              <ArrowLeft size={22} weight="bold" />
+            </button>
+          ) : (
+            <span className="login-brand-mark" aria-hidden="true">
+              <BookOpen size={27} weight="duotone" />
+            </span>
+          )}
+          <span className="login-brand-name">{t("বাড়ির খাতা")}</span>
+          {method === "phone" ? (
+            <span
+              className="login-step"
+              aria-label={t(pinPage ? "দ্বিতীয় ধাপ" : "প্রথম ধাপ")}
+            >
+              <i className="is-filled" />
+              <i className={pinPage ? "is-filled" : ""} />
+            </span>
+          ) : null}
+        </header>
+        <div className="login-welcome">
+          <span
+            className={`login-welcome-symbol ${pinPage ? "is-pin" : ""}`}
+            aria-hidden="true"
+          >
+            {pinPage ? (
+              <LockKey size={36} weight="duotone" />
+            ) : (
+              <HouseLine size={39} weight="duotone" />
+            )}
+          </span>
+          <p className="login-eyebrow">
+            {t(pinPage ? "আর এক ধাপ" : "নিজের খাতা, নিজের মতো")}
+          </p>
+          <h1>
+            {t(
+              pinPage
+                ? manual
+                  ? "PIN লিখুন"
+                  : "কোড লিখুন"
+                : "বাড়ির হিসাব, হাতের মুঠোয়",
+            )}
+          </h1>
+          <p className="auth-description">
+            {pinPage ? (
+              <>
+                <span>{t("ফোন নম্বর")}</span>{" "}
+                <strong dir="ltr">
+                  {formatDigits(normalizeBangladeshPhone(phone))}
+                </strong>
+              </>
+            ) : (
+              t("মালামাল, মজুরি আর প্রতিটি লেনদেন—সব হিসাব এক খাতায়।")
+            )}
+          </p>
         </div>
-        <div className="auth-illustration" aria-hidden="true">
-          <House size={72} weight="duotone" />
-          <ShieldCheck size={30} weight="fill" />
-        </div>
-        <h1>{t("আপনার বাড়ি, আপনার হিসাব")}</h1>
-        <p className="auth-description">
-          {t("মালামাল, মজুরি আর প্রতিটি লেনদেন—সব হিসাব এক খাতায়।")}
-        </p>
-        {auth.phoneOtpEnabled && (
+        {!pinPage && auth.phoneOtpEnabled ? (
           <div
             className="segmented-control auth-methods"
             aria-label={t("লগইনের পদ্ধতি")}
@@ -247,7 +328,7 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
               aria-pressed={method === "phone"}
               onClick={() => changeMethod("phone")}
             >
-              <Phone size={17} />
+              <Phone size={18} weight="duotone" />
               {t("ফোন নম্বর")}
             </button>
             <button
@@ -256,12 +337,12 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
               aria-pressed={method === "email"}
               onClick={() => changeMethod("email")}
             >
-              <Envelope size={17} />
+              <Envelope size={18} weight="duotone" />
               {t("ইমেইল")}
             </button>
           </div>
-        )}
-        <form onSubmit={submit}>
+        ) : null}
+        <form onSubmit={submit} className="login-form">
           {method === "email" ? (
             <>
               <label htmlFor="login-email">{t("ইমেইল")}</label>
@@ -289,126 +370,107 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
                 required
               />
             </>
-          ) : (
+          ) : pinPage ? (
             <>
-              {sent ? (
-                <div className="auth-phone-recipient">
-                  <span>
-                    {t(manual ? "ফোন নম্বর" : "এই নম্বরের কোড লিখুন")}
-                  </span>
-                  <strong>{formatDigits(phone)}</strong>
-                  <button
-                    type="button"
-                    className="text-button"
-                    disabled={busy}
-                    onClick={() => {
-                      requestScope.current++;
-                      setSent(false);
-                      setOtp("");
-                      setError("");
-                    }}
-                  >
-                    <ArrowLeft size={15} />
-                    {t("নম্বর বদলাই")}
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <label htmlFor="login-phone">{t("ফোন নম্বর")}</label>
-                  <div className="auth-input">
-                    <Phone size={20} />
-                    <input
-                      id="login-phone"
-                      type="tel"
-                      autoComplete="tel-national"
-                      inputMode="tel"
-                      value={formatDigits(phone)}
-                      disabled={busy}
-                      onChange={(event) => {
-                        requestScope.current++;
-                        setPhone(latinDigits(event.target.value));
-                        setSent(false);
-                        setOtp("");
-                        setError("");
-                        setRetryUntil(0);
-                      }}
-                      required
-                      placeholder={t("01XXXXXXXXX")}
-                      maxLength={24}
-                      aria-describedby="phone-number-hint"
-                    />
-                  </div>
-                  <p id="phone-number-hint" className="auth-field-hint">
-                    {t("বাংলাদেশের মোবাইল নম্বর দিন।")}
-                  </p>
-                </>
-              )}
-              {mode === "mock" ? (
-                <p className="auth-phone-test-note">
-                  <ShieldCheck size={17} />
-                  {t("পরীক্ষার জন্য ফোনে SMS যাবে না।")}
-                </p>
-              ) : null}
-              {sent ? (
-                <>
-                  <label htmlFor="login-otp">
-                    {t(manual ? "প্রবেশের কোড" : "কোড")}
-                  </label>
-                  <input
-                    className="auth-otp-input"
-                    id="login-otp"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete={manual ? "off" : "one-time-code"}
-                    value={formatDigits(otp)}
-                    disabled={busy}
-                    onChange={(event) => {
-                      setOtp(phoneCode(event.target.value));
-                      setError("");
-                    }}
-                    required
-                    minLength={minimumCodeLength}
-                    maxLength={8}
-                    pattern="[0-9০-৯]*"
-                    placeholder={t("কোড লিখুন")}
-                    aria-describedby="phone-code-hint"
-                  />
-                  <p
-                    id="phone-code-hint"
-                    className="auth-field-hint"
-                    role="status"
-                  >
-                    {t(
-                      manual
-                        ? "আপনাকে দেওয়া প্রবেশের কোডটি লিখুন।"
-                        : mode === "mock"
-                          ? "পরীক্ষার কোডটি লিখুন।"
-                          : "ফোনে পাঠানো কোডটি লিখুন।",
-                    )}
-                  </p>
-                  {!manual && (
-                    <button
-                      type="button"
-                      className="text-button auth-phone-resend"
-                      disabled={busy || remaining > 0}
-                      onClick={() => void requestCode()}
-                    >
-                      {remaining > 0
-                        ? t("{{seconds}} সেকেন্ড পরে আবার নিন", {
-                            seconds: number(remaining),
-                          })
-                        : t("আবার কোড নিন")}
-                    </button>
-                  )}
-                </>
+              <label className="login-pin-label" htmlFor="login-otp">
+                {t(manual ? "প্রবেশের কোড" : "কোড")}
+              </label>
+              <NumericInput
+                className="auth-otp-input"
+                id="login-otp"
+                autoFocus
+                type="password"
+                inputMode="numeric"
+                autoComplete={manual ? "off" : "one-time-code"}
+                value={otp}
+                disabled={busy}
+                onChange={(event) => {
+                  setOtp(phoneCode(event.target.value));
+                  setError("");
+                }}
+                required
+                minLength={minimumCodeLength}
+                maxLength={8}
+                pattern="[0-9০-৯]*"
+                placeholder={t("কোড লিখুন")}
+                aria-describedby="phone-code-hint"
+              />
+              <p id="phone-code-hint" className="auth-field-hint" role="status">
+                {t(
+                  manual
+                    ? "আপনাকে দেওয়া প্রবেশের কোডটি লিখুন।"
+                    : mode === "mock"
+                      ? "পরীক্ষার কোডটি লিখুন।"
+                      : "ফোনে পাঠানো কোডটি লিখুন।",
+                )}
+              </p>
+              {!manual ? (
+                <button
+                  type="button"
+                  className="text-button auth-phone-resend"
+                  disabled={busy || remaining > 0}
+                  onClick={() => void requestCode()}
+                >
+                  {remaining > 0
+                    ? t("{{seconds}} সেকেন্ড পরে আবার নিন", {
+                        seconds: number(remaining),
+                      })
+                    : t("আবার কোড নিন")}
+                </button>
               ) : null}
             </>
+          ) : (
+            <>
+              <label htmlFor="login-phone">{t("ফোন নম্বর")}</label>
+              <div className="login-phone-field">
+                <span
+                  className="login-country"
+                  aria-label={t("বাংলাদেশের কোড")}
+                >
+                  <svg
+                    className="login-bd-flag"
+                    viewBox="0 0 40 28"
+                    role="img"
+                    aria-label={t("বাংলাদেশ")}
+                  >
+                    <rect width="40" height="28" rx="5" fill="#006a4e" />
+                    <circle cx="18" cy="14" r="8" fill="#f42a41" />
+                  </svg>
+                  <span dir="ltr">{formatDigits("+880")}</span>
+                </span>
+                <NumericInput
+                  id="login-phone"
+                  type="tel"
+                  autoComplete="tel-national"
+                  inputMode="tel"
+                  value={phone}
+                  disabled={busy}
+                  onChange={(event) => {
+                    requestScope.current++;
+                    setPhone(nationalPhoneInput(event.target.value));
+                    setSent(false);
+                    setOtp("");
+                    setError("");
+                    setRetryUntil(0);
+                  }}
+                  required
+                  placeholder={t("17 1234 5678")}
+                  maxLength={24}
+                />
+              </div>
+            </>
           )}
-          {error && (
+          {method === "phone" && mode === "mock" ? (
+            <p className="auth-phone-test-note">
+              <ShieldCheck size={17} />
+              {t("পরীক্ষার জন্য ফোনে SMS যাবে না।")}
+            </p>
+          ) : null}
+          {error ? (
             <p className="auth-error" role="alert">
               {error}
             </p>
-          )}
+          ) : null}
           {!manual &&
           error === t("আগে আপনার ইমেইল নিশ্চিত করুন। তারপর লগইন করুন।") ? (
             <Link className="auth-resend-link" to="/register/resend">
@@ -419,7 +481,8 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
             className="primary-button auth-submit"
             type="submit"
             disabled={
-              busy || (method === "phone" && remaining > 0 && (manual || !sent))
+              busy ||
+              (method === "phone" && remaining > 0 && (manual || !pinPage))
             }
           >
             {busy
@@ -428,7 +491,7 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
                 ? t("{{seconds}} সেকেন্ড পরে চেষ্টা করুন", {
                     seconds: number(remaining),
                   })
-                : method === "phone" && !sent
+                : method === "phone" && !pinPage
                   ? manual
                     ? t("এগিয়ে যাই")
                     : remaining > 0
@@ -437,44 +500,55 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
                         })
                       : t("কোড নিন")
                   : t("খাতা খুলুন")}
-            <ArrowRight size={20} />
+            <ArrowRight size={21} weight="bold" />
           </button>
         </form>
-        <Link
-          className="auth-guest-link"
-          to="/sample"
-          aria-label={t("নমুনা দেখুন")}
-        >
-          <span className="auth-guest-symbol" aria-hidden="true">
-            <BookOpen size={23} weight="duotone" />
-          </span>
-          <span className="auth-guest-copy">
-            <strong>{t("নমুনা দেখুন")}</strong>
-            <span>{t("লগইন ছাড়াই অ্যাপ ঘুরে দেখুন।")}</span>
-          </span>
-          <ArrowRight size={18} aria-hidden="true" />
-        </Link>
-        <p className="auth-private">
-          <ShieldCheck size={18} />
-          {t("লগইন ছাড়া ব্যক্তিগত হিসাব দেখা যায় না।")}
-        </p>
-        {manual ? (
-          method === "email" && (
+        {pinPage ? (
+          <div className="login-pin-options">
             <button
               type="button"
-              className="text-button auth-register-link"
+              className="text-button"
+              onClick={editNumber}
               disabled={busy}
-              onClick={() => changeMethod("phone")}
             >
-              {t("ফোন দিয়ে লগইন করুন")}
+              {t("নম্বর বদলাই")}
             </button>
-          )
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => changeMethod("email")}
+              disabled={busy}
+            >
+              {t("ইমেইল")}
+            </button>
+          </div>
         ) : (
-          <p className="auth-register-link">
-            {t("প্রথমবার এসেছেন?")}{" "}
-            <Link to="/register">{t("অ্যাকাউন্ট খুলুন")}</Link>
-          </p>
+          <div className="login-secondary-links">
+            <Link className="auth-guest-link" to="/sample">
+              {t("নমুনা দেখুন")}
+            </Link>
+            {manual ? (
+              method === "email" ? (
+                <button
+                  type="button"
+                  className="text-button auth-register-link"
+                  disabled={busy}
+                  onClick={() => changeMethod("phone")}
+                >
+                  {t("ফোন দিয়ে লগইন করুন")}
+                </button>
+              ) : null
+            ) : (
+              <Link className="auth-register-link" to="/register">
+                {t("অ্যাকাউন্ট খুলুন")}
+              </Link>
+            )}
+          </div>
         )}
+        <p className="auth-private">
+          <ShieldCheck size={16} weight="duotone" />
+          {t("লগইন ছাড়া ব্যক্তিগত হিসাব দেখা যায় না।")}
+        </p>
       </section>
     </main>
   );

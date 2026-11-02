@@ -1,17 +1,23 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Route, Routes, useLocation, useSearchParams } from "react-router";
+import {
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useSearchParams,
+} from "react-router";
 import {
   BookOpenIcon,
-  ChartBarIcon,
+  ChartDonutIcon,
   CloudCheckIcon,
   CloudSlashIcon,
   GearSixIcon,
   HouseLineIcon,
-  NotebookIcon,
-  PlusIcon,
-  RowsIcon,
-  UsersThreeIcon,
+  BookBookmarkIcon,
+  ClockCounterClockwiseIcon,
+  UsersIcon,
 } from "@phosphor-icons/react";
+import { entryUrl, contractUrl, isEntryPage } from "./entryRoutes";
 import { NotebookNavLink, notebookSectionActive } from "./navigation";
 import { useNotebook, type AddOptions } from "./NotebookProvider";
 import { useLanguageContext } from "../context/LanguageProvider";
@@ -59,6 +65,27 @@ const ReviewPage = lazy(() =>
     default: m.ReviewPage,
   })),
 );
+const JobsPage = lazy(() =>
+  import("../features/jobs/JobPages").then((m) => ({ default: m.JobsPage })),
+);
+const JobPage = lazy(() =>
+  import("../features/jobs/JobPages").then((m) => ({ default: m.JobPage })),
+);
+const AccountPage = lazy(() =>
+  import("../features/settings/AccountPage").then((m) => ({
+    default: m.AccountPage,
+  })),
+);
+const AccountPasswordPage = lazy(() =>
+  import("../features/settings/AccountPage").then((m) => ({
+    default: m.AccountPasswordPage,
+  })),
+);
+const RemovedItemsPage = lazy(() =>
+  import("../features/settings/RemovedItemsPage").then((m) => ({
+    default: m.RemovedItemsPage,
+  })),
+);
 const SettingsPage = lazy(() =>
   import("../features/settings/SettingsPage").then((m) => ({
     default: m.SettingsPage,
@@ -75,24 +102,98 @@ function Reports() {
     />
   );
 }
+function EntryRoute() {
+  const { entryId } = useParams();
+  const [params] = useSearchParams();
+  const { ledger, mode, close, save } = useNotebook();
+  const raw = params.get("kind") ?? "expense";
+  const kind: AddOptions["kind"] = [
+    "expense",
+    "payment",
+    "return",
+    "refund",
+    "wage",
+  ].includes(raw)
+    ? (raw as AddOptions["kind"])
+    : "expense";
+  const purpose = params.get("purpose");
+  const options: AddOptions = {
+    kind,
+    workId: params.get("work") ?? undefined,
+    personId: params.get("person") ?? undefined,
+    account: AccountSchema.safeParse(params.get("account")).data,
+    costType: CostTypeSchema.safeParse(params.get("type")).data,
+    contractId: params.get("contract") ?? undefined,
+    purpose:
+      purpose && ["settle", "advance", "wage"].includes(purpose)
+        ? (purpose as AddOptions["purpose"])
+        : undefined,
+  };
+  return entryId ? (
+    <EntrySheet
+      presentation="page"
+      key={entryId}
+      ledger={ledger}
+      mode={mode}
+      editEntryId={entryId}
+      onClose={close}
+      onSave={async (next, attachments) =>
+        save(
+          next,
+          attachments?.files.map((file) => ({
+            ...file,
+            entryId: attachments.entryId,
+          })),
+        )
+      }
+    />
+  ) : (
+    <QuickEntrySheet
+      presentation="page"
+      key={JSON.stringify(options)}
+      options={options}
+    />
+  );
+}
+function ContractRoute() {
+  const { contractId: legacyId, jobId } = useParams();
+  const contractId = jobId ?? legacyId;
+  const [params] = useSearchParams();
+  const { ledger, mode, close, save } = useNotebook();
+  return (
+    <EntitySheet
+      presentation="page"
+      key={contractId ?? `new:${params.get("work")}:${params.get("person")}`}
+      kind="contract"
+      ledger={ledger}
+      mode={mode}
+      editId={contractId}
+      defaultWorkId={params.get("work") ?? undefined}
+      defaultPersonId={params.get("person") ?? undefined}
+      onClose={close}
+      onSave={save}
+    />
+  );
+}
 export function AppShell() {
   const { ledger, state, mode, base, quick, go, close, save } = useNotebook();
   const { t, formatDigits } = useLanguageContext();
   const [params] = useSearchParams();
   const location = useLocation();
   const pwa = usePwa();
-  const formOpen = ["_add", "_entity", "_entry", "_quick"].some((key) =>
-    params.has(key),
-  );
+  const entryPage = isEntryPage(location.pathname);
+  const formOpen =
+    entryPage ||
+    ["_add", "_entity", "_entry", "_quick"].some((key) => params.has(key));
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [location.pathname]);
   const nav = [
     { to: "/", label: "এক নজরে", icon: HouseLineIcon },
-    { to: "/works", label: "কাজের খাতা", icon: NotebookIcon },
-    { to: "/ledger", label: "আগের হিসাব", icon: RowsIcon },
-    { to: "/people", label: "ব্যক্তি ও দোকান", icon: UsersThreeIcon },
-    { to: "/reports", label: "রিপোর্ট", icon: ChartBarIcon },
+    { to: "/works", label: "কাজের খাতা", icon: BookBookmarkIcon },
+    { to: "/ledger", label: "আগের হিসাব", icon: ClockCounterClockwiseIcon },
+    { to: "/people", label: "ব্যক্তি ও দোকান", icon: UsersIcon },
+    { to: "/reports", label: "রিপোর্ট", icon: ChartDonutIcon },
   ];
   const rawKind = params.get("_add");
   const addKind =
@@ -112,9 +213,16 @@ export function AppShell() {
     personId: params.get("_person") ?? undefined,
     account: AccountSchema.safeParse(params.get("_account")).data,
     costType: CostTypeSchema.safeParse(params.get("_type")).data,
+    purpose: ["settle", "advance", "wage"].includes(
+      params.get("_purpose") ?? "",
+    )
+      ? (params.get("_purpose") as AddOptions["purpose"])
+      : undefined,
   };
   return (
-    <div className="app-frame">
+    <div
+      className={`app-frame ${entryPage || addKind || entity === "contract" ? "is-entry-page" : ""}`}
+    >
       <aside className="app-sidebar">
         <button className="brand-lockup" onClick={() => go("/")}>
           <span className="brand-symbol">
@@ -218,45 +326,107 @@ export function AppShell() {
               </div>
             }
           >
-            <Routes>
-              <Route index element={<HomePage />} />
-              <Route path="works" element={<WorksPage />} />
-              <Route path="works/:workId" element={<WorkPage />} />
-              <Route path="ledger" element={<LedgerPage />} />
-              <Route path="people" element={<PeoplePage />} />
-              <Route path="people/:personId" element={<PersonPage />} />
-              <Route path="reports" element={<Reports />} />
-              <Route path="materials/:groupId" element={<Reports />} />
-              <Route path="review" element={<ReviewPage />} />
-              <Route path="settings" element={<SettingsPage />} />
-              <Route
-                path="*"
-                element={
-                  <div className="empty-panel">
-                    <h2>{t("এই পাতা পাওয়া যায়নি")}</h2>
-                    <button className="primary-button" onClick={() => go("/")}>
-                      {t("খাতায় ফিরুন")}
-                    </button>
-                  </div>
-                }
+            {addKind && !entryPage ? (
+              <Navigate
+                replace
+                to={entryUrl(
+                  base,
+                  { ...options, editId },
+                  `${location.pathname}${location.search}`,
+                )}
               />
-            </Routes>
+            ) : entity === "contract" && !entryPage ? (
+              <Navigate
+                replace
+                to={contractUrl(
+                  base,
+                  editId,
+                  options.workId,
+                  options.personId,
+                  `${location.pathname}${location.search}`,
+                )}
+              />
+            ) : (
+              <Routes>
+                <Route path="entries/new" element={<EntryRoute />} />
+                <Route path="entries/:entryId/edit" element={<EntryRoute />} />
+                <Route path="jobs/new" element={<ContractRoute />} />
+                <Route path="jobs/:jobId/edit" element={<ContractRoute />} />
+                <Route path="jobs/:jobId" element={<JobPage />} />
+                <Route path="jobs" element={<JobsPage />} />
+                <Route path="contracts/new" element={<ContractRoute />} />
+                <Route
+                  path="contracts/:contractId/edit"
+                  element={<ContractRoute />}
+                />
+                <Route index element={<HomePage />} />
+                <Route path="works" element={<WorksPage />} />
+                <Route path="works/:workId" element={<WorkPage />} />
+                <Route path="ledger" element={<LedgerPage />} />
+                <Route path="people" element={<PeoplePage />} />
+                <Route path="people/:personId" element={<PersonPage />} />
+                <Route path="reports" element={<Reports />} />
+                <Route path="materials/:groupId" element={<Reports />} />
+                <Route path="review" element={<ReviewPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+                <Route path="settings/account" element={<AccountPage />} />
+                <Route
+                  path="settings/account/password"
+                  element={<AccountPasswordPage />}
+                />
+                <Route path="settings/removed" element={<RemovedItemsPage />} />
+                <Route
+                  path="*"
+                  element={
+                    <div className="empty-panel">
+                      <h2>{t("এই পাতা পাওয়া যায়নি")}</h2>
+                      <button
+                        className="primary-button"
+                        onClick={() => go("/")}
+                      >
+                        {t("খাতায় ফিরুন")}
+                      </button>
+                    </div>
+                  }
+                />
+              </Routes>
+            )}
           </Suspense>
         </main>
       </div>
       <nav className="mobile-bottom-nav" aria-label={t("প্রধান মেনু")}>
         {[nav[0], nav[1]].map((item) => (
-          <NotebookNavLink key={item.to} {...item} base={base} />
+          <NotebookNavLink
+            key={item.to}
+            {...item}
+            label={item.to === "/works" ? "খাতা" : item.label}
+            base={base}
+          />
         ))}
         <button
           className="mobile-add"
           onClick={quick}
           aria-label={t("হিসাব লিখি")}
         >
-          <PlusIcon size={27} weight="bold" />
+          <span className="mobile-add-icon">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M12 5v14M5 12h14"
+                stroke="currentColor"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </span>
+          <span>{t("লিখি")}</span>
         </button>
         {[nav[2], nav[3]].map((item) => (
-          <NotebookNavLink key={item.to} {...item} base={base} />
+          <NotebookNavLink
+            key={item.to}
+            {...item}
+            label={item.to === "/ledger" ? "ইতিহাস" : "মানুষ"}
+            base={base}
+          />
         ))}
       </nav>
       {pwa.needRefresh[0] && !formOpen ? (
@@ -271,32 +441,7 @@ export function AppShell() {
       ) : null}
       {params.get("_quick") === "1" ? <QuickActionsSheet /> : null}
       <Suspense fallback={null}>
-        {addKind ? (
-          editId ? (
-            <EntrySheet
-              key={editId}
-              ledger={ledger}
-              mode={mode}
-              editEntryId={editId}
-              onClose={close}
-              onSave={async (next, attachments) =>
-                save(
-                  next,
-                  attachments?.files.map((file) => ({
-                    ...file,
-                    entryId: attachments.entryId,
-                  })),
-                )
-              }
-            />
-          ) : (
-            <QuickEntrySheet
-              key={`${addKind}:${options.workId}:${options.personId}:${options.costType}:${options.account}`}
-              options={options}
-            />
-          )
-        ) : null}
-        {entity ? (
+        {entity && entity !== "contract" ? (
           <EntitySheet
             key={`${entity}:${editId}`}
             kind={entity}

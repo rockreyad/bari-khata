@@ -1,0 +1,120 @@
+.confirmation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 310;
+  background: #0a101963;
+  backdrop-filter: blur(7px);
+}
+.confirmation-dialog {
+  position: fixed;
+  z-index: 311;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(370px, calc(100vw - 40px));
+  max-height: min(720px, calc(100dvh - 56px));
+  overflow: auto;
+  padding: 26px 23px 20px;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 24px 90px #00000038;
+}
+.confirmation-symbol {
+  display: grid;
+  place-items: center;
+  height: 48px;
+  width: 48px;
+  margin-bottom: 17px;
+  color: #d85656;
+  border-radius: 17px;
+  background: color-mix(in srgb, #d85656 12%, var(--surface));
+}
+.confirmation-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+.confirmation-copy {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.confirmation-type {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.confirmation-type input {
+  min-width: 0;
+  width: 100%;
+  height: 49px;
+  padding: 11px 13px;
+  background: var(--surface-muted);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  outline: 0;
+  font: inherit;
+}
+.confirmation-type input:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.confirmation-type strong {
+  font-weight: 750;
+  color: var(--text);
+}
+.confirmation-subject {
+  margin: 15px 0 0;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.confirmation-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 24px;
+}
+.confirmation-actions button {
+  min-height: 46px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--text);
+  background: var(--surface-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+.confirmation-actions .confirmation-submit {
+  border-color: transparent;
+  color: var(--primary-ink);
+  background: var(--accent);
+}
+.confirmation-dialog.is-danger .confirmation-submit {
+  background: #cf4149;
+  color: #fff;
+}
+.confirmation-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.confirmation-actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.confirmation-error {
+  margin: 14px 0 0;
+  color: #d85656;
+  font-size: 13px;
+  line-height: 1.7;
+}

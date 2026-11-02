@@ -1,0 +1,238 @@
+.contract-section {
+  display: grid;
+  gap: 13px;
+}
+.contract-section > h2 {
+  margin: 0 3px 2px;
+  font-size: 18px;
+  font-weight: 650;
+}
+.contract-card {
+  padding: 23px;
+  border: 1px solid var(--line);
+  border-radius: 23px;
+  background: var(--surface-gradient, var(--surface));
+  min-width: 0;
+}
+.contract-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.contract-card > header > div {
+  min-width: 0;
+}
+.contract-card h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.contract-card .icon-button {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  background: var(--surface-muted);
+}
+.job-detail-total {
+  display: grid;
+  gap: 6px;
+}
+.job-detail-total > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.job-detail-total > strong {
+  color: var(--text);
+  font-size: clamp(29px, 5vw, 38px);
+  letter-spacing: -0.035em;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.job-detail-money {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 32px;
+  margin: 21px 0 18px;
+}
+.job-detail-money > div {
+  min-width: 0;
+  flex: 1 1 100px;
+}
+.job-detail-money dt {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+.job-detail-money dd {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.job-extra-paid dd {
+  color: var(--accent);
+}
+.contract-card > .balance-progress {
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 0;
+}
+.contract-agreed-date {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 19px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.job-refund-note,
+.job-rate-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 13px 0 0;
+}
+.job-refund-note strong {
+  color: var(--text);
+  font-weight: 550;
+}
+.job-detail-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.8;
+  margin: 16px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.contract-history {
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.contract-history.is-open {
+  margin: 0;
+  border: 0;
+}
+.contract-history > summary {
+  padding-top: 15px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+}
+.contract-history > summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  vertical-align: middle;
+}
+.contract-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.contract-history > summary + .contract-history-list {
+  margin-top: 12px;
+}
+.contract-history-list > li {
+  position: relative;
+  padding: 19px 0 19px 17px;
+  border-left: 2px solid var(--line);
+}
+.contract-history-list > li::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: 23px;
+  height: 8px;
+  width: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+}
+.contract-history-list > li:last-child {
+  padding-bottom: 5px;
+}
+.contract-history-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 14px;
+}
+.contract-history-heading strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.contract-history time {
+  font-size: 11px;
+  color: var(--muted);
+}
+.contract-history-amount {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 10px;
+  font-size: 17px;
+}
+.contract-history-amount > span,
+.contract-history-amount > svg {
+  color: var(--muted);
+}
+.contract-history-fields {
+  display: grid;
+  gap: 9px;
+  margin: 13px 0 0;
+  font-size: 12px;
+}
+.contract-history-fields > div {
+  display: grid;
+  grid-template-columns: minmax(85px, 0.8fr) minmax(0, 1.6fr);
+  gap: 12px;
+}
+.contract-history-fields dt {
+  color: var(--muted);
+}
+.contract-history-fields dd {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.job-before-value {
+  color: var(--muted);
+}
+.contract-history-reason {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 12px 0 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.job-history-empty {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+  padding: 20px 0;
+}
+@media (max-width: 600px) {
+  .contract-card {
+    padding: 20px;
+    border-radius: 21px;
+  }
+  .contract-history-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .contract-history-fields > div {
+    grid-template-columns: minmax(80px, 0.8fr) minmax(0, 1.4fr);
+    gap: 8px;
+  }
+}

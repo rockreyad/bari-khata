@@ -317,3 +317,97 @@ describe("one row for an immediate purchase and its cash event", () => {
     expect(compactHistory([{ ...bill, voided: true }, cash])).toHaveLength(2);
   });
 });
+
+it("keeps a driver's full transport history consistent with its effective account without rewriting records", () => {
+  const ledger = LedgerSchema.parse({
+    works: [
+      { id: "door", name: "দরজা" },
+      { id: "other-work", name: "অন্য কাজ" },
+    ],
+    people: [{ id: "driver", name: "রনি", kind: "driver" }],
+    entries: [
+      {
+        id: "trip",
+        kind: "expense",
+        account: "materials",
+        personId: "driver",
+        lines: [
+          {
+            id: "t",
+            workId: "door",
+            label: "পুরোনো ভ্যানের বিল",
+            costType: "transport",
+            amount: 100000,
+          },
+        ],
+      },
+      {
+        id: "old-paid",
+        kind: "payment",
+        account: "materials",
+        personId: "driver",
+        allocations: [{ workId: "door", amount: 50000 }],
+        paymentParts: [{ amount: 50000 }],
+      },
+      {
+        id: "new-paid",
+        kind: "payment",
+        account: "other",
+        personId: "driver",
+        allocations: [{ workId: "door", amount: 50000 }],
+        paymentParts: [{ amount: 50000 }],
+      },
+      {
+        id: "old-cancelled-trip",
+        kind: "expense",
+        account: "materials",
+        personId: "driver",
+        voided: true,
+        lines: [
+          {
+            id: "c",
+            workId: "door",
+            label: "বাতিল ভ্যানের বিল",
+            costType: "transport",
+            amount: 10000,
+          },
+        ],
+      },
+      {
+        id: "material",
+        kind: "expense",
+        account: "materials",
+        personId: "driver",
+        lines: [
+          {
+            id: "m",
+            workId: "other-work",
+            costType: "material",
+            amount: 20000,
+          },
+        ],
+      },
+    ],
+  });
+  const before = structuredClone(ledger);
+  expect(
+    filterHistory(ledger, {
+      personId: "driver",
+      account: "other",
+      workId: "door",
+    }).map((entry) => entry.id),
+  ).toEqual(["trip", "old-paid", "new-paid"]);
+  expect(
+    filterHistory(ledger, { personId: "driver", account: "materials" }).map(
+      (entry) => entry.id,
+    ),
+  ).toEqual(["material"]);
+  expect(
+    filterHistory(ledger, {
+      personId: "driver",
+      account: "other",
+      includeVoided: true,
+    }).map((entry) => entry.id),
+  ).toEqual(["trip", "old-paid", "new-paid", "old-cancelled-trip"]);
+  expect(ledger).toEqual(before);
+});

@@ -13,11 +13,13 @@ import { useLanguageContext } from "../../context/LanguageProvider";
 export function QuickActionsSheet() {
   const { add, entity, close, ledger } = useNotebook();
   const { t, formatDigits } = useLanguageContext();
-  const shortcuts = ledger.works.filter((work) => work.quickActions?.length);
+  const shortcuts = ledger.works.filter(
+    (work) => !work.archivedAt && work.quickActions?.length,
+  );
   const actionNames = {
     expense: "খরচ লিখি",
     payment: "টাকা দিলাম",
-    labour: "মজুরির বিল",
+    labour: "মিস্ত্রির টাকা",
     transport: "আনার খরচ",
   };
   return (
@@ -44,7 +46,10 @@ export function QuickActionsSheet() {
                             !work.quickActions!.includes("expense") &&
                             !work.quickActions!.includes("transport"));
                         add({
-                          kind: action === "payment" ? "payment" : "expense",
+                          kind:
+                            labour || action === "payment"
+                              ? "payment"
+                              : "expense",
                           workId: work.id,
                           account: labour
                             ? "labour"

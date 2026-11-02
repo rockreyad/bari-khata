@@ -6,6 +6,9 @@ import {
 import { z } from "zod";
 import { AUTH_STORAGE_KEY, lockAccount } from "./authSession";
 import type { Ledger } from "../domain/model";
+import { preservesRemovalHistory } from "../domain/entityDeletion";
+import { preservesContractHistory } from "../domain/contracts";
+import { preservesWorkHistory } from "../domain/workActivity";
 import {
   getActiveOwner,
   receiptKey,
@@ -208,6 +211,14 @@ export async function synchronizeWorkspace(
       }
       if (cloud.document) {
         const document = validateLedger(cloud.document);
+        if (
+          !preservesContractHistory(row.ledger, document) ||
+          !preservesWorkHistory(row.ledger, document) ||
+          !preservesRemovalHistory(row.ledger, document)
+        ) {
+          await recordConflict(repo, transport, cloud);
+          return { status: "conflict" };
+        }
         await repo.database.transaction(
           "rw",
           repo.database.workspaces,
@@ -294,6 +305,14 @@ export async function synchronizeWorkspace(
     if (!confirmed.document || confirmed.document.isDemo)
       throw new Error("invalid_cloud_document");
     const document = validateLedger(confirmed.document);
+    if (
+      !preservesContractHistory(latest.ledger, document) ||
+      !preservesWorkHistory(latest.ledger, document) ||
+      !preservesRemovalHistory(latest.ledger, document)
+    ) {
+      await recordConflict(repo, transport, confirmed);
+      return { status: "conflict" };
+    }
     const generation = latest.generation;
     await repo.database.transaction(
       "rw",

@@ -1,0 +1,232 @@
+.account-page {
+  max-width: 640px;
+  margin-inline: auto;
+}
+.account-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.account-heading h1 {
+  margin: 0;
+  font-size: clamp(23px, 4vw, 30px);
+  font-weight: 650;
+  line-height: 1.5;
+}
+.account-back {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--surface);
+  color: var(--text);
+}
+.account-identity {
+  display: flex;
+  gap: 17px;
+  align-items: center;
+  padding: 25px;
+  border: 1px solid var(--line);
+  border-radius: 25px;
+  background: linear-gradient(125deg, var(--accent-soft), var(--surface) 85%);
+}
+.account-avatar {
+  width: 66px;
+  height: 66px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 23px;
+  color: var(--accent-strong);
+  background: var(--surface);
+  box-shadow: 0 5px 20px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.account-identity > div {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.account-identity small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.account-identity strong {
+  font-size: clamp(16px, 3vw, 21px);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.account-login-method {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 11px;
+}
+.account-section h2 {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 550;
+  margin: 0 4px 10px;
+}
+.account-group {
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.account-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 18px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  text-align: left;
+  min-height: 82px;
+}
+.account-row + .account-row {
+  border-top: 1px solid var(--line);
+}
+.account-row > span:nth-child(2) {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.account-row strong {
+  font-weight: 550;
+  font-size: 15px;
+}
+.account-row small {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.account-row > svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.account-row-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  flex-shrink: 0;
+}
+.account-info {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 19px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.account-info > svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.account-info p {
+  margin: 0;
+}
+.account-signout {
+  min-height: 50px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 18px;
+  font-size: 14px;
+  font-weight: 550;
+}
+.account-signout > svg:last-child {
+  margin-left: auto;
+  color: var(--muted);
+}
+.account-danger-zone {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-top: 1px solid var(--line);
+}
+.account-danger-zone h2 {
+  font-size: 14px;
+  font-weight: 550;
+  margin: 0 0 6px;
+}
+.account-danger-zone p,
+.account-deletion-note {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+  margin: 0;
+}
+.account-delete-open {
+  justify-self: start;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 13px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--danger, #b45050) 30%, var(--line));
+  color: var(--danger, #b45050);
+  background: color-mix(in srgb, var(--danger, #b45050) 5%, var(--surface));
+  font-size: 12px;
+}
+.account-error {
+  color: var(--danger, #b45050);
+  font-size: 13px;
+  line-height: 1.8;
+  margin: 0;
+}
+.account-pending {
+  padding: 12px;
+  background: var(--surface-muted);
+  border-radius: 12px;
+}
+.account-page button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.account-page button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.account-password-page .settings-password {
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.account-password-page .settings-password-form {
+  padding: 22px;
+}
+@media (max-width: 500px) {
+  .account-identity {
+    padding: 20px 18px;
+    gap: 13px;
+  }
+  .account-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 18px;
+  }
+  .account-row {
+    padding: 16px;
+  }
+  .account-password-page .settings-password-form {
+    padding: 18px;
+  }
+}

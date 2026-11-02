@@ -16,6 +16,14 @@ describe("embedded money calculator", () => {
       value: "300",
     });
     expect(evaluateMoneyExpression("-(5-10)+2").value).toBe("7");
+    expect(evaluateMoneyExpression("৳১,২৩,৪৫৬.৭৮ + ৳1,234,567.22")).toEqual({
+      poisha: 135802400,
+      value: "1358024",
+    });
+    expect(evaluateMoneyExpression(" 162 + ( 93,000.50 / 2 ) ")).toEqual({
+      poisha: 4666225,
+      value: "46662.25",
+    });
   });
   it("keeps decimal arithmetic exact until final poisha rounding", () => {
     expect(evaluateMoneyExpression("0.1 + 0.2")).toEqual({
@@ -51,6 +59,16 @@ describe("embedded money calculator", () => {
       "Math.max(1,2)",
       "alert(1)",
       "1e8",
+      "1 2",
+      "1 .5",
+      "1. 5",
+      "1,5",
+      "১,৫ + ১০",
+      "1,,234",
+      "12,34",
+      "1৳2",
+      "৳৳100",
+      "100 + ৳",
     ]) {
       expect(() => evaluateMoneyExpression(expression)).toThrow(
         CalculatorError,

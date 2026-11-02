@@ -64,3 +64,47 @@ describe("material suggestions", () => {
     expect(materialItems(ledger).map((item) => item.name)).toEqual(["দরজা"]);
   });
 });
+
+it("matches a legacy material's Bengali digits to English input without rewriting its original name", () => {
+  const item = ItemSchema.parse({
+    id: "legacy-16",
+    name: "Rod ১৬ mm",
+    materialGroupId: "rod",
+    brand: "BSRM",
+    usage: "Door ২",
+    unit: "kg",
+  });
+  expect(materialSuggestion([item], "Rod 16 mm", {})).toMatchObject({
+    label: "Rod 16 mm",
+    brand: "BSRM",
+    usage: "Door ২",
+    groupId: "rod",
+  });
+  expect(item.name).toBe("Rod ১৬ mm");
+  expect(
+    materialSuggestion(
+      [ItemSchema.parse({ ...item, name: "Rod 16 mm" })],
+      "Rod ১৬ mm",
+      {},
+    ),
+  ).toMatchObject({ label: "Rod ১৬ mm", brand: "BSRM" });
+});
+it("does not select a brand when digit-equivalent legacy names have genuinely different variants", () => {
+  const items = [
+    ItemSchema.parse({
+      id: "a",
+      name: "Rod ১৬ mm",
+      materialGroupId: "rod",
+      brand: "BSRM",
+    }),
+    ItemSchema.parse({
+      id: "b",
+      name: "Rod 16 mm",
+      materialGroupId: "rod",
+      brand: "AKS",
+    }),
+  ];
+  expect(materialSuggestion(items, "Rod 16 mm", {})).toEqual({
+    label: "Rod 16 mm",
+  });
+});

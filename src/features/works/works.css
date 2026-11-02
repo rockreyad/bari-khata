@@ -17,6 +17,7 @@
 .work-overview-total > div {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 .work-overview-total span {
   color: var(--muted);
@@ -27,6 +28,7 @@
   line-height: 1.35;
   font-weight: 650;
   letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
 }
 .work-chart-toggle {
   width: 44px;
@@ -42,58 +44,32 @@
   background: var(--accent);
   color: var(--primary-ink);
 }
-.work-paid-strip {
+.work-known-due,
+.notebook-card-due {
   display: flex;
-  gap: 12px;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+.work-known-due {
   padding: 17px 24px;
 }
-.work-paid-strip > span {
-  color: var(--muted);
-  font-size: 13px;
-}
-.work-paid-strip > strong {
-  font-size: 20px;
-  font-weight: 600;
-}
-.work-balance-disclosure {
-  border-top: 1px solid var(--line);
-}
-.work-balance-disclosure > summary {
-  list-style: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  padding: 14px 24px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.work-balance-disclosure > summary::-webkit-details-marker {
-  display: none;
-}
-.work-balance-disclosure[open] > summary > svg {
-  transform: rotate(180deg);
-}
-.work-overview-balances {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 0;
-  padding: 0 24px 20px;
-  gap: 16px;
-}
-.work-overview-balances > div {
-  display: grid;
-  gap: 5px;
-}
-.work-overview-balances dt {
-  color: var(--muted);
-  font-size: 12px;
-}
-.work-overview-balances dd {
-  margin: 0;
+.work-known-due > strong {
+  color: var(--text);
   font-size: 19px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.notebook-card-due {
+  padding-top: 12px;
+  font-size: 11px;
+}
+.notebook-card-due > strong {
+  color: var(--text);
+  font-size: 15px;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -119,13 +95,359 @@
   .work-overview-total {
     padding: 21px 20px;
   }
-  .work-paid-strip {
+  .work-known-due {
     padding: 16px 20px;
   }
-  .work-balance-disclosure > summary {
-    padding: 13px 20px;
+}
+
+.notebook-card.notebook-card-v3.work-notebook-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  align-self: stretch;
+  height: 100%;
+  min-height: 244px;
+  padding: 17px;
+  border-radius: 21px;
+  border-color: color-mix(in srgb, var(--work-color) 13%, var(--line));
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--work-color) 5%, var(--surface)),
+    var(--surface) 65%
+  );
+  box-shadow: 0 3px 16px color-mix(in srgb, var(--work-color) 4%, transparent);
+  transform: none;
+}
+.notebook-card.notebook-card-v3.work-notebook-card:hover {
+  border-color: color-mix(in srgb, var(--work-color) 35%, var(--line));
+  transform: none;
+}
+.work-notebook-card.notebook-card-v3 .notebook-card-top {
+  min-height: 40px;
+  flex-wrap: nowrap;
+  margin: 0 0 12px;
+}
+.work-notebook-card.notebook-card-v3 .work-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  color: var(--work-color);
+  background: color-mix(in srgb, var(--work-color) 12%, var(--surface));
+}
+.work-notebook-card.notebook-card-v3 .status-tag {
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: 7px;
+}
+.work-notebook-card.notebook-card-v3 .notebook-card-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-height: 3.1em;
+  margin-bottom: 10px;
+}
+.notebook-card.notebook-card-v3.work-notebook-card .notebook-card-heading > h3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  flex: 1;
+  min-width: 0;
+  height: 3.1em;
+  min-height: 3.1em;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 620;
+  line-height: 1.55;
+  white-space: normal;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.work-notebook-card .notebook-card-arrow {
+  color: color-mix(in srgb, var(--work-color) 70%, var(--muted));
+  flex: none;
+  margin-top: 4px;
+}
+.work-notebook-card.notebook-card-v3 .notebook-card-total {
+  margin: 0 0 8px;
+  gap: 3px;
+}
+.work-notebook-card.notebook-card-v3 .notebook-card-total > strong {
+  font-size: 25px;
+  line-height: 1.4;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.work-notebook-card .notebook-card-balance {
+  min-height: 24px;
+  flex-shrink: 0;
+}
+.work-notebook-card.notebook-card-v3 .notebook-card-due {
+  min-height: 22px;
+  border: 0;
+  padding: 0;
+  gap: 8px;
+  font-size: 11px;
+}
+.work-notebook-card.notebook-card-v3 .notebook-card-due > strong {
+  font-size: 13px;
+  color: var(--warning);
+}
+.works-directory {
+  gap: 20px;
+}
+.works-directory .works-directory-heading {
+  align-items: center;
+}
+.works-directory-heading h1 {
+  letter-spacing: -0.03em;
+}
+.works-directory-heading > .primary-button {
+  min-height: 43px;
+  padding: 10px 15px;
+  border-radius: 14px;
+  font-size: 13px;
+}
+.works-directory-tools {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+.works-directory .works-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 50px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--muted);
+}
+.works-directory .works-search:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.works-directory .works-search > svg {
+  flex: none;
+}
+.works-directory .works-search > input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  box-shadow: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 450;
+}
+.works-directory .works-search > button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  min-height: 44px;
+  padding: 0;
+  color: var(--muted);
+}
+.works-directory .works-filter-rail {
+  background: transparent;
+  border: 0;
+}
+.works-status-filters {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-padding-inline: 40px;
+  overscroll-behavior-inline: contain;
+  padding: 3px 1px;
+}
+.works-status-filters::-webkit-scrollbar {
+  display: none;
+}
+.works-status-filters > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: 6px;
+  min-height: 44px;
+  padding: 9px 12px;
+  border-radius: 13px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.works-status-filters > button.selected {
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+.works-status-filters small {
+  color: inherit;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+.works-directory .works-directory-grid {
+  gap: 15px;
+}
+.works-directory .works-directory-empty {
+  display: grid;
+  justify-items: center;
+  gap: 13px;
+  padding: 42px 20px;
+  color: var(--muted);
+}
+.works-directory-empty h3 {
+  font-size: 16px;
+  color: var(--text);
+}
+@media (max-width: 900px) {
+  .works-directory-tools {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
-  .work-overview-balances {
-    padding: 0 20px 18px;
+  .works-status-filters > button {
+    flex-grow: 1;
   }
+}
+.work-tabs-rail {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: var(--surface-muted);
+  isolation: isolate;
+}
+.work-page-v3 .work-tabs-v3.work-tabs-scroll {
+  position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  padding: 5px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-inline: contain;
+  scroll-padding-inline: 40px;
+  -webkit-overflow-scrolling: touch;
+}
+.work-page-v3 .work-tabs-v3.work-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+.work-page-v3 .work-tabs-v3.work-tabs-scroll > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: 1 0 auto;
+  min-width: max-content;
+  min-height: 43px;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--muted);
+  transition:
+    color 0.18s,
+    background 0.18s,
+    box-shadow 0.18s;
+}
+.work-page-v3 .work-tabs-v3.work-tabs-scroll > button.selected {
+  color: var(--accent);
+  font-weight: 650;
+  border-color: color-mix(in srgb, var(--accent) 13%, var(--line));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 10%, var(--surface)),
+    var(--surface)
+  );
+  box-shadow: 0 2px 7px color-mix(in srgb, var(--accent) 9%, transparent);
+}
+.work-page-v3 .work-tabs-v3.work-tabs-scroll > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+.work-tabs-rail::before,
+.work-tabs-rail::after {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  width: 44px;
+  z-index: 1;
+  content: "";
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.work-tabs-rail::before {
+  left: 1px;
+  border-radius: 16px 0 0 16px;
+  background: linear-gradient(90deg, var(--surface-muted) 45%, transparent);
+}
+.work-tabs-rail::after {
+  right: 1px;
+  border-radius: 0 16px 16px 0;
+  background: linear-gradient(270deg, var(--surface-muted) 45%, transparent);
+}
+.work-tabs-rail.can-scroll-left::before,
+.work-tabs-rail.can-scroll-right::after {
+  opacity: 1;
+}
+.work-tabs-scroll-control {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 32px;
+  padding: 0;
+  border-radius: 9px;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 2px 7px color-mix(in srgb, var(--text) 7%, transparent);
+  transform: translateY(-50%);
+}
+.work-tabs-scroll-control.is-left {
+  left: 6px;
+}
+.work-tabs-scroll-control.is-right {
+  right: 6px;
+}
+@media (max-width: 600px) {
+  .notebook-grid .notebook-card.notebook-card-v3.work-notebook-card {
+    padding: 15px;
+  }
+  .notebook-grid
+    .work-notebook-card.notebook-card-v3
+    .notebook-card-total
+    > strong {
+    font-size: clamp(19px, 4.2vw, 24px);
+  }
+}
+
+.work-page-v3 .work-tabs-scroll > button > svg,
+.work-page-v3 .work-tabs-scroll > button > span {
+  flex: none;
 }

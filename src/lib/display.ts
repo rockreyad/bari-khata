@@ -1,3 +1,4 @@
+import { poishaDecimal } from "../domain/money";
 import type { CostType, Entry, Ledger } from "../domain/model";
 
 export const costNames: Record<CostType, string> = {
@@ -98,7 +99,7 @@ export function buildCsv(
         .map((work) => work!.name)
         .join(" / "),
       ledger.people.find((person) => person.id === entry.personId)?.name ?? "",
-      String(entryAmount(entry, workId) / 100),
+      poishaDecimal(entryAmount(entry, workId)),
       entry.note,
       t(entry.voided ? "হ্যাঁ" : "না"),
     ]);

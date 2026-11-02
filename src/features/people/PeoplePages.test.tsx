@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { LedgerSchema, type Ledger } from "../../domain/model";
@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   ledger: null as unknown,
   go: vi.fn(),
   add: vi.fn(),
+  entity: vi.fn(),
 }));
 vi.mock("../../app/NotebookProvider", () => ({
   useNotebook: () => ({
@@ -16,7 +17,7 @@ vi.mock("../../app/NotebookProvider", () => ({
     mode: "demo",
     go: state.go,
     add: state.add,
-    entity: vi.fn(),
+    entity: state.entity,
     detail: vi.fn(),
     notify: vi.fn(),
   }),
@@ -35,6 +36,7 @@ afterEach(() => {
   cleanup();
   state.go.mockClear();
   state.add.mockClear();
+  state.entity.mockClear();
 });
 function renderPage(path = "/people/worker") {
   return render(
@@ -87,41 +89,57 @@ function fixture() {
   });
 }
 describe("minimal people pages", () => {
-  it("opens an earned wage bill from a worker with the selected work context and never offers it for a shop", async () => {
+  it("opens all contractor work from the people page even before a job exists", () => {
+    state.ledger = fixture();
+    renderPage("/people");
+    fireEvent.click(screen.getByRole("button", { name: "মিস্ত্রির সব কাজ" }));
+    expect(state.go).toHaveBeenLastCalledWith("/jobs");
+  });
+
+  it("offers one contextual worker payment action and keeps duplicate wage bills out of the menu", async () => {
     state.ledger = fixture();
     const user = userEvent.setup();
     for (const workId of [undefined, "work"]) {
       const view = renderPage(
         `/people/worker${workId ? `?work=${workId}` : ""}`,
       );
-      screen.getByRole("button", { name: "আরও" }).focus();
-      await user.keyboard("{Enter}");
-      await user.click(
-        await screen.findByRole("menuitem", { name: "মজুরির বিল লিখি" }),
+      expect(screen.getAllByRole("button", { name: "টাকা দিই" })).toHaveLength(
+        1,
       );
+      await user.click(screen.getByRole("button", { name: "টাকা দিই" }));
       expect(state.add).toHaveBeenLastCalledWith({
-        kind: "wage",
+        kind: "payment",
         personId: "worker",
         workId,
         account: "labour",
-        costType: "labour",
       });
+      screen.getByRole("button", { name: "আরও" }).focus();
+      await user.keyboard("{Enter}");
+      expect(await screen.findByRole("menu")).toBeTruthy();
+      expect(
+        screen.queryByRole("menuitem", { name: "মজুরির চুক্তি রাখি" }),
+      ).toBeNull();
+      expect(
+        screen.queryByRole("menuitem", { name: "মজুরির বিল লিখি" }),
+      ).toBeNull();
+      await user.keyboard("{Escape}");
+      await user.click(screen.getByRole("button", { name: "কাজ যোগ করি" }));
+      expect(state.entity).toHaveBeenLastCalledWith(
+        "contract",
+        undefined,
+        workId,
+        "worker",
+      );
       view.unmount();
     }
-    renderPage("/people/shop");
-    screen.getByRole("button", { name: "আরও" }).focus();
-    await user.keyboard("{Enter}");
-    expect(await screen.findByRole("menu")).toBeTruthy();
-    expect(
-      screen.queryByRole("menuitem", { name: "মজুরির বিল লিখি" }),
-    ).toBeNull();
     expect(state.add).toHaveBeenCalledTimes(2);
+    expect(state.entity).toHaveBeenCalledTimes(2);
   });
   it("shows simple contact rows without payment, return, edit or date controls on every contact", () => {
     state.ledger = fixture();
     const { container } = renderPage("/people");
     expect(container.querySelectorAll(".contact-row")).toHaveLength(2);
-    expect(screen.queryByRole("button", { name: "টাকা দিলাম" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "টাকা দিই" })).toBeNull();
     expect(screen.queryByRole("button", { name: "মাল ফেরত লিখি" })).toBeNull();
     expect(container.textContent).not.toContain("2026-11");
   });
@@ -147,7 +165,7 @@ describe("minimal people pages", () => {
     renderPage("/people/shop");
     const purchase = screen.getByRole("button", { name: "মাল কিনলাম" });
     expect(purchase.className).toBe("primary-button");
-    expect(screen.getByRole("button", { name: "টাকা দিলাম" }).className).toBe(
+    expect(screen.getByRole("button", { name: "টাকা দিই" }).className).toBe(
       "secondary-button",
     );
     expect(screen.queryByRole("button", { name: "মাল ফেরত লিখি" })).toBeNull();
@@ -159,13 +177,23 @@ describe("minimal people pages", () => {
       account: "materials",
       costType: "material",
     });
+    expect(screen.getAllByRole("button", { name: "টাকা দিই" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "বাকি মেটাই" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "অগ্রিম" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "টাকা দিই" }));
+    expect(state.add).toHaveBeenLastCalledWith({
+      kind: "payment",
+      personId: "shop",
+      workId: undefined,
+      account: "materials",
+    });
   });
   it("respects a contact that has intentionally hidden all quick actions", () => {
     const ledger = fixture();
     ledger.people[0].quickActions = [];
     state.ledger = ledger;
     renderPage();
-    expect(screen.queryByRole("button", { name: "টাকা দিলাম" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "টাকা দিই" })).toBeNull();
   });
   it("does not inflate a worker balance with a cancelled record while routing full history", async () => {
     const ledger = fixture();
@@ -190,14 +218,14 @@ describe("minimal people pages", () => {
   it("makes a worker's old material account read-only instead of offering a misleading wage payment there", () => {
     state.ledger = fixture();
     renderPage("/people/worker?account=materials");
-    expect(screen.queryByRole("button", { name: "টাকা দিলাম" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "টাকা দিই" })).toBeNull();
     expect(
       screen.getByRole("button", { name: "মূল হিসাবে ফিরি" }),
     ).toBeTruthy();
   });
 });
 
-it("puts a shop's net purchases ahead of payments and shows only its own bills in the monthly chart", () => {
+it("puts cash paid first for a shop and its monthly chart while preserving material charges and known due", () => {
   const ledger = fixture();
   ledger.entries.push(
     ...LedgerSchema.parse({
@@ -225,17 +253,30 @@ it("puts a shop's net purchases ahead of payments and shows only its own bills i
   state.ledger = ledger;
   const { container } = renderPage("/people/shop");
   const hero = container.querySelector(".contact-summary-hero")!;
-  expect(hero.textContent).toContain("মোট কেনাকাটা");
-  expect(hero.textContent).toContain("৳93000");
+  expect(hero.textContent).toContain("মোট টাকা দিয়েছি");
+  expect(hero.textContent).toContain("৳30000");
+  expect(
+    container.querySelector(".contact-summary-metrics")?.textContent,
+  ).toContain("মালের দাম৳93000");
   expect(
     container.querySelector(".contact-summary-metrics")?.textContent,
   ).toContain("৳63000");
   expect(screen.queryByText("মজুরির চুক্তি")).toBeNull();
-  expect(screen.getByRole("region", { name: "মাসে মাসে খরচ" })).toBeTruthy();
+  const summary = container.querySelector<HTMLElement>(
+    ".contact-summary-card",
+  )!;
+  const chart = screen.getByRole("region", { name: "মাসের হিসাব" });
+  expect(summary.contains(chart)).toBe(true);
+  expect(chart.querySelector("h2")).toBeNull();
+  expect(chart.textContent).not.toContain("৳30000");
+  fireEvent.click(
+    [...chart.querySelectorAll(".spending-chart-months button")].at(-1)!,
+  );
+  expect(chart.textContent).toContain("৳30000");
   expect(screen.queryByText("মিস্ত্রির খরচ")).toBeNull();
 });
 
-it("charts a driver's older transport account using the same scoped bills as the profile totals", () => {
+it("charts a driver's older transport payment using the same scoped cash as the profile total", () => {
   state.ledger = LedgerSchema.parse({
     works: [{ id: "work", name: "দরজা" }],
     people: [{ id: "driver", name: "রনি", kind: "driver" }],
@@ -256,9 +297,76 @@ it("charts a driver's older transport account using the same scoped bills as the
           },
         ],
       },
+      {
+        id: "legacy-trip-paid",
+        kind: "payment",
+        personId: "driver",
+        account: "materials",
+        relatedEntryId: "legacy-trip",
+        date: "2026-11-01",
+        allocations: [{ workId: "work", amount: 50000 }],
+        paymentParts: [{ amount: 50000 }],
+      },
     ],
   });
   renderPage("/people/driver");
-  const chart = screen.getByRole("region", { name: "মাসে মাসে খরচ" });
-  expect(chart.querySelector("h2")?.textContent).toBe("৳500");
+  const chart = screen.getByRole("region", { name: "মাসের হিসাব" });
+  expect(chart.textContent).not.toContain("৳500");
+  fireEvent.click(
+    [...chart.querySelectorAll(".spending-chart-months button")].at(-1)!,
+  );
+  expect(chart.textContent).toContain("৳500");
 });
+
+it.each([
+  ["shop", "materials"],
+  ["worker", "labour"],
+  ["driver", "other"],
+  ["other", "materials"],
+] as const)(
+  "keeps a payment-only %s profile consistent with the people list without upfront zero prices or inferred advances",
+  async (kind, account) => {
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "work", name: "দরজা" }],
+      people: [{ id: "person", name: "Golam", kind }],
+      entries: [
+        {
+          id: "paid",
+          kind: "payment",
+          date: "2026-11-02",
+          personId: "person",
+          account,
+          allocations: [{ workId: "work", amount: 16200 }],
+          paymentParts: [{ amount: 16200 }],
+        },
+      ],
+    });
+    const before = JSON.stringify(ledger);
+    state.ledger = ledger;
+    const list = renderPage("/people");
+    expect(
+      list.container.querySelector(".contact-row-money > strong")?.textContent,
+    ).toBe("৳162");
+    expect(list.container.querySelector(".contact-credit")).toBeNull();
+    expect(list.container.querySelector(".contact-due")).toBeNull();
+    list.unmount();
+    const { container } = renderPage("/people/person");
+    expect(container.querySelector(".contact-summary-hero")?.textContent).toBe(
+      "মোট টাকা দিয়েছি৳162",
+    );
+    expect(container.querySelector(".contact-summary-metrics")).toBeNull();
+    const chart = screen.getByRole("region", { name: "মাসের হিসাব" });
+    expect(chart.querySelector("h2")).toBeNull();
+    expect(chart.textContent).not.toContain("৳162");
+    fireEvent.click(
+      [...chart.querySelectorAll(".spending-chart-months button")].at(-1)!,
+    );
+    expect(chart.textContent).toContain("৳162");
+    const more = container.querySelector("details.contact-reconciliation")!;
+    expect(more.hasAttribute("open")).toBe(false);
+    await userEvent.click(screen.getByText("আরও হিসাব"));
+    expect(more.hasAttribute("open")).toBe(true);
+    expect(more.textContent).toContain("অগ্রিম দিয়েছি৳162");
+    expect(JSON.stringify(ledger)).toBe(before);
+  },
+);
