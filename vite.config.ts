@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { accountPlugin } from "./server/accountPlugin.ts";
+import { mcpPlugin } from "./server/mcpPlugin.js";
 import { phoneOtpPlugin } from "./server/phoneOtpPlugin.ts";
 import { phoneAuthMode } from "./server/phoneOtp.ts";
 
@@ -112,6 +113,7 @@ export default defineConfig(({ mode }) => {
       privateFiles(),
       phoneOtpPlugin(env),
       accountPlugin(env),
+      mcpPlugin(env),
       react(),
       offlineShell(),
     ],

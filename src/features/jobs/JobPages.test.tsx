@@ -878,6 +878,14 @@ it("requires a reason to change status and saves it against the latest job witho
   expect((await screen.findByRole("alert")).textContent).toBe(
     "কেন বদলালেন, ছোট করে লিখুন।",
   );
+  const reason = screen.getByLabelText("কেন বদলালেন");
+  const alert = screen.getByRole("alert");
+  expect(alert.parentElement?.firstElementChild).toBe(alert);
+  expect(document.activeElement).toBe(alert);
+  expect(reason.getAttribute("aria-invalid")).toBe("true");
+  reason.focus();
+  fireEvent.click(screen.getByRole("button", { name: "রাখুন" }));
+  expect(document.activeElement).toBe(alert);
   expect(state.save).not.toHaveBeenCalled();
   state.ledger = saveContractChange(
     ledger,

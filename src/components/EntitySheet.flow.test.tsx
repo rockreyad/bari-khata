@@ -253,10 +253,11 @@ it("updates a used whole-house amount with a reason and records before/after whi
   expect(JSON.stringify(ledger)).toBe(before);
 });
 
-it("rejects changing a used agreement amount without its reason", async () => {
+it("shows and focuses a missing agreement-change reason at the top without losing the edited draft", async () => {
   const ledger = usedHouse();
   const onSave = vi.fn(async (_next: Ledger) => {});
-  mount(
+  const onClose = vi.fn();
+  const view = mount(
     <EntitySheet
       presentation="page"
       kind="contract"
@@ -264,7 +265,7 @@ it("rejects changing a used agreement amount without its reason", async () => {
       ledger={ledger}
       mode="demo"
       onSave={onSave}
-      onClose={vi.fn()}
+      onClose={onClose}
     />,
   );
   await ready();
@@ -275,8 +276,81 @@ it("rejects changing a used agreement amount without its reason", async () => {
   expect((await screen.findByRole("alert")).textContent).toBe(
     "কেন বদলালেন, তা লিখুন।",
   );
+  const alert = screen.getByRole("alert");
+  expect(view.container.querySelector("form")!.firstElementChild).toBe(alert);
+  await waitFor(() => expect(document.activeElement).toBe(alert));
+  await userEvent.click(screen.getByLabelText("কাজের টাকা"));
+  await userEvent.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() =>
+    expect(document.activeElement).toBe(screen.getByRole("alert")),
+  );
   expect(onSave).not.toHaveBeenCalled();
   expect(ledger.contracts[0].total).toBe(60000000);
+  expect((screen.getByLabelText("কাজের টাকা") as HTMLInputElement).value).toBe(
+    "৬৫০০০০",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "ফিরুন" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  expect(storage.drafts.get("entity:contract:house:any")).toMatchObject({
+    total: "650000",
+    contractReason: "",
+  });
+});
+
+it("shows invalid entry money before all fields and preserves the unsaved amount and note after closing", async () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "door", name: "দরজা" }],
+    people: [{ id: "shop", name: "দরজার দোকান", kind: "shop" }],
+    entries: [
+      {
+        id: "bill",
+        kind: "expense",
+        account: "materials",
+        personId: "shop",
+        lines: [{ id: "line", workId: "door", label: "দরজা", amount: 9300000 }],
+      },
+    ],
+  });
+  const onSave = vi.fn(async (_next: Ledger) => {}),
+    onClose = vi.fn();
+  const props = {
+    presentation: "page",
+    ledger,
+    editEntryId: "bill",
+    mode: "demo",
+    onSave,
+    onClose,
+  } as const;
+  const view = mount(<EntrySheet {...props} />);
+  await ready("সংরক্ষণ করুন");
+  fireEvent.change(screen.getByRole("textbox", { name: /^মোট দাম/ }), {
+    target: { value: "0" },
+  });
+  fireEvent.change(screen.getByLabelText("মনে রাখার কথা"), {
+    target: { value: "আমার অসমাপ্ত নোট" },
+  });
+  await userEvent.click(screen.getByRole("button", { name: "সংরক্ষণ করুন" }));
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toBe("প্রতিটি খরচের জন্য সঠিক টাকার পরিমাণ দিন।");
+  expect(view.container.querySelector("form")!.firstElementChild).toBe(alert);
+  await waitFor(() => expect(document.activeElement).toBe(alert));
+  expect(onSave).not.toHaveBeenCalled();
+  expect(ledger.entries[0].lines[0].amount).toBe(9300000);
+  await userEvent.click(screen.getByRole("button", { name: "ফিরুন" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  view.unmount();
+  expect(storage.drafts.get("entry:bill")).toMatchObject({
+    draft: { rows: [{ amount: "0" }], note: "আমার অসমাপ্ত নোট" },
+  });
+  mount(<EntrySheet {...props} />);
+  await ready("সংরক্ষণ করুন");
+  expect(
+    (screen.getByRole("textbox", { name: /^মোট দাম/ }) as HTMLInputElement)
+      .value,
+  ).toBe("০");
+  expect(
+    (screen.getByLabelText("মনে রাখার কথা") as HTMLTextAreaElement).value,
+  ).toBe("আমার অসমাপ্ত নোট");
 });
 
 it("flushes changed agreement amount and reason on immediate unmount before debounce and restores both", async () => {

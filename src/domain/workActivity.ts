@@ -5,7 +5,7 @@ import {
   type Ledger,
   type Work,
   type WorkSnapshot,
-} from "./model";
+} from "./model.js";
 
 export function workChanges(
   before: WorkSnapshot | null,

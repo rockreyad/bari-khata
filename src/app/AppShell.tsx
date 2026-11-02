@@ -91,6 +91,11 @@ const SettingsPage = lazy(() =>
     default: m.SettingsPage,
   })),
 );
+const AssistantSettingsPage = lazy(() =>
+  import("../features/integrations/AssistantSettingsPage").then((m) => ({
+    default: m.AssistantSettingsPage,
+  })),
+);
 function Reports() {
   const { ledger, detail } = useNotebook();
   const { groupId } = useParams();
@@ -369,6 +374,10 @@ export function AppShell() {
                 <Route path="materials/:groupId" element={<Reports />} />
                 <Route path="review" element={<ReviewPage />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route
+                  path="settings/assistants"
+                  element={<AssistantSettingsPage />}
+                />
                 <Route path="settings/account" element={<AccountPage />} />
                 <Route
                   path="settings/account/password"

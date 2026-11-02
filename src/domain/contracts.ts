@@ -6,7 +6,7 @@ import {
   type ContractActivity,
   type ContractSnapshot,
   type Ledger,
-} from "./model";
+} from "./model.js";
 
 export function contractAppliesToWork(
   contract: Pick<Contract, "scope" | "workId">,

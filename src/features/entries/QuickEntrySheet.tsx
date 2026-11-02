@@ -25,6 +25,7 @@ import { EntitySheet } from "../../components/EntitySheet";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { MoneyInput } from "../../components/ui/MoneyInput";
+import { FormError, useFormError } from "../../components/ui/FormError";
 import { personKind, defaultContactAccount } from "../../domain/contacts";
 import { Sheet } from "../../components/Sheet";
 import { EntryFrame } from "../../components/EntryFrame";
@@ -95,7 +96,8 @@ export function QuickEntrySheet({
   const [more, setMore] = useState(false);
   const [creatingWork, setCreatingWork] = useState(false);
   const [files, setFiles] = useState<ReceiptInput[]>([]);
-  const [error, setError] = useState("");
+  const [error, setError, errorNotice] = useFormError();
+  const [invalidField, setInvalidField] = useState("");
   const [saving, setSaving] = useState(false);
   const locked = useRef(false);
   const mounted = useRef(false);
@@ -265,6 +267,7 @@ export function QuickEntrySheet({
     locked.current = true;
     setSaving(true);
     setError("");
+    setInvalidField("");
     try {
       if (!sameOwner()) throw new Error("account_changed");
       await queueDraft({ draft, files });
@@ -299,6 +302,7 @@ export function QuickEntrySheet({
       if (mounted.current && sameOwner()) close();
     } catch (err) {
       const code = err instanceof Error ? err.message : "";
+      if (mounted.current) setInvalidField(code);
       if (mounted.current)
         setError(
           t(
@@ -444,7 +448,9 @@ export function QuickEntrySheet({
             : "বাকি মেটাই"
           : transport
             ? "গাড়িভাড়া দিই"
-            : "মাল কিনলাম";
+            : labour
+              ? "মিস্ত্রির টাকা"
+              : "মাল কিনলাম";
   return (
     <Frame
       title={t(title)}
@@ -472,6 +478,7 @@ export function QuickEntrySheet({
         className="entry-form-v3 entry-page-form"
         onSubmit={submit}
       >
+        <FormError {...errorNotice} id={`${formId}-error`} />
         <fieldset disabled={saving || !ready} className="entry-fields-v3">
           {!cash &&
           !returning &&
@@ -516,6 +523,12 @@ export function QuickEntrySheet({
               {t("কাজের খাতা")}
               <AppSelect
                 aria-label={t("কাজের খাতা")}
+                aria-invalid={Boolean(error) && invalidField === "work"}
+                aria-describedby={
+                  error && invalidField === "work"
+                    ? `${formId}-error`
+                    : undefined
+                }
                 value={draft.workId}
                 onChange={(e) => {
                   if (e.target.value === "__new__") setCreatingWork(true);
@@ -548,6 +561,15 @@ export function QuickEntrySheet({
               )}
               <AppSelect
                 value={draft.personId}
+                aria-invalid={
+                  Boolean(error) &&
+                  ["person", "person_kind"].includes(invalidField)
+                }
+                aria-describedby={
+                  error && ["person", "person_kind"].includes(invalidField)
+                    ? `${formId}-error`
+                    : undefined
+                }
                 onChange={(e) => field("personId", e.target.value)}
               >
                 <option value="">
@@ -816,6 +838,16 @@ export function QuickEntrySheet({
                             : "কী কিনলেন",
                     )}
                     <AppCombobox
+                      aria-invalid={
+                        Boolean(error) &&
+                        invalidField === "label" &&
+                        !r.label.trim()
+                      }
+                      aria-describedby={
+                        error && invalidField === "label" && !r.label.trim()
+                          ? `${formId}-error`
+                          : undefined
+                      }
                       suggestions={
                         labour || transport
                           ? []
@@ -1297,11 +1329,6 @@ export function QuickEntrySheet({
             </section>
           ) : null}
         </fieldset>
-        {error ? (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        ) : null}
       </form>
     </Frame>
   );

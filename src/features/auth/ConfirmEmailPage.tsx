@@ -7,6 +7,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
+import { FormError, useFormError } from "../../components/ui/FormError";
 import { useAuth } from "./AuthProvider";
 import {
   confirmRegistration,
@@ -26,7 +27,7 @@ export function ConfirmEmailPage() {
     "ready" | "busy" | "confirmed" | "invalid"
   >(() => (confirmation ? "ready" : "invalid"));
   const [email, setEmail] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError, errorNotice] = useFormError();
   const generation = useRef(0),
     active = useRef(true),
     inFlight = useRef(false);
@@ -123,6 +124,7 @@ export function ConfirmEmailPage() {
                 : "ইমেইল নিশ্চিত করুন",
           )}
         </h1>
+        <FormError {...errorNotice} message={t(error)} className="auth-error" />
         <p className="auth-description">
           {t(
             confirmed
@@ -132,11 +134,6 @@ export function ConfirmEmailPage() {
                 : "অ্যাকাউন্ট খোলা শেষ করতে নিচের বোতামে চাপুন।",
           )}
         </p>
-        {error ? (
-          <p className="auth-error" role="alert">
-            {t(error)}
-          </p>
-        ) : null}
         {!confirmed && !invalid ? (
           <button
             className="primary-button"

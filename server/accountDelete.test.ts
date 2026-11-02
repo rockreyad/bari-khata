@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createClient } from "@supabase/supabase-js";
 import {
   accountDeleteConfigured,
   createAccountDeleteHandler,
   type AccountDeleteBackend,
   type AccountDeleteConfig,
 } from "./accountDelete";
+vi.mock("@supabase/supabase-js", () => ({ createClient: vi.fn() }));
 
 const owner = "00000000-0000-4000-8000-000000000001";
 const config: AccountDeleteConfig = {
@@ -174,6 +176,70 @@ describe("self-account deletion", () => {
     expect(result.status).toBe(503);
     expect(await result.json()).toEqual({ error: "account_delete_failed" });
     expect(deleteUser).not.toHaveBeenCalled();
+  });
+  it("purges only the verified owner's assistant files before deleting the account", async () => {
+    const cleanupAssistantFiles = vi.fn().mockResolvedValue(undefined);
+    const response = await createAccountDeleteHandler(config, {
+      ...backend,
+      cleanupAssistantFiles,
+    })(request());
+    expect(response.status).toBe(200);
+    expect(cleanupAssistantFiles).toHaveBeenCalledExactlyOnceWith(owner);
+    expect(cleanupAssistantFiles.mock.invocationCallOrder[0]).toBeLessThan(
+      deleteUser.mock.invocationCallOrder[0],
+    );
+  });
+  it("retains the account for retry if assistant staging cleanup fails", async () => {
+    const cleanupAssistantFiles = vi
+      .fn()
+      .mockRejectedValue(new Error("private storage error"));
+    const response = await createAccountDeleteHandler(config, {
+      ...backend,
+      cleanupAssistantFiles,
+    })(request());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "account_delete_failed" });
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+  it("does not invoke either cleanup for an opaque MCP bearer rejected by Auth", async () => {
+    const cleanupAssistantFiles = vi.fn();
+    getUser.mockResolvedValue(null);
+    const token = `bkm_p_${"A".repeat(43)}`;
+    const response = await createAccountDeleteHandler(config, {
+      ...backend,
+      cleanupAssistantFiles,
+    })(request(undefined, { Authorization: `Bearer ${token}` }));
+    expect(response.status).toBe(401);
+    expect(getUser).toHaveBeenCalledExactlyOnceWith(token);
+    expect(listReceipts).not.toHaveBeenCalled();
+    expect(cleanupAssistantFiles).not.toHaveBeenCalled();
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+  it("keeps legacy account deletion available when the assistant staging bucket does not exist", async () => {
+    const storageRemove = vi.fn().mockResolvedValue({ error: null });
+    vi.mocked(createClient).mockReturnValue({
+      auth: {
+        getUser: async () => ({ data: { user: { id: owner } }, error: null }),
+        admin: { deleteUser },
+      },
+      storage: {
+        from: (bucket: string) => ({
+          list: async () =>
+            bucket === "bari-mcp-staging"
+              ? {
+                  data: null,
+                  error: { message: "Bucket not found", statusCode: "404" },
+                }
+              : { data: [], error: null },
+          remove: storageRemove,
+        }),
+      },
+    } as unknown as ReturnType<typeof createClient>);
+    deleteUser.mockResolvedValue({ error: null });
+    const response = await createAccountDeleteHandler(config)(request());
+    expect(response.status).toBe(200);
+    expect(storageRemove).not.toHaveBeenCalled();
+    expect(deleteUser).toHaveBeenCalledExactlyOnceWith(owner);
   });
   it("rejects unsafe storage names before removing any object", async () => {
     listReceipts.mockResolvedValue([

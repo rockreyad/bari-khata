@@ -1,5 +1,5 @@
-import type { Account, Entry, Ledger } from "./model";
-import { personKind } from "./contactKind";
+import type { Account, Entry, Ledger } from "./model.js";
+import { personKind } from "./contactKind.js";
 
 const isCost = (entry: Entry) =>
   entry.kind === "expense" || entry.kind === "expense_credit";

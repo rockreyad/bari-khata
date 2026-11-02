@@ -8,6 +8,7 @@ import {
 import * as Dialog from "@radix-ui/react-dialog";
 import { TrashSimpleIcon } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
+import { FormError, useFormError } from "./FormError";
 import "./confirmation-dialog.css";
 
 export function ConfirmationDialog({
@@ -40,7 +41,7 @@ export function ConfirmationDialog({
   const { t } = useLanguageContext();
   const [typed, setTyped] = useState("");
   const [running, setRunning] = useState(false);
-  const [failure, setFailure] = useState("");
+  const [failure, setFailure, failureNotice] = useFormError();
   const mounted = useRef(true);
   const lock = useRef(false);
   const cancel = useRef<HTMLButtonElement>(null);
@@ -111,6 +112,11 @@ export function ConfirmationDialog({
             </span>
           ) : null}
           <Dialog.Title className="confirmation-title">{title}</Dialog.Title>
+          <FormError
+            {...failureNotice}
+            message={error || failure}
+            className="confirmation-error"
+          />
           {description ? (
             <Dialog.Description className="confirmation-copy">
               {description}
@@ -140,11 +146,6 @@ export function ConfirmationDialog({
                 spellCheck={false}
               />
             </label>
-          ) : null}
-          {error || failure ? (
-            <p className="confirmation-error" role="alert">
-              {error || failure}
-            </p>
           ) : null}
           <div className="confirmation-actions">
             <button

@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { AdaptivePopover } from "./AdaptivePopover";
+import { FormError, useFormError } from "./FormError";
 import {
   ArrowRightIcon,
   BackspaceIcon,
@@ -47,7 +48,7 @@ export function MoneyInput({
   const current = String(value === undefined ? internal : value);
   const [open, setOpen] = useState(false);
   const [expression, setExpression] = useState("");
-  const [showError, setShowError] = useState(false);
+  const [, setError, errorNotice] = useFormError();
   const expressionRef = useRef<HTMLInputElement>(null);
   const labelId = useId();
   let result: ReturnType<typeof evaluateMoneyExpression> | null = null;
@@ -58,7 +59,7 @@ export function MoneyInput({
     error = t(errors[cause instanceof CalculatorError ? cause.code : "syntax"]);
   }
   const append = (text: string) => {
-    setShowError(false);
+    setError("");
     setExpression((previous) =>
       previous.length < 240 ? previous + text : previous,
     );
@@ -66,12 +67,12 @@ export function MoneyInput({
   const calculate = () => {
     if (result) {
       setExpression(result.value);
-      setShowError(false);
-    } else setShowError(true);
+      setError("");
+    } else setError(error);
   };
   const apply = () => {
     if (!result) {
-      setShowError(true);
+      setError(error);
       return;
     }
     setInternal(result.value);
@@ -132,7 +133,7 @@ export function MoneyInput({
           ) {
             event.preventDefault();
             setExpression(normalizeExpression(current));
-            setShowError(false);
+            setError("");
             setOpen(true);
           }
         }}
@@ -143,7 +144,7 @@ export function MoneyInput({
           onOpenChange={(next) => {
             if (next) {
               setExpression(normalizeExpression(current));
-              setShowError(false);
+              setError("");
             }
             setOpen(next);
           }}
@@ -181,6 +182,11 @@ export function MoneyInput({
               <XIcon size={17} />
             </button>
           </div>
+          <FormError
+            {...errorNotice}
+            id={`${labelId}-error`}
+            className="calculator-error"
+          />
           <div className="calculator-display">
             <NumericInput
               ref={expressionRef}
@@ -190,11 +196,15 @@ export function MoneyInput({
               value={expression}
               onChange={(event) => {
                 setExpression(event.target.value.slice(0, 240));
-                setShowError(false);
+                setError("");
               }}
               onKeyDown={expressionKey}
               placeholder={number(0)}
               aria-label={t("ক্যালকুলেটরের হিসাব")}
+              aria-invalid={Boolean(errorNotice.message)}
+              aria-describedby={
+                errorNotice.message ? `${labelId}-error` : undefined
+              }
               autoComplete="off"
               spellCheck={false}
             />
@@ -214,7 +224,7 @@ export function MoneyInput({
               type="button"
               onClick={() => {
                 setExpression("");
-                setShowError(false);
+                setError("");
               }}
             >
               {t("সব মুছি")}
@@ -237,7 +247,7 @@ export function MoneyInput({
               type="button"
               onClick={() => {
                 setExpression((previous) => previous.slice(0, -1));
-                setShowError(false);
+                setError("");
               }}
               aria-label={t("শেষ সংখ্যাটি মুছি")}
             >
@@ -273,11 +283,6 @@ export function MoneyInput({
               </button>
             ))}
           </div>
-          {showError && error ? (
-            <p className="calculator-error" role="alert">
-              {error}
-            </p>
-          ) : null}
           <button type="button" className="calculator-apply" onClick={apply}>
             {t("এই টাকা লিখি")}
             <ArrowRightIcon size={18} weight="bold" />

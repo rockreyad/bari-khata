@@ -2,6 +2,7 @@ import { localizedDigits } from "../../lib/numerals";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { AddressBookIcon, FileArrowUpIcon } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
+import { FormError, useFormError } from "../ui/FormError";
 import {
   contactFileLimit,
   deviceContactPicker,
@@ -19,7 +20,7 @@ export function ContactImport({
   const { t, language } = useLanguageContext();
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [, setError, errorNotice] = useFormError();
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState<ImportedContact | null>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -92,6 +93,7 @@ export function ContactImport({
   }
   return (
     <div className="contact-import">
+      <FormError {...errorNotice} className="field-error" />
       <button
         type="button"
         className="contact-import-trigger"
@@ -158,11 +160,6 @@ export function ContactImport({
       {notice ? (
         <p className="field-hint" role="status">
           {notice}
-        </p>
-      ) : null}
-      {error ? (
-        <p className="field-error" role="alert">
-          {error}
         </p>
       ) : null}
     </div>

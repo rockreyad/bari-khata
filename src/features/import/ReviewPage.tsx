@@ -13,6 +13,7 @@ import { useNotebook } from "../../app/NotebookProvider";
 import { EntryList } from "../../components/ui/EntryList";
 import { LoadMore } from "../../components/ui/LoadMore";
 import { AppSelect } from "../../components/ui/AppSelect";
+import { FormError, useFormError } from "../../components/ui/FormError";
 import { Sheet } from "../../components/Sheet";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { entryTotal } from "../../domain/ledger";
@@ -36,7 +37,7 @@ function OrganizeSheet({
   const { t, money, date, number, formatDigits } = useLanguageContext();
   const [drafts, setDrafts] = useState(() => reviewDraft(entry, ledger));
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [, setError, errorNotice] = useFormError();
   const change = (id: string, values: Partial<LineDraft>) =>
     setDrafts((previous) =>
       previous.map((line) => (line.id === id ? { ...line, ...values } : line)),
@@ -74,6 +75,7 @@ function OrganizeSheet({
       }
     >
       <form id="organize-history" className="review-form" onSubmit={save}>
+        <FormError {...errorNotice} />
         <div className="review-source-card">
           <div>
             <FileTextIcon size={23} weight="duotone" />
@@ -234,11 +236,6 @@ function OrganizeSheet({
             <summary>{t("কোন তথ্য দেওয়া বাকি")}</summary>
             <p>{formatDigits(entry.reviewReason)}</p>
           </details>
-        ) : null}
-        {error ? (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
         ) : null}
       </form>
     </Sheet>

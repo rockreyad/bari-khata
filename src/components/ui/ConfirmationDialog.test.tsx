@@ -128,6 +128,12 @@ it("keeps failed confirmation open and allows a retry without losing its typed t
     "textContent",
     "কাজটি হয়নি। আবার চেষ্টা করুন।",
   );
+  const error = screen.getByRole("alert");
+  expect(document.activeElement).toBe(error);
+  expect(
+    error.compareDocumentPosition(screen.getByRole("textbox")) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
   expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe(
     "DELETE",
   );

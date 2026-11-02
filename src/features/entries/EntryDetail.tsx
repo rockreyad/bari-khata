@@ -17,7 +17,12 @@ import { Sheet } from "../../components/Sheet";
 import { AppMenu } from "../../components/ui/AppMenu";
 import { PaymentIcon } from "../../components/ui/Icons";
 import { entryTotal, entryWorkIds, setEntryVoided } from "../../domain/ledger";
-import type { Ledger } from "../../domain/model";
+import {
+  EntryProvenanceSchema,
+  type Ledger,
+  type EntryProvenance,
+} from "../../domain/model";
+import type { LanguageContextValue } from "../../context/LanguageContext";
 import { costNames, methodNames } from "../../lib/display";
 import { createWorkspaceStorage } from "../../data/repository";
 import {
@@ -49,7 +54,57 @@ const auditLabels: Partial<Record<AuditField, string>> = {
   reviewReason: "তথ্য দেখার কারণ",
   source: "পুরোনো খাতার তথ্য",
   paymentPurposeId: "কিসের টাকা",
+  provenance: "যে সহকারী লিখেছে",
 };
+const originLabels: Record<EntryProvenance["origin"], string> = {
+  text: "লেখা নির্দেশ থেকে",
+  image: "ছবির তথ্য থেকে",
+  voice: "ভয়েসের নির্দেশ থেকে",
+};
+function assistantSourceText(
+  value: unknown,
+  t: LanguageContextValue["t"],
+  date: LanguageContextValue["date"],
+) {
+  const parsed = EntryProvenanceSchema.safeParse(value);
+  if (!parsed.success) return t("সহকারীর তথ্য নেই");
+  const source = parsed.data;
+  return [
+    t("সহকারী: {{name}}", { name: source.actorName }),
+    t(originLabels[source.origin]),
+    date(source.recordedAt, {
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }),
+    source.reason ? t("কারণ: {{reason}}", { reason: source.reason }) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+function AssistantSource({ source }: { source: EntryProvenance }) {
+  const { t, date, formatDigits } = useLanguageContext();
+  return (
+    <section className="detail-source" aria-label={t("সহকারীর লেখা")}>
+      <p>
+        <strong>{t("সহকারী: {{name}}", { name: source.actorName })}</strong>
+      </p>
+      <p>{t(originLabels[source.origin])}</p>
+      <small>
+        <time dateTime={source.recordedAt}>
+          {date(source.recordedAt, {
+            year: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </time>
+      </small>
+      {source.reason ? (
+        <p>{t("কারণ: {{reason}}", { reason: formatDigits(source.reason) })}</p>
+      ) : null}
+    </section>
+  );
+}
 function SnapshotCard({
   snapshot,
   ledger,
@@ -154,6 +209,9 @@ function SnapshotCard({
           <p>{formatDigits(snapshot.source.note)}</p>
         </div>
       ) : null}
+      {snapshot.provenance ? (
+        <AssistantSource source={snapshot.provenance} />
+      ) : null}
     </div>
   );
 }
@@ -225,6 +283,7 @@ export function EntryDetail({ id }: { id: string }) {
     }
   }
   function fieldText(field: AuditField, value: unknown): string {
+    if (field === "provenance") return assistantSourceText(value, t, date);
     if (value === null || value === undefined || value === "")
       return t("লেখা নেই");
     if (field === "paymentPurposeId")
@@ -315,6 +374,7 @@ export function EntryDetail({ id }: { id: string }) {
     }
     if (Array.isArray(value))
       return value.length ? String(value.length) : t("লেখা নেই");
+    if (typeof value === "object") return t("বিস্তারিত বদলেছে");
     return String(value);
   }
   return (
@@ -615,6 +675,9 @@ export function EntryDetail({ id }: { id: string }) {
               ))}
             </section>
           </details>
+        ) : null}
+        {entry.provenance ? (
+          <AssistantSource source={entry.provenance} />
         ) : null}
         {events.length ? (
           <details className="detail-fold">

@@ -1,4 +1,13 @@
 export const entriesV4English: Record<string, string> = {
+  "সহকারীর লেখা": "Written by your assistant",
+  "যে সহকারী লিখেছে": "Assistant source",
+  "সহকারীর তথ্য নেই": "No assistant information",
+  "লেখা নির্দেশ থেকে": "From a written instruction",
+  "ছবির তথ্য থেকে": "From image information",
+  "ভয়েসের নির্দেশ থেকে": "From a voice instruction",
+  "সহকারী: {{name}}": "Assistant: {{name}}",
+  "কারণ: {{reason}}": "Reason: {{reason}}",
+  "বিস্তারিত বদলেছে": "Details changed",
   "তথ্য যোগ করা বাকি": "Details to add",
   "বিলের লেনদেন": "Bill transactions",
   "লেনদেনের বিস্তারিত": "Transaction details",

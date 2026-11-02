@@ -69,6 +69,10 @@ const options = {
   },
 };
 const admin = createClient(endpoint, status.SERVICE_ROLE_KEY, options);
+success(
+  await admin.storage.getBucket("bari-mcp-staging"),
+  "Checking local assistant staging bucket; apply current migrations first",
+);
 const run = randomUUID();
 const fixtures: {
   id: string;
@@ -76,6 +80,7 @@ const fixtures: {
   client: SupabaseClient;
   token: string;
   receipts: string[];
+  staging: string[];
   shareToken: string;
 }[] = [];
 function success<R extends { data: unknown; error: unknown }>(
@@ -111,6 +116,7 @@ async function fixture(index: number) {
     client,
     token: "",
     receipts: [] as string[],
+    staging: [] as string[],
     shareToken: "",
   };
   fixtures.push(own);
@@ -156,6 +162,25 @@ async function fixture(index: number) {
       "Uploading disposable receipt",
     );
   }
+  for (const file of [
+    `.mcp-staging/${randomUUID()}`,
+    `.mcp-chunks/${randomUUID()}/000`,
+  ]) {
+    const path = `${own.id}/${file}`;
+    own.staging.push(path);
+    success(
+      await admin.storage
+        .from("bari-mcp-staging")
+        .upload(
+          path,
+          new TextEncoder().encode(
+            `Disposable assistant staging ${run} ${index}`,
+          ),
+          { contentType: "application/octet-stream" },
+        ),
+      "Uploading disposable assistant staging file",
+    );
+  }
   const shared = success(
     await client.rpc("create_contact_share", {
       p_person_id: "fixture-person",
@@ -186,8 +211,8 @@ async function absent(id: string) {
     "Auth must confirm the disposable identity is not found.",
   );
 }
-async function receiptAbsent(path: string) {
-  const result = await admin.storage.from("bari-receipts").download(path);
+async function receiptAbsent(path: string, bucket = "bari-receipts") {
+  const result = await admin.storage.from(bucket).download(path);
   const error = result.error as {
     statusCode?: string | number;
     message?: string;
@@ -255,6 +280,7 @@ try {
   ])
     assert.equal((await rows(table, own.id)).length, 0);
   for (const path of own.receipts) await receiptAbsent(path);
+  for (const path of own.staging) await receiptAbsent(path, "bari-mcp-staging");
   assert.equal(
     (await deletion(own.token)).status,
     401,
@@ -279,8 +305,13 @@ try {
       await guard.client.storage.from("bari-receipts").download(path),
       "Checking unrelated guard receipt",
     );
+  for (const path of guard.staging)
+    success(
+      await admin.storage.from("bari-mcp-staging").download(path),
+      "Checking unrelated guard assistant file",
+    );
   console.log(
-    "Local account deletion: verified bearer identity, exact DELETE, scoped nested receipts, Auth/ledger/share deletion, rejected old token and untouched guard account verified.",
+    "Local account deletion: verified bearer identity, exact DELETE, scoped nested receipts and assistant staging/chunks, Auth/ledger/share deletion, rejected old token and untouched guard account/files verified.",
   );
 } finally {
   let cleanupFailed = false;
@@ -293,6 +324,11 @@ try {
           result.data.user.app_metadata.bari_disposable_delete_check !== run
         )
           throw new Error("Cleanup refused an unexpected account.");
+        if (own.staging.length)
+          success(
+            await admin.storage.from("bari-mcp-staging").remove(own.staging),
+            "Cleaning disposable assistant files",
+          );
         if (own.receipts.length)
           success(
             await admin.storage.from("bari-receipts").remove(own.receipts),
@@ -303,6 +339,11 @@ try {
           "Cleaning disposable account",
         );
       }
+      if (!result.data.user && own.staging.length)
+        success(
+          await admin.storage.from("bari-mcp-staging").remove(own.staging),
+          "Cleaning deleted disposable account's assistant files",
+        );
       await own.client.auth.signOut({ scope: "local" }).catch(() => {});
       await absent(own.id);
       for (const table of [
@@ -312,6 +353,8 @@ try {
       ])
         assert.equal((await rows(table, own.id)).length, 0);
       for (const path of own.receipts) await receiptAbsent(path);
+      for (const path of own.staging)
+        await receiptAbsent(path, "bari-mcp-staging");
     } catch {
       cleanupFailed = true;
     }
@@ -321,6 +364,6 @@ try {
       "Disposable fixture cleanup did not finish; inspect only the fresh fixtures created by this script.",
     );
   console.log(
-    "Both newly created disposable accounts, receipt files, ledgers, operations and share links were cleaned up. No existing account was modified.",
+    "Both newly created disposable accounts, receipt and assistant staging files, ledgers, operations and share links were cleaned up. No existing account was modified.",
   );
 }

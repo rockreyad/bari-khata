@@ -21,6 +21,10 @@ try {
     path.join(root, "node_modules/typescript/bin/tsc"),
     "api/phone-login.ts",
     "api/account-delete.ts",
+    "api/mcp.ts",
+    "api/mcp-admin.ts",
+    "api/mcp-auth.ts",
+    "api/mcp-file.ts",
     "--module",
     "NodeNext",
     "--moduleResolution",
@@ -51,6 +55,7 @@ try {
   const accountEntry = pathToFileURL(
     path.join(output, "api/account-delete.js"),
   ).href;
+  const mcpEntry = pathToFileURL(path.join(output, "api/mcp.js")).href;
   run(
     [
       "--input-type=module",
@@ -65,6 +70,10 @@ try {
   const accountResponse=await accountRoute.default.fetch(new Request('https://bari.invalid/api/account-delete',{method:'POST'}));
   assert.equal(accountResponse.status,404);
   assert.deepEqual(await accountResponse.json(),{error:'account_delete_unavailable'});
+  const mcpRoute=await import(${JSON.stringify(mcpEntry)});
+  const mcpResponse=await mcpRoute.default.fetch(new Request('https://bari.invalid/api/mcp',{method:'POST'}));
+  assert.equal(mcpResponse.status,404);
+  assert.deepEqual(await mcpResponse.json(),{error:'mcp_unavailable',available:false});
   console.log('API runtime imports verified.');
  `,
     ],
@@ -76,6 +85,7 @@ try {
       BARI_SUPABASE_SERVICE_ROLE_KEY: "",
       VITE_SUPABASE_URL: "",
       VITE_SUPABASE_ANON_KEY: "",
+      BARI_MCP_ENABLED: "false",
     },
   );
 } finally {

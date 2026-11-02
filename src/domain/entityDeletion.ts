@@ -1,4 +1,4 @@
-import { LedgerSchema, type Ledger } from "./model";
+import { LedgerSchema, type Ledger } from "./model.js";
 
 export type RemovableKind = "work" | "person" | "contract";
 const entityKey = {

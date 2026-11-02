@@ -276,10 +276,17 @@ describe("typed account deletion", () => {
         name: "অ্যাকাউন্ট মুছে ফেলুন",
       }),
     );
-    expect(await screen.findByRole("alert")).toHaveProperty(
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveProperty(
       "textContent",
       "অ্যাকাউন্ট মুছতে পুরো কাজ শেষ হয়নি। আবার চেষ্টা করুন।",
     );
+    expect(document.activeElement).toBe(alert);
+    expect(
+      alert.compareDocumentPosition(
+        screen.getByLabelText("নিশ্চিত করতে DELETE লিখুন"),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(api.signOut).not.toHaveBeenCalled();
   });

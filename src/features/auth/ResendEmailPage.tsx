@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { Envelope } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
+import { FormError, useFormError } from "../../components/ui/FormError";
 import { resendRegistration, registrationErrorText } from "./registration";
 import "./registration.css";
 export function ResendEmailPage() {
@@ -9,9 +10,9 @@ export function ResendEmailPage() {
   const [email, setEmail] = useState(""),
     [busy, setBusy] = useState(false),
     [sent, setSent] = useState(false),
-    [error, setError] = useState(""),
     [until, setUntil] = useState(0),
     [now, setNow] = useState(Date.now);
+  const [error, setError, errorNotice] = useFormError();
   const active = useRef(true),
     inFlight = useRef(false);
   useEffect(() => {
@@ -60,6 +61,11 @@ export function ResendEmailPage() {
           {t("অ্যাকাউন্ট খোলার সময় যে ইমেইল দিয়েছেন সেটি লিখুন।")}
         </p>
         <form onSubmit={submit} noValidate>
+          <FormError
+            {...errorNotice}
+            message={t(error)}
+            className="auth-error"
+          />
           <label htmlFor="resend-email">{t("ইমেইল")}</label>
           <div className="auth-input">
             <Envelope size={20} />
@@ -78,11 +84,6 @@ export function ResendEmailPage() {
               }}
             />
           </div>
-          {error ? (
-            <p className="auth-error" role="alert">
-              {t(error)}
-            </p>
-          ) : null}
           <button
             className="primary-button auth-submit"
             disabled={busy || remaining > 0}

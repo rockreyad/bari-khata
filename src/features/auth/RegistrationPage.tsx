@@ -8,6 +8,7 @@ import {
   ShieldCheck,
 } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
+import { FormError, useFormError } from "../../components/ui/FormError";
 import { useAuth } from "./AuthProvider";
 import { PasswordInput } from "./PasswordInput";
 import {
@@ -24,9 +25,9 @@ export function RegistrationPage() {
     [confirmation, setConfirmation] = useState("");
   const [sent, setSent] = useState(false),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
     [until, setUntil] = useState(0),
     [now, setNow] = useState(Date.now);
+  const [error, setError, errorNotice] = useFormError();
   const active = useRef(true),
     inFlight = useRef(false);
   const currentAccount = useRef(auth.user?.id ?? null);
@@ -141,6 +142,7 @@ export function RegistrationPage() {
               : "আপনার হিসাব শুধু আপনার খাতাতেই থাকবে।",
           )}
         </p>
+        <FormError {...errorNotice} message={t(error)} className="auth-error" />
         {sent ? (
           <div className="auth-email-sent" role="status">
             <strong>{email}</strong>
@@ -224,11 +226,6 @@ export function RegistrationPage() {
               maxLength={128}
               disabled={busy}
             />
-            {error ? (
-              <p className="auth-error" role="alert">
-                {t(error)}
-              </p>
-            ) : null}
             <button
               className="primary-button auth-submit"
               type="submit"
@@ -239,11 +236,6 @@ export function RegistrationPage() {
             </button>
           </form>
         )}
-        {sent && error ? (
-          <p className="auth-error" role="alert">
-            {t(error)}
-          </p>
-        ) : null}
         <p className="auth-private">
           <ShieldCheck size={18} />
           {t("অন্য কারও হিসাব আপনার খাতায় দেখা যাবে না।")}

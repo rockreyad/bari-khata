@@ -3,6 +3,7 @@ import { CheckCircleIcon } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { Sheet } from "../../components/Sheet";
 import { AppSelect } from "../../components/ui/AppSelect";
+import { FormError, useFormError } from "../../components/ui/FormError";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import type { CostType, Entry } from "../../domain/model";
 import { entryTotal } from "../../domain/ledger";
@@ -26,7 +27,7 @@ export function BulkReviewSheet({
   const [groupId, setGroupId] = useState("");
   const [reviewed, setReviewed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [, setError, errorNotice] = useFormError();
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!reviewed || busy) return;
@@ -73,6 +74,7 @@ export function BulkReviewSheet({
       }
     >
       <form id="bulk-review-form" className="review-form" onSubmit={submit}>
+        <FormError {...errorNotice} />
         <p className="review-safety-note">
           {t("শুধু বাছা তথ্য বদলাবে। টাকা, তারিখ ও মূল খাতার লেখা একই থাকবে।")}
         </p>
@@ -153,11 +155,6 @@ export function BulkReviewSheet({
           />
           <span>{t("বাছা প্রতিটি হিসাব দেখে নিয়েছি")}</span>
         </label>
-        {error ? (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        ) : null}
       </form>
     </Sheet>
   );

@@ -1,4 +1,4 @@
-import { latinDigits } from "../lib/numerals";
+import { latinDigits } from "../lib/numerals.js";
 import { z } from "zod";
 
 export const MoneySchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
@@ -269,8 +269,21 @@ export const PaymentPurposeSchema = z.object({
 });
 export type PaymentPurpose = z.infer<typeof PaymentPurposeSchema>;
 
+export const EntryProvenanceSchema = z.object({
+  version: z.literal(1),
+  origin: z.enum(["text", "image", "voice"]),
+  connectionId: Id,
+  actorName: z.string().trim().min(1).max(200),
+  sourceEventId: Id.nullable().default(null),
+  assetDigests: z.array(z.string().min(1).max(128)).max(30).default([]),
+  recordedAt: z.string().datetime(),
+  reason: z.string().max(2000).default(""),
+});
+export type EntryProvenance = z.infer<typeof EntryProvenanceSchema>;
+
 export const EntryCoreSchema = z.object({
   id: Id,
+  provenance: EntryProvenanceSchema.nullable().optional(),
   balanceImpact: z.enum(["normal", "historical"]).default("normal"),
   reviewStatus: z.enum(["confirmed", "needs_review"]).default("confirmed"),
   reviewReason: Text.default(""),

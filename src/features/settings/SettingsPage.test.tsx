@@ -254,9 +254,10 @@ describe("organized settings", () => {
       }),
     );
     await user.click(screen.getByRole("button", { name: "খাতা ফিরিয়ে আনুন" }));
-    expect((await screen.findByRole("alert")).textContent).toContain(
-      "ইতিহাস রাখতে নতুন কপি বেছে নিন",
-    );
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("ইতিহাস রাখতে নতুন কপি বেছে নিন");
+    expect(alert.parentElement?.firstElementChild).toBe(alert);
+    expect(document.activeElement).toBe(alert);
     expect(
       screen.getByRole("dialog", { name: "আগের কপি থেকে খাতা ফিরিয়ে আনুন" }),
     ).toBeTruthy();
