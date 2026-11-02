@@ -1,8 +1,16 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { LedgerSchema } from "../../domain/model";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { summarize } from "../../domain/ledger";
+import { LedgerSchema, type Ledger } from "../../domain/model";
 import { EntryDetail } from "./EntryDetail";
 const { notebook } = vi.hoisted(() => ({ notebook: vi.fn() }));
 vi.mock("../../app/NotebookProvider", () => ({ useNotebook: notebook }));
@@ -145,4 +153,68 @@ it("keeps payment drill-down collapsed and opens only the selected payment or or
   fireEvent.click(screen.getByRole("button", { name: "মূল বিল: ৮টি দরজা" }));
   expect(detail).toHaveBeenLastCalledWith("bill");
   expect(screen.getAllByText("৳30000")).toHaveLength(1);
+});
+
+it("uses a normal confirmation dialog for a transaction and preserves linked cash and audit history", async () => {
+  let ledger = LedgerSchema.parse({
+    works: [{ id: "door", name: "দরজা" }],
+    people: [{ id: "shop", name: "দোকান", kind: "shop" }],
+    entries: [
+      {
+        id: "bill",
+        kind: "expense",
+        personId: "shop",
+        lines: [{ id: "line", workId: "door", label: "দরজা", amount: 200000 }],
+      },
+      {
+        id: "paid",
+        kind: "payment",
+        personId: "shop",
+        relatedEntryId: "bill",
+        allocations: [{ workId: "door", amount: 100000 }],
+        paymentParts: [{ amount: 100000 }],
+      },
+    ],
+  });
+  const close = vi.fn();
+  const save = vi.fn(async (change: (current: Ledger) => Ledger) => {
+    ledger = change(ledger);
+  });
+  const context = () => ({
+    ledger,
+    mode: "demo",
+    go: vi.fn(),
+    close,
+    add: vi.fn(),
+    save,
+    notify: vi.fn(),
+    detail: vi.fn(),
+  });
+  notebook.mockReturnValue(context());
+  const view = render(<EntryDetail id="bill" />);
+  fireEvent.click(screen.getByRole("button", { name: "হিসাব বাতিল করুন" }));
+  const dialog = screen.getByRole("dialog", { name: "হিসাবটি বাদ দেবেন?" });
+  expect(within(dialog).queryByRole("textbox")).toBeNull();
+  expect(
+    screen.queryByText("বাতিল করলে মোট হিসাব থেকে বাদ যাবে। আগের তথ্য থাকবে।"),
+  ).toBeNull();
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "হিসাব বাদ দিন" }),
+  );
+  await waitFor(() => expect(close).toHaveBeenCalledOnce());
+  expect(ledger.entries[0].voided).toBe(true);
+  expect(ledger.entries[0].revisions).toHaveLength(1);
+  expect(ledger.entries[1].voided).toBe(false);
+  expect(summarize(ledger).netPaid).toBe(100000);
+  notebook.mockReturnValue(context());
+  view.rerender(<EntryDetail id="bill" />);
+  fireEvent.click(screen.getByRole("button", { name: "হিসাবে ফিরিয়ে আনুন" }));
+  const restore = screen.getByRole("dialog", { name: "হিসাবটি ফেরাবেন?" });
+  fireEvent.click(
+    within(restore).getByRole("button", { name: "হিসাবে ফিরিয়ে আনুন" }),
+  );
+  await waitFor(() => expect(close).toHaveBeenCalledTimes(2));
+  expect(ledger.entries[0].voided).toBe(false);
+  expect(ledger.entries[0].revisions).toHaveLength(2);
+  expect(summarize(ledger).netPaid).toBe(100000);
 });

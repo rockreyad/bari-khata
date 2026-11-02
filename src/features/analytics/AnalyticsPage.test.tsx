@@ -78,7 +78,7 @@ describe("report routes", () => {
       filtersFromSearch(new URLSearchParams("group="), "cement").groupId,
     ).toBe("");
   });
-  it("defaults to material-only report and switches explicitly to labour", () => {
+  it("shows material-only price details and switches explicitly to labour", () => {
     const ledger = LedgerSchema.parse({
       works: [{ id: "roof", name: "ছাদের কাজ" }],
       people: [{ id: "worker", name: "রহিম" }],
@@ -129,7 +129,7 @@ describe("report routes", () => {
       ],
     });
     const material = renderToString(
-      <MemoryRouter initialEntries={["/reports"]}>
+      <MemoryRouter initialEntries={["/reports?mode=cost"]}>
         <AnalyticsPage ledger={ledger} />
       </MemoryRouter>,
     );
@@ -148,4 +148,59 @@ describe("report routes", () => {
     expect(labour).toContain("মিস্ত্রির মজুরি");
     expect(labour).not.toContain("৳2000");
   });
+});
+
+it("keeps transport and rental prices together when drilling into other cash payments, without pulling in materials", () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "w", name: "দরজা" }],
+    people: [{ id: "driver", name: "চালক", kind: "driver" }],
+    entries: [
+      {
+        id: "old-van",
+        kind: "expense",
+        personId: "driver",
+        lines: [
+          {
+            id: "van",
+            workId: "w",
+            costType: "transport",
+            label: "ভ্যানের ভাড়া",
+            amount: 20000,
+          },
+        ],
+      },
+      {
+        id: "rental",
+        kind: "expense",
+        account: "other",
+        lines: [
+          {
+            id: "rent",
+            workId: "w",
+            costType: "rental",
+            label: "যন্ত্রের ভাড়া",
+            amount: 50000,
+          },
+        ],
+      },
+      {
+        id: "materials",
+        kind: "expense",
+        lines: [
+          { id: "door", workId: "w", label: "দরজা কিনেছি", amount: 9300000 },
+        ],
+      },
+    ],
+  });
+  const html = renderToString(
+    <MemoryRouter
+      initialEntries={["/reports?mode=cost&account=other&section=all"]}
+    >
+      <AnalyticsPage ledger={ledger} />
+    </MemoryRouter>,
+  );
+  expect(html).toContain("৳700");
+  expect(html).toContain("ভ্যানের ভাড়া");
+  expect(html).toContain("যন্ত্রের ভাড়া");
+  expect(html).not.toContain("৳93000");
 });

@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import {
   ArrowRightIcon,
   FunnelSimpleIcon,
+  HardHatIcon,
   MagnifyingGlassIcon,
   PlusIcon,
   UserCircleIcon,
@@ -24,10 +25,12 @@ export function PeoplePage() {
   const status = params.get("status") ?? "all";
   const rows = useMemo(
     () =>
-      ledger.people.map((person) => ({
-        person,
-        summary: contactAccountSummary(ledger, person),
-      })),
+      ledger.people
+        .filter((person) => !person.archivedAt)
+        .map((person) => ({
+          person,
+          summary: contactAccountSummary(ledger, person),
+        })),
     [ledger],
   );
   const shown = rows
@@ -65,6 +68,11 @@ export function PeoplePage() {
           {t("নাম যোগ করি")}
         </button>
       </header>
+      <button className="people-jobs-link" onClick={() => go("/jobs")}>
+        <HardHatIcon size={21} weight="duotone" />
+        <span>{t("মিস্ত্রির সব কাজ")}</span>
+        <ArrowRightIcon size={18} />
+      </button>
       <div className="contacts-search">
         <MagnifyingGlassIcon size={21} />
         <input
@@ -155,20 +163,11 @@ export function PeoplePage() {
                     ? t("যাচাই বাকি")
                     : money(summary.netPaid)}
                 </strong>
-                <span>
-                  {summary.payable > 0 ? (
-                    <small className="contact-due">
-                      {t("বাকি {{amount}}", { amount: money(summary.payable) })}
-                    </small>
-                  ) : null}
-                  {summary.advance > 0 ? (
-                    <small className="contact-credit">
-                      {t("অগ্রিম {{amount}}", {
-                        amount: money(summary.advance),
-                      })}
-                    </small>
-                  ) : null}
-                </span>
+                {summary.payable > 0 ? (
+                  <small className="contact-due">
+                    {t("বাকি {{amount}}", { amount: money(summary.payable) })}
+                  </small>
+                ) : null}
               </span>
               <ArrowRightIcon className="contact-row-chevron" size={16} />
             </button>

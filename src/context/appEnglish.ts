@@ -288,7 +288,7 @@ export const appEnglish: Record<string, string> = {
   "মিস্ত্রি নিজের টাকায় মাল কিনেছেন":
     "The worker bought materials with their own money",
   "মালের টাকা ফেরত; বাড়তি ২০০ টাকা তার কাছে আছে":
-    "Material purchase reimbursed; an extra ৳200 remains with the worker",
+    "Material purchase reimbursed; an extra ৳\u202f200 remains with the worker",
   "নমুনা বাড়ি": "Sample home",
   "টাইলসের কাজ": "Tiling work",
   "মাল কেনা থেকে মিস্ত্রির মজুরি": "From materials to the worker’s wages",
@@ -317,7 +317,7 @@ export const appEnglish: Record<string, string> = {
   টি: "pcs",
   "সুইচ ও তার": "Switches and wires",
   "টাইলস লাগানোর মজুরি": "Tile laying agreement",
-  "প্রতি বর্গফুট ২২ টাকা": "৳22 per square foot",
+  "প্রতি বর্গফুট ২২ টাকা": "৳\u202f22 per square foot",
   ধরন: "Type",
   নোট: "Note",
   হ্যাঁ: "Yes",

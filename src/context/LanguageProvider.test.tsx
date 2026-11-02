@@ -49,7 +49,7 @@ it("switches text, amounts, dates and editable money digits live while keeping c
   );
   expect(screen.getByTestId("label").textContent).toBe("৮টি দরজা ১২");
   expect(screen.getByTestId("copy").textContent).toContain("১২টি");
-  expect(screen.getByTestId("money").textContent).toBe("৳১,২৫০.৫");
+  expect(screen.getByTestId("money").textContent).toBe("৳\u202f১,২৫০.৫");
   expect(screen.getByTestId("number").textContent).toContain(
     "২০২৬".slice(0, 1),
   );
@@ -65,6 +65,7 @@ it("switches text, amounts, dates and editable money digits live while keeping c
   expect(input.value).toBe("৯৩.৫");
   expect(screen.getByTestId("stored").textContent).toBe("93.5");
   await userEvent.click(screen.getByRole("button", { name: "English" }));
+  expect(screen.getByTestId("money").textContent).toBe("৳\u202f1,250.5");
   expect(screen.getByTestId("label").textContent).toBe("8টি দরজা 12");
   expect(screen.getByTestId("copy").textContent).toContain("12");
   expect(screen.getByTestId("date").textContent).toContain("2026");

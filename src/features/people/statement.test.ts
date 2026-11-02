@@ -1,4 +1,5 @@
 import { localizedDigits } from "../../lib/numerals";
+import { formatMoney } from "../../lib/formatMoney";
 import { describe, expect, it } from "vitest";
 import { LedgerSchema } from "../../domain/model";
 import {
@@ -78,7 +79,24 @@ const ledger = () =>
     ],
   });
 describe("read-only contact statements", () => {
-  it("contains only the selected person's wage account, in chronological order", () => {
+  it.each(["bn", "en"] as const)(
+    "retains nonbreaking currency spacing in exported %s HTML",
+    (language) => {
+      const document = ledger();
+      const statement = contactStatement(document, document.people[0]);
+      const html = statementHtml(statement, {
+        language,
+        t: (key) => key,
+        money: (amount) => formatMoney(amount, language),
+        date: (value) => value ?? "—",
+      });
+      expect(html).toContain(
+        language === "bn" ? "৳\u202f৩,০০০" : "৳\u202f3,000",
+      );
+      expect(html).not.toMatch(/৳[0-9০-৯-]/u);
+    },
+  );
+  it("nets the selected person's running wage account across works and keeps chronological rows", () => {
     const document = ledger();
     const statement = contactStatement(document, document.people[0]);
     expect(statement.account).toBe("labour");
@@ -90,8 +108,8 @@ describe("read-only contact statements", () => {
     expect(statement.totals).toMatchObject({
       cost: 600000,
       paid: 300000,
-      payable: 500000,
-      advance: 200000,
+      payable: 300000,
+      advance: 0,
     });
     const serialized = JSON.stringify(statement);
     for (const privateValue of [

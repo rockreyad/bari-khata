@@ -157,10 +157,12 @@
     gap: 5px 9px;
   }
   .home-total-breakdown .summary-symbol {
+    grid-row: auto;
     width: 29px;
     height: 34px;
   }
   .home-total-breakdown strong {
+    grid-column: 1 / -1;
     font-size: 18px;
   }
   .home-transport-note {

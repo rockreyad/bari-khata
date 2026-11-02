@@ -3,12 +3,14 @@ import { Navigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  CaretDownIcon,
   DotsThreeIcon,
   PhoneCallIcon,
   PlusIcon,
   TruckIcon,
   WalletIcon,
 } from "@phosphor-icons/react";
+import { useEntityRemoval } from "../../components/EntityRemoval";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { EntryList } from "../../components/ui/EntryList";
@@ -21,7 +23,10 @@ import {
   personKind,
   sortContactEntries,
 } from "../../domain/contacts";
-import { contractSummary } from "../../domain/ledger";
+import { contractAppliesToWork } from "../../domain/contracts";
+import { personSummary } from "../../domain/ledger";
+import { BalanceProgress } from "../../components/ui/BalanceProgress";
+import { JobPreview } from "../jobs/JobPreview";
 import type { Account } from "../../domain/model";
 import { PersonMark, kindLabels, accountLabels } from "./ContactIdentity";
 import { StatementSheet } from "./StatementSheet";
@@ -34,6 +39,7 @@ export function PersonPage() {
   const [params, setParams] = useSearchParams();
   const [shareOpen, setShareOpen] = useState(false);
   const person = ledger.people.find((record) => record.id === (id ?? personId));
+  const removal = useEntityRemoval("person", id ?? personId);
   const kind = person ? personKind(person) : "other";
   const defaultAccount = person ? defaultContactAccount(person) : "materials";
   const rawAccount = params.get("account");
@@ -97,7 +103,7 @@ export function PersonPage() {
   if (workId) historyQuery.set("work", workId);
   const fullHistoryPath = `/ledger?${historyQuery.toString()}`;
   const href = phoneLink(person.phone);
-  const actions = allowedContactActions(person);
+  const actions = removal.archived ? [] : allowedContactActions(person);
   const otherAccounts = (["materials", "labour", "other"] as Account[]).filter(
     (value) =>
       value !== account &&
@@ -131,68 +137,57 @@ export function PersonPage() {
   const personContracts =
     account === "labour"
       ? ledger.contracts.filter(
-          (c) => c.personId === person.id && (!workId || c.workId === workId),
+          (c) =>
+            c.personId === person.id &&
+            (!workId || contractAppliesToWork(c, workId)),
         )
       : [];
+  const uncontractedAdvance = personContracts.length
+    ? personSummary(
+        {
+          ...ledger,
+          entries: summary.entries.filter((entry) => !entry.contractId),
+        },
+        person.id,
+        workId || undefined,
+      ).advance
+    : summary.advance;
   const isPurchase = account === "materials";
-  const heroLabel = isPurchase
-    ? "মোট কেনাকাটা"
-    : kind === "worker"
-      ? "মোট টাকা নিয়েছেন"
-      : "মোট দিয়েছি";
-  const heroAmount = isPurchase ? summary.cost : summary.netPaid;
-  const hasReturns = summary.entries.some(
-    (entry) => entry.kind === "expense_credit",
-  );
   const metrics = [
-    {
-      label: isPurchase
-        ? "টাকা দিয়েছি"
-        : account === "labour"
-          ? "কাজের বিল"
-          : "মোট খরচ",
-      amount: isPurchase ? summary.netPaid : summary.cost,
-      tone: "",
-    },
-    {
-      label: "দিতে বাকি",
-      amount: summary.payable,
-      tone: summary.payable ? "contact-due" : "",
-    },
-    ...(summary.advance > 0
+    ...(summary.cost !== 0 && summary.cost !== summary.netPaid
       ? [
           {
-            label: "অগ্রিম দিয়েছি",
-            amount: summary.advance,
-            tone: "contact-credit",
+            label: isPurchase
+              ? "মালের দাম"
+              : account === "labour"
+                ? "কাজের মজুরি"
+                : "অন্য খরচ",
+            amount: summary.cost,
+            tone: "",
+          },
+        ]
+      : []),
+    ...(summary.payable > 0
+      ? [
+          {
+            label: "দিতে বাকি",
+            amount: summary.payable,
+            tone: "contact-due",
           },
         ]
       : []),
   ];
+  if (kind === "shop" && summary.confirmedCost > 0 && summary.advance > 0)
+    metrics.push({
+      label: "অগ্রিম",
+      amount: summary.advance,
+      tone: "contact-credit",
+    });
   const menu = [
-    ...(kind === "worker"
-      ? [
-          {
-            label: t("মজুরির বিল লিখি"),
-            onSelect: () =>
-              add({
-                kind: "wage",
-                personId: person.id,
-                workId: workId || undefined,
-                account: "labour",
-                costType: "labour",
-              }),
-          },
-          {
-            label: t("মজুরির চুক্তি রাখি"),
-            onSelect: () =>
-              entity("contract", undefined, workId || undefined, person.id),
-          },
-        ]
-      : []),
     {
       label: t("তথ্য ও বোতাম বদলাই"),
       onSelect: () => entity("person", person.id),
+      disabled: removal.archived,
     },
     { label: t("হিসাবের কপি পাঠাই"), onSelect: () => setShareOpen(true) },
     ...(kind === "shop" && actions.includes("return")
@@ -215,6 +210,7 @@ export function PersonPage() {
       onSelect: () => filter("account", value),
       separatorBefore: true,
     })),
+    removal.menuItem,
   ];
   return (
     <div className="contacts-page contact-detail-page">
@@ -236,38 +232,70 @@ export function PersonPage() {
         <AppMenu
           label={t("এই নামের আরও কাজ")}
           trigger={
-            <button className="icon-button" aria-label={t("আরও")}>
+            <button
+              className="icon-button"
+              aria-label={t("আরও")}
+              ref={removal.triggerRef}
+            >
               <DotsThreeIcon size={25} />
             </button>
           }
           items={menu}
         />
       </header>
+      {removal.notice}
+      {removal.dialog}
       <section
         className={`contact-summary-card contact-summary-${kind}`}
         aria-label={t("এই নামের মোট হিসাব")}
       >
         <div className="contact-summary-hero">
-          <span>{t(heroLabel)}</span>
-          <strong>{money(heroAmount)}</strong>
-          {(isPurchase && hasReturns) ||
-          (!isPurchase && summary.refunds > 0) ? (
-            <small>{t("ফেরত বাদে")}</small>
-          ) : null}
+          <span>{t("মোট টাকা দিয়েছি")}</span>
+          <strong>{money(summary.netPaid)}</strong>
+          {summary.refunds > 0 ? <small>{t("ফেরত বাদে")}</small> : null}
         </div>
-        <dl
-          className="contact-summary-metrics"
-          style={{
-            gridTemplateColumns: `repeat(${metrics.length}, minmax(0, 1fr))`,
-          }}
-        >
-          {metrics.map((metric) => (
-            <div key={metric.label}>
-              <dt>{t(metric.label)}</dt>
-              <dd className={metric.tone}>{money(metric.amount)}</dd>
-            </div>
-          ))}
-        </dl>
+        {metrics.length ? (
+          <dl
+            className="contact-summary-metrics"
+            style={{
+              gridTemplateColumns: `repeat(${metrics.length}, minmax(0, 1fr))`,
+            }}
+          >
+            {metrics.map((metric) => (
+              <div key={metric.label}>
+                <dt>{t(metric.label)}</dt>
+                <dd className={metric.tone}>{money(metric.amount)}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+        {kind === "shop" &&
+        account === "materials" &&
+        summary.confirmedCost > 0 &&
+        summary.payable > 0 ? (
+          <div className="contact-bill-progress">
+            <BalanceProgress
+              total={summary.confirmedCost}
+              paid={summary.netPaid}
+              compact
+              showAmounts={false}
+              showStatus={false}
+            />
+          </div>
+        ) : null}
+        {uncontractedAdvance > 0 &&
+        (kind !== "shop" || summary.confirmedCost <= 0) ? (
+          <details className="contact-reconciliation">
+            <summary>
+              {t("আরও হিসাব")}
+              <CaretDownIcon size={16} />
+            </summary>
+            <dl>
+              <dt>{t("অগ্রিম দিয়েছি")}</dt>
+              <dd>{money(uncontractedAdvance)}</dd>
+            </dl>
+          </details>
+        ) : null}
         {workId || account !== defaultAccount ? (
           <div className="contact-account-note">
             <span>
@@ -282,9 +310,19 @@ export function PersonPage() {
             </button>
           </div>
         ) : null}
+        <SpendingChart
+          ledger={chartLedger}
+          personId={person.id}
+          workId={workId || undefined}
+          basis="paid"
+          title="মাসের হিসাব"
+          presentation="embedded"
+        />
       </section>
       {account === defaultAccount ? (
-        <div className="contact-main-actions">
+        <div
+          className={`contact-main-actions ${kind === "shop" ? "contact-shop-actions" : ""}`}
+        >
           {kind === "shop" && actions.includes("purchase") ? (
             <button className="primary-button" onClick={addPurchase}>
               <PlusIcon size={20} />
@@ -301,7 +339,7 @@ export function PersonPage() {
               onClick={addPayment}
             >
               <WalletIcon size={20} weight="duotone" />
-              {t("টাকা দিলাম")}
+              {t("টাকা দিই")}
             </button>
           ) : null}
           {kind !== "shop" && actions.includes("purchase") ? (
@@ -318,40 +356,14 @@ export function PersonPage() {
           ) : null}
         </div>
       ) : null}
-      {personContracts.length ? (
-        <details className="work-agreements contact-agreements">
-          <summary>{t("মজুরির চুক্তি")}</summary>
-          {personContracts.map((c) => {
-            const agreement = contractSummary(ledger, c.id);
-            return (
-              <div className="wage-agreement-v3" key={c.id}>
-                <strong>
-                  {formatDigits(
-                    ledger.works.find((w) => w.id === c.workId)?.name ?? "",
-                  )}
-                </strong>
-                <div>
-                  <span>{t("ঠিক করা মোট মজুরি")}</span>
-                  <strong>{money(c.total)}</strong>
-                </div>
-                <div>
-                  <span>{t("এই চুক্তিতে দিয়েছি")}</span>
-                  <strong>{money(agreement.netPaid)}</strong>
-                </div>
-                <div>
-                  <span>{t("চুক্তির আর বাকি")}</span>
-                  <strong>{money(agreement.remaining)}</strong>
-                </div>
-                <button
-                  className="text-button"
-                  onClick={() => entity("contract", c.id, c.workId, person.id)}
-                >
-                  {t("চুক্তি বদলাই")}
-                </button>
-              </div>
-            );
-          })}
-        </details>
+      {kind === "worker" && account === "labour" ? (
+        <JobPreview
+          ledger={ledger}
+          contracts={personContracts}
+          personId={person.id}
+          allowCreate={!removal.archived}
+          workId={workId || undefined}
+        />
       ) : null}
       {summary.historicalCount ? (
         <p className="contact-old-note">
@@ -360,11 +372,6 @@ export function PersonPage() {
           )}
         </p>
       ) : null}
-      <SpendingChart
-        ledger={chartLedger}
-        personId={person.id}
-        workId={workId || undefined}
-      />
       <section className="contact-history">
         <div className="contact-history-heading">
           <div>

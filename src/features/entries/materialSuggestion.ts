@@ -1,3 +1,4 @@
+import { latinDigits } from "../../lib/numerals";
 import type { Item, Ledger } from "../../domain/model";
 type SuggestedRow = { autoItemName?: string };
 export function materialSuggestion(
@@ -5,10 +6,17 @@ export function materialSuggestion(
   value: string,
   previous: SuggestedRow,
 ) {
-  const matches = items.filter((item) => item.name === value);
+  const matches = items.filter(
+    (item) => latinDigits(item.name) === latinDigits(value),
+  );
   const variants = new Set(
     matches.map((item) =>
-      JSON.stringify([item.materialGroupId, item.brand, item.usage, item.unit]),
+      JSON.stringify([
+        item.materialGroupId,
+        latinDigits(item.brand),
+        latinDigits(item.usage),
+        latinDigits(item.unit),
+      ]),
     ),
   );
   if (matches.length && variants.size === 1) {

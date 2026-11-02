@@ -1,6 +1,26 @@
+import {
+  LanguageContext,
+  type Language,
+  type LanguageContextValue,
+} from "./LanguageContext";
+export { useLanguageContext } from "./LanguageContext";
+import { entryFlowEnglish, compactCopy } from "./entryFlowEnglish";
+import { worksRefreshEnglish } from "../features/works/worksRefreshEnglish";
+import { deletionEnglish } from "../components/ui/deletionEnglish";
+import { accountEnglish } from "../features/settings/accountEnglish";
+import { loginRefreshEnglish } from "../features/auth/loginRefreshEnglish";
+import { navigationRefreshEnglish } from "./navigationRefreshEnglish";
+import { jobsEnglish } from "../features/jobs/jobsEnglish";
+import { jobFormEnglish } from "../components/jobFormEnglish";
+import { v21EntryEnglish } from "../features/entries/v21EntryEnglish";
+import { entryPageEnglish } from "../features/entries/entryPageEnglish";
+import { cashOverviewEnglish } from "./cashOverviewEnglish";
+import { cashReportEnglish } from "../features/analytics/cashReportEnglish";
+import { formatMoney } from "../lib/formatMoney";
 import { settingsPasswordEnglish } from "../features/settings/settingsPasswordEnglish";
 import { localizedDigits } from "../lib/numerals";
 import { spendingEnglish } from "../components/ui/spendingEnglish";
+import { spendingChartEnglish } from "../components/ui/spendingChartEnglish";
 import { contactImportEnglish } from "../components/contacts/contactImportEnglish";
 import { phoneAuthEnglish } from "../features/auth/phoneAuthEnglish";
 import { authRegistrationEnglish } from "../features/auth/authRegistrationEnglish";
@@ -8,9 +28,7 @@ import { historyV4English } from "../features/history/historyV4English";
 import { entriesV4English } from "../features/entries/entriesV4English";
 import { sharedEnglish } from "../features/sharing/sharedEnglish";
 import {
-  createContext,
   useCallback,
-  useContext,
   useMemo,
   useState,
   useEffect,
@@ -36,9 +54,21 @@ import {
   savePreferences,
 } from "../lib/preferences";
 
-type Language = "bn" | "en";
 const english: Record<string, string> = {
+  ...entryFlowEnglish,
+  ...v21EntryEnglish,
+  ...jobsEnglish,
+  ...jobFormEnglish,
+  ...navigationRefreshEnglish,
+  ...loginRefreshEnglish,
+  ...accountEnglish,
+  ...deletionEnglish,
+  ...worksRefreshEnglish,
+  ...entryPageEnglish,
+  ...cashReportEnglish,
+  ...cashOverviewEnglish,
   ...spendingEnglish,
+  ...spendingChartEnglish,
   ...settingsPasswordEnglish,
   ...contactImportEnglish,
   ...v3English,
@@ -147,17 +177,6 @@ const english: Record<string, string> = {
   "ফোনের মতো": "Use device setting",
 };
 
-type LanguageContextValue = {
-  language: Language;
-  setLanguage: (language: Language) => void;
-  t: (text: string, values?: Record<string, string | number>) => string;
-  money: (poisha: number, compact?: boolean) => string;
-  number: (value: number) => string;
-  formatDigits: (value: string | number) => string;
-  date: (value: string | null, options?: Intl.DateTimeFormatOptions) => string;
-};
-const LanguageContext = createContext<LanguageContextValue | null>(null);
-
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>(() => {
     const prefs = readPreferences();
@@ -172,12 +191,16 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const locale = language === "bn" ? "bn-BD" : "en-BD";
   const t = useCallback(
     (text: string, values: Record<string, string | number> = {}) => {
-      let translated = language === "en" ? (english[text] ?? text) : text;
+      const source = compactCopy[text] ?? text;
+      let translated =
+        language === "en"
+          ? (english[source] ?? english[text] ?? source)
+          : source;
       for (const [key, value] of Object.entries(values))
         translated = translated.replaceAll(`{{${key}}}`, String(value));
       return localizedDigits(
         language === "bn"
-          ? translated.replaceAll("আগাম", "অগ্রিম")
+          ? translated.replaceAll("আগাম", "অগ্রিম").replaceAll("বোতাম", "বাটন")
           : translated,
         language,
       );
@@ -191,7 +214,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       t,
       formatDigits: (value) => localizedDigits(value, language),
       money: (poisha, compact = false) =>
-        `৳${new Intl.NumberFormat(locale, { maximumFractionDigits: 2, ...(compact ? { notation: "compact" as const, maximumFractionDigits: 1 } : {}) }).format(poisha / 100)}`,
+        formatMoney(poisha, language, compact),
       number: (value) =>
         new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(
           value,
@@ -218,10 +241,4 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       {children}
     </LanguageContext.Provider>
   );
-}
-
-export function useLanguageContext() {
-  const value = useContext(LanguageContext);
-  if (!value) throw new Error("LanguageProvider is missing");
-  return value;
 }

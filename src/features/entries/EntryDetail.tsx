@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ArrowRightIcon,
   ArrowSquareOutIcon,
@@ -12,6 +12,7 @@ import {
 } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
+import { ConfirmationDialog } from "../../components/ui/ConfirmationDialog";
 import { Sheet } from "../../components/Sheet";
 import { AppMenu } from "../../components/ui/AppMenu";
 import { PaymentIcon } from "../../components/ui/Icons";
@@ -161,6 +162,7 @@ export function EntryDetail({ id }: { id: string }) {
   const { t, money, date, language, formatDigits } = useLanguageContext();
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode]);
   const [confirm, setConfirm] = useState(false);
+  const moreButton = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
   const entry = ledger.entries.find((e) => e.id === id);
   if (!entry) return null;
@@ -331,7 +333,11 @@ export function EntryDetail({ id }: { id: string }) {
           </button>
           <AppMenu
             trigger={
-              <button className="secondary-button" aria-label={t("আরও")}>
+              <button
+                className="secondary-button"
+                aria-label={t("আরও")}
+                ref={moreButton}
+              >
                 <DotsThreeIcon size={22} />
                 {t("আরও")}
               </button>
@@ -727,39 +733,36 @@ export function EntryDetail({ id }: { id: string }) {
           </details>
         ) : null}
         {confirm ? (
-          <div className="detail-void-confirm">
-            <p>
-              {t(
-                entry.voided
-                  ? "এই হিসাব আবার মোট খরচে যুক্ত হবে।"
-                  : "বাতিল করলে মোট হিসাব থেকে বাদ যাবে। আগের তথ্য থাকবে।",
-              )}
-            </p>
-            <div className="detail-footer">
-              <button className="text-button" onClick={() => setConfirm(false)}>
-                {t("ফিরে যাই")}
-              </button>
-              <button
-                className="secondary-button"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    await save((current) =>
-                      setEntryVoided(current, entry.id, !entry.voided),
-                    );
-                    close();
-                  } catch {
-                    notify(t("বদলানো যায়নি। আবার চেষ্টা করুন।"), true);
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                {t("নিশ্চিত করুন")}
-              </button>
-            </div>
-          </div>
+          <ConfirmationDialog
+            title={t(entry.voided ? "হিসাবটি ফেরাবেন?" : "হিসাবটি বাদ দেবেন?")}
+            description={t(
+              entry.voided
+                ? "আবার মোট হিসাবে যোগ হবে।"
+                : "মোট হিসাব থেকে সরবে।",
+            )}
+            confirmLabel={t(
+              entry.voided ? "হিসাবে ফিরিয়ে আনুন" : "হিসাব বাদ দিন",
+            )}
+            danger={!entry.voided}
+            busy={busy}
+            returnFocusRef={moreButton}
+            onClose={() => setConfirm(false)}
+            onConfirm={async () => {
+              setBusy(true);
+              try {
+                await save((current) =>
+                  setEntryVoided(current, entry.id, !entry.voided),
+                );
+                setConfirm(false);
+                close();
+              } catch {
+                notify(t("বদলানো যায়নি। আবার চেষ্টা করুন।"), true);
+                throw new Error("entry_change_failed");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
         ) : null}
       </div>
     </Sheet>

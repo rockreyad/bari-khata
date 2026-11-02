@@ -1,5 +1,24 @@
+import { saveContractChange } from "../domain/contracts";
+import { contractSummary } from "../domain/ledger";
+import { todayDhaka } from "../lib/display";
+import { BalanceProgress } from "./ui/BalanceProgress";
+import { EntryFrame } from "./EntryFrame";
+import {
+  numericDraftText,
+  moneyInputValue,
+  contractQuantity,
+  contractTotal,
+} from "../lib/numericFields";
+import { NumericInput } from "./ui/NumericInput";
 import { latinDigits } from "../lib/numerals";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import {
   CheckIcon,
   HardHatIcon,
@@ -35,6 +54,7 @@ import { MoneyInput } from "./ui/MoneyInput";
 import { ContactImport } from "./contacts/ContactImport";
 type Kind = "work" | "person" | "contract";
 export type EntitySheetProps = {
+  presentation?: "sheet" | "page";
   kind: Kind;
   ledger: Ledger;
   defaultWorkId?: string;
@@ -56,19 +76,24 @@ const DraftSchema = z.object({
   contactKind: z.enum(["worker", "shop", "driver", "other"]).default("shop"),
   quickActions: z.array(z.string()).nullable().default(null),
   role: z.string().default(""),
-  phone: z.string().default(""),
+  phone: z.string().default("").transform(latinDigits),
   workId: z.string().default(""),
   personId: z.string().default(""),
   newPersonId: z.string().default(""),
   newPersonName: z.string().default(""),
   title: z.string().default(""),
+  scope: z.enum(["work", "house"]).default("work"),
+  agreedOn: z.string().nullable().default(null),
+  contractReason: z.string().max(2000).default(""),
+  jobStatus: z.enum(["planned", "ongoing", "done"]).nullable().default(null),
+  jobStatusChanged: z.boolean().default(false),
   basis: z.enum(["sqft", "day", "fixed"]).default("fixed"),
-  quantity: z.string().default("1"),
-  rate: z.string().default(""),
-  total: z.string().default(""),
+  quantity: numericDraftText(60, "1"),
+  rate: numericDraftText(),
+  total: numericDraftText(),
   notes: z.string().default(""),
   personContractId: z.string().default(""),
-  personContractAmount: z.string().default(""),
+  personContractAmount: numericDraftText(),
 });
 type Draft = z.infer<typeof DraftSchema>;
 const personKinds = [
@@ -96,16 +121,6 @@ function amount(value: string) {
     return 0;
   }
 }
-function totalFor(quantity: string, rate: string) {
-  const q = quantity
-    .replace(/[০-৯]/g, (d) => String("০১২৩৪৫৬৭৮৯".indexOf(d)))
-    .replaceAll(",", "");
-  if (!/^\d+(\.\d{1,4})?$/.test(q)) return 0;
-  const [a, b = ""] = q.split(".");
-  const divisor = 10n ** BigInt(b.length);
-  const total = (BigInt(a + b) * BigInt(amount(rate)) + divisor / 2n) / divisor;
-  return total <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(total) : 0;
-}
 function initial(
   kind: Kind,
   ledger: Ledger,
@@ -119,6 +134,9 @@ function initial(
     personId: personId ?? "",
     newPersonId: crypto.randomUUID(),
     personContractId: crypto.randomUUID(),
+    scope: workId ? "work" : "house",
+    agreedOn: todayDhaka(),
+    jobStatus: kind === "contract" ? "ongoing" : null,
   });
   if (kind === "work") {
     const work = ledger.works.find((w) => w.id === editId);
@@ -139,13 +157,17 @@ function initial(
       d = DraftSchema.parse({
         ...d,
         ...c,
-        rate: String(c.rate / 100),
-        total: String(c.total / 100),
+        status: d.status,
+        jobStatus: c.status ?? null,
+        workId: c.workId ?? "",
+        rate: moneyInputValue(c.rate),
+        total: moneyInputValue(c.total),
       });
   }
   return d;
 }
 export function EntitySheet({
+  presentation = "sheet",
   kind,
   ledger,
   defaultWorkId,
@@ -155,20 +177,51 @@ export function EntitySheet({
   onSave,
   onClose,
 }: EntitySheetProps) {
-  const { t, money, formatDigits } = useLanguageContext();
+  const { t, money } = useLanguageContext();
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode]);
+  const originalContract =
+    kind === "contract"
+      ? ledger.contracts.find((contract) => contract.id === editId)
+      : undefined;
+  const identityLocked = Boolean(
+    originalContract &&
+    ledger.entries.some((entry) => entry.contractId === originalContract.id),
+  );
   const [draft, setDraft] = useState(() =>
     initial(kind, ledger, editId, defaultWorkId, defaultPersonId),
   );
+  const identityMismatch = Boolean(
+    identityLocked &&
+    originalContract &&
+    (draft.personId !== originalContract.personId ||
+      draft.scope !== originalContract.scope ||
+      draft.workId !== (originalContract.workId ?? "")),
+  );
+  const notebookValue = draft.scope === "work" ? draft.workId : "";
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const lock = useRef(false);
   const mounted = useRef(false);
+  const hydrated = useRef(false);
+  const finished = useRef(false);
+  const queue = useRef(Promise.resolve());
   const latest = useRef(draft);
   latest.current = draft;
   const key = `entity:${kind}:${editId ?? defaultWorkId ?? "new"}:${defaultPersonId ?? "any"}`;
+  const queueDraft = useCallback(
+    (value: Draft) => {
+      const next = queue.current
+        .catch(() => {})
+        .then(async () => {
+          await storage.saveDraft(key, value);
+        });
+      queue.current = next;
+      return next;
+    },
+    [key, storage],
+  );
   useEffect(() => {
     mounted.current = true;
     let active = true;
@@ -187,11 +240,24 @@ export function EntitySheet({
           const parsed = DraftSchema.safeParse(
             typeof value === "object" && value && !Array.isArray(value)
               ? {
-                  contactKind: initialValue.contactKind,
-                  startedOn: initialValue.startedOn,
-                  completedOn: initialValue.completedOn,
-                  quickActions: initialValue.quickActions,
+                  ...initialValue,
                   ...value,
+                  ...(!("scope" in value) || value.scope === undefined
+                    ? {
+                        scope: editId
+                          ? initialValue.scope
+                          : (
+                                "workId" in value
+                                  ? value.workId
+                                  : initialValue.workId
+                              )
+                            ? "work"
+                            : "house",
+                      }
+                    : {}),
+                  ...("workId" in value && value.workId === null
+                    ? { workId: "" }
+                    : {}),
                 }
               : value,
           );
@@ -205,10 +271,12 @@ export function EntitySheet({
               )
             )
           ) {
+            latest.current = parsed.data;
             setDraft(parsed.data);
             setNotice(t("আগের লেখা ফিরিয়ে আনা হয়েছে।"));
           }
         }
+        hydrated.current = true;
         setReady(true);
       })
       .catch(() => {
@@ -217,25 +285,46 @@ export function EntitySheet({
     return () => {
       active = false;
       mounted.current = false;
+      if (hydrated.current && !finished.current)
+        void queueDraft(latest.current).catch(() => {});
     };
-  }, [key, storage]);
+  }, [key, storage, queueDraft]);
   useEffect(() => {
-    if (!ready || saving) return;
+    if (!ready || saving || finished.current) return;
     const timeout = window.setTimeout(() => {
-      void storage.saveDraft(key, draft).catch(() => {
+      void queueDraft(draft).catch(() => {
         if (mounted.current) setError(t("লেখা রাখা যায়নি। আবার চেষ্টা করুন।"));
       });
     }, 250);
     return () => window.clearTimeout(timeout);
-  }, [draft, key, storage, ready, saving, t]);
+  }, [draft, queueDraft, ready, saving, t]);
   const field = <K extends keyof Draft>(name: K, value: Draft[K]) => {
     setError("");
     setDraft((d) => ({ ...d, [name]: value }));
   };
+  const chooseNotebook = (workId: string) => {
+    if (identityLocked) return;
+    setError("");
+    setDraft((current) => ({
+      ...current,
+      workId,
+      scope: workId ? "work" : "house",
+    }));
+  };
+  const restoreIdentity = () => {
+    if (!originalContract) return;
+    setError("");
+    setDraft((current) => ({
+      ...current,
+      personId: originalContract.personId,
+      workId: originalContract.workId ?? "",
+      scope: originalContract.scope,
+    }));
+  };
   const total =
     draft.basis === "fixed"
       ? amount(draft.total)
-      : totalFor(draft.quantity, draft.rate);
+      : contractTotal(draft.quantity, draft.rate);
   const allowed =
     kind === "person"
       ? roleActions[draft.contactKind]
@@ -265,6 +354,10 @@ export function EntitySheet({
     setSaving(true);
     setError("");
     try {
+      if (identityMismatch)
+        throw new Error(
+          t("এই কাজে হিসাব আছে। মিস্ত্রি ও খাতা বদলানো যাবে না।"),
+        );
       let next = structuredClone(ledger);
       if (kind !== "contract" && !draft.name.trim())
         throw new Error(t("নাম লিখুন।"));
@@ -288,7 +381,7 @@ export function EntitySheet({
           ...next.people.find((p) => p.id === editId),
           id: draft.id,
           name: draft.name.trim(),
-          phone: draft.phone.trim(),
+          phone: latinDigits(draft.phone.trim()),
           role: draft.role.trim(),
           kind: draft.contactKind,
           quickActions:
@@ -302,23 +395,32 @@ export function EntitySheet({
           !editId &&
           draft.contactKind === "worker" &&
           draft.personContractAmount.trim() &&
-          (!draft.workId || !amount(draft.personContractAmount))
+          !amount(draft.personContractAmount)
         )
-          throw new Error(t("চুক্তি রাখতে কাজ বেছে নিন ও মোট মজুরি লিখুন।"));
+          throw new Error(t("কাজের সঠিক টাকা লিখুন।"));
+        if (
+          !editId &&
+          draft.personContractAmount.trim() &&
+          next.works.some(
+            (work) => work.id === notebookValue && work.archivedAt,
+          )
+        )
+          throw new Error(t("মুছে রাখা নাম, খাতা বা কাজ আগে ফিরিয়ে আনুন।"));
         next = savePersonWithContract(
           next,
           person,
           !editId && draft.contactKind === "worker"
             ? {
                 id: draft.personContractId || `contract-${draft.id}`,
-                workId: draft.workId,
+                workId: notebookValue || null,
+                scope: notebookValue ? "work" : "house",
+                agreedOn: draft.agreedOn,
                 amount: draft.personContractAmount,
               }
             : undefined,
         );
       } else {
-        if (!draft.workId || !total)
-          throw new Error(t("কাজ বেছে নিন ও সঠিক টাকা লিখুন।"));
+        if (!total) throw new Error(t("কাজের সঠিক টাকা লিখুন।"));
         let personId = draft.personId;
         if (personId === "__new__") {
           if (!draft.newPersonName.trim())
@@ -333,6 +435,16 @@ export function EntitySheet({
             }),
           );
         }
+        if (
+          !editId &&
+          (next.people.some(
+            (person) => person.id === personId && person.archivedAt,
+          ) ||
+            next.works.some(
+              (work) => work.id === notebookValue && work.archivedAt,
+            ))
+        )
+          throw new Error(t("মুছে রাখা নাম, খাতা বা কাজ আগে ফিরিয়ে আনুন।"));
         if (!next.people.some((p) => p.id === personId))
           throw new Error(t("মিস্ত্রির নাম বেছে নিন।"));
         const previous = next.contracts.find((c) => c.id === editId);
@@ -341,56 +453,52 @@ export function EntitySheet({
           personKind(next.people.find((p) => p.id === personId)!) !== "worker"
         )
           throw new Error(t("মজুরির দর রাখতে মিস্ত্রির নাম বেছে নিন।"));
-        if (
-          previous &&
-          (previous.workId !== draft.workId ||
-            previous.personId !== personId) &&
-          next.entries.some((e) => e.contractId === previous.id)
-        )
-          throw new Error(
-            t("এই দরে হিসাব আছে। কাজ বা নাম বদলাতে আলাদা দর রাখুন।"),
-          );
         const contract = ContractSchema.parse({
           id: draft.id,
-          workId: draft.workId,
+          ...previous,
+          workId:
+            notebookValue ||
+            (previous?.scope === "house" &&
+            draft.scope === "house" &&
+            draft.workId === (previous.workId ?? "")
+              ? previous.workId
+              : null),
+          scope: notebookValue ? "work" : "house",
+          agreedOn: draft.agreedOn || null,
+          status:
+            editId && !draft.jobStatusChanged
+              ? (previous?.status ?? null)
+              : draft.jobStatus,
           personId,
           title: draft.title.trim(),
           basis: draft.basis,
           quantity:
             draft.basis === "fixed"
               ? "1"
-              : draft.quantity.replace(/[০-৯]/g, (d) =>
-                  String("০১২৩৪৫৬৭৮৯".indexOf(d)),
-                ),
+              : (contractQuantity(draft.quantity) ?? ""),
           rate: draft.basis === "fixed" ? total : amount(draft.rate),
           total,
           notes: draft.notes,
-          history: previous
-            ? [
-                ...previous.history,
-                {
-                  at: new Date().toISOString(),
-                  total: previous.total,
-                  note: previous.notes,
-                },
-              ]
-            : [],
         });
-        next.contracts = [
-          ...next.contracts.filter((c) => c.id !== draft.id),
-          contract,
-        ];
+        next = saveContractChange(next, contract, draft.contractReason);
       }
+      await queueDraft(latest.current);
       await onSave(LedgerSchema.parse(next));
+      finished.current = true;
+      await queue.current.catch(() => {});
       try {
         await storage.removeDraft(key);
       } catch {}
-      onClose();
+      if (mounted.current) onClose();
     } catch (cause) {
       if (mounted.current)
         setError(
           cause instanceof Error && /[\u0980-\u09ff]/.test(cause.message)
-            ? cause.message
+            ? t(
+                cause.message === "চুক্তি কেন বদলালেন, তা লিখুন।"
+                  ? "কেন বদলালেন, তা লিখুন।"
+                  : cause.message,
+              )
             : t("তথ্য ঠিক হয়নি। নাম, তারিখ ও টাকা মিলিয়ে দেখুন।"),
         );
       lock.current = false;
@@ -406,16 +514,18 @@ export function EntitySheet({
     lock.current = true;
     setSaving(true);
     try {
-      await storage.saveDraft(key, latest.current);
-      onClose();
+      await queueDraft(latest.current);
+      finished.current = true;
+      if (mounted.current) onClose();
     } catch {
       setError(t("লেখা রাখা যায়নি। আবার চেষ্টা করুন।"));
       lock.current = false;
       setSaving(false);
     }
   }
+  const Frame = presentation === "page" ? EntryFrame : Sheet;
   return (
-    <Sheet
+    <Frame
       title={t(
         kind === "work"
           ? editId
@@ -426,8 +536,8 @@ export function EntitySheet({
               ? "নামের তথ্য"
               : "নাম যোগ করব"
             : editId
-              ? "মজুরির দর বদলাই"
-              : "মজুরির দর রাখি",
+              ? "কাজ বদলাই"
+              : "নতুন কাজ",
       )}
       onClose={() => void close()}
       footer={
@@ -435,7 +545,7 @@ export function EntitySheet({
           className="primary-button full-width"
           form="entity-form"
           type="submit"
-          disabled={saving || !ready}
+          disabled={saving || !ready || identityMismatch}
         >
           <CheckIcon size={19} />
           {t(saving ? "রাখছি…" : "রাখুন")}
@@ -625,10 +735,10 @@ export function EntitySheet({
               </label>
               <label>
                 {t("ফোন নম্বর")}
-                <input
+                <NumericInput
                   type="tel"
-                  value={formatDigits(draft.phone)}
-                  onChange={(e) => field("phone", latinDigits(e.target.value))}
+                  value={draft.phone}
+                  onChange={(e) => field("phone", e.target.value)}
                   placeholder={t("না দিলেও হবে")}
                 />
               </label>
@@ -644,31 +754,33 @@ export function EntitySheet({
               />
               {!editId && draft.contactKind === "worker" ? (
                 <details className="entity-extra">
-                  <summary>{t("মোট মজুরি ঠিক করা আছে?")}</summary>
+                  <summary>{t("কাজের টাকা")}</summary>
                   <div className="entity-extra-body">
-                    <p className="field-hint">
-                      {t(
-                        "না থাকলে খালি রাখুন। শুধু মজুরির চুক্তি এখানে রাখবেন।",
-                      )}
-                    </p>
+                    <p className="field-hint">{t("না থাকলে খালি রাখুন।")}</p>
                     <label>
                       {t("কাজের খাতা")}
                       <AppSelect
-                        value={draft.workId}
-                        onChange={(e) => field("workId", e.target.value)}
+                        value={notebookValue}
+                        onChange={(event) => chooseNotebook(event.target.value)}
                       >
-                        <option value="">{t("খাতা বেছে নিন")}</option>
-                        {ledger.works.map((w) => (
-                          <option key={w.id} value={w.id}>
-                            {w.name}
-                          </option>
-                        ))}
+                        <option value="">{t("পরে বেছে নেব")}</option>
+                        {ledger.works
+                          .filter(
+                            (work) =>
+                              !work.archivedAt ||
+                              (Boolean(editId) && work.id === notebookValue),
+                          )
+                          .map((work) => (
+                            <option key={work.id} value={work.id}>
+                              {work.name}
+                            </option>
+                          ))}
                       </AppSelect>
                     </label>
                     <label>
-                      {t("মোট মজুরির চুক্তি")}
+                      {t("কাজের টাকা")}
                       <MoneyInput
-                        aria-label={t("মোট মজুরির চুক্তি")}
+                        aria-label={t("কাজের টাকা")}
                         value={draft.personContractAmount}
                         onChange={(e) =>
                           field("personContractAmount", e.target.value)
@@ -714,30 +826,92 @@ export function EntitySheet({
             </>
           ) : (
             <>
+              {identityMismatch ? (
+                <div className="entity-notice" role="alert">
+                  <p>
+                    {t("এই কাজে হিসাব আছে। মিস্ত্রি ও খাতা বদলানো যাবে না।")}
+                  </p>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={restoreIdentity}
+                  >
+                    {t("আগের মিস্ত্রি ও খাতা রাখি")}
+                  </button>
+                </div>
+              ) : identityLocked ? (
+                <p className="field-hint">
+                  {t("এই কাজে হিসাব আছে। মিস্ত্রি ও খাতা বদলানো যাবে না।")}
+                </p>
+              ) : null}
+              <label>
+                {t("কাজের নাম")}
+                <input
+                  value={draft.title}
+                  onChange={(event) => field("title", event.target.value)}
+                  maxLength={300}
+                  placeholder={t("যেমন: দরজা লাগানো")}
+                />
+              </label>
+              <label>
+                {t("কাজের অবস্থা")}
+                <AppSelect
+                  aria-label={t("কাজের অবস্থা")}
+                  value={draft.jobStatus ?? ""}
+                  onChange={(event) => {
+                    field(
+                      "jobStatus",
+                      event.target.value
+                        ? (event.target.value as Draft["jobStatus"])
+                        : null,
+                    );
+                    field("jobStatusChanged", true);
+                  }}
+                >
+                  <option value="">{t("অবস্থা দিন")}</option>
+                  <option value="planned">{t("শুরু হয়নি")}</option>
+                  <option value="ongoing">{t("চলছে")}</option>
+                  <option value="done">{t("শেষ")}</option>
+                </AppSelect>
+              </label>
               <label>
                 {t("কাজের খাতা")}
                 <AppSelect
-                  value={draft.workId}
-                  onChange={(e) => field("workId", e.target.value)}
-                  required
+                  value={notebookValue}
+                  onChange={(event) => chooseNotebook(event.target.value)}
+                  disabled={identityLocked}
                 >
-                  <option value="">{t("খাতা বেছে নিন")}</option>
-                  {ledger.works.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
+                  <option value="">{t("পরে বেছে নেব")}</option>
+                  {ledger.works
+                    .filter(
+                      (work) =>
+                        !work.archivedAt ||
+                        (Boolean(editId) && work.id === notebookValue),
+                    )
+                    .map((work) => (
+                      <option key={work.id} value={work.id}>
+                        {work.name}
+                      </option>
+                    ))}
                 </AppSelect>
               </label>
               <label>
                 {t("মিস্ত্রি")}
                 <AppSelect
                   value={draft.personId}
-                  onChange={(e) => field("personId", e.target.value)}
+                  onChange={(e) => {
+                    if (!identityLocked) field("personId", e.target.value);
+                  }}
+                  disabled={identityLocked}
                   required
                 >
                   <option value="">{t("নাম বেছে নিন")}</option>
                   {ledger.people
+                    .filter(
+                      (person) =>
+                        !person.archivedAt ||
+                        (Boolean(editId) && person.id === draft.personId),
+                    )
                     .filter(
                       (p) =>
                         personKind(p) === "worker" || p.id === draft.personId,
@@ -761,29 +935,21 @@ export function EntitySheet({
                 </label>
               ) : null}
               <label>
-                {t("কী কাজের মজুরি")}
-                <input
-                  value={draft.title}
-                  onChange={(e) => field("title", e.target.value)}
-                  placeholder={t("যেমন: টাইলস বসানো")}
-                />
-              </label>
-              <label>
-                {t("মজুরির হিসাব")}
+                {t("দর ঠিক হয়েছে")}
                 <AppSelect
                   value={draft.basis}
                   onChange={(e) =>
                     field("basis", e.target.value as Draft["basis"])
                   }
                 >
-                  <option value="fixed">{t("এই কাজের মোট মজুরি")}</option>
+                  <option value="fixed">{t("মোট টাকা")}</option>
                   <option value="sqft">{t("প্রতি বর্গফুট")}</option>
                   <option value="day">{t("প্রতি দিন")}</option>
                 </AppSelect>
               </label>
               {draft.basis === "fixed" ? (
                 <label>
-                  {t("মোট মজুরি")}
+                  {t("কাজের টাকা")}
                   <MoneyInput
                     inputMode="decimal"
                     value={draft.total}
@@ -796,12 +962,10 @@ export function EntitySheet({
                   <div className="field-grid">
                     <label>
                       {t(draft.basis === "sqft" ? "কত বর্গফুট" : "কত দিন")}
-                      <input
+                      <NumericInput
                         inputMode="decimal"
-                        value={formatDigits(draft.quantity)}
-                        onChange={(e) =>
-                          field("quantity", latinDigits(e.target.value))
-                        }
+                        value={draft.quantity}
+                        onChange={(e) => field("quantity", e.target.value)}
                       />
                     </label>
                     <label>
@@ -814,11 +978,40 @@ export function EntitySheet({
                     </label>
                   </div>
                   <div className="contract-calculation">
-                    <span>{t("মোট মজুরি")}</span>
+                    <span>{t("কাজের টাকা")}</span>
                     <strong>{money(total)}</strong>
                   </div>
                 </>
               )}
+              <label>
+                {t("দর ঠিকের তারিখ")}
+                <AppDatePicker
+                  value={draft.agreedOn ?? ""}
+                  onChange={(event) =>
+                    field("agreedOn", event.target.value || null)
+                  }
+                />
+              </label>
+              {total > 0 ? (
+                <BalanceProgress
+                  total={total}
+                  paid={editId ? contractSummary(ledger, editId).netPaid : 0}
+                  label={t("দিয়েছি ও বাকি")}
+                />
+              ) : null}
+              {editId ? (
+                <label>
+                  {t("কেন বদলালেন")}
+                  <textarea
+                    value={draft.contractReason}
+                    onChange={(event) =>
+                      field("contractReason", event.target.value)
+                    }
+                    placeholder={t("যেমন: সিঁড়ির কাজ যোগ হয়েছে")}
+                    rows={2}
+                  />
+                </label>
+              ) : null}
               <label>
                 {t("নোট")}
                 <textarea
@@ -836,6 +1029,6 @@ export function EntitySheet({
           </p>
         ) : null}
       </form>
-    </Sheet>
+    </Frame>
   );
 }

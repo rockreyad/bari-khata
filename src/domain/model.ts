@@ -1,3 +1,4 @@
+import { latinDigits } from "../lib/numerals";
 import { z } from "zod";
 
 export const MoneySchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
@@ -14,6 +15,43 @@ export const CostTypeSchema = z.enum([
 export type CostType = z.infer<typeof CostTypeSchema>;
 const Id = z.string().trim().min(1).max(160);
 const Text = z.string().max(10000);
+
+export const RemovalEventSchema = z.object({
+  id: Id,
+  at: z.string().datetime(),
+  archived: z.boolean(),
+});
+const removalFields = {
+  archivedAt: z.string().datetime().nullable().default(null),
+  removalHistory: z.array(RemovalEventSchema).max(2000).default([]),
+};
+function validateRemoval(
+  entity: {
+    archivedAt: string | null;
+    removalHistory: z.infer<typeof RemovalEventSchema>[];
+  },
+  ctx: z.RefinementCtx,
+) {
+  const events = entity.removalHistory;
+  const last = events.at(-1);
+  if (
+    new Set(events.map((event) => event.id)).size !== events.length ||
+    events.some(
+      (event, index) =>
+        event.archived === (index ? events[index - 1].archived : false),
+    ) ||
+    events.some(
+      (event, index) =>
+        index > 0 && Date.parse(event.at) < Date.parse(events[index - 1].at),
+    ) ||
+    entity.archivedAt !== (last?.archived ? last.at : null)
+  )
+    ctx.addIssue({
+      code: "custom",
+      message: "Invalid removal history",
+      path: ["removalHistory"],
+    });
+}
 
 const WorkDateSchema = z
   .string()
@@ -46,8 +84,10 @@ export const WorkActivitySchema = z.object({
 export type WorkActivity = z.infer<typeof WorkActivitySchema>;
 export const WorkSchema = WorkSnapshotSchema.extend({
   id: Id,
+  ...removalFields,
   activity: z.array(WorkActivitySchema).max(2000).default([]),
 }).superRefine((work, ctx) => {
+  validateRemoval(work, ctx);
   const validDate = (value: string | null) =>
     !value ||
     (!Number.isNaN(Date.parse(`${value}T00:00:00Z`)) &&
@@ -102,14 +142,17 @@ export const ContactActionSchema = z.enum([
   "transport",
 ]);
 export type ContactAction = z.infer<typeof ContactActionSchema>;
-export const PersonSchema = z.object({
-  id: Id,
-  name: z.string().trim().min(1).max(200),
-  role: z.string().max(200).default(""),
-  phone: z.string().max(60).default(""),
-  kind: PersonKindSchema.nullable().default(null),
-  quickActions: z.array(ContactActionSchema).max(4).nullable().default(null),
-});
+export const PersonSchema = z
+  .object({
+    id: Id,
+    ...removalFields,
+    name: z.string().trim().min(1).max(200),
+    role: z.string().max(200).default(""),
+    phone: z.string().max(60).default("").transform(latinDigits),
+    kind: PersonKindSchema.nullable().default(null),
+    quickActions: z.array(ContactActionSchema).max(4).nullable().default(null),
+  })
+  .superRefine(validateRemoval);
 export type Person = z.infer<typeof PersonSchema>;
 
 export const MaterialGroupSchema = z.object({
@@ -130,22 +173,61 @@ export const ItemSchema = z.object({
 });
 export type Item = z.infer<typeof ItemSchema>;
 
-export const ContractSchema = z.object({
-  id: Id,
-  workId: Id,
+export const ContractScopeSchema = z.enum(["work", "house"]);
+export const ContractStatusSchema = z.enum(["planned", "ongoing", "done"]);
+export type ContractStatus = z.infer<typeof ContractStatusSchema>;
+export const ContractSnapshotSchema = z.object({
+  scope: ContractScopeSchema.default("work"),
+  status: ContractStatusSchema.nullable().default(null),
+  workId: Id.nullable().default(null),
   personId: Id,
   title: z.string().max(300).default(""),
   basis: z.enum(["sqft", "day", "fixed"]).default("fixed"),
-  quantity: z.string().max(60).default("1"),
+  quantity: z.string().max(60).default("1").transform(latinDigits),
   rate: MoneySchema.default(0),
   total: MoneySchema,
   notes: Text.default(""),
+  agreedOn: WorkDateSchema.default(null),
+});
+export type ContractSnapshot = z.infer<typeof ContractSnapshotSchema>;
+function contractRateMatches(snapshot: ContractSnapshot) {
+  if (snapshot.basis === "fixed") return true;
+  if (!/^\d+(?:\.\d{1,4})?$/.test(snapshot.quantity)) return false;
+  const [whole, fraction = ""] = snapshot.quantity.split(".");
+  const denominator = 10n ** BigInt(fraction.length);
+  return (
+    (BigInt(whole + fraction) * BigInt(snapshot.rate) + denominator / 2n) /
+      denominator ===
+    BigInt(snapshot.total)
+  );
+}
+export const ContractActivitySchema = z
+  .object({
+    id: Id,
+    at: z.string().datetime({ offset: true }),
+    before: ContractSnapshotSchema.nullable(),
+    after: ContractSnapshotSchema,
+    reason: z.string().trim().min(1).max(2000),
+  })
+  .superRefine((event, ctx) => {
+    if (!contractRateMatches(event.after))
+      ctx.addIssue({
+        code: "custom",
+        path: ["after", "total"],
+        message: "Contract total must match quantity and rate",
+      });
+  });
+export type ContractActivity = z.infer<typeof ContractActivitySchema>;
+export const ContractSchema = ContractSnapshotSchema.extend({
+  id: Id,
+  ...removalFields,
   history: z
     .array(
       z.object({ at: z.string(), total: MoneySchema, note: Text.default("") }),
     )
     .default([]),
-});
+  activity: z.array(ContractActivitySchema).max(2000).default([]),
+}).superRefine(validateRemoval);
 export type Contract = z.infer<typeof ContractSchema>;
 
 export const EntryLineSchema = z.object({
@@ -157,7 +239,7 @@ export const EntryLineSchema = z.object({
   label: z.string().max(300).default(""),
   costType: CostTypeSchema.default("material"),
   amount: MoneySchema,
-  quantity: z.string().max(60).default(""),
+  quantity: z.string().max(60).default("").transform(latinDigits),
   unit: z.string().max(60).default(""),
 });
 export type EntryLine = z.infer<typeof EntryLineSchema>;
@@ -292,20 +374,73 @@ export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
   const receiptIds = new Set<string>();
   const kindTotals = { expense: 0, payment: 0, expense_credit: 0, refund: 0 };
   ledger.contracts.forEach((contract, index) => {
-    if (!works.has(contract.workId))
-      error("Unknown contract work", ["contracts", index, "workId"]);
-    if (!people.has(contract.personId))
-      error("Unknown contract person", ["contracts", index, "personId"]);
-    if (!contract.total)
-      error("Contract total must be positive", ["contracts", index, "total"]);
+    const snapshots = [
+      contract,
+      ...contract.activity.flatMap((event) =>
+        event.before ? [event.before, event.after] : [event.after],
+      ),
+    ];
+    for (const snapshot of snapshots) {
+      if (
+        (snapshot.scope === "work" && !snapshot.workId) ||
+        (snapshot.workId && !works.has(snapshot.workId))
+      )
+        error("Unknown contract work", ["contracts", index, "workId"]);
+      if (!people.has(snapshot.personId))
+        error("Unknown contract person", ["contracts", index, "personId"]);
+      if (!snapshot.total)
+        error("Contract total must be positive", ["contracts", index, "total"]);
+      if (
+        !/^\d+(?:\.\d{1,4})?$/.test(snapshot.quantity) ||
+        Number(snapshot.quantity) <= 0
+      )
+        error("Contract quantity must be positive", [
+          "contracts",
+          index,
+          "quantity",
+        ]);
+      if (snapshot.agreedOn) {
+        const when = Date.parse(`${snapshot.agreedOn}T00:00:00Z`);
+        if (
+          !Number.isFinite(when) ||
+          new Date(when).toISOString().slice(0, 10) !== snapshot.agreedOn
+        )
+          error("Invalid contract date", ["contracts", index, "agreedOn"]);
+      }
+    }
+    const ids = new Set<string>();
+    contract.activity.forEach((event, eventIndex) => {
+      if (ids.has(event.id))
+        error("Duplicate contract activity", [
+          "contracts",
+          index,
+          "activity",
+          eventIndex,
+        ]);
+      ids.add(event.id);
+      const previous = contract.activity[eventIndex - 1];
+      if (
+        previous &&
+        (Date.parse(previous.at) > Date.parse(event.at) ||
+          JSON.stringify(event.before) !== JSON.stringify(previous.after))
+      )
+        error("Broken contract activity", [
+          "contracts",
+          index,
+          "activity",
+          eventIndex,
+        ]);
+    });
+    const last = contract.activity.at(-1);
     if (
-      !/^\d+(?:\.\d{1,4})?$/.test(contract.quantity) ||
-      Number(contract.quantity) <= 0
+      last &&
+      JSON.stringify(last.after) !==
+        JSON.stringify(ContractSnapshotSchema.parse(contract))
     )
-      error("Contract quantity must be positive", [
+      error("Contract activity must match current terms", [
         "contracts",
         index,
-        "quantity",
+        "activity",
       ]);
   });
   ledger.entries.forEach((entry, index) => {
@@ -417,7 +552,11 @@ export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
         error("Labour account requires labour cost", [...path, "lines", l]);
       if (entry.account !== "labour" && line.costType === "labour")
         error("Labour cost requires labour account", [...path, "lines", l]);
-      if (contract && line.workId !== contract.workId)
+      if (
+        contract &&
+        contract.scope === "work" &&
+        line.workId !== contract.workId
+      )
         error("Contract cost must use its work", [...path, "lines", l]);
     });
     entry.allocations.forEach((allocation, a) => {
@@ -425,7 +564,11 @@ export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
         error("Allocation must be positive", [...path, "allocations", a]);
       if (!works.has(allocation.workId))
         error("Unknown payment work", [...path, "allocations", a]);
-      if (contract && allocation.workId !== contract.workId)
+      if (
+        contract &&
+        contract.scope === "work" &&
+        allocation.workId !== contract.workId
+      )
         error("Contract payment must use its work", [
           ...path,
           "allocations",

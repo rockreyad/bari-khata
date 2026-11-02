@@ -19,7 +19,9 @@ export function notebookSectionActive(
       ? [section, "/materials"]
       : section === "/ledger"
         ? [section, "/review"]
-        : [section];
+        : section === "/people"
+          ? [section, "/jobs"]
+          : [section];
   return aliases.some(
     (prefix) => path === prefix || path.startsWith(`${prefix}/`),
   );

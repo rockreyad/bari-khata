@@ -2,7 +2,9 @@
 
 :root {
   font-family:
-    "FN Mahin Rafid",
+    var(--number-fonts),
+    "FN Akkhor",
+    "Hind Siliguri",
     "Noto Sans Bengali Variable",
     -apple-system,
     BlinkMacSystemFont,
@@ -12,7 +14,7 @@
     sans-serif;
   color: #273b32;
   background: #f5f4ef;
-  font-synthesis: weight;
+  font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   font-weight: 400;
@@ -103,7 +105,7 @@ img {
 }
 .money {
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.025em;
+  letter-spacing: normal;
   white-space: nowrap;
 }
 .app {
@@ -2636,8 +2638,18 @@ button.link {
   border-color: #97ac7d;
 }
 .money-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-variant-numeric: tabular-nums;
   font-size: 20px;
+}
+.money-input > span:not(.money-control) {
+  flex: none;
+}
+.money-input > .money-control {
+  flex: 1;
+  min-width: 0;
 }
 .payment-methods {
   padding-top: 3px;

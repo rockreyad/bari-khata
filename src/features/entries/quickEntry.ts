@@ -1,3 +1,11 @@
+import { latinDigits } from "../../lib/numerals";
+import {
+  contractQuantity,
+  contractTotal,
+  moneyInputValue,
+  numericDraftText,
+} from "../../lib/numericFields";
+import { contractAppliesToWork } from "../../domain/contracts";
 import { z } from "zod";
 import {
   EntrySchema,
@@ -30,9 +38,12 @@ export const QuickDraftSchema = z.object({
   purpose: z.enum(["settle", "advance", "wage"]).default("settle"),
   date: text(10),
   note: text(10000),
-  amount: text(60),
-  paid: text(60),
-  refund: text(60),
+  amount: numericDraftText(),
+  paid: numericDraftText(),
+  wageBasis: z.enum(["total", "day"]).default("total"),
+  wageDays: numericDraftText(),
+  wageRate: numericDraftText(),
+  refund: numericDraftText(),
   payment: z.enum(["full", "partial", "due", "worker"]).default("full"),
   method: z.enum(["cash", "bkash", "bank", "other"]).default("cash"),
   account: z.enum(["materials", "labour", "other"]).default("materials"),
@@ -48,13 +59,13 @@ export const QuickDraftSchema = z.object({
       z.object({
         id: z.string().min(1).max(160),
         label: text(200),
-        amount: text(60),
+        amount: numericDraftText(),
         groupId: id(),
         groupName: text(),
         autoItemName: text(),
         brand: text(),
         usage: text(),
-        quantity: text(60),
+        quantity: numericDraftText(),
         unit: text(60),
       }),
     )
@@ -115,6 +126,18 @@ function positiveAmount(value: string) {
   throw new Error("amount");
 }
 
+export function quickWageAmount(
+  draft: Pick<QuickDraft, "amount" | "wageBasis" | "wageDays" | "wageRate">,
+) {
+  if (draft.wageBasis === "day")
+    return contractTotal(draft.wageDays, draft.wageRate);
+  try {
+    return parseAmount(draft.amount);
+  } catch {
+    return 0;
+  }
+}
+
 export function buildQuickEntry(
   current: Ledger,
   input: QuickDraft,
@@ -134,7 +157,9 @@ export function buildQuickEntry(
   const now = new Date().toISOString();
   let workId = draft.workId;
   if (!workId) {
-    let work = next.works.find((work) => work.name === generalName);
+    let work = next.works.find(
+      (work) => !work.archivedAt && work.name === generalName,
+    );
     if (!work) {
       work = WorkSchema.parse({
         id: `general-${draft.id}`,
@@ -147,6 +172,8 @@ export function buildQuickEntry(
     workId = work.id;
   }
   if (!next.works.some((work) => work.id === workId)) throw new Error("work");
+  if (next.works.some((work) => work.id === workId && work.archivedAt))
+    throw new Error("removed_entity");
   let personId = draft.personId || null;
   if (personId === "__new__") {
     if (
@@ -176,11 +203,26 @@ export function buildQuickEntry(
   }
   if (personId && !next.people.some((person) => person.id === personId))
     throw new Error("person");
+  if (
+    next.people.some((person) => person.id === personId && person.archivedAt) ||
+    next.contracts.some((job) => job.id === draft.contractId && job.archivedAt)
+  )
+    throw new Error("removed_entity");
   const wage =
     draft.kind === "wage" ||
     (draft.kind === "payment" && draft.purpose === "wage");
   const isCash = draft.kind === "refund" || (draft.kind === "payment" && !wage);
-  if (isCash && !draft.workId) throw new Error("work");
+  const unlinkedJobPayment =
+    draft.kind === "payment" &&
+    isCash &&
+    draft.account === "labour" &&
+    next.contracts.some(
+      (contract) =>
+        contract.id === draft.contractId &&
+        contract.scope === "house" &&
+        contract.personId === personId,
+    );
+  if (isCash && !draft.workId && !unlinkedJobPayment) throw new Error("work");
   const labour = wage || (!isCash && draft.costType === "labour");
   const account = labour
     ? "labour"
@@ -213,7 +255,7 @@ export function buildQuickEntry(
     !next.contracts.some(
       (contract) =>
         contract.id === contractId &&
-        contract.workId === workId &&
+        contractAppliesToWork(contract, workId) &&
         contract.personId === personId,
     )
   )
@@ -283,18 +325,27 @@ export function buildQuickEntry(
       draft.kind === "refund" ? "refund" : "payment",
     );
   } else {
+    const wageAmount = wage ? quickWageAmount(draft) : 0;
+    if (wage && !wageAmount) throw new Error("amount");
+    const daily = wage && draft.wageBasis === "day";
+    const dailyQuantity = daily ? contractQuantity(draft.wageDays)! : "";
+    const dailyDescription = daily
+      ? `${dailyQuantity} দিন × ${moneyInputValue(parseAmount(draft.wageRate))} টাকা`
+      : "";
     const rows = wage
       ? [
           {
             id: `line-${draft.id}`,
-            label: draft.note.trim() || "মজুরি",
-            amount: draft.amount,
+            label: [draft.note.trim() || "মজুরি", dailyDescription]
+              .filter(Boolean)
+              .join(" · "),
+            amount: moneyInputValue(wageAmount),
             groupId: "",
             groupName: "",
             brand: "",
             usage: "",
-            quantity: "",
-            unit: "",
+            quantity: dailyQuantity,
+            unit: daily ? "দিন" : "",
           },
         ]
       : draft.rows;
@@ -323,10 +374,10 @@ export function buildQuickEntry(
       if (groupId) {
         const match = next.items.find(
           (item) =>
-            item.name === row.label.trim() &&
-            item.brand === row.brand.trim() &&
+            latinDigits(item.name) === latinDigits(row.label.trim()) &&
+            latinDigits(item.brand) === latinDigits(row.brand.trim()) &&
             item.materialGroupId === groupId &&
-            item.usage === row.usage.trim(),
+            latinDigits(item.usage) === latinDigits(row.usage.trim()),
         );
         if (match) itemId = match.id;
         else {
@@ -383,11 +434,7 @@ export function buildQuickEntry(
       const refund = draft.refund.trim() ? parseAmount(draft.refund) : 0;
       if (refund > total) throw new Error("refund");
       if (refund) addCash(draft.refundId, refund, "refund");
-    } else if (
-      (draft.kind === "payment" && draft.purpose === "wage") ||
-      draft.payment === "full" ||
-      draft.payment === "partial"
-    ) {
+    } else if (draft.payment === "full" || draft.payment === "partial") {
       const paid =
         draft.payment === "partial" ? positiveAmount(draft.paid) : total;
       if (!personId && paid !== total) throw new Error("person");

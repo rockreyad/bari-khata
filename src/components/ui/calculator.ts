@@ -1,3 +1,4 @@
+import { latinDigits } from "../../lib/numerals";
 export type CalculatorFailure =
   "empty" | "syntax" | "zero" | "negative" | "large";
 export class CalculatorError extends Error {
@@ -24,18 +25,41 @@ function fraction(n: bigint, d = 1n): Fraction {
   return { n: n / divisor, d: d / divisor };
 }
 export function normalizeExpression(expression: string) {
-  return expression
-    .replace(/[০-৯]/g, (char) => String("০১২৩৪৫৬৭৮৯".indexOf(char)))
+  return latinDigits(expression)
     .replace(/[×✕xX]/g, "*")
     .replace(/[÷]/g, "/")
     .replace(/[−–]/g, "-")
-    .replace(/[,৳\s]/g, "");
+    .trim();
+}
+function arithmeticSource(expression: string) {
+  if (/[\d.,]\s+[\d.,]/.test(expression)) throw new CalculatorError("syntax");
+  const compact = expression.replace(/\s/g, "");
+  for (let index = 0; index < compact.length; index++) {
+    if (compact[index] !== "৳") continue;
+    if (
+      (index > 0 && !/[+\-*/(]/.test(compact[index - 1])) ||
+      !/[\d.]/.test(compact[index + 1] ?? "")
+    )
+      throw new CalculatorError("syntax");
+  }
+  return compact
+    .replaceAll("৳", "")
+    .replace(/[\d,]+(?:\.\d*)?|\.\d+/g, (literal) => {
+      if (!literal.includes(",")) return literal;
+      const [whole] = literal.split(".");
+      if (
+        !/^\d{1,3}(?:,\d{3})+$/.test(whole) &&
+        !/^\d{1,2}(?:,\d{2})*,\d{3}$/.test(whole)
+      )
+        throw new CalculatorError("syntax");
+      return literal.replaceAll(",", "");
+    });
 }
 export function evaluateMoneyExpression(expression: string): {
   poisha: number;
   value: string;
 } {
-  const source = normalizeExpression(expression);
+  const source = arithmeticSource(normalizeExpression(expression));
   if (!source) throw new CalculatorError("empty");
   if (source.length > 240) throw new CalculatorError("large");
   if (/[^0-9.+\-*/()]/.test(source)) throw new CalculatorError("syntax");

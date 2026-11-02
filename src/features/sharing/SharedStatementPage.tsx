@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowClockwiseIcon,
+  CaretDownIcon,
   DownloadSimpleIcon,
   HouseLineIcon,
   LinkBreakIcon,
@@ -168,6 +169,26 @@ export function SharedStatementPage() {
       ? [{ kind: "refund" as const, label: "টাকা ফেরত" }]
       : []),
   ];
+  const metrics = statement
+    ? [
+        ...(statement.totals.cost !== 0
+          ? [
+              {
+                label: isWorker
+                  ? "কাজের মজুরি"
+                  : isShop
+                    ? "মালের দাম"
+                    : "অন্য খরচ",
+                amount: statement.totals.cost,
+                due: false,
+              },
+            ]
+          : []),
+        ...(statement.totals.payable > 0
+          ? [{ label: "আর পাবেন", amount: statement.totals.payable, due: true }]
+          : []),
+      ]
+    : [];
   return (
     <main className="shared-statement-page">
       <header className="shared-brand">
@@ -228,46 +249,42 @@ export function SharedStatementPage() {
           </section>
           <section className="shared-overview" aria-label={t("হিসাবের সারাংশ")}>
             <div className="shared-total-main">
-              <span>
-                {t(
-                  isWorker
-                    ? "মোট পেয়েছেন"
-                    : isShop
-                      ? statement.counts.expense_credit
-                        ? "ফেরত বাদে কেনাকাটা"
-                        : "মোট কেনাকাটা"
-                      : "মোট খরচ",
-                )}
-              </span>
-              <strong>
-                {money(
-                  isWorker ? statement.totals.paid : statement.totals.cost,
-                )}
-              </strong>
+              <span>{t("মোট পেয়েছেন")}</span>
+              <strong>{money(statement.totals.paid)}</strong>
               <small>
                 {t(statement.workName ? "এই কাজের হিসাব" : "সব সময়ের হিসাব")}
               </small>
             </div>
-            <dl className="shared-balance-grid">
-              <div>
-                <dt>{t(isWorker ? "কাজের বিল" : "পরিশোধ হয়েছে")}</dt>
-                <dd>
-                  {money(
-                    isWorker ? statement.totals.cost : statement.totals.paid,
-                  )}
-                </dd>
-              </div>
-              <div
-                className={statement.totals.payable > 0 ? "shared-has-due" : ""}
+            {metrics.length ? (
+              <dl
+                className="shared-balance-grid"
+                style={{
+                  gridTemplateColumns: `repeat(${metrics.length}, minmax(0, 1fr))`,
+                }}
               >
-                <dt>{t("আর পাবেন")}</dt>
-                <dd>{money(statement.totals.payable)}</dd>
-              </div>
-              <div>
-                <dt>{t("অগ্রিম")}</dt>
-                <dd>{money(statement.totals.advance)}</dd>
-              </div>
-            </dl>
+                {metrics.map((metric) => (
+                  <div
+                    key={metric.label}
+                    className={metric.due ? "shared-has-due" : ""}
+                  >
+                    <dt>{t(metric.label)}</dt>
+                    <dd>{money(metric.amount)}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+            {statement.totals.advance > 0 ? (
+              <details className="shared-reconciliation">
+                <summary>
+                  {t("আরও হিসাব")}
+                  <CaretDownIcon size={16} />
+                </summary>
+                <dl>
+                  <dt>{t("অগ্রিম")}</dt>
+                  <dd>{money(statement.totals.advance)}</dd>
+                </dl>
+              </details>
+            ) : null}
           </section>
           {isWorker && statement.contracts.length ? (
             <details className="shared-contracts">

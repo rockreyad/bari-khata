@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { effectiveAccounts } from "../../domain/effectiveAccounts";
+import { CashReport } from "./CashReport";
 import { useSearchParams } from "react-router";
 import {
   ArrowRightIcon,
@@ -13,7 +15,12 @@ import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { EntryList } from "../../components/ui/EntryList";
 import { Sheet } from "../../components/Sheet";
-import { costNames, saveFile, todayDhaka } from "../../lib/display";
+import {
+  accountNames,
+  costNames,
+  saveFile,
+  todayDhaka,
+} from "../../lib/display";
 import { validHistoryDate } from "../history/history";
 import {
   analyticsCsv,
@@ -35,6 +42,16 @@ export type AnalyticsPageProps = {
   onEntry?: (id: string) => void;
   initialGroupId?: string;
 };
+export function AnalyticsPage(props: AnalyticsPageProps) {
+  const [params] = useSearchParams();
+  const detail =
+    props.initialGroupId ||
+    params.get("mode") === "cost" ||
+    ["section", "group", "item", "brand", "usage", "type"].some((key) =>
+      params.has(key),
+    );
+  return detail ? <CostAnalyticsPage {...props} /> : <CashReport {...props} />;
+}
 const queryKeys: Record<keyof AnalyticsFilters, string> = {
   groupId: "group",
   itemId: "item",
@@ -83,7 +100,7 @@ const dimensions: { id: AnalyticsDimension; label: string }[] = [
   { id: "usage", label: "ব্যবহার অনুযায়ী" },
   { id: "item", label: "মালের নাম অনুযায়ী" },
 ];
-export function AnalyticsPage({
+function CostAnalyticsPage({
   ledger,
   onEntry,
   initialGroupId,
@@ -97,7 +114,16 @@ export function AnalyticsPage({
   const section = reportSection(params.get("section"), filters.costType);
   const [filterOpen, setFilterOpen] = useState(false);
   const [limit, setLimit] = useState(20);
-  const allRows = useMemo(() => costRows(ledger), [ledger]);
+  const rawAccount = params.get("account");
+  const account = ["materials", "labour", "other"].includes(rawAccount ?? "")
+    ? rawAccount
+    : null;
+  const allRows = useMemo(() => {
+    const rows = costRows(ledger);
+    if (!account) return rows;
+    const accounts = effectiveAccounts(ledger);
+    return rows.filter((row) => accounts.get(row.entry.id) === account);
+  }, [ledger, account]);
   const hasMaterialGroups = allRows.some(
     (row) => row.line.costType === "material" && row.groupId,
   );
@@ -169,6 +195,7 @@ export function AnalyticsPage({
   function chooseSection(id: ReportSection) {
     const next = new URLSearchParams(params);
     next.set("section", id);
+    if (id !== "all") next.delete("account");
     ["type", "item", "brand", "usage", "by"].forEach((key) => next.delete(key));
     setParams(next, { replace: true });
     setLimit(20);
@@ -247,16 +274,23 @@ export function AnalyticsPage({
       field: "to",
     });
   const heading =
-    section === "material"
-      ? group
-        ? t("{{name}} — কোথায় কত", { name: group.name })
-        : t("মালের খরচ")
-      : section === "labour"
-        ? t("মজুরির হিসাব")
-        : section === "transport"
-          ? t("আনা ও নামানোর খরচ")
-          : t("অন্য খরচ");
-  const scopeLabel = work?.name ?? t("সব কাজ মিলিয়ে");
+    section === "all"
+      ? t("মাল ও কাজের দাম")
+      : section === "material"
+        ? group
+          ? t("{{name}} — কোথায় কত", { name: group.name })
+          : t("মালের খরচ")
+        : section === "labour"
+          ? t("মজুরির হিসাব")
+          : section === "transport"
+            ? t("আনা ও নামানোর খরচ")
+            : t("অন্য খরচ");
+  const scopeLabel = [
+    work?.name ?? t("সব কাজ মিলিয়ে"),
+    account ? t(accountNames[account as keyof typeof accountNames]) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const max = Math.max(1, ...breakdown.map((row) => Math.abs(row.amount)));
   const amounts = Object.fromEntries(
     matches.map((match) => [match.entry.id, match.amount]),
@@ -277,18 +311,20 @@ export function AnalyticsPage({
     ]),
   );
   const selectCostTypes =
-    section === "material"
-      ? ["material"]
-      : section === "labour"
-        ? ["labour"]
-        : section === "transport"
-          ? ["transport", "unload"]
-          : ["rental", "other"];
+    section === "all"
+      ? Object.keys(costNames)
+      : section === "material"
+        ? ["material"]
+        : section === "labour"
+          ? ["labour"]
+          : section === "transport"
+            ? ["transport", "unload"]
+            : ["rental", "other"];
   return (
     <div className="report-page">
       <header className="page-heading">
         <div>
-          <h1>{t("খরচের হিসাব")}</h1>
+          <h1>{t("মাল ও কাজের দাম")}</h1>
           <p>{t("যে খরচ জানতে চান, সেটি খুলে দেখুন।")}</p>
         </div>
         <button
@@ -306,12 +342,27 @@ export function AnalyticsPage({
           <DownloadSimpleIcon size={21} />
         </button>
       </header>
+      <button
+        className="text-button"
+        onClick={() => {
+          const next = new URLSearchParams();
+          for (const key of ["work", "person", "from", "to", "account"])
+            if (params.get(key)) next.set(key, params.get(key)!);
+          setParams(next);
+        }}
+      >
+        {t("টাকা দেওয়ার হিসাব দেখি")}
+        <ArrowRightIcon size={16} />
+      </button>
       <div
         className="report-section-tabs"
         role="tablist"
         aria-label={t("খরচের খাত")}
       >
-        {sections.map((item) => (
+        {(section === "all"
+          ? [{ id: "all" as const, label: "সব দাম" }, ...sections]
+          : sections
+        ).map((item) => (
           <button
             key={item.id}
             role="tab"

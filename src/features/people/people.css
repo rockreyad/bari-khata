@@ -662,6 +662,45 @@
   font-weight: 650;
   overflow-wrap: anywhere;
 }
+.contact-reconciliation {
+  border-top: 1px solid var(--line);
+}
+.contact-reconciliation > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 29px;
+  min-height: 48px;
+  list-style: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+}
+.contact-reconciliation > summary::-webkit-details-marker {
+  display: none;
+}
+.contact-reconciliation[open] > summary > svg {
+  transform: rotate(180deg);
+}
+.contact-reconciliation > dl {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 29px 20px;
+  margin: 0;
+}
+.contact-reconciliation dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.contact-reconciliation dd {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 .contact-detail-page .contact-account-note {
   margin: 0;
   padding: 12px 29px;
@@ -699,4 +738,75 @@
   .contact-detail-page .contact-account-note {
     padding: 11px 21px;
   }
+  .contact-reconciliation > summary {
+    padding: 13px 21px;
+  }
+  .contact-reconciliation > dl {
+    padding: 0 21px 18px;
+  }
+}
+
+.contact-bill-progress {
+  padding: 0 29px 23px;
+}
+.contact-main-actions.contact-shop-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.contact-shop-actions .contact-advance-action {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 32px;
+  padding: 4px 2px;
+}
+@media (max-width: 600px) {
+  .contact-bill-progress {
+    padding: 0 21px 21px;
+  }
+}
+
+.contact-summary-card > .spending-chart-card {
+  padding: 22px 29px 20px;
+  border-top: 1px solid var(--line);
+}
+.contact-summary-card > .contact-summary-hero:last-child {
+  padding-bottom: 27px;
+}
+.contact-summary-card .contact-bill-progress {
+  padding-bottom: 24px;
+}
+.contact-summary-card .contact-summary-metrics {
+  padding-top: 19px;
+  padding-bottom: 18px;
+}
+.contact-summary-card .contact-summary-metrics dd {
+  font-size: 20px;
+}
+@media (max-width: 600px) {
+  .contact-summary-card > .spending-chart-card {
+    padding: 20px 21px 18px;
+  }
+  .contact-summary-card .contact-summary-metrics dd {
+    font-size: clamp(17px, 4.7vw, 20px);
+  }
+}
+
+.people-jobs-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 49px;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+  color: var(--accent);
+  background: linear-gradient(115deg, var(--accent-soft), var(--surface));
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+}
+.people-jobs-link > svg:last-child {
+  margin-left: auto;
 }

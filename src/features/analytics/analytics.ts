@@ -1,3 +1,5 @@
+import { latinDigits } from "../../lib/numerals";
+import { poishaDecimal } from "../../domain/money";
 import type {
   CostType,
   Entry,
@@ -62,7 +64,11 @@ export type Breakdown = {
 export type AnalyticsDimension =
   "group" | "item" | "work" | "brand" | "usage" | "costType" | "person";
 export const normalizeSearch = (value: string) =>
-  value.normalize("NFKC").trim().toLocaleLowerCase().replace(/\s+/g, " ");
+  latinDigits(value)
+    .normalize("NFKC")
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/\s+/g, " ");
 
 export function costRows(ledger: Ledger): CostRow[] {
   const items = new Map(ledger.items.map((item) => [item.id, item]));
@@ -139,7 +145,7 @@ export function filterCostRows(
       (!f.itemId ||
         (f.itemId.startsWith("label:")
           ? !row.line.itemId &&
-            normalizeSearch(row.itemName) === f.itemId.slice(6)
+            normalizeSearch(row.itemName) === normalizeSearch(f.itemId.slice(6))
           : row.line.itemId === f.itemId)) &&
       (!f.brand ||
         (f.brand === "__unknown__" ? !row.brand : row.brand === f.brand)) &&
@@ -290,9 +296,11 @@ export function matchingEntries(rows: CostRow[]) {
 
 type Translate = (text: string) => string;
 function poishaText(amount: number) {
-  const absolute = Math.abs(amount);
-  return `${amount < 0 ? "-" : ""}${Math.trunc(absolute / 100)}.${String(absolute % 100).padStart(2, "0")}`;
+  const text = poishaDecimal(amount);
+  const [whole, tail = ""] = text.split(".");
+  return `${whole}.${tail.padEnd(2, "0")}`;
 }
+
 function csvCell(text: string, generatedNumber = false) {
   const escaped =
     !generatedNumber && /^[=+@\-\t\r\n]/.test(text.trimStart())
@@ -435,12 +443,14 @@ export function analyticsPresets(ledger: Ledger): AnalyticsPreset[] {
   return presets;
 }
 
-export type ReportSection = "material" | "labour" | "transport" | "other";
+export type ReportSection =
+  "material" | "labour" | "transport" | "other" | "all";
 export function reportSection(
   value: string | null,
   costType = "",
 ): ReportSection {
   if (
+    value === "all" ||
     value === "material" ||
     value === "labour" ||
     value === "transport" ||
@@ -453,6 +463,7 @@ export function reportSection(
   return "material";
 }
 export function sectionRows(rows: CostRow[], section: ReportSection) {
+  if (section === "all") return rows;
   return rows.filter((row) =>
     section === "material"
       ? row.line.costType === "material"

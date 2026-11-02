@@ -5,31 +5,33 @@ import {
   MagnifyingGlassIcon,
   PackageIcon,
   PlusIcon,
-  TruckIcon,
   ClipboardTextIcon,
 } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { summarize } from "../../domain/ledger";
+import { cashSummary } from "../../domain/cashSummary";
 import { EntryList } from "../../components/ui/EntryList";
 import { pendingReviewEntries } from "../import/bulkReview";
 import { WorkCard } from "../works/WorksPages";
+import "./home-summary.css";
 export function HomePage() {
   const { ledger, add, go, detail } = useNotebook();
   const { t, money, number, formatDigits } = useLanguageContext();
   const s = summarize(ledger);
+  const paid = cashSummary(ledger);
   const pending = pendingReviewEntries(ledger).length;
   const cards = [
     {
-      label: "মাল কেনা",
-      value: s.byType.material,
-      scope: "material",
+      label: "মাল কিনতে দিয়েছি",
+      value: paid.byAccount.materials,
+      scope: "materials",
       Icon: PackageIcon,
       tone: "blue",
     },
     {
-      label: "মজুরি",
-      value: s.byType.labour,
+      label: "মিস্ত্রিকে দিয়েছি",
+      value: paid.byAccount.labour,
       scope: "labour",
       Icon: HardHatIcon,
       tone: "purple",
@@ -63,11 +65,11 @@ export function HomePage() {
           {t("টাকা দিলাম")}
         </button>
       </div>
-      <section className="home-total-card" aria-label={t("মোট খরচ")}>
+      <section className="home-total-card" aria-label={t("মোট টাকা দিয়েছি")}>
         <div className="home-total-heading">
           <div>
-            <span>{t("মোট খরচ")}</span>
-            <strong>{money(s.totalCost)}</strong>
+            <span>{t("মোট টাকা দিয়েছি")}</span>
+            <strong>{money(paid.netPaid)}</strong>
           </div>
           <button className="home-total-report" onClick={() => go("/reports")}>
             {t("ভাগ করে দেখি")}
@@ -76,7 +78,7 @@ export function HomePage() {
         </div>
         <div className="home-total-breakdown">
           {cards.map(({ label, value, scope, Icon, tone }) => (
-            <button key={scope} onClick={() => go(`/reports?section=${scope}`)}>
+            <button key={scope} onClick={() => go(`/reports?account=${scope}`)}>
               <span className={`summary-symbol ${tone}`}>
                 <Icon size={20} weight="duotone" />
               </span>
@@ -85,18 +87,39 @@ export function HomePage() {
             </button>
           ))}
         </div>
-        {s.byType.transport + s.byType.unload > 0 ? (
+        {paid.byAccount.other !== 0 ? (
           <button
-            className="home-transport-note"
-            onClick={() => go("/reports?section=transport")}
+            className="home-other-paid"
+            onClick={() => go("/reports?account=other")}
           >
-            <TruckIcon size={16} />
-            <span>{t("গাড়িভাড়া ও মাল নামানো")}</span>
-            <strong>{money(s.byType.transport + s.byType.unload)}</strong>
-            <ArrowRightIcon size={14} />
+            <CoinsIcon size={17} weight="duotone" />
+            <span>{t("অন্য কাজে দিয়েছি")}</span>
+            <strong>{money(paid.byAccount.other)}</strong>
+            <ArrowRightIcon size={15} />
           </button>
         ) : null}
+        {s.payable > 0 ? (
+          <div className="home-known-due">
+            <span>{t("দিতে বাকি")}</span>
+            <strong>{money(s.payable)}</strong>
+          </div>
+        ) : null}
       </section>
+      <button
+        className="home-jobs-link"
+        aria-label={t("মিস্ত্রির কাজ")}
+        aria-describedby="home-jobs-caption"
+        onClick={() => go("/jobs")}
+      >
+        <span className="home-jobs-symbol">
+          <HardHatIcon size={22} weight="duotone" />
+        </span>
+        <span>
+          <strong>{t("মিস্ত্রির কাজ")}</strong>
+          <small id="home-jobs-caption">{t("অবস্থা, বাকি ও দেওয়া টাকা")}</small>
+        </span>
+        <ArrowRightIcon size={19} />
+      </button>
       {pending > 0 ? (
         <button
           className="home-review-notice"
@@ -125,6 +148,7 @@ export function HomePage() {
           </button>
         </div>
         <EntryList
+          showKind
           ledger={ledger}
           entries={[...ledger.entries]
             .sort(
@@ -144,16 +168,18 @@ export function HomePage() {
             <ArrowRightIcon size={16} />
           </button>
         </div>
-        {ledger.works.length ? (
+        {ledger.works.some((work) => !work.archivedAt) ? (
           <div className="work-carousel">
-            {ledger.works.map((work) => (
-              <WorkCard
-                key={work.id}
-                work={work}
-                ledger={ledger}
-                onOpen={() => go(`/works/${work.id}`)}
-              />
-            ))}
+            {ledger.works
+              .filter((work) => !work.archivedAt)
+              .map((work) => (
+                <WorkCard
+                  key={work.id}
+                  work={work}
+                  ledger={ledger}
+                  onOpen={() => go(`/works/${work.id}`)}
+                />
+              ))}
           </div>
         ) : (
           <button className="empty-panel" onClick={() => go("/works")}>

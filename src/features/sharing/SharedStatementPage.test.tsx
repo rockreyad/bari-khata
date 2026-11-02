@@ -154,7 +154,7 @@ describe("public live statements", () => {
   });
 });
 
-it("shows shop purchases as the headline, keeps full totals while filtering a server page and offers a full scoped copy", async () => {
+it("shows shop cash received as the headline, preserves prices and totals while filtering, and offers a full scoped copy", async () => {
   const first = page();
   const shop = {
     ...first,
@@ -181,7 +181,13 @@ it("shows shop purchases as the headline, keeps full totals while filtering a se
     .mockResolvedValueOnce(shop);
   const user = userEvent.setup();
   render(<SharedStatementPage />);
-  await screen.findByText("ফেরত বাদে কেনাকাটা");
+  await screen.findByText("মোট পেয়েছেন");
+  expect(
+    document.querySelector(".shared-total-main > strong")?.textContent,
+  ).toBe("৳100");
+  expect(document.querySelector(".shared-balance-grid")?.textContent).toContain(
+    "মালের দাম৳300",
+  );
   expect(screen.queryByText("এই লিংকে শুধু হিসাব দেখা যায়")).toBeNull();
   expect(screen.queryByText("এই লিংকে কোনো তথ্য বদলানো যায় না।")).toBeNull();
   await user.click(screen.getByRole("button", { name: "মাল ফেরত" }));
@@ -195,6 +201,9 @@ it("shows shop purchases as the headline, keeps full totals while filtering a se
   expect(
     screen.getByRole("region", { name: "হিসাবের সারাংশ" }).textContent,
   ).toContain("৳300");
+  expect(
+    document.querySelector(".shared-total-main > strong")?.textContent,
+  ).toBe("৳100");
   await user.click(screen.getByRole("button", { name: "কপি নামান" }));
   await waitFor(() => expect(mocked.download).toHaveBeenCalledOnce());
   expect(mocked.read).toHaveBeenLastCalledWith("a".repeat(64));
@@ -222,4 +231,102 @@ it("shows contracts only when scoped worker contracts exist", async () => {
   expect(screen.getByText("চুক্তির হিসাব")).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "হালনাগাদ দেখি" }));
   await waitFor(() => expect(screen.queryByText("চুক্তির হিসাব")).toBeNull());
+});
+
+it.each([
+  ["shop", "materials"],
+  ["worker", "labour"],
+  ["driver", "other"],
+  ["other", "materials"],
+] as const)(
+  "shows payment-only %s recipients the cash they received without zero bill totals",
+  async (kind, account) => {
+    const statement = SharedStatementSchema.parse({
+      ...page(),
+      person: { name: "Golam", role: "", kind },
+      account,
+      total: 1,
+      nextOffset: null,
+      totals: {
+        cost: 0,
+        paid: 16200,
+        payable: 0,
+        advance: 16200,
+        historicalCost: 0,
+      },
+      counts: { payment: 1 },
+      rows: [
+        {
+          key: "paid",
+          date: "2026-11-02",
+          kind: "payment",
+          historical: false,
+          charge: 0,
+          paid: 16200,
+          description: "দরজার জন্য দিয়েছি",
+          works: "দরজা",
+        },
+      ],
+    });
+    const before = JSON.stringify(statement);
+    mocked.read.mockResolvedValue(statement);
+    const { container } = render(<SharedStatementPage />);
+    await screen.findByText("মোট পেয়েছেন");
+    expect(
+      container.querySelector(".shared-total-main > strong")?.textContent,
+    ).toBe("৳162");
+    expect(container.querySelector(".shared-balance-grid")).toBeNull();
+    expect(container.querySelector(".shared-has-due")).toBeNull();
+    const more = container.querySelector("details.shared-reconciliation")!;
+    expect(more.hasAttribute("open")).toBe(false);
+    await userEvent.click(screen.getByText("আরও হিসাব"));
+    expect(more.hasAttribute("open")).toBe(true);
+    expect(more.querySelector("dd")?.textContent).toBe("৳162");
+    expect(screen.getByRole("button", { name: "কপি নামান" })).toBeTruthy();
+    expect(JSON.stringify(statement)).toBe(before);
+  },
+);
+
+it("uses the server's net paid amount once even when only a refund row is loaded", async () => {
+  mocked.read.mockResolvedValue(
+    SharedStatementSchema.parse({
+      ...page(),
+      person: { name: "দরজার দোকান", role: "", kind: "shop" },
+      account: "materials",
+      total: 3,
+      nextOffset: 1,
+      totals: {
+        cost: 10000,
+        paid: 15000,
+        payable: 0,
+        advance: 5000,
+        historicalCost: 0,
+      },
+      counts: { expense: 1, payment: 1, refund: 1 },
+      rows: [
+        {
+          key: "refund",
+          date: "2026-11-02",
+          kind: "refund",
+          historical: false,
+          charge: 0,
+          paid: -5000,
+          description: "ফেরত পাওয়া",
+          works: "দরজা",
+        },
+      ],
+    }),
+  );
+  const { container } = render(<SharedStatementPage />);
+  await screen.findByText("মোট পেয়েছেন");
+  expect(
+    container.querySelector(".shared-total-main > strong")?.textContent,
+  ).toBe("৳150");
+  expect(container.querySelector(".shared-balance-grid")?.textContent).toBe(
+    "মালের দাম৳100",
+  );
+  expect(
+    container.querySelector(".shared-reconciliation dd")?.textContent,
+  ).toBe("৳50");
+  expect(screen.getByRole("button", { name: "আরও হিসাব দেখি" })).toBeTruthy();
 });

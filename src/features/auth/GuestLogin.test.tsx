@@ -58,7 +58,12 @@ describe("guest sample entry", () => {
       const link = screen.getByRole("link", { name: "নমুনা দেখুন" });
       expect(link.getAttribute("href")).toBe("/sample");
       expect(link.closest("form")).toBeNull();
-      expect(screen.getByText("লগইন ছাড়াই অ্যাপ ঘুরে দেখুন।")).toBeTruthy();
+      expect(screen.queryByText("লগইন ছাড়াই অ্যাপ ঘুরে দেখুন।")).toBeNull();
+      expect(
+        screen.queryByText("শুরুতে ০ দিয়ে বা ছাড়াই লিখতে পারেন।"),
+      ).toBeNull();
+      expect(link.querySelector("svg")).toBeNull();
+      expect(link.parentElement?.className).toBe("login-secondary-links");
       await user.click(link);
       expect(
         screen.getByRole("heading", { name: "Sample notebook" }),

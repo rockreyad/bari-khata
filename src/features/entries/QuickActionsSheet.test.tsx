@@ -18,6 +18,17 @@ vi.mock("../../app/NotebookProvider", () => ({
           name: "বালু কেনা",
           quickActions: ["expense", "transport"],
         },
+        { id: "worker", name: "মিস্ত্রির খাতা", quickActions: ["labour"] },
+        {
+          id: "worker-pay",
+          name: "শ্রমিকের টাকা",
+          quickActions: ["payment", "labour"],
+        },
+        {
+          id: "mixed",
+          name: "দরজার সব কাজ",
+          quickActions: ["expense", "payment", "labour", "transport"],
+        },
         { id: "hidden", name: "লুকানো", quickActions: [] },
         { id: "default", name: "সাধারণ", quickActions: null },
       ],
@@ -61,5 +72,64 @@ describe("configured notebook shortcuts", () => {
       account: "materials",
       costType: "material",
     });
+  });
+});
+
+it("opens the labour preset as contextual payment without forcing earned wages or settlement", async () => {
+  render(<QuickActionsSheet />);
+  const user = userEvent.setup();
+  const worker = screen.getByText("মিস্ত্রির খাতা").closest("article")!;
+  expect(within(worker).getAllByRole("button")).toHaveLength(1);
+  expect(
+    within(worker).queryByRole("button", { name: "মজুরির বিল" }),
+  ).toBeNull();
+  await user.click(
+    within(worker).getByRole("button", { name: "মিস্ত্রির টাকা" }),
+  );
+  expect(state.add).toHaveBeenLastCalledWith({
+    kind: "payment",
+    workId: "worker",
+    account: "labour",
+    costType: "labour",
+  });
+  const labourPayment = screen.getByText("শ্রমিকের টাকা").closest("article")!;
+  await user.click(
+    within(labourPayment).getByRole("button", { name: "টাকা দিলাম" }),
+  );
+  expect(state.add).toHaveBeenLastCalledWith({
+    kind: "payment",
+    workId: "worker-pay",
+    account: "labour",
+    costType: "labour",
+  });
+});
+
+it("preserves material payment and purchase scopes beside a worker shortcut in a mixed notebook", async () => {
+  render(<QuickActionsSheet />);
+  const user = userEvent.setup();
+  const card = screen.getByText("দরজার সব কাজ").closest("article")!;
+  expect(within(card).getAllByRole("button")).toHaveLength(4);
+  await user.click(
+    within(card).getByRole("button", { name: "মিস্ত্রির টাকা" }),
+  );
+  expect(state.add).toHaveBeenLastCalledWith({
+    kind: "payment",
+    workId: "mixed",
+    account: "labour",
+    costType: "labour",
+  });
+  await user.click(within(card).getByRole("button", { name: "টাকা দিলাম" }));
+  expect(state.add).toHaveBeenLastCalledWith({
+    kind: "payment",
+    workId: "mixed",
+    account: "materials",
+    costType: "material",
+  });
+  await user.click(within(card).getByRole("button", { name: "খরচ লিখি" }));
+  expect(state.add).toHaveBeenLastCalledWith({
+    kind: "expense",
+    workId: "mixed",
+    account: "materials",
+    costType: "material",
   });
 });

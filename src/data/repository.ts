@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { preservesPaymentPurposes } from "../domain/paymentPurposes";
+import { preservesRemovalHistory } from "../domain/entityDeletion";
+import { preservesContractHistory } from "../domain/contracts";
 import { preservesWorkHistory } from "../domain/workActivity";
 import {
   LedgerSchema,
@@ -200,6 +202,10 @@ export class LedgerRepository {
             ? change(structuredClone(current.ledger))
             : change,
         );
+        if (!preservesRemovalHistory(current.ledger, ledger))
+          throw new Error("removal_history_would_be_lost");
+        if (!preservesContractHistory(current.ledger, ledger))
+          throw new Error("contract_history_would_be_lost");
         if (ledger.isDemo !== (mode === "demo"))
           throw new Error("workspace_mode_mismatch");
         const refs = receiptReferences(ledger);
@@ -315,8 +321,12 @@ export class LedgerRepository {
       this.database.recoveries,
       async () => {
         const current = await this.read(mode);
+        if (current && !preservesRemovalHistory(current.ledger, backup.ledger))
+          throw new Error("removal_history_would_be_lost");
         if (current && !preservesPaymentPurposes(current.ledger, backup.ledger))
           throw new Error("payment_purpose_would_be_lost");
+        if (current && !preservesContractHistory(current.ledger, backup.ledger))
+          throw new Error("contract_history_would_be_lost");
         if (current && !preservesWorkHistory(current.ledger, backup.ledger))
           throw new Error("work_history_would_be_lost");
         if (current)

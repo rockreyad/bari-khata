@@ -1,21 +1,238 @@
 @font-face {
-  font-family: "FN Mahin Rafid";
-  src: url("./assets/fonts/fn-mahin-rafid/fn-mahin-rafid-regular.woff2")
+  font-family: "Hind Siliguri";
+  src: url("@fontsource/hind-siliguri/files/hind-siliguri-latin-400-normal.woff2")
     format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
-  size-adjust: 120%;
+}
+
+@font-face {
+  font-family: "Hind Siliguri";
+  src: url("@fontsource/hind-siliguri/files/hind-siliguri-latin-500-normal.woff2")
+    format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Hind Siliguri";
+  src: url("@fontsource/hind-siliguri/files/hind-siliguri-latin-600-normal.woff2")
+    format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Hind Siliguri";
+  src: url("@fontsource/hind-siliguri/files/hind-siliguri-latin-700-normal.woff2")
+    format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Ekush Numerals";
+  src: url("./assets/fonts/ekush/ekush-numerals-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+09E6-09EF, U+09F3, U+202F;
+}
+
+@font-face {
+  font-family: "Hind Currency";
+  src: url("./assets/fonts/hind-currency/hind-currency-400.woff2")
+    format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+09F3, U+202F;
+}
+
+@font-face {
+  font-family: "Hind Currency";
+  src: url("./assets/fonts/hind-currency/hind-currency-500.woff2")
+    format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+09F3, U+202F;
+}
+
+@font-face {
+  font-family: "Hind Currency";
+  src: url("./assets/fonts/hind-currency/hind-currency-600.woff2")
+    format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+09F3, U+202F;
+}
+
+@font-face {
+  font-family: "Hind Currency";
+  src: url("./assets/fonts/hind-currency/hind-currency-700.woff2")
+    format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+09F3, U+202F;
+}
+
+:root {
+  --number-fonts: "Ekush Numerals";
+}
+
+:root:lang(en) {
+  --number-fonts: "Hind Currency", "Ekush Numerals";
+}
+
+@font-face {
+  font-family: "FN Akkhor";
+  src: url("./assets/fonts/fn-akkhor/fn-akkhor-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
   unicode-range: U+0964-0965, U+0980-09FF, U+200C-200D, U+25CC;
 }
 
 @font-face {
-  font-family: "FN Mahin Rafid";
-  src: url("./assets/fonts/fn-mahin-rafid/fn-mahin-rafid-italic.woff2")
-    format("woff2");
+  font-family: "FN Akkhor";
+  src: url("./assets/fonts/fn-akkhor/fn-akkhor-italic.woff2") format("woff2");
   font-weight: 400;
   font-style: italic;
   font-display: swap;
-  size-adjust: 120%;
   unicode-range: U+0964-0965, U+0980-09FF, U+200C-200D, U+25CC;
+}
+
+:root:lang(bn) :is(h1, h2, h3, h4, .brand-name, .brand-lockup) {
+  letter-spacing: normal;
+}
+
+@media (max-width: 600px) {
+  :root
+    :is(
+      .home-total-heading strong,
+      .work-overview-total strong,
+      .contact-summary-hero > strong,
+      .entry-amount-card-v5 > strong,
+      .shared-total-main > strong,
+      .report-total > strong,
+      .job-detail-total > strong,
+      .spending-chart-header h2
+    ) {
+    min-width: 0;
+    max-width: 100%;
+    font-size: clamp(26px, 8vw, 40px);
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+
+  :root .home-total-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+  }
+
+  :root .home-total-heading > div {
+    display: contents;
+  }
+
+  :root .home-total-heading > div > span {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  :root .home-total-heading strong {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  :root .home-total-report {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  :root .home-total-breakdown .summary-symbol {
+    grid-row: 1;
+  }
+
+  :root .home-total-breakdown strong {
+    grid-column: 1 / -1;
+    min-width: 0;
+    font-size: clamp(15px, 4.5vw, 21px);
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+
+  :root .home-v3 .work-carousel {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 360px) {
+  :root .work-overview-total {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: 8px 12px;
+  }
+
+  :root .work-overview-total > div {
+    display: contents;
+  }
+
+  :root .work-overview-total > div > span {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+  }
+
+  :root .work-overview-total strong {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    max-width: 100%;
+    font-size: clamp(24px, 9vw, 32px);
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+
+  :root .work-chart-toggle {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+:root
+  :is(
+    .money,
+    .hero-amount,
+    .total-card > strong,
+    .stat-tile strong,
+    .notebook-card > strong,
+    .notebook-card-v3 > strong,
+    .home-total-heading strong,
+    .home-total-breakdown strong,
+    .home-cost-sections strong,
+    .work-scope-summary > strong,
+    .contract-calculation strong,
+    .entry-amount-wrap .money-control > input,
+    .report-total > strong,
+    .report-breakdown-list > button > strong,
+    .history-row-amount,
+    .review-summary strong,
+    .spending-chart-header h2,
+    .balance-progress-amounts strong,
+    .entry-amount-card-v5 > strong,
+    .shared-total-main > strong,
+    .work-overview-total strong,
+    .job-detail-total > strong,
+    .contact-paid > strong,
+    .contact-summary-hero > strong
+  ) {
+  letter-spacing: normal;
 }

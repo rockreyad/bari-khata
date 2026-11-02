@@ -7,6 +7,7 @@ import {
   render,
   screen,
   fireEvent,
+  waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
@@ -54,6 +55,7 @@ function mount(onSuccess = vi.fn(), email?: string) {
 async function requestCode(
   user: ReturnType<typeof userEvent.setup>,
   phone = "01712345678",
+  outcome: "pin" | "error" | "pending" = "pin",
 ) {
   await user.type(screen.getByLabelText("ফোন নম্বর", { exact: true }), phone);
   await user.click(
@@ -61,6 +63,16 @@ async function requestCode(
       name: api.auth.phoneAuthMode === "manual" ? "এগিয়ে যাই" : "কোড নিন",
     }),
   );
+  if (outcome === "pin") await waitForPinInput();
+  if (outcome === "error") await screen.findByRole("alert");
+}
+async function waitForPinInput() {
+  const input = await screen.findByLabelText(
+    api.auth.phoneAuthMode === "manual" ? "প্রবেশের কোড" : "কোড",
+    { exact: true },
+  );
+  await waitFor(() => expect((input as HTMLInputElement).disabled).toBe(false));
+  return input as HTMLInputElement;
 }
 beforeEach(() => {
   api.format = String;
@@ -117,7 +129,7 @@ describe("phone sign-in", () => {
       "+8801712345678",
       "1318",
     );
-    expect(onSuccess).toHaveBeenCalledOnce();
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
     expect(api.signIn).not.toHaveBeenCalled();
   });
   it("keeps manual number changes available without a resend cooldown", async () => {
@@ -127,11 +139,13 @@ describe("phone sign-in", () => {
     await requestCode(user);
     await user.type(screen.getByLabelText("প্রবেশের কোড"), "1234");
     await user.click(screen.getByRole("button", { name: "নম্বর বদলাই" }));
+    await screen.findByLabelText("ফোন নম্বর", { exact: true });
     const next = screen.getByRole("button", {
       name: "এগিয়ে যাই",
     }) as HTMLButtonElement;
     expect(next.disabled).toBe(false);
     await user.click(next);
+    await waitForPinInput();
     expect(api.request).toHaveBeenCalledTimes(2);
     expect(
       (screen.getByLabelText("প্রবেশের কোড") as HTMLInputElement).value,
@@ -148,17 +162,18 @@ describe("phone sign-in", () => {
     );
     const user = userEvent.setup();
     mount();
-    await requestCode(user);
+    await requestCode(user, undefined, "error");
     expect(screen.getByRole("alert").textContent).toContain("অপেক্ষা");
     expect(
       (screen.getByRole("button", { name: "এগিয়ে যাই" }) as HTMLButtonElement)
         .disabled,
     ).toBe(false);
     await user.click(screen.getByRole("button", { name: "এগিয়ে যাই" }));
+    await waitForPinInput();
     api.verify.mockRejectedValueOnce(new Error("otp_expired"));
     await user.type(screen.getByLabelText("প্রবেশের কোড"), "1234");
     await user.click(screen.getByRole("button", { name: "খাতা খুলুন" }));
-    expect(screen.getByRole("alert").textContent).toBe(
+    expect((await screen.findByRole("alert")).textContent).toBe(
       "লগইন হয়নি। আবার চেষ্টা করুন।",
     );
     expect(document.body.textContent).not.toMatch(
@@ -166,7 +181,7 @@ describe("phone sign-in", () => {
     );
   });
   it("keeps a rate-limited manual code and waits for the server cooldown before verifying again", async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
     api.auth.phoneAuthMode = "manual";
     api.verify.mockRejectedValueOnce(
       Object.assign(new Error("phone_rate_limited"), { retryAfter: 900 }),
@@ -178,7 +193,9 @@ describe("phone sign-in", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "এগিয়ে যাই" }));
     });
-    const code = screen.getByLabelText("প্রবেশের কোড") as HTMLInputElement;
+    const code = (await screen.findByLabelText(
+      "প্রবেশের কোড",
+    )) as HTMLInputElement;
     fireEvent.change(code, { target: { value: "1234" } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "খাতা খুলুন" }));
@@ -195,8 +212,11 @@ describe("phone sign-in", () => {
       fireEvent.submit(code.closest("form")!);
     });
     expect(api.verify).toHaveBeenCalledOnce();
-    fireEvent.click(screen.getByRole("button", { name: "ইমেইল" }));
-    fireEvent.change(screen.getByLabelText("ইমেইল", { exact: true }), {
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "ইমেইল" }));
+    });
+    const emailInput = await screen.findByLabelText("ইমেইল", { exact: true });
+    fireEvent.change(emailInput, {
       target: { value: "friend@example.com" },
     });
     fireEvent.change(screen.getByLabelText("পাসওয়ার্ড", { exact: true }), {
@@ -206,8 +226,11 @@ describe("phone sign-in", () => {
       fireEvent.click(screen.getByRole("button", { name: "খাতা খুলুন" }));
     });
     expect(api.signIn).toHaveBeenCalledWith("friend@example.com", "Password8");
-    fireEvent.click(screen.getByRole("button", { name: "ফোন নম্বর" }));
-    fireEvent.change(screen.getByLabelText("প্রবেশের কোড"), {
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "ফোন নম্বর" }));
+    });
+    const resumedCode = await screen.findByLabelText("প্রবেশের কোড");
+    fireEvent.change(resumedCode, {
       target: { value: "5678" },
     });
     await act(async () => {
@@ -230,7 +253,7 @@ describe("phone sign-in", () => {
     );
     await user.click(screen.getByRole("button", { name: "খাতা খুলুন" }));
     expect(api.signIn).toHaveBeenCalledWith("friend@example.com", "Password8");
-    expect(screen.getByRole("alert")).toBeTruthy();
+    expect(await screen.findByRole("alert")).toBeTruthy();
     expect(
       screen.queryByRole("link", { name: "নিশ্চিত করার ইমেইল আবার চাই" }),
     ).toBeNull();
@@ -238,8 +261,11 @@ describe("phone sign-in", () => {
     await user.click(
       screen.getByRole("button", { name: "ফোন দিয়ে লগইন করুন" }),
     );
-    expect(screen.getByLabelText("ফোন নম্বর", { exact: true })).toBeTruthy();
+    expect(
+      await screen.findByLabelText("ফোন নম্বর", { exact: true }),
+    ).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "ইমেইল" }));
+    await screen.findByLabelText("ইমেইল", { exact: true });
     expect(
       (screen.getByLabelText("ইমেইল", { exact: true }) as HTMLInputElement)
         .value,
@@ -249,7 +275,7 @@ describe("phone sign-in", () => {
         .value,
     ).toBe("Password8");
     await user.click(screen.getByRole("button", { name: "খাতা খুলুন" }));
-    expect(onSuccess).toHaveBeenCalledOnce();
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
     expect(api.request).not.toHaveBeenCalled();
     expect(api.verify).not.toHaveBeenCalled();
   });
@@ -269,19 +295,21 @@ describe("phone sign-in", () => {
     api.verify.mockRejectedValueOnce(new Error("invalid_otp"));
     await user.type(code, "1111");
     await user.click(screen.getByRole("button", { name: "খাতা খুলুন" }));
-    expect(screen.getByRole("alert").textContent).toContain("কোডটি মেলেনি");
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "কোডটি মেলেনি",
+    );
     expect(onSuccess).not.toHaveBeenCalled();
     await user.clear(code);
     await user.type(code, "১৩১৮");
     await user.click(screen.getByRole("button", { name: "খাতা খুলুন" }));
     expect(api.verify).toHaveBeenLastCalledWith("+8801712345678", "1318");
-    expect(onSuccess).toHaveBeenCalledOnce();
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
     expect(api.signIn).not.toHaveBeenCalled();
   });
   it("validates a Bangladesh number before contacting the server", async () => {
     const user = userEvent.setup();
     mount();
-    await requestCode(user, "01112345678");
+    await requestCode(user, "01112345678", "error");
     expect(api.request).not.toHaveBeenCalled();
     expect(screen.getByRole("alert").textContent).toContain("সঠিক বাংলাদেশি");
   });
@@ -305,18 +333,20 @@ describe("phone sign-in", () => {
     await requestCode(user);
     await user.type(screen.getByLabelText("কোড", { exact: true }), "1318");
     await user.click(screen.getByRole("button", { name: "নম্বর বদলাই" }));
+    await screen.findByLabelText("ফোন নম্বর", { exact: true });
     expect(screen.queryByLabelText("কোড", { exact: true })).toBeNull();
     const phone = screen.getByLabelText("ফোন নম্বর", { exact: true });
     await user.clear(phone);
     await user.type(phone, "01812345678");
     await user.click(screen.getByRole("button", { name: "কোড নিন" }));
+    await waitForPinInput();
     expect(api.request).toHaveBeenLastCalledWith("+8801812345678");
     expect(
       (screen.getByLabelText("কোড", { exact: true }) as HTMLInputElement).value,
     ).toBe("");
   });
   it("enforces a visible resend delay, then requests another code without verifying", async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
     api.request.mockResolvedValue({ retryAfter: 2 });
     mount();
     fireEvent.change(screen.getByLabelText("ফোন নম্বর", { exact: true }), {
@@ -325,6 +355,7 @@ describe("phone sign-in", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "কোড নিন" }));
     });
+    await screen.findByLabelText("কোড", { exact: true });
     const waiting = screen.getByRole("button", {
       name: "2 সেকেন্ড পরে আবার নিন",
     }) as HTMLButtonElement;
@@ -346,7 +377,7 @@ describe("phone sign-in", () => {
     );
     const user = userEvent.setup();
     mount();
-    await requestCode(user);
+    await requestCode(user, undefined, "error");
     expect(screen.getByRole("alert").textContent).toContain("অপেক্ষা");
     expect(
       (
@@ -370,7 +401,7 @@ describe("phone sign-in", () => {
       );
       const user = userEvent.setup();
       const { unmount, onSuccess } = mount();
-      await requestCode(user);
+      await requestCode(user, undefined, "pending");
       expect(
         (
           screen.getByLabelText("ফোন নম্বর", {
@@ -399,8 +430,12 @@ describe("phone sign-in", () => {
     await requestCode(user);
     await user.type(screen.getByLabelText("কোড", { exact: true }), "1318");
     await user.click(screen.getByRole("button", { name: "খাতা খুলুন" }));
-    expect(screen.getByRole("alert").textContent).toContain("মেয়াদ শেষ");
-    expect(screen.getByLabelText("ফোন নম্বর", { exact: true })).toBeTruthy();
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "মেয়াদ শেষ",
+    );
+    expect(
+      await screen.findByLabelText("ফোন নম্বর", { exact: true }),
+    ).toBeTruthy();
     expect(screen.queryByLabelText("কোড", { exact: true })).toBeNull();
   });
   it("preserves email registration handoff and leaves email sign-in available when phone is off", async () => {
@@ -435,6 +470,7 @@ it("displays Bengali phone/code digits while submitting the unchanged canonical 
   await user.type(phone, "01712345678");
   expect(phone.value).toBe("০১৭১২৩৪৫৬৭৮");
   await user.click(screen.getByRole("button", { name: "এগিয়ে যাই" }));
+  await waitForPinInput();
   expect(api.request).toHaveBeenCalledWith("+8801712345678");
   const code = screen.getByLabelText("প্রবেশের কোড", {
     exact: true,
@@ -444,5 +480,5 @@ it("displays Bengali phone/code digits while submitting the unchanged canonical 
   expect(code.checkValidity()).toBe(true);
   await user.click(screen.getByRole("button", { name: "খাতা খুলুন" }));
   expect(api.verify).toHaveBeenCalledWith("+8801712345678", "1318");
-  expect(onSuccess).toHaveBeenCalledOnce();
+  await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
 });

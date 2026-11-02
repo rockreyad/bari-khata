@@ -1,3 +1,4 @@
+import { parseMoneyText } from "./money";
 import { z } from "zod";
 import { LedgerSchema, type CostType, type Entry, type Ledger } from "./model";
 
@@ -280,14 +281,7 @@ const blocks: Block[] = [
 ];
 
 export function sourceAmount(text: string): number {
-  const clean = text.replace(/[৳,\s]/g, "");
-  if (!/^-?\d+(?:\.\d{1,2})?$/.test(clean))
-    throw new Error(`Invalid source amount: ${text}`);
-  const negative = clean.startsWith("-");
-  const [whole, decimal = ""] = clean.replace(/^-/, "").split(".");
-  const amount = Number(whole) * 100 + Number(decimal.padEnd(2, "0"));
-  if (!Number.isSafeInteger(amount)) throw new Error("Unsafe source amount");
-  return negative ? -amount : amount;
+  return parseMoneyText(text, { signed: true });
 }
 
 function sourceDate(value: string): string | null {

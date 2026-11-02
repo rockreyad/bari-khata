@@ -162,6 +162,9 @@ it("localizes a contract quantity while saving the exact numeric quantity and re
   const quantity = await screen.findByRole("textbox", { name: "কত বর্গফুট" });
   expect((quantity as HTMLInputElement).value).toBe("১০০");
   fireEvent.change(quantity, { target: { value: "১০১" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "কেন বদলালেন" }), {
+    target: { value: "পরিমাণ আবার মেপে ঠিক করা হয়েছে" },
+  });
   await waitFor(() =>
     expect(
       screen.getByRole("button", { name: "রাখুন" }).hasAttribute("disabled"),

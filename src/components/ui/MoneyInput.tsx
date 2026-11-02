@@ -1,4 +1,4 @@
-import { latinDigits } from "../../lib/numerals";
+import { NumericInput } from "./NumericInput";
 import {
   useId,
   useRef,
@@ -42,7 +42,7 @@ export function MoneyInput({
   onKeyDown,
   ...props
 }: MoneyInputProps) {
-  const { t, money, number, formatDigits } = useLanguageContext();
+  const { t, money, number } = useLanguageContext();
   const [internal, setInternal] = useState(String(defaultValue ?? ""));
   const current = String(value === undefined ? internal : value);
   const [open, setOpen] = useState(false);
@@ -110,16 +110,16 @@ export function MoneyInput({
       className={`money-control ${disabled ? "is-disabled" : ""}`}
       style={style}
     >
-      <input
+      <NumericInput
         {...props}
-        value={formatDigits(current)}
+        value={current}
         name={name}
         className={className}
         disabled={disabled}
         readOnly={readOnly}
         inputMode={props.inputMode ?? "decimal"}
         onChange={(event) => {
-          const next = latinDigits(event.target.value);
+          const next = event.target.value;
           setInternal(next);
           onChange?.(valueChange<HTMLInputElement>(next, name));
         }}
@@ -182,13 +182,14 @@ export function MoneyInput({
             </button>
           </div>
           <div className="calculator-display">
-            <input
+            <NumericInput
               ref={expressionRef}
+              numericKind="expression"
               type="text"
               inputMode="none"
-              value={formatDigits(expression)}
+              value={expression}
               onChange={(event) => {
-                setExpression(latinDigits(event.target.value).slice(0, 240));
+                setExpression(event.target.value.slice(0, 240));
                 setShowError(false);
               }}
               onKeyDown={expressionKey}

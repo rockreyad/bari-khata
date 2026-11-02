@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { formatMoney } from "../../lib/formatMoney";
 import { SharedStatementSchema } from "./shareModel";
 import {
   completeSharedStatement,
@@ -36,6 +37,21 @@ const first = () =>
     ],
   });
 describe("shared statement export", () => {
+  it.each(["bn", "en"] as const)(
+    "keeps currency spacing in the downloadable %s account copy",
+    (language) => {
+      const csv = sharedStatementCsv(first(), {
+        language,
+        t: (value) => value,
+        money: (amount) => formatMoney(amount, language),
+        date: (value) => value ?? "—",
+      });
+      expect(csv).toContain(
+        language === "bn" ? '"৳\u202f৯৩,০০০"' : '"৳\u202f93,000"',
+      );
+      expect(csv).not.toMatch(/৳[0-9০-৯-]/u);
+    },
+  );
   it("loads every authorized bounded page at one revision before producing the export", async () => {
     const page = first();
     const read = vi

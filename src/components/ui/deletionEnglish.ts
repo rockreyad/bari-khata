@@ -1,0 +1,27 @@
+export const deletionEnglish: Record<string, string> = {
+  "কাজটি হয়নি। আবার চেষ্টা করুন।": "That did not work. Please try again.",
+  "নিশ্চিত করতে {{text}} লিখুন": "Type {{text}} to confirm",
+  "হিসাবটি বাদ দেবেন?": "Remove this transaction?",
+  "হিসাবটি ফেরাবেন?": "Restore this transaction?",
+  "হিসাবে ফিরিয়ে আনুন": "Restore transaction",
+  "হিসাব বাদ দিন": "Remove transaction",
+  মুছুন: "Remove",
+  "তালিকা থেকে সরাবেন?": "Remove from the list?",
+  "তালিকা থেকে সরবে। আগের হিসাব থাকবে।":
+    "It will leave the list. Your previous entries will stay.",
+  "তালিকা থেকে সরানো হয়েছে": "Removed from the list",
+  "আবার তালিকায় রাখা হয়েছে": "Restored to the list",
+  "তালিকা থেকে সরানো আছে": "Removed from the list",
+  "আগের হিসাব এখানে দেখতে পারবেন।": "Your previous entries are available here.",
+  "ফিরিয়ে আনুন": "Restore",
+  "সরানো খাতা ও নাম": "Removed notebooks and names",
+  "চাইলে আবার তালিকায় রাখতে পারেন।":
+    "Restore these to your list whenever you need them.",
+  "সরানো তালিকা": "Removed items",
+  "সরানো কিছু নেই": "No removed items",
+  "ফিরিয়ে আনা যায়নি। আবার চেষ্টা করুন।": "Could not restore it. Try again.",
+  "{{name}} ফিরিয়ে আনুন": "Restore {{name}}",
+  "কাজের আরও কাজ": "More work actions",
+  "মোট হিসাব থেকে সরবে।": "It will be excluded from your totals.",
+  "আবার মোট হিসাবে যোগ হবে।": "It will count towards your totals again.",
+};
