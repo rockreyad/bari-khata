@@ -21,6 +21,7 @@ import { useNotebook } from "../../app/NotebookProvider";
 import { jobDetailUrl, jobReturn } from "../../app/jobRoutes";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { AppSelect } from "../../components/ui/AppSelect";
+import { FormError } from "../../components/ui/FormError";
 import { EntryList } from "../../components/ui/EntryList";
 import { LoadMore } from "../../components/ui/LoadMore";
 import {
@@ -373,6 +374,7 @@ export function JobPage() {
     status: JobStatus;
     reason: string;
     error: string;
+    errorOccurrence?: number;
   } | null>(null);
   const [savingStatus, setSavingStatus] = useState(false);
   const statusLock = useRef(false);
@@ -428,7 +430,11 @@ export function JobPage() {
     event.preventDefault();
     if (!editor || statusLock.current || editor.status === job!.status) return;
     if (!editor.reason.trim()) {
-      setStatusEditor({ ...editor, error: t("কেন বদলালেন, ছোট করে লিখুন।") });
+      setStatusEditor({
+        ...editor,
+        error: t("কেন বদলালেন, ছোট করে লিখুন।"),
+        errorOccurrence: (editor.errorOccurrence ?? 0) + 1,
+      });
       return;
     }
     statusLock.current = true;
@@ -455,6 +461,7 @@ export function JobPage() {
           value?.jobId === editor.jobId
             ? {
                 ...value,
+                errorOccurrence: (value.errorOccurrence ?? 0) + 1,
                 error:
                   cause instanceof Error &&
                   /[\u0980-\u09ff]/.test(cause.message)
@@ -551,6 +558,11 @@ export function JobPage() {
           className="job-status-editor"
           onSubmit={(event) => void updateStatus(event)}
         >
+          <FormError
+            id="job-status-error"
+            message={editor.error}
+            occurrence={editor.errorOccurrence}
+          />
           <div className="jobs-filters">
             <label>
               <span>{t("কাজের অবস্থা")}</span>
@@ -577,6 +589,8 @@ export function JobPage() {
               <span>{t("কেন বদলালেন")}</span>
               <input
                 aria-label={t("কেন বদলালেন")}
+                aria-invalid={Boolean(editor.error) && !editor.reason.trim()}
+                aria-describedby={editor.error ? "job-status-error" : undefined}
                 value={editor.reason}
                 maxLength={2000}
                 disabled={savingStatus}
@@ -591,11 +605,6 @@ export function JobPage() {
               />
             </label>
           </div>
-          {editor.error ? (
-            <p className="form-error" role="alert">
-              {editor.error}
-            </p>
-          ) : null}
           <div className="job-status-actions">
             <button
               type="button"

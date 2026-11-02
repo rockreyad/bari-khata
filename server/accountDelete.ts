@@ -13,6 +13,7 @@ export type AccountDeleteBackend = {
   getUser: (token: string) => Promise<string | null>;
   listReceipts: (prefix: string, offset: number) => Promise<StorageItem[]>;
   removeReceipts: (paths: string[]) => Promise<void>;
+  cleanupAssistantFiles?: (id: string) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
 };
 const Body = z.strictObject({ confirmation: z.literal("DELETE") });
@@ -69,6 +70,7 @@ function backend(config: AccountDeleteConfig): AccountDeleteBackend {
     },
   });
   const receipts = client.storage.from("bari-receipts");
+  const assistantFiles = client.storage.from("bari-mcp-staging");
   return {
     async getUser(token) {
       const result = await client.auth.getUser(token);
@@ -86,6 +88,39 @@ function backend(config: AccountDeleteConfig): AccountDeleteBackend {
     async removeReceipts(paths) {
       const result = await receipts.remove(paths);
       if (result.error) throw new Error("receipt_cleanup_failed");
+    },
+    async cleanupAssistantFiles(id) {
+      const paths = await receiptPaths(
+        {
+          async listReceipts(prefix, offset) {
+            const result = await assistantFiles.list(prefix, {
+              limit: 100,
+              offset,
+              sortBy: { column: "name", order: "asc" },
+            });
+            if (result.error) {
+              if (
+                /bucket (?:not found|does not exist)/i.test(
+                  result.error.message,
+                )
+              )
+                return [];
+              throw new Error("assistant_cleanup_failed");
+            }
+            return result.data.map((item) => ({
+              name: item.name,
+              id: item.id,
+            }));
+          },
+        },
+        id,
+      );
+      for (let start = 0; start < paths.length; start += 100) {
+        const result = await assistantFiles.remove(
+          paths.slice(start, start + 100),
+        );
+        if (result.error) throw new Error("assistant_cleanup_failed");
+      }
     },
     async deleteUser(id) {
       const result = await client.auth.admin.deleteUser(id);
@@ -149,7 +184,10 @@ async function body(request: Request) {
     reader.releaseLock();
   }
 }
-async function receiptPaths(client: AccountDeleteBackend, id: string) {
+async function receiptPaths(
+  client: Pick<AccountDeleteBackend, "listReceipts">,
+  id: string,
+) {
   const folders = [id],
     files: string[] = [];
   for (let cursor = 0; cursor < folders.length; cursor++) {
@@ -203,6 +241,7 @@ export function createAccountDeleteHandler(
       // Auth refuses deleting owners of Storage objects; a failed cleanup can be retried.
       for (let start = 0; start < paths.length; start += 100)
         await client.removeReceipts(paths.slice(start, start + 100));
+      await client.cleanupAssistantFiles?.(id.data);
       await client.deleteUser(id.data);
       return reply(200, { deleted: true });
     } catch (error) {

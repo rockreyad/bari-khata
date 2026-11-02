@@ -19,6 +19,7 @@ import { getActiveOwner } from "../../data/database";
 import { createWorkspaceStorage } from "../../data/repository";
 import { saveFile, todayDhaka } from "../../lib/display";
 import { ConfirmationDialog } from "../../components/ui/ConfirmationDialog";
+import { FormError, useFormError } from "../../components/ui/FormError";
 import { useAuth } from "../auth/AuthProvider";
 import { canChangeEmailPassword } from "../auth/changePassword";
 import { deleteOwnAccount } from "../auth/deleteAccount";
@@ -78,7 +79,7 @@ export function AccountPage() {
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode, owner]);
   const [busy, setBusy] = useState(false);
   const [dialog, setDialog] = useState(false);
-  const [error, setError] = useState("");
+  const [, setError, errorNotice] = useFormError();
   const [copySaved, setCopySaved] = useState(false);
   const mounted = useRef(true),
     lock = useRef(false),
@@ -195,6 +196,9 @@ export function AccountPage() {
         </button>
         <h1>{t("অ্যাকাউন্ট")}</h1>
       </header>
+      {!dialog ? (
+        <FormError {...errorNotice} className="account-error" />
+      ) : null}
       <section className="account-identity">
         <span className="account-avatar" aria-hidden="true">
           <UserCircleIcon size={38} weight="duotone" />
@@ -262,11 +266,6 @@ export function AccountPage() {
           />
         </div>
       </section>
-      {error && !dialog ? (
-        <p className="account-error" role="alert">
-          {error}
-        </p>
-      ) : null}
       {mode === "real" ? (
         <>
           <button
@@ -332,9 +331,9 @@ export function AccountPage() {
             }
           }}
           busy={busy}
-          error={error}
           returnFocusRef={deleteButton}
         >
+          <FormError {...errorNotice} className="account-error" />
           <p className="account-deletion-note">
             {t(
               "এই ফোনের কপি নিজে থেকে মুছবে না। দরকার হলে আগে কপি নামিয়ে রাখুন।",

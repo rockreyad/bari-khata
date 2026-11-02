@@ -1,7 +1,7 @@
-import { parseMoneyText } from "./money";
-import { effectiveAccounts } from "./effectiveAccounts";
-import type { Account, CostType, Entry, Ledger } from "./model";
-import { EntryCoreSchema, validateLedger } from "./model";
+import { parseMoneyText } from "./money.js";
+import { effectiveAccounts } from "./effectiveAccounts.js";
+import type { Account, CostType, Entry, Ledger } from "./model.js";
+import { EntryCoreSchema, validateLedger } from "./model.js";
 
 export const accounts: Account[] = ["materials", "labour", "other"];
 export const costTypes: CostType[] = [
@@ -405,6 +405,7 @@ export function replaceEntry(ledger: Ledger, replacement: Entry): Ledger {
   const now = new Date().toISOString();
   const updated = {
     ...replacement,
+    provenance: replacement.provenance ?? original.provenance,
     updatedAt: now,
     revisions: [
       ...original.revisions,

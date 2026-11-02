@@ -7,6 +7,7 @@ import {
 } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
+import { FormError, useFormError } from "../../components/ui/FormError";
 import {
   createShare,
   liveShareUrl,
@@ -24,7 +25,7 @@ export function ShareLinkControls({ scope }: { scope: ShareScope }) {
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(mode === "real");
-  const [error, setError] = useState("");
+  const [error, setError, errorNotice] = useFormError();
   const mounted = useRef(false);
   const field = useRef<HTMLInputElement>(null);
   const scopeKey = JSON.stringify(scope);
@@ -115,6 +116,7 @@ export function ShareLinkControls({ scope }: { scope: ShareScope }) {
           </p>
         </div>
       </div>
+      <FormError {...errorNotice} message={t(error)} className="share-error" />
       {mode === "demo" ? (
         <p className="helper-text">
           {t("নমুনা খাতা থেকে লিংক দেওয়া যায় না। নিজের খাতায় ব্যবহার করুন।")}
@@ -173,11 +175,6 @@ export function ShareLinkControls({ scope }: { scope: ShareScope }) {
               {t(
                 "আগের লিংক রাখা থাকলে সেটিই চলবে। আবার পাঠাতে চাইলে নতুন লিংক নিন।",
               )}
-            </p>
-          )}
-          {error && (
-            <p role="alert" className="share-error">
-              {t(error)}
             </p>
           )}
           <div className="share-link-actions">

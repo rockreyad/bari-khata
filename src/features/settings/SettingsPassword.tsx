@@ -7,6 +7,7 @@ import {
 import type { AccountUser } from "../../data/authSession";
 import { getActiveOwner } from "../../data/database";
 import { useLanguageContext } from "../../context/LanguageProvider";
+import { FormError, useFormError } from "../../components/ui/FormError";
 import { PasswordInput } from "../auth/PasswordInput";
 import {
   changeEmailPassword,
@@ -44,7 +45,7 @@ export function SettingsPassword({
   const [fields, setFields] = useState(empty);
   const [busy, setBusy] = useState(false);
   const [complete, setComplete] = useState(false);
-  const [error, setError] = useState("");
+  const [, setError, errorNotice] = useFormError();
   const locked = useRef(false);
   const mounted = useRef(true);
   useEffect(() => {
@@ -106,6 +107,7 @@ export function SettingsPassword({
   }
   const content = complete ? (
     <div className="settings-password-success" role="status">
+      <FormError {...errorNotice} className="settings-error" />
       <CheckCircleIcon size={30} weight="duotone" />
       <strong>{t("পাসওয়ার্ড বদলেছে")}</strong>
       <p>
@@ -121,17 +123,13 @@ export function SettingsPassword({
       >
         {t("নতুন পাসওয়ার্ড দিয়ে ঢুকি")}
       </button>
-      {error ? (
-        <p className="settings-error" role="alert">
-          {error}
-        </p>
-      ) : null}
     </div>
   ) : (
     <form
       onSubmit={(event) => void submit(event)}
       className="settings-password-form"
     >
+      <FormError {...errorNotice} className="settings-error" />
       <p className="settings-hint">
         {t(
           "এখনকার পাসওয়ার্ড মিলিয়ে নতুনটি রাখুন। ইমেইলে কোনো কোড পাঠানো হবে না।",
@@ -175,11 +173,6 @@ export function SettingsPassword({
           onChange={(event) => field("confirmation", event.target.value)}
         />
       </label>
-      {error ? (
-        <p className="settings-error" role="alert">
-          {error}
-        </p>
-      ) : null}
       <button
         className="primary-button"
         type="submit"

@@ -29,6 +29,7 @@ import { AppDatePicker } from "./ui/AppDatePicker";
 import { MoneyInput } from "./ui/MoneyInput";
 import { PersonSchema } from "../domain/model";
 import { Sheet } from "./Sheet";
+import { FormError, useFormError } from "./ui/FormError";
 
 const kinds = ["purchase", "labour", "payment", "refund", "return"] as const;
 type FormKind = (typeof kinds)[number];
@@ -276,7 +277,7 @@ export function EntrySheet({
   );
   const [files, setFiles] = useState<Array<{ id: string; file: File }>>([]);
   const [ready, setReady] = useState(false);
-  const [error, setError] = useState("");
+  const [, setError, errorNotice] = useFormError();
   const [draftNotice, setDraftNotice] = useState("");
   const [draftConflict, setDraftConflict] = useState<
     "changed" | "mismatch" | null
@@ -634,6 +635,7 @@ export function EntrySheet({
         reviewStatus: original?.reviewStatus ?? "confirmed",
         reviewReason: original?.reviewReason ?? "",
         source: original?.source ?? null,
+        provenance: original?.provenance,
         id: draft.id,
         date: draft.unknownDate ? null : draft.date,
         note: draft.note.trim(),
@@ -1013,6 +1015,7 @@ export function EntrySheet({
           void submit(event);
         }}
       >
+        <FormError {...errorNotice} className="error-message" />
         {draftNotice ? (
           <div
             className="muted form-hint"
@@ -1759,11 +1762,6 @@ export function EntrySheet({
             {t("অসমাপ্ত লেখা বাদ দিন")}
           </button>
         </fieldset>
-        {error ? (
-          <p className="error-message" role="alert">
-            {error}
-          </p>
-        ) : null}
       </form>
     </Frame>
   );

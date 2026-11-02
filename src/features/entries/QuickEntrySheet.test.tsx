@@ -119,6 +119,133 @@ const ready = () =>
     ).toBe(false),
   );
 describe("quick entry creation flow", () => {
+  it("keeps the page title aligned with material, labour and transport choices without changing the amount", async () => {
+    state.notebook.ledger = LedgerSchema.parse({
+      works: [{ id: "doors", name: "দরজার কাজ" }],
+    });
+    const user = userEvent.setup();
+    render(
+      <QuickEntrySheet
+        presentation="page"
+        options={{
+          kind: "expense",
+          workId: "doors",
+          account: "materials",
+          costType: "material",
+        }}
+      />,
+    );
+    await ready();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "মাল কিনলাম" }),
+    ).toBeTruthy();
+    await user.type(screen.getByLabelText("কত টাকা"), "2000");
+    await user.click(screen.getByRole("button", { name: "মিস্ত্রির টাকা" }));
+    expect(
+      screen.getByRole("heading", { level: 1, name: "মিস্ত্রির টাকা" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "মিস্ত্রির টাকা", pressed: true }),
+    ).toBeTruthy();
+    expect(screen.getByLabelText("কী কাজের মজুরি")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "মাল কেনা" }));
+    expect(
+      screen.getByRole("heading", { level: 1, name: "মাল কিনলাম" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "মাল কেনা", pressed: true }),
+    ).toBeTruthy();
+    expect(screen.getByLabelText("কী কিনলেন")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "গাড়িভাড়া" }));
+    expect(
+      screen.getByRole("heading", { level: 1, name: "গাড়িভাড়া দিই" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "গাড়িভাড়া", pressed: true }),
+    ).toBeTruthy();
+    expect(screen.getByLabelText("কী বাবদ খরচ")).toBeTruthy();
+    expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
+      "2000",
+    );
+    expect(state.notebook.save).not.toHaveBeenCalled();
+    expect((state.notebook.ledger as Ledger).entries).toEqual([]);
+  });
+  it("uses a restored labour draft's title despite a material entry URL and preserves its financial data and receipt", async () => {
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "doors", name: "দরজার কাজ" }],
+    });
+    state.notebook.ledger = ledger;
+    const base = entryContext(ledger, {
+      kind: "expense",
+      workId: "doors",
+      account: "labour",
+      costType: "labour",
+    });
+    const draft = {
+      ...base,
+      note: "আগের অসমাপ্ত কথা",
+      payment: "partial" as const,
+      paid: "1500",
+      method: "bkash" as const,
+      rows: [
+        {
+          ...base.rows[0],
+          label: "প্লাস্টারের কাজ",
+          amount: "3500",
+          quantity: "7",
+          unit: "দিন",
+        },
+      ],
+    };
+    const receipt = new File(["voucher"], "labour.pdf", {
+      type: "application/pdf",
+    });
+    const saved = {
+      draft,
+      files: [
+        {
+          id: "labour-receipt",
+          entryId: draft.id,
+          name: receipt.name,
+          file: receipt,
+        },
+      ],
+    };
+    const key = "quick-v2:expense:doors:all:material:account=materials";
+    state.drafts.set(key, saved);
+    const user = userEvent.setup();
+    render(
+      <QuickEntrySheet
+        presentation="page"
+        options={{
+          kind: "expense",
+          workId: "doors",
+          account: "materials",
+          costType: "material",
+        }}
+      />,
+    );
+    await ready();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "মিস্ত্রির টাকা" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "মিস্ত্রির টাকা", pressed: true }),
+    ).toBeTruthy();
+    expect(
+      (screen.getByLabelText("কী কাজের মজুরি") as HTMLInputElement).value,
+    ).toBe("প্লাস্টারের কাজ");
+    expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
+      "3500",
+    );
+    await user.click(screen.getByRole("button", { name: "আরও তথ্য যোগ করি" }));
+    expect(screen.getByText("labour.pdf")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "ফিরুন" }));
+    await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
+    expect(state.drafts.get(key)).toEqual(saved);
+    expect(state.notebook.save).not.toHaveBeenCalled();
+    expect(state.notebook.ledger).toEqual(ledger);
+  });
   it("creates the first work inside a payment, preserving the amount and recipient, then saves it to that work", async () => {
     const user = userEvent.setup();
     render(
@@ -572,7 +699,23 @@ it("keeps a driver expense limited to transport and records its amount with its 
   expect(screen.queryByRole("button", { name: "মাল নামানোর খরচ" })).toBeNull();
   expect(screen.queryByLabelText("কী কিনলেন")).toBeNull();
   await user.type(screen.getByLabelText("কত টাকা"), "200");
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  const notice = await screen.findByRole("alert");
+  expect(notice.textContent).toBe("কী বাবদ খরচ, ছোট করে লিখুন।");
+  expect(container.querySelector("form")?.firstElementChild).toBe(notice);
+  await waitFor(() => expect(document.activeElement).toBe(notice));
+  expect(
+    screen.getByLabelText("কী বাবদ খরচ").getAttribute("aria-invalid"),
+  ).toBe("true");
+  expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
+    "200",
+  );
+  expect((state.notebook.ledger as Ledger).entries).toHaveLength(0);
   await user.type(screen.getByLabelText("কী বাবদ খরচ"), "ভ্যানভাড়া");
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(
+    screen.getByLabelText("কী বাবদ খরচ").getAttribute("aria-invalid"),
+  ).toBe("false");
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
   const saved = state.notebook.ledger as Ledger;

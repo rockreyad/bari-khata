@@ -83,10 +83,10 @@ it("shows a useful incorrect-current-password error without signing out", async 
   await user.click(
     screen.getByRole("button", { name: "নতুন পাসওয়ার্ড রাখুন" }),
   );
-  await screen.findByRole("alert");
-  expect(screen.getByRole("alert").textContent).toContain(
-    "এখনকার পাসওয়ার্ড মেলেনি",
-  );
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("এখনকার পাসওয়ার্ড মেলেনি");
+  expect(alert.closest("form")?.firstElementChild).toBe(alert);
+  expect(document.activeElement).toBe(alert);
   expect(signIn).not.toHaveBeenCalled();
 });
 it("prevents duplicate submissions and never invokes sign-out when the owner changes", async () => {

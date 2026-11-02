@@ -3,6 +3,7 @@ import { preservesPaymentPurposes } from "../domain/paymentPurposes";
 import { preservesRemovalHistory } from "../domain/entityDeletion";
 import { preservesContractHistory } from "../domain/contracts";
 import { preservesWorkHistory } from "../domain/workActivity";
+import { preservesMcpProvenance } from "../domain/mcpProvenance.js";
 import {
   LedgerSchema,
   validateLedger as validateDomainLedger,
@@ -89,7 +90,9 @@ const now = () => new Date().toISOString();
 
 export function validateLedger(value: unknown): Ledger {
   LedgerDocumentShape.parse(value);
-  return validateDomainLedger(value);
+  const ledger = validateDomainLedger(value);
+  receiptReferences(ledger);
+  return ledger;
 }
 
 export function receiptReferences(ledger: Ledger) {
@@ -206,6 +209,8 @@ export class LedgerRepository {
           throw new Error("removal_history_would_be_lost");
         if (!preservesContractHistory(current.ledger, ledger))
           throw new Error("contract_history_would_be_lost");
+        if (!preservesMcpProvenance(current.ledger, ledger))
+          throw new Error("mcp_provenance_would_be_lost");
         if (ledger.isDemo !== (mode === "demo"))
           throw new Error("workspace_mode_mismatch");
         const refs = receiptReferences(ledger);
@@ -329,6 +334,8 @@ export class LedgerRepository {
           throw new Error("contract_history_would_be_lost");
         if (current && !preservesWorkHistory(current.ledger, backup.ledger))
           throw new Error("work_history_would_be_lost");
+        if (current && !preservesMcpProvenance(current.ledger, backup.ledger))
+          throw new Error("mcp_provenance_would_be_lost");
         if (current)
           await this.database.recoveries.add({
             id: crypto.randomUUID(),

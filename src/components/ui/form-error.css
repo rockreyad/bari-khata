@@ -1,0 +1,14 @@
+.form-error-summary {
+  scroll-margin-block: 16px;
+  overflow-wrap: anywhere;
+}
+.form-error-summary:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 3px;
+}
+.entry-page .form-error-summary {
+  scroll-margin-top: 120px;
+}
+[aria-invalid="true"]:is(input, textarea, .app-select, .app-date-trigger) {
+  border-color: var(--danger);
+}

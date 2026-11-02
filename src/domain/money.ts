@@ -1,4 +1,4 @@
-import { latinDigits } from "../lib/numerals";
+import { latinDigits } from "../lib/numerals.js";
 
 export function parseMoneyText(
   value: string,

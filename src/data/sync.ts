@@ -9,6 +9,7 @@ import type { Ledger } from "../domain/model";
 import { preservesRemovalHistory } from "../domain/entityDeletion";
 import { preservesContractHistory } from "../domain/contracts";
 import { preservesWorkHistory } from "../domain/workActivity";
+import { preservesMcpProvenance } from "../domain/mcpProvenance.js";
 import {
   getActiveOwner,
   receiptKey,
@@ -103,7 +104,7 @@ const SnapshotSchema = z.object({
   updatedAt: z.string().nullable(),
 });
 
-function createTransport(
+export function createTransport(
   cloud: SupabaseClient,
   ownerId: string,
 ): CloudTransport {
@@ -149,13 +150,26 @@ function createTransport(
       };
     },
     async uploadReceipt(receipt) {
+      const path = `${ownerId}/${receipt.id}`;
       const result = await cloud.storage
         .from("bari-receipts")
-        .upload(`${ownerId}/${receipt.id}`, receipt.blob, {
+        .upload(path, receipt.blob, {
           contentType: receipt.mime,
-          upsert: true,
+          upsert: false,
         });
-      if (result.error) throw new Error("receipt_sync_failed");
+      if (!result.error) return;
+      const existing = await cloud.storage.from("bari-receipts").download(path);
+      if (
+        existing.error ||
+        !existing.data ||
+        existing.data.size !== receipt.blob.size ||
+        existing.data.type !== receipt.mime
+      )
+        throw new Error("receipt_sync_failed");
+      const original = new Uint8Array(await existing.data.arrayBuffer());
+      const local = new Uint8Array(await receipt.blob.arrayBuffer());
+      if (original.some((byte, index) => byte !== local[index]))
+        throw new Error("receipt_sync_failed");
     },
     async downloadReceipt(id) {
       const result = await cloud.storage
@@ -214,6 +228,7 @@ export async function synchronizeWorkspace(
         if (
           !preservesContractHistory(row.ledger, document) ||
           !preservesWorkHistory(row.ledger, document) ||
+          !preservesMcpProvenance(row.ledger, document) ||
           !preservesRemovalHistory(row.ledger, document)
         ) {
           await recordConflict(repo, transport, cloud);
@@ -308,6 +323,7 @@ export async function synchronizeWorkspace(
     if (
       !preservesContractHistory(latest.ledger, document) ||
       !preservesWorkHistory(latest.ledger, document) ||
+      !preservesMcpProvenance(latest.ledger, document) ||
       !preservesRemovalHistory(latest.ledger, document)
     ) {
       await recordConflict(repo, transport, confirmed);

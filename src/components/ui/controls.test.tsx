@@ -242,7 +242,18 @@ describe("embedded calculator", () => {
     await user.clear(expression);
     await user.type(expression, "100/0");
     await user.click(screen.getByRole("button", { name: "এই টাকা লিখি" }));
-    expect(screen.getByRole("alert").textContent).toContain("শূন্য দিয়ে ভাগ");
+    const notice = screen.getByRole("alert");
+    expect(notice.textContent).toContain("শূন্য দিয়ে ভাগ");
+    expect(document.activeElement).toBe(notice);
+    expect(
+      notice.compareDocumentPosition(expression) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(expression.getAttribute("aria-invalid")).toBe("true");
+    await user.click(expression);
+    await user.click(screen.getByRole("button", { name: "এই টাকা লিখি" }));
+    expect(document.activeElement).toBe(notice);
+    expect((expression as HTMLInputElement).value).toBe("100/0");
     expect(changed).not.toHaveBeenCalled();
     await user.keyboard("{Escape}");
     expect(

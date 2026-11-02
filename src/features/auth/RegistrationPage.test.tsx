@@ -104,7 +104,13 @@ describe("registration form", () => {
     await user.click(screen.getByRole("link", { name: "অ্যাকাউন্ট খুলুন" }));
     await fillRegistration(user, "Password8", "different");
     await user.click(screen.getByRole("button", { name: "অ্যাকাউন্ট খুলুন" }));
-    expect(screen.getByRole("alert").textContent).toContain("পাসওয়ার্ড মেলেনি");
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toContain("পাসওয়ার্ড মেলেনি");
+    expect(document.activeElement).toBe(alert);
+    expect(
+      alert.compareDocumentPosition(screen.getByLabelText("ইমেইল")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.getByLabelText("পাসওয়ার্ড", { exact: true })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "ইমেইল দেখুন" })).toBeNull();
   });
@@ -347,6 +353,10 @@ describe("confirmation email recovery", () => {
     );
     await user.click(screen.getByRole("button", { name: "খাতা খুলুন" }));
     expect(screen.getByRole("alert").textContent).toContain("ইমেইল নিশ্চিত");
+    expect(document.activeElement).toBe(screen.getByRole("alert"));
+    expect(screen.getByRole("alert").closest("form")?.firstElementChild).toBe(
+      screen.getByRole("alert"),
+    );
     expect(
       screen
         .getByRole("link", { name: "নিশ্চিত করার ইমেইল আবার চাই" })

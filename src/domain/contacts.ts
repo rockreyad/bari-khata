@@ -5,11 +5,11 @@ import type {
   Ledger,
   Person,
   PersonKind,
-} from "./model";
-import { personSummary } from "./ledger";
-import { personKind } from "./contactKind";
-import { effectiveAccounts } from "./effectiveAccounts";
-export { personKind } from "./contactKind";
+} from "./model.js";
+import { personSummary } from "./ledger.js";
+import { personKind } from "./contactKind.js";
+import { effectiveAccounts } from "./effectiveAccounts.js";
+export { personKind } from "./contactKind.js";
 
 export const roleActions: Record<PersonKind, ContactAction[]> = {
   worker: ["payment"],

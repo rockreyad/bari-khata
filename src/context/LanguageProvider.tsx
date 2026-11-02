@@ -27,6 +27,7 @@ import { authRegistrationEnglish } from "../features/auth/authRegistrationEnglis
 import { historyV4English } from "../features/history/historyV4English";
 import { entriesV4English } from "../features/entries/entriesV4English";
 import { sharedEnglish } from "../features/sharing/sharedEnglish";
+import { integrationsEnglish } from "../features/integrations/integrationsEnglish";
 import {
   useCallback,
   useMemo,
@@ -76,6 +77,7 @@ const english: Record<string, string> = {
   ...historyV4English,
   ...entriesV4English,
   ...sharedEnglish,
+  ...integrationsEnglish,
   ...controlsEnglish,
   ...historyReportsEnglish,
   ...analyticsEnglish,

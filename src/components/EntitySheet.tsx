@@ -52,6 +52,7 @@ import { AppSelect } from "./ui/AppSelect";
 import { AppDatePicker } from "./ui/AppDatePicker";
 import { MoneyInput } from "./ui/MoneyInput";
 import { ContactImport } from "./contacts/ContactImport";
+import { FormError, useFormError } from "./ui/FormError";
 type Kind = "work" | "person" | "contract";
 export type EntitySheetProps = {
   presentation?: "sheet" | "page";
@@ -200,7 +201,7 @@ export function EntitySheet({
   const notebookValue = draft.scope === "work" ? draft.workId : "";
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [, setError, errorNotice] = useFormError();
   const [notice, setNotice] = useState("");
   const lock = useRef(false);
   const mounted = useRef(false);
@@ -553,6 +554,7 @@ export function EntitySheet({
       }
     >
       <form id="entity-form" className="entity-form-v3" onSubmit={submit}>
+        <FormError {...errorNotice} className="form-error" />
         {notice ? (
           <p className="entity-notice" role="status">
             {notice}
@@ -1023,11 +1025,6 @@ export function EntitySheet({
             </>
           )}
         </fieldset>
-        {error ? (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        ) : null}
       </form>
     </Frame>
   );

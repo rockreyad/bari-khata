@@ -1,4 +1,4 @@
-import type { Ledger } from "./model";
+import type { Ledger } from "./model.js";
 export function preservesPaymentPurposes(before: Ledger, after: Ledger) {
   return (
     before.paymentPurposes.every((purpose) =>

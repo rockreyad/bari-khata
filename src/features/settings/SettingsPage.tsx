@@ -18,12 +18,14 @@ import {
   Moon,
   Palette,
   PencilSimple,
+  Robot,
   ShieldCheck,
   Sun,
   Warning,
 } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { Sheet } from "../../components/Sheet";
+import { FormError, useFormError } from "../../components/ui/FormError";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import {
   createWorkspaceStorage,
@@ -108,7 +110,7 @@ export function SettingsPage() {
   const [panel, setPanel] = useState<Panel | null>(null);
   const [name, setName] = useState(ledger.project.name);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [, setError, errorNotice] = useFormError();
   const [restore, setRestore] = useState<{
     text: string;
     backup: LedgerBackup;
@@ -218,12 +220,6 @@ export function SettingsPage() {
                   ? "সংরক্ষণের অবস্থা"
                   : "ফোনে অ্যাপ রাখুন",
       );
-  const sheetError = error ? (
-    <p className="settings-error" role="alert">
-      <Warning size={19} />
-      {error}
-    </p>
-  ) : null;
   const pending = Boolean(
     state.pending || state.conflict || auth.status === "offline",
   );
@@ -388,6 +384,13 @@ export function SettingsPage() {
           >
             <h2 id="settings-more-title">{t("আরও কিছু")}</h2>
             <div className="settings-group-card">
+              <SettingsRow
+                title={t("আপনার AI সহকারী")}
+                description={t("সহকারী দিয়ে হিসাব রাখুন ও খুঁজুন")}
+                icon={<Robot size={21} weight="duotone" />}
+                tone="violet"
+                onClick={() => go("/settings/assistants")}
+              />
               {mode === "real" && (
                 <SettingsRow
                   title={t("অ্যাকাউন্ট")}
@@ -448,6 +451,7 @@ export function SettingsPage() {
           onClose={closePanel}
         >
           <div className="settings-sheet-body">
+            <FormError {...errorNotice} className="settings-error" />
             {restore ? (
               <>
                 <div className="settings-restore-summary">
@@ -475,7 +479,6 @@ export function SettingsPage() {
                   />
                   {t("আমি ফাইলটি দেখে এই খাতা ফিরিয়ে আনতে চাই।")}
                 </label>
-                {sheetError}
                 <button
                   className="primary-button settings-sheet-primary"
                   disabled={!confirmed || busy}
@@ -562,7 +565,6 @@ export function SettingsPage() {
                     autoFocus
                     onChange={(event) => setName(event.target.value)}
                   />
-                  {sheetError}
                   <button
                     className="primary-button settings-sheet-primary"
                     disabled={busy || !name.trim()}
@@ -607,7 +609,6 @@ export function SettingsPage() {
                 <p className="settings-hint">
                   {t("এই ফাইলে ব্যক্তিগত হিসাব থাকে। নিরাপদ জায়গায় রাখুন।")}
                 </p>
-                {sheetError}
               </>
             ) : panel === "sync" ? (
               <>
@@ -695,7 +696,6 @@ export function SettingsPage() {
                     </button>
                   </div>
                 )}
-                {sheetError}
               </>
             ) : panel === "install" ? (
               <>

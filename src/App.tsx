@@ -21,6 +21,19 @@ const SharedStatementPage = lazy(() =>
     default: module.SharedStatementPage,
   })),
 );
+const McpConsentPage = lazy(() =>
+  import("./features/integrations/McpConsentPage").then((module) => ({
+    default: module.McpConsentPage,
+  })),
+);
+function McpConsentRoute() {
+  const { t } = useLanguageContext();
+  return (
+    <Suspense fallback={<div className="app-splash">{t("অপেক্ষা করুন…")}</div>}>
+      <McpConsentPage />
+    </Suspense>
+  );
+}
 function SharedRoute() {
   const { t } = useLanguageContext();
   return (
@@ -76,6 +89,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/shared" element={<SharedRoute />} />
+          <Route path="/mcp/consent" element={<McpConsentRoute />} />
           <Route path="/login/*" element={<Login />} />
           <Route
             path="/register"

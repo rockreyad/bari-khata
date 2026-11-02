@@ -1,4 +1,4 @@
-import type { Person, PersonKind } from "./model";
+import type { Person, PersonKind } from "./model.js";
 
 export function personKind(person: Person): PersonKind {
   if (person.kind) return person.kind;

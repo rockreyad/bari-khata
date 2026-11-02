@@ -30,7 +30,9 @@ vi.mock("../../context/LanguageProvider", () => ({
             day: "numeric",
             month: "short",
             ...options,
-          }).format(new Date(`${value}T12:00:00+06:00`))
+          }).format(
+            new Date(value.length > 10 ? value : `${value}T12:00:00+06:00`),
+          )
         : "তারিখ দেওয়া নেই",
     language: "en",
     formatDigits: (value: string | number) => String(value),
@@ -43,6 +45,74 @@ const calendarLabel = (value: string) =>
     year: "numeric",
   }).format(new Date(`${value}T12:00:00+06:00`));
 describe("transaction detail activity", () => {
+  it("renders assistant provenance changes as names, origin and reason without raw identifiers", () => {
+    const source = {
+      version: 1 as const,
+      origin: "image" as const,
+      connectionId: "private-connection-one",
+      actorName: "ছবি পড়ার সহকারী",
+      sourceEventId: "private-image-event",
+      assetDigests: ["private-image-digest"],
+      recordedAt: "2026-11-02T08:00:00.000Z",
+      reason: "বিলের ছবি থেকে লেখা",
+    };
+    let ledger = LedgerSchema.parse({
+      works: [{ id: "roof", name: "ছাদের কাজ" }],
+      entries: [
+        {
+          id: "assistant-bill",
+          kind: "expense",
+          date: "2026-11-02",
+          createdAt: source.recordedAt,
+          provenance: source,
+          lines: [
+            {
+              id: "assistant-line",
+              workId: "roof",
+              label: "সিমেন্ট",
+              amount: 6000000,
+            },
+          ],
+        },
+      ],
+    });
+    ledger = replaceEntry(ledger, {
+      ...ledger.entries[0],
+      note: "পরিমাণ ঠিক হয়েছে",
+      provenance: {
+        ...source,
+        origin: "voice",
+        connectionId: "private-connection-two",
+        actorName: "আমার কথা শোনার সহকারী",
+        sourceEventId: "private-voice-event",
+        recordedAt: "2026-11-02T09:00:00.000Z",
+        reason: "বলে দেওয়া সংশোধন",
+      },
+    });
+    notebook.mockReturnValue({
+      ledger,
+      mode: "demo",
+      close: vi.fn(),
+      add: vi.fn(),
+      save: vi.fn(),
+      notify: vi.fn(),
+      go: vi.fn(),
+      detail: vi.fn(),
+    });
+    const html = renderToString(<EntryDetail id="assistant-bill" />);
+    expect(html).toContain("যে সহকারী লিখেছে");
+    expect(html).toContain("ছবি পড়ার সহকারী");
+    expect(html).toContain("আমার কথা শোনার সহকারী");
+    expect(html).toContain("ছবির তথ্য থেকে");
+    expect(html).toContain("ভয়েসের নির্দেশ থেকে");
+    expect(html).toContain("কারণ: বলে দেওয়া সংশোধন");
+    expect(html).toContain("2026-11-02T09:00:00.000Z");
+    expect(html).not.toContain("[object Object]");
+    expect(html).not.toContain("private-connection");
+    expect(html).not.toContain("private-image-event");
+    expect(html).not.toContain("private-voice-event");
+    expect(html).not.toContain("private-image-digest");
+  });
   it("renders every edited version with original and changed amounts, note and date", () => {
     let ledger = LedgerSchema.parse({
       works: [{ id: "roof", name: "ছাদের কাজ" }],

@@ -1,4 +1,5 @@
 import { NumericInput } from "../../components/ui/NumericInput";
+import { FormError, useFormError } from "../../components/ui/FormError";
 import { PwaUpdateNotice } from "../../components/PwaUpdateNotice";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
@@ -88,7 +89,7 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
     ...(initialEmail ? { email: initialEmail } : {}),
   };
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError, errorNotice] = useFormError();
   const [retryUntil, setRetryUntil] = useState(0);
   const [now, setNow] = useState(Date.now);
   const active = useRef(true),
@@ -350,6 +351,13 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
           </div>
         ) : null}
         <form onSubmit={submit} className="login-form">
+          <FormError {...errorNotice} className="auth-error" />
+          {!manual &&
+          error === t("আগে আপনার ইমেইল নিশ্চিত করুন। তারপর লগইন করুন।") ? (
+            <Link className="auth-resend-link" to="/register/resend">
+              {t("নিশ্চিত করার ইমেইল আবার চাই")}
+            </Link>
+          ) : null}
           {method === "email" ? (
             <>
               <label htmlFor="login-email">{t("ইমেইল")}</label>
@@ -472,17 +480,6 @@ export function LoginPage({ onSuccess }: { onSuccess?: () => void }) {
               <ShieldCheck size={17} />
               {t("পরীক্ষার জন্য ফোনে SMS যাবে না।")}
             </p>
-          ) : null}
-          {error ? (
-            <p className="auth-error" role="alert">
-              {error}
-            </p>
-          ) : null}
-          {!manual &&
-          error === t("আগে আপনার ইমেইল নিশ্চিত করুন। তারপর লগইন করুন।") ? (
-            <Link className="auth-resend-link" to="/register/resend">
-              {t("নিশ্চিত করার ইমেইল আবার চাই")}
-            </Link>
           ) : null}
           <button
             className="primary-button auth-submit"
