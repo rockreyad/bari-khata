@@ -1,8 +1,11 @@
-import { expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { parseAmount } from "../domain/ledger";
 import { parseMoneyText } from "../domain/money";
 import { evaluateMoneyExpression } from "../components/ui/calculator";
 import { formatMoney } from "./formatMoney";
+import { localizedDigits } from "./numerals";
+
+afterEach(() => vi.restoreAllMocks());
 
 it("localizes only the display digits and preserves the exact stored paisa", () => {
   expect(formatMoney(16225, "bn")).toBe("৳\u202f১৬২.২৫");
@@ -27,6 +30,47 @@ it.each(["bn", "en"] as const)(
         expect(shown.match(/৳/g)).toHaveLength(1);
         expect(shown.slice(2)).not.toMatch(/^\s/);
       }
+    }
+  },
+);
+
+it.each(["bn", "en"] as const)(
+  "keeps selected %s digits when Intl returns the other numbering script",
+  (language) => {
+    const cases = [
+      0,
+      1,
+      16225,
+      -16225,
+      123456789,
+      Number.MAX_SAFE_INTEGER,
+      -Number.MAX_SAFE_INTEGER,
+    ].flatMap((amount) =>
+      [false, true].map((compact) => ({
+        amount,
+        compact,
+        expected: formatMoney(amount, language, compact),
+      })),
+    );
+    const nativeFormat = Object.getOwnPropertyDescriptor(
+      Intl.NumberFormat.prototype,
+      "format",
+    )!.get!;
+    vi.spyOn(
+      Intl.NumberFormat.prototype as unknown as { format: unknown },
+      "format",
+      "get",
+    ).mockImplementation(function (this: Intl.NumberFormat) {
+      const format = nativeFormat.call(this) as Intl.NumberFormat["format"];
+      return (value: number | bigint) =>
+        localizedDigits(format(value), language === "bn" ? "en" : "bn");
+    });
+    for (const { amount, compact, expected } of cases) {
+      const shown = formatMoney(amount, language, compact);
+      expect(shown).toBe(expected);
+      expect(shown).not.toMatch(language === "bn" ? /[0-9]/ : /[০-৯]/);
+      if (!compact)
+        expect(parseMoneyText(shown, { signed: true })).toBe(amount);
     }
   },
 );

@@ -218,8 +218,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       money: (poisha, compact = false) =>
         formatMoney(poisha, language, compact),
       number: (value) =>
-        new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(
-          value,
+        localizedDigits(
+          new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(
+            value,
+          ),
+          language,
         ),
       date: (date, options) => {
         if (!date) return t("তারিখ জানা নেই");
@@ -227,12 +230,15 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
           date.length > 10 ? date : `${date}T12:00:00+06:00`,
         );
         return Number.isFinite(value.getTime())
-          ? new Intl.DateTimeFormat(locale, {
-              timeZone: "Asia/Dhaka",
-              day: "numeric",
-              month: "short",
-              ...options,
-            }).format(value)
+          ? localizedDigits(
+              new Intl.DateTimeFormat(locale, {
+                timeZone: "Asia/Dhaka",
+                day: "numeric",
+                month: "short",
+                ...options,
+              }).format(value),
+              language,
+            )
           : t("তারিখ জানা নেই");
       },
     }),
