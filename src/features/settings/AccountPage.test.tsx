@@ -249,9 +249,11 @@ describe("typed account deletion", () => {
     await user.clear(input);
     await user.type(input, "DELETE");
     await user.click(remove);
+    await waitFor(() =>
+      expect(screen.getByTestId("route").textContent).toBe("/login"),
+    );
     expect(api.remove).toHaveBeenCalledExactlyOnceWith(owner, "DELETE");
     expect(api.signOut).toHaveBeenCalledOnce();
-    expect(screen.getByTestId("route").textContent).toBe("/login");
   });
   it("cancel never calls deletion and returns focus to the original control", async () => {
     mount();
