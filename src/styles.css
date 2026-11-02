@@ -1,5 +1,8 @@
+@import "./fonts.css";
+
 :root {
   font-family:
+    "FN Mahin Rafid",
     "Noto Sans Bengali Variable",
     -apple-system,
     BlinkMacSystemFont,
@@ -9,7 +12,7 @@
     sans-serif;
   color: #273b32;
   background: #f5f4ef;
-  font-synthesis: none;
+  font-synthesis: weight;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   font-weight: 400;

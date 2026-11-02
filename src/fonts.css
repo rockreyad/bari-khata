@@ -1,0 +1,19 @@
+@font-face {
+  font-family: "FN Mahin Rafid";
+  src: url("./assets/fonts/fn-mahin-rafid/fn-mahin-rafid-regular.woff2")
+    format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0964-0965, U+0980-09FF, U+200C-200D, U+25CC;
+}
+
+@font-face {
+  font-family: "FN Mahin Rafid";
+  src: url("./assets/fonts/fn-mahin-rafid/fn-mahin-rafid-italic.woff2")
+    format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  unicode-range: U+0964-0965, U+0980-09FF, U+200C-200D, U+25CC;
+}
