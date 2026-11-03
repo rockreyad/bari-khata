@@ -186,20 +186,23 @@ export const ContractSnapshotSchema = z.object({
   basis: z.enum(["sqft", "day", "fixed"]).default("fixed"),
   quantity: z.string().max(60).default("1").transform(latinDigits),
   rate: MoneySchema.default(0),
+  calculatedTotal: MoneySchema.nullable().optional(),
   total: MoneySchema,
   notes: Text.default(""),
   agreedOn: WorkDateSchema.default(null),
 });
 export type ContractSnapshot = z.infer<typeof ContractSnapshotSchema>;
 function contractRateMatches(snapshot: ContractSnapshot) {
-  if (snapshot.basis === "fixed") return true;
+  if (snapshot.basis === "fixed") return snapshot.calculatedTotal == null;
   if (!/^\d+(?:\.\d{1,4})?$/.test(snapshot.quantity)) return false;
   const [whole, fraction = ""] = snapshot.quantity.split(".");
   const denominator = 10n ** BigInt(fraction.length);
-  return (
+  const calculated =
     (BigInt(whole + fraction) * BigInt(snapshot.rate) + denominator / 2n) /
-      denominator ===
-    BigInt(snapshot.total)
+    denominator;
+  return (
+    calculated > 0n &&
+    calculated === BigInt(snapshot.calculatedTotal ?? snapshot.total)
   );
 }
 export const ContractActivitySchema = z
@@ -228,7 +231,15 @@ export const ContractSchema = ContractSnapshotSchema.extend({
     )
     .default([]),
   activity: z.array(ContractActivitySchema).max(2000).default([]),
-}).superRefine(validateRemoval);
+}).superRefine((contract, ctx) => {
+  validateRemoval(contract, ctx);
+  if (contract.calculatedTotal != null && !contractRateMatches(contract))
+    ctx.addIssue({
+      code: "custom",
+      path: ["calculatedTotal"],
+      message: "Contract calculation must match quantity and rate",
+    });
+});
 export type Contract = z.infer<typeof ContractSchema>;
 
 export const EntryLineSchema = z.object({
@@ -408,6 +419,12 @@ export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
       ),
     ];
     for (const snapshot of snapshots) {
+      if (snapshot.calculatedTotal != null && !contractRateMatches(snapshot))
+        error("Contract calculation must match quantity and rate", [
+          "contracts",
+          index,
+          "calculatedTotal",
+        ]);
       if (
         (snapshot.scope === "work" && !snapshot.workId) ||
         (snapshot.workId && !works.has(snapshot.workId))
