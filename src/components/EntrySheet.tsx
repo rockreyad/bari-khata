@@ -27,7 +27,6 @@ import {
   parseAmount,
   replaceExpenseAndSettlements,
 } from "../domain/ledger";
-import { MoneyCorrectionSummary } from "../features/reconciliation/MoneyCorrectionSummary";
 import { AppCombobox } from "./ui/AppCombobox";
 import { AppSelect } from "./ui/AppSelect";
 import { AppDatePicker } from "./ui/AppDatePicker";
@@ -35,6 +34,7 @@ import { MoneyInput } from "./ui/MoneyInput";
 import { PersonSchema } from "../domain/model";
 import { Sheet } from "./Sheet";
 import { FormError, useFormError } from "./ui/FormError";
+import "./entry-edit.css";
 
 const kinds = ["purchase", "labour", "payment", "refund", "return"] as const;
 type FormKind = (typeof kinds)[number];
@@ -95,6 +95,7 @@ const DraftSchema = z.object({
   newPersonName: z.string().default(""),
   relatedEntryId: z.string().default(""),
   entryUpdatedAt: z.string().default(""),
+  // Old draft reasons are restored into the visible note before this field is cleared.
   reconciliationReason: z.string().max(2000).default(""),
   rows: z.array(RowSchema).min(1),
   methods: z.array(MethodSchema).min(1),
@@ -114,7 +115,6 @@ export type EntrySheetProps = {
   initialAccount?: "materials" | "labour" | "other";
   editEntryId?: string;
   mode?: "real" | "demo";
-  reconciliation?: boolean;
   onCorrectLinkedPayment?: (id: string) => void;
   onSave: (nextLedger: Ledger, attachments?: EntryAttachments) => Promise<void>;
   onClose: () => void;
@@ -281,7 +281,6 @@ function SupportedEntrySheet({
   initialAccount,
   editEntryId,
   mode = "real",
-  reconciliation = false,
   onCorrectLinkedPayment,
   onSave,
   onClose,
@@ -413,7 +412,27 @@ function SupportedEntrySheet({
           void storage.removeDraft(draftKey);
           return;
         }
-        setDraft(parsed.data);
+        const reason = parsed.data.reconciliationReason.trim();
+        const reasonBlock = `${t("হিসাব মেলানোর কারণ")}: ${reason}`;
+        const hasReason = [
+          reasonBlock,
+          `হিসাব মেলানোর কারণ: ${reason}`,
+          `Reason for the correction: ${reason}`,
+        ].some(
+          (block) =>
+            parsed.data.note === block ||
+            parsed.data.note.startsWith(`${block}\n`) ||
+            parsed.data.note.endsWith(`\n${block}`) ||
+            parsed.data.note.includes(`\n${block}\n`),
+        );
+        setDraft({
+          ...parsed.data,
+          note:
+            reason && !hasReason
+              ? [parsed.data.note, reasonBlock].filter(Boolean).join("\n")
+              : parsed.data.note,
+          reconciliationReason: "",
+        });
         if (Array.isArray(saved.files)) {
           const restored = saved.files.filter(
             (item): item is { id: string; file: Blob & { name?: string } } =>
@@ -546,8 +565,6 @@ function SupportedEntrySheet({
     setSaving(true);
     setError("");
     try {
-      if (reconciliation && original && !draft.reconciliationReason.trim())
-        throw new Error(t("হিসাব মেলানোর কারণ লিখুন।"));
       const now = new Date().toISOString();
       let next = structuredClone(ledger);
       if (
@@ -658,26 +675,24 @@ function SupportedEntrySheet({
           size: file.size,
         })),
       ];
+      const confirmsReview =
+        original?.balanceImpact === "normal" &&
+        original.reviewStatus === "needs_review";
       const base = {
         paymentPurposeId:
           original?.account === account && isCash
             ? original.paymentPurposeId
             : null,
         balanceImpact: original?.balanceImpact ?? "normal",
-        reviewStatus: original?.reviewStatus ?? "confirmed",
-        reviewReason: original?.reviewReason ?? "",
+        reviewStatus: confirmsReview
+          ? "confirmed"
+          : (original?.reviewStatus ?? "confirmed"),
+        reviewReason: confirmsReview ? "" : (original?.reviewReason ?? ""),
         source: original?.source ?? null,
         provenance: original?.provenance,
         id: draft.id,
         date: draft.unknownDate ? null : draft.date,
-        note: [
-          draft.note.trim(),
-          reconciliation && original
-            ? `${t("হিসাব মেলানোর কারণ")}: ${draft.reconciliationReason.trim()}`
-            : "",
-        ]
-          .filter(Boolean)
-          .join("\n"),
+        note: draft.note.trim(),
         personId,
         account,
         contractId,
@@ -1031,13 +1046,7 @@ function SupportedEntrySheet({
   const Frame = presentation === "page" ? EntryFrame : Sheet;
   return (
     <Frame
-      title={t(
-        original && reconciliation
-          ? "হিসাব মিলিয়ে নিই"
-          : original
-            ? "হিসাব বদলান"
-            : "নতুন হিসাব",
-      )}
+      title={t(original ? "হিসাব বদলান" : "নতুন হিসাব")}
       subtitle={t("ছোট ছোট হিসাব, এক জায়গায়।")}
       onClose={close}
       footer={
@@ -1123,37 +1132,6 @@ function SupportedEntrySheet({
           className="sheet-fields"
           disabled={saving || processingFiles || !ready}
         >
-          {reconciliation && original ? (
-            <>
-              <MoneyCorrectionSummary
-                before={entryTotal(original)}
-                after={
-                  isCash
-                    ? draft.split
-                      ? draft.rows.reduce(
-                          (sum, row) => sum + poisha(row.amount),
-                          0,
-                        )
-                      : poisha(draft.amount)
-                    : draft.rows.reduce(
-                        (sum, row) => sum + poisha(row.amount),
-                        0,
-                      )
-                }
-              />
-              <label className="field">
-                <span className="field-label">{t("হিসাব মেলানোর কারণ")}</span>
-                <textarea
-                  value={draft.reconciliationReason}
-                  maxLength={2000}
-                  aria-required="true"
-                  onChange={(event) =>
-                    field("reconciliationReason", event.target.value)
-                  }
-                />
-              </label>
-            </>
-          ) : null}
           {original &&
           linkedPayments.length &&
           lineTotal !== entryTotal(original) ? (

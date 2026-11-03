@@ -21,6 +21,8 @@ describe("safe entry return routes", () => {
     "/contracts/c/edit",
     "/works/door/../../entries/new",
     "/sample/people/shop",
+    "/reconcile",
+    "/reconcile?person=shop",
   ])("rejects unsafe or circular real-account return %s", (path) => {
     expect(entryReturn(path)).toBe("/");
   });
@@ -31,6 +33,7 @@ describe("safe entry return routes", () => {
     "/sample/works/door/../../login",
     "/sample/entries/new",
     "/sample/contracts/agreement/edit",
+    "/sample/reconcile?person=shop",
     "//outside.test/sample/people/shop",
   ])("keeps a demo return inside the demo account for %s", (path) => {
     expect(entryReturn(path, "/sample")).toBe("/sample/");

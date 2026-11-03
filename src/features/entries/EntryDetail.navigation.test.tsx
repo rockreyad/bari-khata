@@ -51,6 +51,166 @@ vi.mock("../../context/LanguageProvider", () => ({
 }));
 afterEach(cleanup);
 describe("entry detail navigation", () => {
+  it.each(["menu", "information"] as const)(
+    "opens the ordinary editor for an incomplete normal entry from its %s action without clearing return context",
+    (action) => {
+      const ledger = LedgerSchema.parse({
+        works: [{ id: "general", name: "সাধারণ" }],
+        entries: [
+          {
+            id: "normal",
+            kind: "expense",
+            reviewStatus: "needs_review",
+            reviewReason: "কাজের খাতা পরে বেছে নিন।",
+            lines: [
+              {
+                id: "line",
+                workId: "general",
+                label: "সিমেন্ট",
+                amount: 10000,
+              },
+            ],
+          },
+        ],
+      });
+      const add = vi.fn(),
+        go = vi.fn(),
+        close = vi.fn();
+      notebook.mockReturnValue({
+        ledger,
+        mode: "demo",
+        add,
+        go,
+        close,
+        detail: vi.fn(),
+        save: vi.fn(),
+        notify: vi.fn(),
+      });
+      render(<EntryDetail id="normal" />);
+      if (action === "information")
+        fireEvent.click(screen.getByText("তথ্য যোগ করা বাকি"));
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: action === "menu" ? "এই তথ্য ঠিক করি" : "এই তথ্য দেখে নিন",
+        }),
+      );
+      expect(add).toHaveBeenCalledWith({ editId: "normal" });
+      expect(go).not.toHaveBeenCalled();
+      expect(close).not.toHaveBeenCalled();
+      expect(ledger.entries[0].reviewStatus).toBe("needs_review");
+    },
+  );
+  it.each(["menu", "information"] as const)(
+    "retains the contextual historical review route for a sourced old expense from its %s action",
+    (action) => {
+      const ledger = LedgerSchema.parse({
+        works: [{ id: "old", name: "পুরোনো" }],
+        entries: [
+          {
+            id: "historical",
+            kind: "expense",
+            balanceImpact: "historical",
+            reviewStatus: "needs_review",
+            source: {
+              file: "example.xlsx",
+              cell: "A1",
+              checksum: "a".repeat(64),
+              note: "সিমেন্ট / আনা",
+              ledger: "Cost",
+            },
+            lines: [
+              {
+                id: "line",
+                workId: "old",
+                label: "সিমেন্ট / আনা",
+                amount: 10000,
+              },
+            ],
+          },
+        ],
+      });
+      const add = vi.fn(),
+        go = vi.fn(),
+        close = vi.fn();
+      notebook.mockReturnValue({
+        ledger,
+        mode: "demo",
+        add,
+        go,
+        close,
+        detail: vi.fn(),
+        save: vi.fn(),
+        notify: vi.fn(),
+      });
+      render(<EntryDetail id="historical" />);
+      if (action === "information")
+        fireEvent.click(screen.getByText("পুরোনো খাতার তথ্য"));
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: action === "menu" ? "এই তথ্য ঠিক করি" : "এই তথ্য দেখে নিন",
+        }),
+      );
+      expect(go).toHaveBeenCalledWith(
+        `/review?q=${encodeURIComponent("সিমেন্ট / আনা")}`,
+      );
+      expect(close).toHaveBeenCalledOnce();
+      expect(add).not.toHaveBeenCalled();
+      expect(ledger.entries[0]).toMatchObject({
+        balanceImpact: "historical",
+        reviewStatus: "needs_review",
+        lines: [{ amount: 10000 }],
+      });
+    },
+  );
+  it.each([
+    { balanceImpact: "normal", sourced: true, voided: false },
+    { balanceImpact: "historical", sourced: false, voided: false },
+    { balanceImpact: "historical", sourced: true, voided: true },
+  ])(
+    "does not send entries excluded from the historical queue to an empty review search (%j)",
+    ({ balanceImpact, sourced, voided }) => {
+      const ledger = LedgerSchema.parse({
+        works: [{ id: "work", name: "খাতা" }],
+        entries: [
+          {
+            id: "entry",
+            kind: "expense",
+            balanceImpact,
+            reviewStatus: "needs_review",
+            voided,
+            ...(sourced
+              ? {
+                  source: {
+                    file: "example.xlsx",
+                    cell: "A1",
+                    checksum: "a".repeat(64),
+                  },
+                }
+              : {}),
+            lines: [
+              { id: "line", workId: "work", label: "মাল", amount: 10000 },
+            ],
+          },
+        ],
+      });
+      const add = vi.fn(),
+        go = vi.fn();
+      notebook.mockReturnValue({
+        ledger,
+        mode: "demo",
+        add,
+        go,
+        close: vi.fn(),
+        detail: vi.fn(),
+        save: vi.fn(),
+        notify: vi.fn(),
+      });
+      render(<EntryDetail id="entry" />);
+      fireEvent.click(screen.getByRole("button", { name: "এই তথ্য ঠিক করি" }));
+      expect(add).toHaveBeenCalledWith({ editId: "entry" });
+      expect(go).not.toHaveBeenCalled();
+    },
+  );
   it("keeps adjustment records immutable while retaining audited void and restore controls", async () => {
     let ledger = LedgerSchema.parse({
       people: [{ id: "person", name: "পরীক্ষার নাম" }],
@@ -61,7 +221,9 @@ describe("entry detail navigation", () => {
           personId: "person",
           note: "হিসাব মিলিয়েছি",
           adjustment: {
-          target: "person", basis: "balance", account: "materials",
+            target: "person",
+            basis: "balance",
+            account: "materials",
             before: 10000,
             after: 5000,
             delta: -5000,

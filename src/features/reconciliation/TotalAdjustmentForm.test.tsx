@@ -14,12 +14,12 @@ import { MemoryRouter } from "react-router";
 import { LedgerSchema, type Ledger } from "../../domain/model";
 import { readBalanceAdjustmentScope } from "../../domain/balanceAdjustments";
 import { TotalAdjustmentForm } from "./TotalAdjustmentForm";
-import { ReconciliationPage } from "./ReconciliationPage";
 
 const context = vi.hoisted(() => ({
   ledger: null as unknown,
   save: vi.fn(),
   go: vi.fn(),
+  saved: vi.fn(),
   drafts: new Map<string, unknown>(),
   draftSave: vi.fn(),
 }));
@@ -92,6 +92,7 @@ beforeEach(() => {
   context.ledger = fixture();
   context.drafts.clear();
   context.go.mockReset();
+  context.saved.mockReset();
   context.draftSave.mockReset();
   context.save
     .mockReset()
@@ -108,7 +109,7 @@ const target = {
 function show() {
   return render(
     <MemoryRouter>
-      <TotalAdjustmentForm target={target} />
+      <TotalAdjustmentForm target={target} onSaved={context.saved} />
     </MemoryRouter>,
   );
 }
@@ -136,7 +137,7 @@ it("corrects the person's paid total with one separate adjustment and preserves 
   await enter();
   expect(screen.getByText("৳6500")).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "সমন্বয় রাখুন" }));
-  await waitFor(() => expect(context.go).toHaveBeenCalled());
+  await waitFor(() => expect(context.saved).toHaveBeenCalled());
   const ledger = context.ledger as Ledger;
   expect(ledger.entries).toHaveLength(3);
   expect(ledger.entries[2]).toMatchObject({
@@ -192,7 +193,7 @@ it("can reconcile an amount owed to credit without recording a cash payment", as
   await enter("1500");
   expect(screen.getByText("আমার জমা ৳1500")).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "সমন্বয় রাখুন" }));
-  await waitFor(() => expect(context.go).toHaveBeenCalled());
+  await waitFor(() => expect(context.saved).toHaveBeenCalled());
   expect((context.ledger as Ledger).entries[2].adjustment).toMatchObject({
     basis: "balance",
     before: 2000000,
@@ -260,7 +261,7 @@ it("prevents duplicate submissions while the first save is pending", async () =>
   fireEvent.submit(view.container.querySelector("form")!);
   await waitFor(() => expect(context.save).toHaveBeenCalledTimes(1));
   release();
-  await waitFor(() => expect(context.go).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(context.saved).toHaveBeenCalledTimes(1));
   expect(
     (context.ledger as Ledger).entries.filter(
       (entry) => entry.kind === "adjustment",
@@ -280,7 +281,13 @@ it("finishes the contextual panel without navigating to another page", async () 
 
 it("keeps the panel open with its text when the final draft write fails", async () => {
   const beforeClose = createRef<(() => Promise<boolean>) | null>();
-  render(<TotalAdjustmentForm target={target} beforeCloseRef={beforeClose} />);
+  render(
+    <TotalAdjustmentForm
+      target={target}
+      onSaved={context.saved}
+      beforeCloseRef={beforeClose}
+    />,
+  );
   await screen.findByText("৳30000");
   await enter();
   context.draftSave.mockImplementationOnce(() => {
@@ -323,16 +330,17 @@ it("rejects a corrupted stored draft until the user explicitly discards it", asy
   expect(context.drafts.get(key)).toBeUndefined();
 });
 
-it("uses the existing reconciliation page for an unallocated notebook adjustment", async () => {
+it("corrects a notebook total without allocating its difference to a person", async () => {
   render(
-    <MemoryRouter initialEntries={["/reconcile?target=work&work=work"]}>
-      <ReconciliationPage />
-    </MemoryRouter>,
+    <TotalAdjustmentForm
+      target={{ target: "work", id: "work", account: null }}
+      onSaved={context.saved}
+    />,
   );
   await screen.findByText("৳30000");
   await enter("28000");
   await userEvent.click(screen.getByRole("button", { name: "সমন্বয় রাখুন" }));
-  await waitFor(() => expect(context.go).toHaveBeenCalledWith("/works/work"));
+  await waitFor(() => expect(context.saved).toHaveBeenCalledOnce());
   expect((context.ledger as Ledger).entries[2]).toMatchObject({
     kind: "adjustment",
     personId: null,

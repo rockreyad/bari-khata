@@ -18,8 +18,7 @@ import {
   ClockCounterClockwiseIcon,
   UsersIcon,
 } from "@phosphor-icons/react";
-import { entryUrl, contractUrl, isEntryPage } from "./entryRoutes";
-import { reconciliationEditUrl } from "../features/reconciliation/reconciliation";
+import { entryUrl, contractUrl, entryReturn, isEntryPage } from "./entryRoutes";
 import { NotebookNavLink, notebookSectionActive } from "./navigation";
 import { useNotebook, type AddOptions } from "./NotebookProvider";
 import { useLanguageContext } from "../context/LanguageProvider";
@@ -43,11 +42,6 @@ const EntryDetail = lazy(() =>
 );
 const EntrySheet = lazy(() =>
   import("../components/EntrySheet").then((m) => ({ default: m.EntrySheet })),
-);
-const ReconciliationPage = lazy(() =>
-  import("../features/reconciliation/ReconciliationPage").then((m) => ({
-    default: m.ReconciliationPage,
-  })),
 );
 const EntitySheet = lazy(() =>
   import("../components/EntitySheet").then((m) => ({ default: m.EntitySheet })),
@@ -154,15 +148,9 @@ function EntryRoute() {
       ledger={ledger}
       mode={mode}
       editEntryId={entryId}
-      reconciliation={params.get("reconcile") === "1"}
       onCorrectLinkedPayment={(id) => {
         navigate(
-          reconciliationEditUrl(
-            base,
-            "payment",
-            id,
-            `${base}/reconcile?type=payment&id=${encodeURIComponent(id)}`,
-          ),
+          entryUrl(base, { editId: id }, entryReturn(params.get("back"), base)),
         );
       }}
       onClose={close}
@@ -197,7 +185,6 @@ function ContractRoute() {
       ledger={ledger}
       mode={mode}
       editId={contractId}
-      reconciliation={params.get("reconcile") === "1"}
       defaultWorkId={params.get("work") ?? undefined}
       defaultPersonId={params.get("person") ?? undefined}
       onClose={close}
@@ -399,7 +386,10 @@ export function AppShell() {
                 <Route path="reports" element={<Reports />} />
                 <Route path="materials/:groupId" element={<Reports />} />
                 <Route path="review" element={<ReviewPage />} />
-                <Route path="reconcile" element={<ReconciliationPage />} />
+                <Route
+                  path="reconcile"
+                  element={<Navigate replace to={`${base}/people`} />}
+                />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route
                   path="settings/assistants"

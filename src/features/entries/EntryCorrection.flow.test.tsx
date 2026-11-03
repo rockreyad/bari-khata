@@ -8,10 +8,8 @@ import {
   render,
   screen,
   waitFor,
-  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, useLocation } from "react-router";
 import { LanguageProvider } from "../../context/LanguageProvider";
 import { LedgerSchema, type Ledger } from "../../domain/model";
 import { entryTotal, summarize } from "../../domain/ledger";
@@ -21,19 +19,15 @@ import {
   setActiveOwner,
   LedgerDatabase,
 } from "../../data/database";
-import { LedgerRepository } from "../../data/repository";
+import {
+  LedgerRepository,
+  createWorkspaceStorage,
+} from "../../data/repository";
 import { savePreferences } from "../../lib/preferences";
 import { EntrySheet } from "../../components/EntrySheet";
 import { EntitySheet } from "../../components/EntitySheet";
 import { EntryList } from "../../components/ui/EntryList";
-import { ReconciliationPage } from "./ReconciliationPage";
 
-const state = vi.hoisted(() => ({
-  ledger: {} as Ledger,
-  base: "",
-  go: vi.fn(),
-}));
-vi.mock("../../app/NotebookProvider", () => ({ useNotebook: () => state }));
 vi.mock("../../components/ui/AppSelect", () => ({
   AppSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => (
     <select {...props} />
@@ -86,15 +80,6 @@ function fixture() {
     ],
   });
 }
-function Location() {
-  const location = useLocation();
-  return (
-    <output data-testid="route">
-      {location.pathname}
-      {location.search}
-    </output>
-  );
-}
 async function ready(name = "সংরক্ষণ করুন") {
   await waitFor(() =>
     expect(
@@ -112,29 +97,11 @@ async function repository(ledger: Ledger) {
   return repo;
 }
 
-it("keeps adjustment separate from transaction editing even on an older reconciliation URL", () => {
-  savePreferences({ language: "bn" });
-  state.ledger = fixture();
-  state.base = "/sample";
-  render(
-    <MemoryRouter initialEntries={["/sample/reconcile?type=bill"]}>
-      <LanguageProvider>
-        <ReconciliationPage />
-        <Location />
-      </LanguageProvider>
-    </MemoryRouter>,
-  );
-  expect(screen.getByLabelText("কার হিসাব")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "এই হিসাব ঠিক করি" })).toBeNull();
-  expect(screen.queryByText("আগের কোনো লেনদেন ঠিক করি")).toBeNull();
-  expect(screen.queryByLabelText("যে হিসাবটি বদলাবেন")).toBeNull();
-});
-
 it.each([
   { id: "bill", field: /^মোট দাম/, next: "1600" },
   { id: "payment", field: /^টাকার পরিমাণ/, next: "1400" },
 ])(
-  "requires a reason, restores its unfinished text and saves an audited $id correction without creating money events",
+  "restores an unfinished ordinary $id edit and preserves a legacy draft reason in its visible note",
   async ({ id, field, next }) => {
     savePreferences({ language: "bn" });
     const original = fixture();
@@ -150,7 +117,6 @@ it.each([
             presentation="page"
             ledger={original}
             editEntryId={id}
-            reconciliation
             onSave={onSave}
             onClose={onClose}
           />
@@ -159,32 +125,36 @@ it.each([
     let view = mount();
     await ready();
     fireEvent.change(screen.getByLabelText(field), { target: { value: next } });
-    const summary = screen.getByRole("region", { name: "অঙ্কের পরিবর্তন" });
-    expect(within(summary).getByText("আগের অঙ্ক")).toBeTruthy();
-    expect(summary.textContent).toContain("১০০");
+    expect(
+      screen.queryByRole("region", { name: "অঙ্কের পরিবর্তন" }),
+    ).toBeNull();
+    expect(screen.queryByLabelText("হিসাব মেলানোর কারণ")).toBeNull();
     if (id === "bill")
       expect(
         screen.getByText(
           "বিলের দাম বদলালেও আগের দেওয়া টাকা বদলাবে না। দেওয়া টাকা ঠিক করতে সেই হিসাবটি খুলুন।",
         ),
       ).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "সংরক্ষণ করুন" }));
-    expect((await screen.findByRole("alert")).textContent).toBe(
-      "হিসাব মেলানোর কারণ লিখুন।",
-    );
-    expect(onSave).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText("হিসাব মেলানোর কারণ"), {
-      target: { value: "আগের অঙ্কটি ভুল ছিল" },
-    });
     await userEvent.click(screen.getByRole("button", { name: "ফিরুন" }));
     await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
     view.unmount();
+    const storage = createWorkspaceStorage("real");
+    const pending = (await storage.readDraft<{
+      draft: Record<string, unknown>;
+      files: unknown[];
+    }>(`entry:${id}`))!;
+    pending.draft.reconciliationReason = "আগের অঙ্কটি ভুল ছিল";
+    if (id === "payment")
+      pending.draft.note = "হিসাব মেলানোর কারণ: আগের অঙ্কটি ভুল ছিল";
+    await storage.saveDraft(`entry:${id}`, pending);
     view = mount();
     await ready();
-    expect(
-      (screen.getByLabelText("হিসাব মেলানোর কারণ") as HTMLTextAreaElement)
-        .value,
-    ).toBe("আগের অঙ্কটি ভুল ছিল");
+    const note = screen.getByLabelText("মনে রাখার কথা") as HTMLTextAreaElement;
+    expect(note.value).toContain("হিসাব মেলানোর কারণ: আগের অঙ্কটি ভুল ছিল");
+    expect(note.value).toContain(
+      original.entries.find((entry) => entry.id === id)!.note,
+    );
+    fireEvent.change(note, { target: { value: `${note.value}\nআমার নোট` } });
     await userEvent.click(screen.getByRole("button", { name: "সংরক্ষণ করুন" }));
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
@@ -196,6 +166,10 @@ it.each([
     const corrected = saved.entries.find((entry) => entry.id === id)!;
     expect(entryTotal(corrected)).toBe(Number(next) * 100);
     expect(corrected.note).toContain("হিসাব মেলানোর কারণ: আগের অঙ্কটি ভুল ছিল");
+    expect(
+      corrected.note.match(/হিসাব মেলানোর কারণ: আগের অঙ্কটি ভুল ছিল/g),
+    ).toHaveLength(1);
+    expect(corrected.note).toContain("আমার নোট");
     expect(corrected.revisions.at(-1)?.before).toEqual(
       expect.objectContaining({
         date: original.entries.find((entry) => entry.id === id)!.date,
@@ -252,6 +226,76 @@ it("flushes the unfinished bill before explicitly opening its recorded payment c
   expect(await repo.database.drafts.get("real:entry:bill")).toBeTruthy();
   view.unmount();
 });
+it.each([
+  { impact: "normal" as const, source: null, status: "confirmed" },
+  {
+    impact: "normal" as const,
+    source: { file: "source.html", cell: "A1", checksum: "example" },
+    status: "confirmed",
+  },
+  {
+    impact: "historical" as const,
+    source: { file: "source.html", cell: "A1", checksum: "example" },
+    status: "needs_review",
+  },
+])(
+  "confirms only an explicitly saved normal incomplete record ($impact, $source)",
+  async ({ impact, source, status }) => {
+    savePreferences({ language: "bn" });
+    const base = fixture();
+    const original = LedgerSchema.parse({
+      ...base,
+      entries: [
+        {
+          ...base.entries[0],
+          balanceImpact: impact,
+          source,
+          reviewStatus: "needs_review",
+          reviewReason: "নাম বা খাতার তথ্য মিলিয়ে নিন",
+        },
+      ],
+    });
+    const repo = await repository(original);
+    const saved = vi.fn(async (next: Ledger) => {
+      await repo.save(next);
+    });
+    const view = render(
+      <LanguageProvider>
+        <EntrySheet
+          ledger={original}
+          presentation="page"
+          editEntryId="bill"
+          onSave={saved}
+          onClose={vi.fn()}
+        />
+      </LanguageProvider>,
+    );
+    await ready();
+    expect((await repo.read())!.ledger.entries[0].reviewStatus).toBe(
+      "needs_review",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "সংরক্ষণ করুন" }));
+    await waitFor(() => expect(saved).toHaveBeenCalledOnce());
+    view.unmount();
+    const entry = (await repo.read())!.ledger.entries[0];
+    expect(entry.reviewStatus).toBe(status);
+    expect(entry.reviewReason).toBe(
+      status === "confirmed" ? "" : "নাম বা খাতার তথ্য মিলিয়ে নিন",
+    );
+    expect(entry.source).toEqual(original.entries[0].source);
+    expect(entry.provenance).toEqual(original.entries[0].provenance);
+    expect(entry.balanceImpact).toBe(impact);
+    expect(entry.lines[0]).toMatchObject({
+      workId: "work",
+      label: "দরজা",
+      amount: 150000,
+      costType: "material",
+    });
+    expect((await repo.read())!.ledger.entries.map((row) => row.id)).toEqual([
+      "bill",
+    ]);
+  },
+);
 
 it("uses the existing contract history for a reasoned agreed-amount correction", async () => {
   savePreferences({ language: "bn" });
@@ -268,7 +312,6 @@ it("uses the existing contract history for a reasoned agreed-amount correction",
         kind="contract"
         ledger={ledger}
         editId="agreement"
-        reconciliation
         onSave={onSave}
         onClose={close}
       />
@@ -278,12 +321,10 @@ it("uses the existing contract history for a reasoned agreed-amount correction",
   fireEvent.change(screen.getByLabelText("কাজের টাকা"), {
     target: { value: "4500" },
   });
-  expect(
-    screen.getByRole("region", { name: "অঙ্কের পরিবর্তন" }).textContent,
-  ).toContain("৫০০");
+  expect(screen.queryByRole("region", { name: "অঙ্কের পরিবর্তন" })).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "রাখুন" }));
   expect((await screen.findByRole("alert")).textContent).toBe(
-    "হিসাব মেলানোর কারণ লিখুন।",
+    "কেন বদলালেন, তা লিখুন।",
   );
   expect(onSave).not.toHaveBeenCalled();
   fireEvent.change(screen.getByLabelText("কেন বদলালেন"), {

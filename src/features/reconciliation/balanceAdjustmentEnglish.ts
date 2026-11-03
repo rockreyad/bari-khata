@@ -1,5 +1,4 @@
 export const balanceAdjustmentEnglish: Record<string, string> = {
-  "ব্যক্তি বা খাতার মোট মিলিয়ে নিন": "Reconcile a person or notebook total",
   "বাকি নিশ্চিত নয়। দেওয়া টাকা বা খরচের মোট বেছে নিন।":
     "The outstanding balance is uncertain. Choose the paid or cost total.",
   সমন্বয়সহ: "Including adjustments",
@@ -7,12 +6,7 @@ export const balanceAdjustmentEnglish: Record<string, string> = {
     "This copy is missing earlier adjustment records. Keep the current data or use a newer backup.",
   "এই কপির সমন্বয়ের তথ্য মিলছে না। নতুন কপি বেছে নিন।":
     "The adjustment history in this copy is inconsistent. Choose a newer backup.",
-  "সঠিক মোট লিখুন। পার্থক্যটি সমন্বয় হিসেবে থাকবে।":
-    "Enter the correct total. The difference is recorded as an adjustment.",
-  "কার হিসাব": "Whose balance",
   "সব ধরনের হিসাব": "All accounts",
-  "খাতা বেছে নিন": "Choose a notebook",
-  "একটি বেছে নিন": "Choose one",
   "মোট হিসাব মেলাই": "Reconcile total",
   "যে মোট মিলাব": "Total to reconcile",
   "মোট দিয়েছি": "Total paid",

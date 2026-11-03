@@ -54,7 +54,6 @@ import { AppCombobox } from "./ui/AppCombobox";
 import { MoneyInput } from "./ui/MoneyInput";
 import { ContactImport } from "./contacts/ContactImport";
 import { FormError, useFormError } from "./ui/FormError";
-import { MoneyCorrectionSummary } from "../features/reconciliation/MoneyCorrectionSummary";
 import "../features/people/person-work-links.css";
 type Kind = "work" | "person" | "contract";
 export type EntitySheetProps = {
@@ -64,7 +63,6 @@ export type EntitySheetProps = {
   defaultWorkId?: string;
   defaultPersonId?: string;
   editId?: string;
-  reconciliation?: boolean;
   mode?: "real" | "demo";
   onSave: (ledger: Ledger) => Promise<void>;
   onClose: () => void;
@@ -194,7 +192,6 @@ export function EntitySheet({
   defaultWorkId,
   defaultPersonId,
   editId,
-  reconciliation = false,
   mode = "real",
   onSave,
   onClose,
@@ -456,8 +453,6 @@ export function EntitySheet({
             : undefined,
         );
       } else {
-        if (reconciliation && editId && !draft.contractReason.trim())
-          throw new Error(t("হিসাব মেলানোর কারণ লিখুন।"));
         if (!total) throw new Error(t("কাজের সঠিক টাকা লিখুন।"));
         let personId = draft.personId;
         if (personId === "__new__") {
@@ -1110,12 +1105,6 @@ export function EntitySheet({
                   }
                 />
               </label>
-              {reconciliation && originalContract ? (
-                <MoneyCorrectionSummary
-                  before={originalContract.total}
-                  after={total}
-                />
-              ) : null}
               {total > 0 ? (
                 <BalanceProgress
                   total={total}

@@ -40,6 +40,213 @@ function example() {
 }
 
 describe("historical organization", () => {
+  it("moves explicitly selected all-labour lines into the labour account without creating wages or cash", () => {
+    const before = LedgerSchema.parse({
+      ...example(),
+      people: [{ id: "worker", name: "মিস্ত্রি", kind: "worker" }],
+      entries: example().entries.map((entry) => ({
+        ...entry,
+        personId: "worker",
+        date: "2026-01-03",
+        lines: [
+          ...entry.lines,
+          { ...entry.lines[0], id: "second", amount: 20000 },
+        ],
+      })),
+    });
+    const original = structuredClone(before),
+      entry = before.entries[0];
+    const drafts = reviewDraft(entry, before).map((draft) => ({
+      ...draft,
+      costType: "labour" as const,
+    }));
+    const after = organizeHistoricalEntry(before, entry, drafts);
+    expect(after.entries[0]).toMatchObject({
+      account: "labour",
+      personId: "worker",
+      source: entry.source,
+      date: entry.date,
+      note: entry.note,
+      balanceImpact: "historical",
+      reviewStatus: "confirmed",
+    });
+    expect(after.entries[0].lines).toEqual(
+      entry.lines.map((line) => ({
+        ...line,
+        materialGroupId: "cement",
+        costType: "labour",
+        usage: "",
+      })),
+    );
+    expect(after.entries[0].revisions[0].before).toMatchObject({
+      account: "materials",
+      source: entry.source,
+      lines: entry.lines,
+    });
+    expect(summarize(after)).toMatchObject({
+      cost: 70000,
+      historicalCost: 70000,
+      confirmedCost: 0,
+      paid: 0,
+      refunds: 0,
+      payable: 0,
+      advance: 0,
+    });
+    expect(before).toEqual(original);
+  });
+  it.each(["material", "transport", "unload", "rental", "other"] as const)(
+    "moves all lines out of labour into the appropriate account for %s",
+    (costType) => {
+      const before = LedgerSchema.parse({
+        ...example(),
+        entries: example().entries.map((entry) => ({
+          ...entry,
+          account: "labour",
+          lines: entry.lines.map((line) => ({ ...line, costType: "labour" })),
+        })),
+      });
+      const entry = before.entries[0];
+      const after = organizeHistoricalEntry(
+        before,
+        entry,
+        reviewDraft(entry, before).map((draft) => ({ ...draft, costType })),
+      );
+      expect(after.entries[0].account).toBe(
+        costType === "material" ? "materials" : "other",
+      );
+      expect(after.entries[0].lines[0]).toMatchObject({
+        costType,
+        id: entry.lines[0].id,
+        amount: 50000,
+      });
+      expect(after.entries[0]).toMatchObject({
+        personId: entry.personId,
+        date: entry.date,
+        source: entry.source,
+        balanceImpact: "historical",
+      });
+      expect(summarize(after)).toMatchObject({
+        historicalCost: 50000,
+        confirmedCost: 0,
+        paid: 0,
+        payable: 0,
+        advance: 0,
+      });
+    },
+  );
+  it("never infers wages from a worker's identity or normalizes an unchanged legacy account", () => {
+    const before = LedgerSchema.parse({
+      ...example(),
+      people: [{ id: "worker", name: "মিস্ত্রি", kind: "worker" }],
+      entries: example().entries.map((entry) => ({
+        ...entry,
+        personId: "worker",
+        account: "other",
+      })),
+    });
+    const after = organizeHistoricalEntry(
+      before,
+      before.entries[0],
+      reviewDraft(before.entries[0], before),
+    );
+    expect(after.entries[0]).toMatchObject({
+      personId: "worker",
+      account: "other",
+      lines: [{ costType: "material", amount: 50000 }],
+    });
+  });
+  it("rejects mixed labour and nonlabour selections without rewriting any other line", () => {
+    const before = LedgerSchema.parse({
+      ...example(),
+      entries: example().entries.map((entry) => ({
+        ...entry,
+        lines: [
+          ...entry.lines,
+          { ...entry.lines[0], id: "second", amount: 20000 },
+        ],
+      })),
+    });
+    const original = structuredClone(before),
+      drafts = reviewDraft(before.entries[0], before);
+    drafts[0].costType = "labour";
+    expect(() =>
+      organizeHistoricalEntry(before, before.entries[0], drafts),
+    ).toThrow("mixed_historical_cost_types");
+    expect(before).toEqual(original);
+  });
+  it.each([false, true])(
+    "rejects account changes with linked settlements, including cancelled ones (%s)",
+    (voided) => {
+      const before = LedgerSchema.parse({
+        ...example(),
+        entries: [
+          ...example().entries,
+          {
+            id: "paid",
+            kind: "payment",
+            relatedEntryId: "old",
+            voided,
+            account: "materials",
+            paymentParts: [{ amount: 1000 }],
+            allocations: [{ workId: "plaster", amount: 1000 }],
+          },
+        ],
+      });
+      const original = structuredClone(before);
+      const drafts = reviewDraft(before.entries[0], before).map((draft) => ({
+        ...draft,
+        costType: "labour" as const,
+      }));
+      expect(() =>
+        organizeHistoricalEntry(before, before.entries[0], drafts),
+      ).toThrow("historical_review_linked_account");
+      expect(before).toEqual(original);
+    },
+  );
+  it("rejects changing a contract-linked entry out of labour without unlinking or rewriting relationships", () => {
+    const before = LedgerSchema.parse({
+      ...example(),
+      people: [{ id: "worker", name: "মিস্ত্রি" }],
+      contracts: [
+        { id: "job", personId: "worker", workId: "plaster", total: 100000 },
+      ],
+      entries: example().entries.map((entry) => ({
+        ...entry,
+        personId: "worker",
+        contractId: "job",
+        account: "labour",
+        lines: entry.lines.map((line) => ({ ...line, costType: "labour" })),
+      })),
+    });
+    const original = structuredClone(before);
+    expect(() =>
+      organizeHistoricalEntry(
+        before,
+        before.entries[0],
+        reviewDraft(before.entries[0], before).map((draft) => ({
+          ...draft,
+          costType: "material",
+        })),
+      ),
+    ).toThrow("historical_review_linked_account");
+    expect(before).toEqual(original);
+  });
+  it("rejects ordinary financial entries even when they have a source attachment", () => {
+    const before = LedgerSchema.parse({
+      ...example(),
+      entries: example().entries.map((entry) => ({
+        ...entry,
+        balanceImpact: "normal",
+      })),
+    });
+    expect(() =>
+      organizeHistoricalEntry(
+        before,
+        before.entries[0],
+        reviewDraft(before.entries[0], before),
+      ),
+    ).toThrow("historical_entry_required");
+  });
   it("preserves source, amount and historical accounting while organizing metadata", () => {
     const before = example();
     const entry = before.entries[0];

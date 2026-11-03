@@ -9,6 +9,7 @@ import type { CostType, Entry } from "../../domain/model";
 import { entryTotal } from "../../domain/ledger";
 import { costNames } from "../../lib/display";
 import { bulkOrganizeHistoricalEntries } from "./bulkReview";
+import { historicalReviewErrorMessage } from "./review";
 
 export function BulkReviewSheet({
   entries,
@@ -45,9 +46,10 @@ export function BulkReviewSheet({
     } catch (cause) {
       setError(
         t(
-          cause instanceof Error && cause.message === "review_conflict"
-            ? "বাছা কোনো হিসাব অন্য জায়গায় বদলেছে। বন্ধ করে আবার বেছে নিন।"
-            : "তথ্য রাখা যায়নি। আবার চেষ্টা করুন।",
+          historicalReviewErrorMessage(cause) ??
+            (cause instanceof Error && cause.message === "review_conflict"
+              ? "বাছা কোনো হিসাব অন্য জায়গায় বদলেছে। বন্ধ করে আবার বেছে নিন।"
+              : "তথ্য রাখা যায়নি। আবার চেষ্টা করুন।"),
         ),
       );
     } finally {

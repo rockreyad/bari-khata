@@ -402,20 +402,6 @@ export function SettingsPage() {
                   onClick={() => openPanel("sync")}
                 />
               )}
-              <SettingsRow
-                title={t("পুরোনো হিসাব ঠিক করি")}
-                description={t("আগের খাতার তথ্য দেখুন")}
-                icon={<PencilSimple size={21} weight="duotone" />}
-                tone="amber"
-                onClick={() => go("/review")}
-              />
-              <SettingsRow
-                title={t("হিসাব মিলিয়ে নিই")}
-                description={t("ব্যক্তি বা খাতার মোট মিলিয়ে নিন")}
-                icon={<PencilSimple size={21} weight="duotone" />}
-                tone="violet"
-                onClick={() => go("/reconcile")}
-              />
             </div>
           </section>
           <section

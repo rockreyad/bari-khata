@@ -1,0 +1,18 @@
+.linked-payment-correction {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-muted);
+}
+.linked-payment-correction p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.8;
+  font-size: 13px;
+}
+.linked-payment-correction button {
+  min-height: 44px;
+  text-align: start;
+}
