@@ -131,4 +131,42 @@ describe("recorded notebook activity", () => {
     });
     expect(notebookTimeline(ledger)).toEqual([]);
   });
+  it("orders different UTC offsets by their actual time and skips invalid or date-only legacy history", () => {
+    let ledger = LedgerSchema.parse({
+      works: [{ id: "work", name: "খাতা" }],
+      people: [{ id: "worker", name: "মিস্ত্রি", kind: "worker" }],
+      contracts: [
+        {
+          id: "job",
+          workId: "work",
+          personId: "worker",
+          total: 100000,
+          history: [
+            { at: "old time", total: 90000, note: "সময় অজানা" },
+            { at: "2026-11-01", total: 95000, note: "শুধু দিন জানা" },
+          ],
+        },
+      ],
+      entries: [
+        {
+          id: "bill",
+          kind: "expense",
+          createdAt: "2026-11-03T08:00:00Z",
+          lines: [{ id: "line", workId: "work", amount: 1000 }],
+        },
+      ],
+    });
+    ledger = saveContractChange(
+      ledger,
+      { ...ledger.contracts[0], total: 110000 },
+      "নতুন দর",
+      "2026-11-03T09:00:00+06:00",
+    );
+    const events = notebookTimeline(ledger);
+    expect(events).toHaveLength(2);
+    expect(events.map((event) => event.at)).toEqual([
+      "2026-11-03T08:00:00Z",
+      "2026-11-03T09:00:00+06:00",
+    ]);
+  });
 });
