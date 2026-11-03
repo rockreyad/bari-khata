@@ -10,6 +10,7 @@ import {
   Check,
   CloudCheck,
   CloudSlash,
+  ClockCounterClockwise,
   DeviceMobile,
   FloppyDisk,
   Globe,
@@ -390,6 +391,12 @@ export function SettingsPage() {
                 icon={<Robot size={21} weight="duotone" />}
                 tone="violet"
                 onClick={() => go("/settings/assistants")}
+              />
+              <SettingsRow
+                title={t("টাইমলাইন")}
+                description={t("কখন কী করেছি")}
+                icon={<ClockCounterClockwise size={21} />}
+                onClick={() => go("/timeline")}
               />
               {mode === "real" && (
                 <SettingsRow
