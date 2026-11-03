@@ -95,6 +95,7 @@ const DraftSchema = z.object({
   quantity: numericDraftText(60, "1"),
   rate: numericDraftText(),
   total: numericDraftText(),
+  totalOverridden: z.boolean().default(false),
   notes: z.string().default(""),
   personContractId: z.string().default(""),
   personContractAmount: numericDraftText(),
@@ -178,6 +179,8 @@ function initial(
         workId: c.workId ?? "",
         rate: moneyInputValue(c.rate),
         total: moneyInputValue(c.total),
+        totalOverridden:
+          c.calculatedTotal != null && c.calculatedTotal !== c.total,
       });
   }
   return d;
@@ -349,10 +352,11 @@ export function EntitySheet({
       scope: originalContract.scope,
     }));
   };
+  const calculatedTotal = contractTotal(draft.quantity, draft.rate);
   const total =
-    draft.basis === "fixed"
+    draft.basis === "fixed" || draft.totalOverridden
       ? amount(draft.total)
-      : contractTotal(draft.quantity, draft.rate);
+      : calculatedTotal;
   const allowed =
     kind === "person"
       ? roleActions[draft.contactKind]
@@ -506,6 +510,7 @@ export function EntitySheet({
               ? "1"
               : (contractQuantity(draft.quantity) ?? ""),
           rate: draft.basis === "fixed" ? total : amount(draft.rate),
+          calculatedTotal: draft.basis === "fixed" ? null : calculatedTotal,
           total,
           notes: draft.notes,
         });
@@ -1058,9 +1063,37 @@ export function EntitySheet({
                     </label>
                   </div>
                   <div className="contract-calculation">
-                    <span>{t("কাজের টাকা")}</span>
-                    <strong>{money(total)}</strong>
+                    <span>{t("পরিমাণ ও দর অনুযায়ী")}</span>
+                    {draft.totalOverridden && total !== calculatedTotal ? (
+                      <s>{money(calculatedTotal)}</s>
+                    ) : (
+                      <strong>{money(calculatedTotal)}</strong>
+                    )}
                   </div>
+                  <label>
+                    {t("শেষে ঠিক করা টাকা")}
+                    <MoneyInput
+                      inputMode="decimal"
+                      value={
+                        draft.totalOverridden
+                          ? draft.total
+                          : moneyInputValue(calculatedTotal)
+                      }
+                      onChange={(event) => {
+                        field("totalOverridden", true);
+                        field("total", event.target.value);
+                      }}
+                    />
+                  </label>
+                  {draft.totalOverridden ? (
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => field("totalOverridden", false)}
+                    >
+                      {t("পরিমাণের হিসাব রাখি")}
+                    </button>
+                  ) : null}
                 </>
               )}
               <label>

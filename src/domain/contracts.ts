@@ -36,8 +36,8 @@ export function contractChanges(
   ).filter(
     (key) =>
       !before ||
-      (key === "status"
-        ? (before.status ?? null) !== (after.status ?? null)
+      (key === "status" || key === "calculatedTotal"
+        ? (before[key] ?? null) !== (after[key] ?? null)
         : JSON.stringify(before[key]) !== JSON.stringify(after[key])),
   );
 }
@@ -72,7 +72,7 @@ export function saveContractChange(
     const total =
       (BigInt(whole + fraction) * BigInt(next.rate) + denominator / 2n) /
       denominator;
-    if (total !== BigInt(next.total))
+    if (total !== BigInt(next.calculatedTotal ?? next.total))
       throw new Error("পরিমাণ ও দর অনুযায়ী মোট মজুরি মিলছে না।");
   }
   const replacement = ContractSchema.parse({
@@ -100,9 +100,11 @@ export function saveContractChange(
 function comparableSnapshot(snapshot: ContractSnapshot | null) {
   if (!snapshot) return null;
   return Object.fromEntries(
-    Object.entries({ ...snapshot, status: snapshot.status ?? null }).sort(
-      ([left], [right]) => left.localeCompare(right),
-    ),
+    Object.entries({
+      ...snapshot,
+      status: snapshot.status ?? null,
+      calculatedTotal: snapshot.calculatedTotal ?? null,
+    }).sort(([left], [right]) => left.localeCompare(right)),
   );
 }
 function comparableActivity(event: ContractActivity) {
