@@ -148,6 +148,7 @@ export const PersonSchema = z
     ...removalFields,
     name: z.string().trim().min(1).max(200),
     role: z.string().max(200).default(""),
+    workIds: z.array(Id).max(10000).optional(),
     phone: z.string().max(60).default("").transform(latinDigits),
     kind: PersonKindSchema.nullable().default(null),
     quickActions: z.array(ContactActionSchema).max(4).nullable().default(null),
@@ -366,6 +367,19 @@ export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
   const works = unique(ledger.works, "works");
   const people = unique(ledger.people, "people");
   ledger.people.forEach((person, index) => {
+    if (person.workIds) {
+      if (new Set(person.workIds).size !== person.workIds.length)
+        error("Duplicate contact work", ["people", index, "workIds"]);
+      person.workIds.forEach((workId, workIndex) => {
+        if (!works.has(workId))
+          error("Unknown contact work", [
+            "people",
+            index,
+            "workIds",
+            workIndex,
+          ]);
+      });
+    }
     if (
       person.quickActions &&
       new Set(person.quickActions).size !== person.quickActions.length

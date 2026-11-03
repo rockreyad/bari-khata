@@ -50,9 +50,11 @@ import { Sheet } from "./Sheet";
 import { WorkMark, workIconChoices, workColorChoices } from "./ui/Icons";
 import { AppSelect } from "./ui/AppSelect";
 import { AppDatePicker } from "./ui/AppDatePicker";
+import { AppCombobox } from "./ui/AppCombobox";
 import { MoneyInput } from "./ui/MoneyInput";
 import { ContactImport } from "./contacts/ContactImport";
 import { FormError, useFormError } from "./ui/FormError";
+import "../features/people/person-work-links.css";
 type Kind = "work" | "person" | "contract";
 export type EntitySheetProps = {
   presentation?: "sheet" | "page";
@@ -77,6 +79,7 @@ const DraftSchema = z.object({
   contactKind: z.enum(["worker", "shop", "driver", "other"]).default("shop"),
   quickActions: z.array(z.string()).nullable().default(null),
   role: z.string().default(""),
+  personWorkIds: z.array(z.string()).max(10000).default([]),
   phone: z.string().default("").transform(latinDigits),
   workId: z.string().default(""),
   personId: z.string().default(""),
@@ -109,6 +112,16 @@ const personActionNames = {
   return: "মাল ফেরত",
   transport: "আনার খরচ",
 };
+const roleSuggestions = [
+  "সুইপার",
+  "লেবার",
+  "ঠিকাদার",
+  "ডিলার",
+  "ইঞ্জিনিয়ার",
+  "রাজমিস্ত্রি",
+  "ইলেকট্রিক মিস্ত্রি",
+  "প্লাম্বার",
+] as const;
 const workActionNames = {
   expense: "খরচ লিখি",
   payment: "টাকা দিলাম",
@@ -132,6 +145,7 @@ function initial(
   let d = DraftSchema.parse({
     id: editId ?? crypto.randomUUID(),
     workId: workId ?? "",
+    personWorkIds: workId ? [workId] : [],
     personId: personId ?? "",
     newPersonId: crypto.randomUUID(),
     personContractId: crypto.randomUUID(),
@@ -150,6 +164,7 @@ function initial(
         ...d,
         ...person,
         contactKind: personKind(person),
+        personWorkIds: person.workIds ?? [],
       });
   }
   if (kind === "contract") {
@@ -178,8 +193,20 @@ export function EntitySheet({
   onSave,
   onClose,
 }: EntitySheetProps) {
-  const { t, money } = useLanguageContext();
+  const { t, money, formatDigits } = useLanguageContext();
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode]);
+  const personRoleChoices = useMemo(
+    () =>
+      kind === "person"
+        ? [
+            ...roleSuggestions.map((role) => ({ value: t(role) })),
+            ...ledger.people
+              .filter((person) => person.role.trim())
+              .map((person) => ({ value: person.role })),
+          ]
+        : [],
+    [kind, ledger.people, t],
+  );
   const originalContract =
     kind === "contract"
       ? ledger.contracts.find((contract) => contract.id === editId)
@@ -384,6 +411,7 @@ export function EntitySheet({
           name: draft.name.trim(),
           phone: latinDigits(draft.phone.trim()),
           role: draft.role.trim(),
+          workIds: draft.personWorkIds,
           kind: draft.contactKind,
           quickActions:
             draft.quickActions === null
@@ -736,6 +764,18 @@ export function EntitySheet({
                 />
               </label>
               <label>
+                {t("পরিচয় / কী কাজ করেন")}
+                <AppCombobox
+                  value={draft.role}
+                  onChange={(event) => field("role", event.target.value)}
+                  maxLength={200}
+                  placeholder={t(
+                    "যেমন: সুইপার, লেবার, ঠিকাদার, ডিলার বা ইঞ্জিনিয়ার",
+                  )}
+                  suggestions={personRoleChoices}
+                />
+              </label>
+              <label>
                 {t("ফোন নম্বর")}
                 <NumericInput
                   type="tel"
@@ -754,6 +794,52 @@ export function EntitySheet({
                   }));
                 }}
               />
+              <fieldset className="person-work-picker">
+                <legend>{t("কোন কোন খাতায়")}</legend>
+                <p className="field-hint">
+                  {t(
+                    "একাধিক খাতা বেছে নিতে পারেন। এতে নতুন খরচ বা চুক্তি হবে না।",
+                  )}
+                </p>
+                <div className="person-work-options">
+                  {ledger.works
+                    .filter(
+                      (work) =>
+                        !work.archivedAt ||
+                        draft.personWorkIds.includes(work.id),
+                    )
+                    .map((work) => (
+                      <label className="person-work-option" key={work.id}>
+                        <input
+                          type="checkbox"
+                          checked={draft.personWorkIds.includes(work.id)}
+                          onChange={(event) =>
+                            field(
+                              "personWorkIds",
+                              event.target.checked
+                                ? [...draft.personWorkIds, work.id]
+                                : draft.personWorkIds.filter(
+                                    (id) => id !== work.id,
+                                  ),
+                            )
+                          }
+                        />
+                        <span>
+                          {work.archivedAt
+                            ? t("{{name}} (সরানো)", {
+                                name: formatDigits(work.name),
+                              })
+                            : formatDigits(work.name)}
+                        </span>
+                      </label>
+                    ))}
+                </div>
+                {!ledger.works.some((work) => !work.archivedAt) ? (
+                  <p className="field-hint">
+                    {t("খাতা যোগ করলে এখানে বেছে নিতে পারবেন।")}
+                  </p>
+                ) : null}
+              </fieldset>
               {!editId && draft.contactKind === "worker" ? (
                 <details className="entity-extra">
                   <summary>{t("কাজের টাকা")}</summary>
@@ -794,16 +880,8 @@ export function EntitySheet({
                 </details>
               ) : null}
               <details className="entity-extra">
-                <summary>{t("পরিচয় ও পছন্দের বোতাম")}</summary>
+                <summary>{t("পছন্দের বোতাম")}</summary>
                 <div className="entity-extra-body">
-                  <label>
-                    {t("কী কাজ করেন / কীসের দোকান")}
-                    <input
-                      value={draft.role}
-                      onChange={(e) => field("role", e.target.value)}
-                      placeholder={t("যেমন: টাইলস মিস্ত্রি / রডের দোকান")}
-                    />
-                  </label>
                   <h3>{t("এই নামে কোন বোতাম রাখবেন?")}</h3>
                   <div className="preset-options">
                     {(allowed as ContactAction[]).map((id) => (
