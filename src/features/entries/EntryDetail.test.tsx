@@ -60,6 +60,73 @@ function renderDetail(ledger: Ledger, id = ledger.entries[0].id) {
 const revisionMarkup = (html: string) =>
   html.match(/<ol class="entry-revision-list">[\s\S]*?<\/ol>/)?.[0] ?? "";
 describe("transaction detail activity", () => {
+  it("shows a notebook paid-total correction as an adjustment without inventing a person or bill", () => {
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "work", name: "পরীক্ষার খাতা" }],
+      entries: [
+        {
+          id: "adjust",
+          kind: "adjustment",
+          personId: null,
+          account: "other",
+          note: "অঙ্ক মিলিয়েছি",
+          adjustment: {
+            target: "work",
+            basis: "paid",
+            account: null,
+            before: 100000,
+            after: 150000,
+            delta: 50000,
+            workId: "work",
+          },
+        },
+      ],
+    });
+    const html = renderDetail(ledger, "adjust");
+    expect(html).toContain("সমন্বয়");
+    expect(html).toContain("মোট দিয়েছি");
+    expect(html).toContain("পরীক্ষার খাতা");
+    expect(html).toContain("সব হিসাব");
+    expect(html).toContain("<strong>৳1000</strong>");
+    expect(html).toContain("<strong>৳1500</strong>");
+    expect(html).not.toContain("বাকি ৳");
+    expect(html).not.toContain("entry-person-card");
+  });
+  it("shows an immutable noncash adjustment with before/after balances and its reason", () => {
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "roof", name: "ছাদের কাজ" }],
+      people: [{ id: "worker", name: "মিস্ত্রি" }],
+      entries: [
+        {
+          id: "adjust",
+          kind: "adjustment",
+          personId: "worker",
+          account: "labour",
+          note: "পুরোনো হিসাব মিলিয়েছি",
+          adjustment: {
+            target: "person",
+            basis: "balance",
+            account: "labour",
+            before: 600000,
+            after: -100000,
+            delta: -700000,
+            workId: "roof",
+          },
+        },
+      ],
+    });
+    const html = renderDetail(ledger, "adjust");
+    expect(html).toContain("সমন্বয়");
+    expect(html).toContain("৳-7000");
+    expect(html).toContain("বাকি ৳6000");
+    expect(html).toContain("আমার জমা ৳1000");
+    expect(html).toContain("ছাদের কাজ");
+    expect(html).toContain("কারণ: পুরোনো হিসাব মিলিয়েছি");
+    expect(html).toContain("আগের বিল বা টাকা দেওয়ার তথ্য বদলায়নি।");
+    expect(html).not.toContain("সংশোধন করুন");
+    expect(html).not.toContain("মজুরির বিল");
+    expect(html).not.toContain("মালের বিল");
+  });
   it("renders assistant provenance changes as names, origin and reason without raw identifiers", () => {
     const source = {
       version: 1 as const,

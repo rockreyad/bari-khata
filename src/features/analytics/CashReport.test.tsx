@@ -12,6 +12,48 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
 });
+it("keeps cash rows actual and shows a paid-total correction separately", () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "পরীক্ষার খাতা" }],
+    entries: [
+      {
+        id: "paid",
+        kind: "payment",
+        date: "2026-11-03",
+        allocations: [{ workId: "work", amount: 10000 }],
+        paymentParts: [{ method: "cash", amount: 10000 }],
+      },
+      {
+        id: "adjust",
+        kind: "adjustment",
+        personId: null,
+        account: "other",
+        date: "2026-11-03",
+        note: "অঙ্ক মিলিয়েছি",
+        adjustment: {
+          target: "work",
+          basis: "paid",
+          account: null,
+          before: 10000,
+          after: 15000,
+          delta: 5000,
+          workId: "work",
+        },
+      },
+    ],
+  });
+  const { container } = mount(ledger, "en");
+  expect(container.querySelector(".report-total > strong")?.textContent).toBe(
+    "৳\u202f100",
+  );
+  expect(container.querySelector(".report-total")?.textContent).toContain(
+    "Adjustment",
+  );
+  expect(container.querySelector(".report-total")?.textContent).toContain(
+    "৳\u202f50",
+  );
+  expect(container.querySelector(".history-adjustment")).toBeNull();
+});
 function CurrentRoute() {
   const location = useLocation();
   return <output data-testid="route">{location.search}</output>;

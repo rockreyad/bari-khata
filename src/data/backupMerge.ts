@@ -4,6 +4,7 @@ import {
   type Entry,
   type Ledger,
 } from "../domain/model";
+import { preservesBalanceAdjustments } from "../domain/adjustmentHistory.js";
 
 const collections = [
   "works",
@@ -167,6 +168,8 @@ export function planBackupMerge(
     (difference) => !decisions[difference.key],
   );
   const parsed = LedgerSchema.safeParse(candidate);
+  if (parsed.success && !preservesBalanceAdjustments(current, parsed.data))
+    historyConflict = true;
   return {
     ledger: !historyConflict && parsed.success ? parsed.data : null,
     differences,

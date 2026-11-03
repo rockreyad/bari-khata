@@ -4,6 +4,7 @@ import { workChanges } from "../../domain/workActivity";
 import { contractChanges } from "../../domain/contracts";
 import { latinDigits } from "../../lib/numerals";
 import { z } from "zod";
+import { adjustmentBasisLabels } from "./adjustmentDisplay";
 
 const RecordedTime = z.string().datetime({ offset: true });
 
@@ -13,6 +14,7 @@ type TimelineState =
   | "paid"
   | "credit"
   | "refund"
+  | "adjustment"
   | "voided"
   | "planned"
   | "ongoing"
@@ -30,6 +32,11 @@ export type TimelineEvent = {
   before?: number;
   amount?: number;
   statusChange?: { before: string; after: string };
+  adjustmentChange?: {
+    basis: keyof typeof adjustmentBasisLabels;
+    before: number;
+    after: number;
+  };
   target: { kind: "entry" | "work" | "job" | "person"; id: string };
 };
 export type TimelineSearchRecord = { event: TimelineEvent; text: string };
@@ -107,6 +114,7 @@ const entryFields: Record<string, string> = {
   contractId: "কাজ",
   relatedEntryId: "যে বিলের টাকা",
   receipts: "ভাউচার",
+  adjustment: "হিসাবের সমন্বয়",
 };
 const workFields: Record<string, string> = {
   name: "নাম",
@@ -151,6 +159,13 @@ export function notebookTimeline(ledger: Ledger): TimelineEvent[] {
     ledger.paymentPurposes.map((purpose) => [purpose.id, purpose.name]),
   );
   const subject = (entry: EntrySnapshot) => {
+    if (entry.kind === "adjustment")
+      return (
+        people.get(entry.personId ?? "") ||
+        ledger.works.find((work) => work.id === entry.adjustment?.workId)
+          ?.name ||
+        "হিসাবের সমন্বয়"
+      );
     if (entry.kind === "payment" || entry.kind === "refund")
       return (
         people.get(entry.personId ?? "") ||
@@ -183,6 +198,7 @@ export function notebookTimeline(ledger: Ledger): TimelineEvent[] {
                 payment: "paid",
                 expense_credit: "credit",
                 refund: "refund",
+                adjustment: "adjustment",
               } as const
             )[event.after.kind],
         title:
@@ -193,6 +209,7 @@ export function notebookTimeline(ledger: Ledger): TimelineEvent[] {
                   payment: "টাকা দেওয়ার হিসাব রেখেছি",
                   refund: "ফেরত টাকার হিসাব রেখেছি",
                   expense_credit: "মাল ফেরতের হিসাব রেখেছি",
+                  adjustment: "হিসাবের সমন্বয় রেখেছি",
                 } as const
               )[event.after.kind]
             : event.kind === "voided"
@@ -209,8 +226,19 @@ export function notebookTimeline(ledger: Ledger): TimelineEvent[] {
               .filter(Boolean),
           ),
         ],
-        ...(event.before ? { before: snapshotTotal(event.before) } : {}),
-        amount: snapshotTotal(event.after),
+        ...(event.after.kind === "adjustment" && event.after.adjustment
+          ? {
+              adjustmentChange: {
+                basis: event.after.adjustment.basis,
+                before: event.after.adjustment.before,
+                after: event.after.adjustment.after,
+              },
+              amount: event.after.adjustment.delta,
+            }
+          : {
+              ...(event.before ? { before: snapshotTotal(event.before) } : {}),
+              amount: snapshotTotal(event.after),
+            }),
         target: { kind: "entry", id: entry.id },
       });
     }

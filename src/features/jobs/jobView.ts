@@ -1,4 +1,5 @@
 import type { Contract, ContractStatus, Ledger } from "../../domain/model";
+import { adjustmentBalanceDelta } from "../../domain/adjustmentMath";
 
 export function jobName(
   job: Pick<Contract, "title">,
@@ -47,16 +48,36 @@ export type JobBalance = {
 export function jobBalances(ledger: Ledger): Map<string, JobBalance> {
   const jobs = new Map(ledger.contracts.map((job) => [job.id, job]));
   const paid = new Map<string, bigint>();
+  const billed = new Map<string, bigint>();
+  const adjustments = new Map<string, bigint>();
   for (const entry of ledger.entries) {
     if (
       entry.voided ||
       entry.balanceImpact === "historical" ||
-      !entry.contractId ||
-      (entry.kind !== "payment" && entry.kind !== "refund")
+      !entry.contractId
     )
       continue;
     const job = jobs.get(entry.contractId);
     if (!job || entry.personId !== job.personId) continue;
+    if (entry.kind === "adjustment") {
+      adjustments.set(
+        job.id,
+        (adjustments.get(job.id) ?? 0n) + BigInt(adjustmentBalanceDelta(entry)),
+      );
+      continue;
+    }
+    if (entry.kind === "expense" || entry.kind === "expense_credit") {
+      const amount = entry.lines.reduce(
+        (sum, line) => sum + BigInt(line.amount),
+        0n,
+      );
+      billed.set(
+        job.id,
+        (billed.get(job.id) ?? 0n) +
+          (entry.kind === "expense_credit" ? -amount : amount),
+      );
+      continue;
+    }
     const amount = entry.paymentParts.reduce(
       (sum, part) => sum + BigInt(part.amount),
       0n,
@@ -70,7 +91,10 @@ export function jobBalances(ledger: Ledger): Map<string, JobBalance> {
   return new Map(
     ledger.contracts.map((job) => {
       const net = paid.get(job.id) ?? 0n;
-      const difference = BigInt(job.total) - net;
+      const agreed = BigInt(job.total),
+        cost = billed.get(job.id) ?? 0n;
+      const difference =
+        (agreed > cost ? agreed : cost) + (adjustments.get(job.id) ?? 0n) - net;
       const remaining = difference > 0n ? difference : 0n;
       const extra = difference < 0n ? -difference : 0n;
       return [

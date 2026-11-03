@@ -12,6 +12,39 @@ import { saveContractChange } from "../../domain/contracts";
 import { setEntityRemoved } from "../../domain/entityDeletion";
 
 describe("recorded notebook activity", () => {
+  it("names a signed adjustment without presenting it as a payment and preserves the recorded balance change", () => {
+    const ledger = LedgerSchema.parse({
+      people: [{ id: "person", name: "পরীক্ষার নাম" }],
+      entries: [
+        {
+          id: "adjust",
+          kind: "adjustment",
+          personId: "person",
+          createdAt: "2026-11-03T10:00:00Z",
+          note: "আগের অঙ্ক মিলিয়েছি",
+          adjustment: {
+            target: "person",
+            basis: "balance",
+            account: "materials",
+            before: 500000,
+            after: -100000,
+            delta: -600000,
+            workId: null,
+          },
+        },
+      ],
+    });
+    expect(notebookTimeline(ledger)).toMatchObject([
+      {
+        title: "হিসাবের সমন্বয় রেখেছি",
+        state: "adjustment",
+        subject: "পরীক্ষার নাম",
+        amount: -600000,
+        adjustmentChange: { basis: "balance", before: 500000, after: -100000 },
+        note: "আগের অঙ্ক মিলিয়েছি",
+      },
+    ]);
+  });
   it("shows the original amount and corrected amount separately at the recording time, without changing the payment or ledger", () => {
     const ledger = LedgerSchema.parse({
       works: [{ id: "work", name: "খাতা" }],

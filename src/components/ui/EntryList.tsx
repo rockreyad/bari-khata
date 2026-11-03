@@ -71,6 +71,7 @@ export function EntryList({
         const context = historySubtitle(ledger, entry, {
           hidePerson,
           hideWork,
+          translate: t,
         });
         const kindLabel = entryKindLabels[entry.kind];
         const subtitle =
@@ -84,9 +85,12 @@ export function EntryList({
             .filter(Boolean)
             .join(" · ");
         const sign =
-          entry.kind === "refund" || entry.kind === "expense_credit" ? -1 : 1;
-        const amount =
-          amounts?.[entry.id] ?? entryWorkAmount(entry, workId) * sign;
+          entry.kind === "refund" ||
+          entry.kind === "expense_credit" ||
+          (entry.kind === "adjustment" && (entry.adjustment?.delta ?? 0) < 0)
+            ? -1
+            : 1;
+        const amount = amounts?.[entry.id] ?? (original ? original * sign : 0);
         return (
           <div className="history-record" key={entry.id}>
             {header ? (

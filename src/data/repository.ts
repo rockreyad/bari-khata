@@ -13,6 +13,10 @@ import { preservesWorkHistory } from "../domain/workActivity";
 import { preservesPersonWorkLinks } from "../domain/personWorkLinks";
 import { preservesMcpProvenance } from "../domain/mcpProvenance.js";
 import {
+  balanceAdjustmentHistoryIsValid,
+  preservesBalanceAdjustments,
+} from "../domain/adjustmentHistory.js";
+import {
   LedgerSchema,
   validateLedger as validateDomainLedger,
   type Ledger,
@@ -106,6 +110,8 @@ const now = () => new Date().toISOString();
 export function validateLedger(value: unknown): Ledger {
   LedgerDocumentShape.parse(value);
   const ledger = validateDomainLedger(value);
+  if (!balanceAdjustmentHistoryIsValid(ledger))
+    throw new Error("balance_adjustment_history_invalid");
   receiptReferences(ledger);
   return ledger;
 }
@@ -228,6 +234,8 @@ export class LedgerRepository {
           throw new Error("person_work_links_would_be_lost");
         if (!preservesMcpProvenance(current.ledger, ledger))
           throw new Error("mcp_provenance_would_be_lost");
+        if (!preservesBalanceAdjustments(current.ledger, ledger))
+          throw new Error("balance_adjustment_would_be_lost");
         if (ledger.isDemo !== (mode === "demo"))
           throw new Error("workspace_mode_mismatch");
         const refs = receiptReferences(ledger);
@@ -355,6 +363,11 @@ export class LedgerRepository {
           throw new Error("person_work_links_would_be_lost");
         if (current && !preservesMcpProvenance(current.ledger, backup.ledger))
           throw new Error("mcp_provenance_would_be_lost");
+        if (
+          current &&
+          !preservesBalanceAdjustments(current.ledger, backup.ledger)
+        )
+          throw new Error("balance_adjustment_would_be_lost");
         if (current)
           await this.database.recoveries.add({
             id: crypto.randomUUID(),
@@ -444,6 +457,8 @@ export class LedgerRepository {
           throw new Error("person_work_links_would_be_lost");
         if (!preservesMcpProvenance(current.ledger, ledger))
           throw new Error("mcp_provenance_would_be_lost");
+        if (!preservesBalanceAdjustments(current.ledger, ledger))
+          throw new Error("balance_adjustment_would_be_lost");
         if (!preservesBackupPersonWorkLinks(current.ledger, ledger))
           throw new Error("person_work_links_would_be_lost");
         const prepared: ReceiptRow[] = [];

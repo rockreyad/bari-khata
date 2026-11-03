@@ -112,48 +112,23 @@ async function repository(ledger: Ledger) {
   return repo;
 }
 
-it.each([
-  { type: "bill", id: "bill", path: "/entries/bill/edit" },
-  { type: "payment", id: "payment", path: "/entries/payment/edit" },
-  { type: "contract", id: "agreement", path: "/jobs/agreement/edit" },
-])(
-  "opens only the explicitly selected $type record with a safe reconciliation return",
-  async ({ type, id, path }) => {
-    savePreferences({ language: "bn" });
-    state.ledger = fixture();
-    state.base = "/sample";
-    render(
-      <MemoryRouter initialEntries={[`/sample/reconcile?type=${type}`]}>
-        <LanguageProvider>
-          <ReconciliationPage />
-          <Location />
-        </LanguageProvider>
-      </MemoryRouter>,
-    );
-    expect(
-      (
-        screen.getByRole("button", {
-          name: "এই হিসাব ঠিক করি",
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(true);
-    fireEvent.change(screen.getByLabelText("যে হিসাবটি বদলাবেন"), {
-      target: { value: id },
-    });
-    await userEvent.click(
-      screen.getByRole("button", { name: "এই হিসাব ঠিক করি" }),
-    );
-    const url = new URL(
-      screen.getByTestId("route").textContent!,
-      "https://bari.invalid",
-    );
-    expect(url.pathname).toBe(`/sample${path}`);
-    expect(url.searchParams.get("reconcile")).toBe("1");
-    expect(url.searchParams.get("back")).toBe(
-      `/sample/reconcile?type=${type}&id=${id}`,
-    );
-  },
-);
+it("keeps adjustment separate from transaction editing even on an older reconciliation URL", () => {
+  savePreferences({ language: "bn" });
+  state.ledger = fixture();
+  state.base = "/sample";
+  render(
+    <MemoryRouter initialEntries={["/sample/reconcile?type=bill"]}>
+      <LanguageProvider>
+        <ReconciliationPage />
+        <Location />
+      </LanguageProvider>
+    </MemoryRouter>,
+  );
+  expect(screen.getByLabelText("কার হিসাব")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "এই হিসাব ঠিক করি" })).toBeNull();
+  expect(screen.queryByText("আগের কোনো লেনদেন ঠিক করি")).toBeNull();
+  expect(screen.queryByLabelText("যে হিসাবটি বদলাবেন")).toBeNull();
+});
 
 it.each([
   { id: "bill", field: /^মোট দাম/, next: "1600" },

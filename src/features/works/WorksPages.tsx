@@ -33,6 +33,7 @@ import { useLanguageContext } from "../../context/LanguageProvider";
 import { summarize } from "../../domain/ledger";
 import { contractAppliesToWork } from "../../domain/contracts";
 import { JobPreview } from "../jobs/JobPreview";
+import { TotalAdjustmentSheet } from "../reconciliation/TotalAdjustmentSheet";
 import type { Ledger, Work, WorkSnapshot } from "../../domain/model";
 import { workChanges } from "../../domain/workActivity";
 import {
@@ -69,12 +70,12 @@ const fields: Record<keyof WorkSnapshot, string> = {
 };
 function workDueRows(balance: WorkBalances) {
   if (!balance.valid) return [];
-  if (balance.scopedOutstanding !== null)
-    return balance.scopedOutstanding > 0
+  if (balance.reconciledPayable !== null)
+    return balance.reconciledPayable > 0
       ? [
           {
             label: balance.sharedOutstanding > 0 ? "এই খাতায় বাকি" : "মোট বাকি",
-            amount: balance.scopedOutstanding,
+            amount: balance.reconciledPayable,
           },
         ]
       : [];
@@ -122,7 +123,9 @@ export function WorkCard({
       <div className="notebook-card-total">
         <span>{t("মোট টাকা দিয়েছি")}</span>
         <strong>
-          {balance.valid ? money(balance.netPaid) : t("টাকার অঙ্ক বেশি হয়েছে।")}
+          {balance.valid
+            ? money(balance.reconciledNetPaid)
+            : t("টাকার অঙ্ক বেশি হয়েছে।")}
         </strong>
       </div>
       <div
@@ -365,6 +368,7 @@ export function WorkPage() {
   const { ledger, go, entity, add, detail, base = "" } = useNotebook();
   const { t, money, date, language, formatDigits } = useLanguageContext();
   const [showChart, setShowChart] = useState(false);
+  const [adjustmentOpen, setAdjustmentOpen] = useState(false);
   const [params, setParams] = useSearchParams();
   const raw = params.get("tab") ?? "all";
   const tab: WorkTab = [
@@ -533,7 +537,7 @@ export function WorkPage() {
             <span>{t("মোট টাকা দিয়েছি")}</span>
             <strong>
               {balance.valid
-                ? money(balance.netPaid)
+                ? money(balance.reconciledNetPaid)
                 : t("টাকার অঙ্ক বেশি হয়েছে।")}
             </strong>
           </div>
@@ -552,6 +556,20 @@ export function WorkPage() {
             <strong>{money(row.amount)}</strong>
           </div>
         ))}
+        {balance.valid && balance.costCorrection !== 0 ? (
+          <div className="work-known-due">
+            <span>
+              {t("মোট খরচ")}
+              {" · "}
+              {t("সমন্বয়সহ")}
+            </span>
+            <strong>{money(balance.reconciledCost)}</strong>
+          </div>
+        ) : null}
+        {balance.valid &&
+        (balance.paidCorrection !== 0 || balance.balanceCorrection !== 0) ? (
+          <p className="work-due-note">{t("সমন্বয়সহ")}</p>
+        ) : null}
         {balance.valid && balance.sharedOutstanding > 0 ? (
           <details className="work-shared-dues">
             <summary className="work-known-due work-shared-due">
@@ -603,7 +621,24 @@ export function WorkPage() {
             {t("এই বাকিগুলোতে একই টাকা থাকতে পারে, তাই যোগ করে দেখানো হয়নি।")}
           </p>
         ) : null}
+        {!removal.archived ? (
+          <div className="work-adjustment-link">
+            <button
+              className="text-button"
+              onClick={() => setAdjustmentOpen(true)}
+            >
+              {t("মোট হিসাব মেলাই")}
+            </button>
+          </div>
+        ) : null}
       </section>
+      {adjustmentOpen ? (
+        <TotalAdjustmentSheet
+          target={{ target: "work", id: work.id, account: null }}
+          name={work.name}
+          onClose={() => setAdjustmentOpen(false)}
+        />
+      ) : null}
       {showChart ? (
         <SpendingChart
           ledger={ledger}

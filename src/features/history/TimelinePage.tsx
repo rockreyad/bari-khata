@@ -17,6 +17,7 @@ import {
   type TimelineEvent,
 } from "./timeline";
 import "./timeline.css";
+import { adjustmentBasisLabels } from "./adjustmentDisplay";
 
 const filters = [
   ["all", "সব ঘটনা"],
@@ -195,6 +196,16 @@ export function TimelinePage() {
                           ) : null}
                           <b>{money(event.amount)}</b>
                         </span>
+                      ) : null}
+                      {event.adjustmentChange ? (
+                        <small>
+                          {t(
+                            adjustmentBasisLabels[event.adjustmentChange.basis],
+                          )}
+                          : {money(event.adjustmentChange.before)}
+                          {" → "}
+                          {money(event.adjustmentChange.after)}
+                        </small>
                       ) : null}
                       {event.changes.length ? (
                         <small>

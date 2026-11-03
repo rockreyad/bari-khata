@@ -9,7 +9,7 @@ import {
   MagnifyingGlassIcon,
   XIcon,
 } from "@phosphor-icons/react";
-import type { CostType, Ledger } from "../../domain/model";
+import type { Account, CostType, Ledger } from "../../domain/model";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
@@ -22,6 +22,7 @@ import {
   todayDhaka,
 } from "../../lib/display";
 import { validHistoryDate } from "../history/history";
+import { reportAdjustments } from "./reportAdjustments";
 import {
   analyticsCsv,
   breakdownRows,
@@ -148,6 +149,14 @@ function CostAnalyticsPage({
     [selectedSection, filters],
   );
   const totals = useMemo(() => summarizeRows(rows), [rows]);
+  const corrections = reportAdjustments(ledger, {
+    workId: filters.workId,
+    personId: filters.personId,
+    account: (account ?? undefined) as Account | undefined,
+    from: filters.from,
+    to: filters.to,
+    query: filters.query,
+  });
   const breakdown = useMemo(
     () => breakdownRows(rows, dimension),
     [rows, dimension],
@@ -425,6 +434,11 @@ function CostAnalyticsPage({
       <section className="report-total">
         <span>{heading}</span>
         <strong>{money(totals.total)}</strong>
+        {corrections.costCorrection !== 0 ? (
+          <p>
+            {t("সমন্বয়")} · {t("মোট খরচ")}: {money(corrections.costCorrection)}
+          </p>
+        ) : null}
         <small>
           {formatDigits(scopeLabel)}
           {section === "material" ? ` · ${t("মালের দাম")}` : ""}

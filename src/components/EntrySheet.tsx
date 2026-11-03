@@ -256,7 +256,23 @@ function editDraft(entry: Entry): Draft {
   };
 }
 
-export function EntrySheet({
+export function EntrySheet(props: EntrySheetProps) {
+  const { t } = useLanguageContext();
+  if (
+    props.initialKind === "adjustment" ||
+    props.ledger.entries.find((entry) => entry.id === props.editEntryId)
+      ?.kind === "adjustment"
+  ) {
+    const Frame = props.presentation === "page" ? EntryFrame : Sheet;
+    return (
+      <Frame title={t("সমন্বয়")} onClose={props.onClose}>
+        <p>{t("এই সমন্বয় বদলানো যাবে না। দরকার হলে আবার হিসাব মেলান।")}</p>
+      </Frame>
+    );
+  }
+  return <SupportedEntrySheet {...props} />;
+}
+function SupportedEntrySheet({
   presentation = "sheet",
   ledger,
   defaultWorkId,

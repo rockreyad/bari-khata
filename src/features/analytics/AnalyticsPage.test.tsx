@@ -19,6 +19,47 @@ vi.mock("../../context/LanguageProvider", () => ({
 }));
 
 describe("report routes", () => {
+  it("keeps cost rows actual and shows a separate cost-total correction", () => {
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "work", name: "পরীক্ষার খাতা" }],
+      entries: [
+        {
+          id: "bill",
+          kind: "expense",
+          date: "2026-11-03",
+          lines: [
+            { id: "line", workId: "work", label: "মালের বিল", amount: 10000 },
+          ],
+        },
+        {
+          id: "adjust",
+          kind: "adjustment",
+          personId: null,
+          account: "other",
+          date: "2026-11-03",
+          note: "অঙ্ক মিলিয়েছি",
+          adjustment: {
+            target: "work",
+            basis: "cost",
+            account: null,
+            before: 10000,
+            after: 15000,
+            delta: 5000,
+            workId: "work",
+          },
+        },
+      ],
+    });
+    const html = renderToString(
+      <MemoryRouter initialEntries={["/reports?mode=cost&section=all"]}>
+        <AnalyticsPage ledger={ledger} />
+      </MemoryRouter>,
+    );
+    expect(html).toContain("৳100");
+    expect(html).toContain("সমন্বয়");
+    expect(html).toContain("৳50");
+    expect(html).not.toContain("history-adjustment");
+  });
   it("renders linked filters without treating material names or brands as dates", () => {
     const ledger = LedgerSchema.parse({
       materialGroups: [{ id: "cement", name: "সিমেন্ট" }],

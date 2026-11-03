@@ -10,6 +10,7 @@ import type { LedgerBackup } from "../../data/repository";
 import type { Ledger } from "../../domain/model";
 import { entryTotal, entryWorkIds, summarize } from "../../domain/ledger";
 import { cashSummary } from "../../domain/cashSummary";
+import { adjustmentBasisLabels } from "../history/adjustmentDisplay";
 import "./backup-import.css";
 
 const collectionLabels: Record<BackupCollection, string> = {
@@ -50,10 +51,18 @@ export function BackupImportReview({
         payment: "টাকা দেওয়া",
         refund: "টাকা ফেরত পাওয়া",
         expense_credit: "মাল ফেরত",
+        adjustment: "সমন্বয়",
       }[entry.kind];
       return [
         t(kind),
-        money(entryTotal(entry)),
+        entry.adjustment
+          ? t(adjustmentBasisLabels[entry.adjustment.basis])
+          : "",
+        money(
+          entry.kind === "adjustment"
+            ? (entry.adjustment?.delta ?? 0)
+            : entryTotal(entry),
+        ),
         date(entry.date),
         source.people.find((person) => person.id === entry.personId)?.name,
         entryWorkIds(entry)

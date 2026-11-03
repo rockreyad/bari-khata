@@ -41,6 +41,10 @@ export function workTabEntries(entries: Entry[], workId: string, tab: WorkTab) {
   );
 }
 export function workEntryAmount(entry: Entry, workId: string, tab: WorkTab) {
+  if (entry.kind === "adjustment") {
+    const amount = tab === "all" ? entryWorkAmount(entry, workId) : 0;
+    return amount ? amount * ((entry.adjustment?.delta ?? 0) < 0 ? -1 : 1) : 0;
+  }
   if (entry.kind === "payment" || entry.kind === "refund" || tab === "all")
     return (
       entryWorkAmount(entry, workId) *

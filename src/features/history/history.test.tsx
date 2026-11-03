@@ -102,6 +102,53 @@ function fixture() {
     ],
   });
 }
+it("keeps noncash adjustments signed and separately named in history and void activity", () => {
+  let ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "পরীক্ষার খাতা" }],
+    people: [{ id: "person", name: "পরীক্ষার নাম" }],
+    entries: [
+      {
+        id: "adjust",
+        kind: "adjustment",
+        personId: "person",
+        date: "2026-11-03",
+        createdAt: "2026-11-03T10:00:00Z",
+        note: "আগের হিসাব মিলিয়েছি",
+        adjustment: {
+          target: "person",
+          basis: "balance",
+          account: "materials",
+          before: 500000,
+          after: 100000,
+          delta: -400000,
+          workId: "work",
+        },
+      },
+    ],
+  });
+  const selected = filterHistory(ledger, {
+    workId: "work",
+    kind: "adjustment",
+    query: "মিলিয়েছি",
+  });
+  expect(selected).toHaveLength(1);
+  expect(filterHistory(ledger, { workId: "other" })).toEqual([]);
+  const html = renderToString(
+    <EntryList ledger={ledger} entries={selected} onEntry={vi.fn()} showKind />,
+  );
+  expect(html).toContain("সমন্বয়");
+  expect(html).toContain("৳-4000");
+  expect(html).not.toContain("টাকা দিয়েছি");
+  expect(html).not.toContain("খরচ");
+  expect(snapshotTotal(ledger.entries[0])).toBe(400000);
+  ledger = setEntryVoided(ledger, "adjust", true);
+  ledger = setEntryVoided(ledger, "adjust", false);
+  expect(entryAudit(ledger.entries[0]).map((event) => event.kind)).toEqual([
+    "created",
+    "voided",
+    "restored",
+  ]);
+});
 
 it("keeps the transaction kind in metadata once when a scoped payment has no other context", () => {
   const ledger = LedgerSchema.parse({

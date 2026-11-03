@@ -1,10 +1,20 @@
 // @vitest-environment jsdom
+import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { LedgerSchema, type Ledger } from "../../domain/model";
 import { PeoplePage, PersonPage } from "./PeoplePages";
+import { contactAccountSummary } from "../../domain/contacts";
+import * as repository from "../../data/repository";
 const state = vi.hoisted(() => ({
   ledger: null as unknown,
   go: vi.fn(),
@@ -48,6 +58,125 @@ function renderPage(path = "/people/worker") {
     </MemoryRouter>,
   );
 }
+it("shows the person's corrected paid total with a correction note in the directory", () => {
+  const base = fixture();
+  const person = base.people.find((row) => row.id === "worker")!;
+  const before = contactAccountSummary(base, person).netPaid;
+  state.ledger = LedgerSchema.parse({
+    ...base,
+    entries: [
+      ...base.entries,
+      {
+        id: "adjust",
+        kind: "adjustment",
+        personId: "worker",
+        account: "labour",
+        note: "অঙ্ক মিলিয়েছি",
+        adjustment: {
+          target: "person",
+          basis: "paid",
+          account: "labour",
+          before,
+          after: before + 10000,
+          delta: 10000,
+          workId: null,
+        },
+      },
+    ],
+  });
+  renderPage("/people");
+  const row = screen.getByRole("button", { name: /রহিম/ });
+  expect(row.textContent).toContain(`৳${(before + 10000) / 100}`);
+  expect(row.textContent).toContain("সমন্বয়");
+});
+it("calls credit created by a paid-total adjustment my credit without claiming an actual advance", () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "পরীক্ষার কাজ" }],
+    people: [{ id: "worker", name: "পরীক্ষার মিস্ত্রি", kind: "worker" }],
+    entries: [
+      {
+        id: "bill",
+        kind: "expense",
+        personId: "worker",
+        account: "labour",
+        lines: [
+          {
+            id: "line",
+            workId: "work",
+            label: "মজুরির বিল",
+            costType: "labour",
+            amount: 100000,
+          },
+        ],
+      },
+      {
+        id: "adjust",
+        kind: "adjustment",
+        personId: "worker",
+        account: "labour",
+        note: "মোট ঠিক করেছি",
+        adjustment: {
+          target: "person",
+          basis: "paid",
+          account: "labour",
+          before: 0,
+          after: 150000,
+          delta: 150000,
+          workId: null,
+        },
+      },
+    ],
+  });
+  state.ledger = ledger;
+  const { container } = renderPage();
+  expect(
+    container.querySelector(".contact-summary-hero > strong")?.textContent,
+  ).toBe("৳1500");
+  expect(
+    container.querySelector(".contact-reconciliation")?.textContent,
+  ).toContain("আমার জমা৳500");
+  expect(
+    container.querySelector(".contact-reconciliation")?.textContent,
+  ).not.toContain("অগ্রিম দিয়েছি");
+  expect(ledger.entries.some((entry) => entry.kind === "payment")).toBe(false);
+});
+it("opens the contextual adjustment sheet without navigating to reconciliation", async () => {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  const realStorage = repository.createWorkspaceStorage("demo");
+  const draftKey = "total-adjustment:person:worker:labour";
+  await realStorage.removeDraft(draftKey);
+  try {
+    state.ledger = fixture();
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("button", { name: "মোট হিসাব মেলাই" }));
+    const sheet = await screen.findByRole("dialog", {
+      name: "মোট হিসাব মেলাই",
+    });
+    expect(within(sheet).getByLabelText("সঠিক অঙ্ক")).toBeTruthy();
+    expect(sheet.textContent).toContain("রহিম");
+    expect(state.go).not.toHaveBeenCalled();
+    await user.click(within(sheet).getByRole("button", { name: "বন্ধ করুন" }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "মোট হিসাব মেলাই" }),
+      ).toBeNull(),
+    );
+    expect(state.go).not.toHaveBeenCalled();
+    expect(await realStorage.readDraft(draftKey)).not.toBeNull();
+  } finally {
+    cleanup();
+    await realStorage.removeDraft(draftKey);
+    vi.unstubAllGlobals();
+  }
+});
 function fixture() {
   return LedgerSchema.parse({
     works: [{ id: "work", name: "টাইলস" }],
