@@ -102,7 +102,7 @@ export const entryKindLabels = {
   expense: "খরচ",
   payment: "টাকা দিয়েছি",
   expense_credit: "মাল ফেরত",
-  refund: "টাকা পেয়েছি",
+  refund: "টাকা ফেরত পেয়েছি",
 };
 export function historyTitle(ledger: Ledger, entry: Entry, hidePerson = false) {
   const person = ledger.people.find((p) => p.id === entry.personId);
@@ -113,7 +113,7 @@ export function historyTitle(ledger: Ledger, entry: Entry, hidePerson = false) {
         (purpose) => purpose.id === entry.paymentPurposeId,
       )?.name ||
       (entry.kind === "refund"
-        ? "টাকা পেয়েছি"
+        ? "টাকা ফেরত পেয়েছি"
         : entry.account === "labour"
           ? "মজুরি দিয়েছি"
           : "টাকা দিয়েছি")

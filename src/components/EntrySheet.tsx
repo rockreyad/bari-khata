@@ -22,7 +22,12 @@ import {
   type Ledger,
 } from "../domain/model";
 import { canAssignContact } from "../domain/contacts";
-import { parseAmount, replaceExpenseAndSettlements } from "../domain/ledger";
+import {
+  entryTotal,
+  parseAmount,
+  replaceExpenseAndSettlements,
+} from "../domain/ledger";
+import { MoneyCorrectionSummary } from "../features/reconciliation/MoneyCorrectionSummary";
 import { AppCombobox } from "./ui/AppCombobox";
 import { AppSelect } from "./ui/AppSelect";
 import { AppDatePicker } from "./ui/AppDatePicker";
@@ -90,6 +95,7 @@ const DraftSchema = z.object({
   newPersonName: z.string().default(""),
   relatedEntryId: z.string().default(""),
   entryUpdatedAt: z.string().default(""),
+  reconciliationReason: z.string().max(2000).default(""),
   rows: z.array(RowSchema).min(1),
   methods: z.array(MethodSchema).min(1),
 });
@@ -108,6 +114,8 @@ export type EntrySheetProps = {
   initialAccount?: "materials" | "labour" | "other";
   editEntryId?: string;
   mode?: "real" | "demo";
+  reconciliation?: boolean;
+  onCorrectLinkedPayment?: (id: string) => void;
   onSave: (nextLedger: Ledger, attachments?: EntryAttachments) => Promise<void>;
   onClose: () => void;
 };
@@ -174,6 +182,7 @@ function startDraft(
     contractId: "",
     relatedEntryId: "",
     entryUpdatedAt: "",
+    reconciliationReason: "",
     account:
       kind === "payment" || kind === "refund"
         ? (initialAccount ?? "materials")
@@ -256,11 +265,13 @@ export function EntrySheet({
   initialAccount,
   editEntryId,
   mode = "real",
+  reconciliation = false,
+  onCorrectLinkedPayment,
   onSave,
   onClose,
 }: EntrySheetProps) {
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode]);
-  const { t, money, number, formatDigits } = useLanguageContext();
+  const { t, money, number, date, formatDigits } = useLanguageContext();
   const original = ledger.entries.find((entry) => entry.id === editEntryId);
   const draftKey = `entry:${editEntryId ?? `${defaultWorkId ?? "all"}:${defaultPersonId ?? "all"}:${initialKind ?? "purchase"}`}`;
   const [draft, setDraft] = useState<Draft>(() =>
@@ -337,6 +348,16 @@ export function EntrySheet({
       entry.id !== original?.id &&
       entry.account === draft.account,
   );
+  const linkedPayments =
+    original?.kind === "expense"
+      ? ledger.entries.filter(
+          (entry) =>
+            entry.relatedEntryId === original.id &&
+            entry.kind === "payment" &&
+            !entry.voided,
+        )
+      : [];
+
   useEffect(() => {
     mounted.current = true;
     let active = true;
@@ -509,6 +530,8 @@ export function EntrySheet({
     setSaving(true);
     setError("");
     try {
+      if (reconciliation && original && !draft.reconciliationReason.trim())
+        throw new Error(t("হিসাব মেলানোর কারণ লিখুন।"));
       const now = new Date().toISOString();
       let next = structuredClone(ledger);
       if (
@@ -631,7 +654,14 @@ export function EntrySheet({
         provenance: original?.provenance,
         id: draft.id,
         date: draft.unknownDate ? null : draft.date,
-        note: draft.note.trim(),
+        note: [
+          draft.note.trim(),
+          reconciliation && original
+            ? `${t("হিসাব মেলানোর কারণ")}: ${draft.reconciliationReason.trim()}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
         personId,
         account,
         contractId,
@@ -900,6 +930,25 @@ export function EntrySheet({
     setReady(true);
   };
 
+  async function correctLinkedPayment(id: string) {
+    if (lock.current || processingFiles || !ready || !onCorrectLinkedPayment)
+      return;
+    lock.current = true;
+    setSaving(true);
+    try {
+      await queueDraft(latest.current);
+      finished.current = true;
+      if (mounted.current) onCorrectLinkedPayment(id);
+    } catch {
+      finished.current = false;
+      setError(
+        t("অসমাপ্ত হিসাবটি রাখা যায়নি। আগে সংরক্ষণ করুন বা আবার চেষ্টা করুন।"),
+      );
+      lock.current = false;
+      setSaving(false);
+    }
+  }
+
   const close = () => {
     if (lock.current || processingFiles) return;
     if (!ready) {
@@ -966,7 +1015,13 @@ export function EntrySheet({
   const Frame = presentation === "page" ? EntryFrame : Sheet;
   return (
     <Frame
-      title={t(original ? "হিসাব বদলান" : "নতুন হিসাব")}
+      title={t(
+        original && reconciliation
+          ? "হিসাব মিলিয়ে নিই"
+          : original
+            ? "হিসাব বদলান"
+            : "নতুন হিসাব",
+      )}
       subtitle={t("ছোট ছোট হিসাব, এক জায়গায়।")}
       onClose={close}
       footer={
@@ -1052,6 +1107,65 @@ export function EntrySheet({
           className="sheet-fields"
           disabled={saving || processingFiles || !ready}
         >
+          {reconciliation && original ? (
+            <>
+              <MoneyCorrectionSummary
+                before={entryTotal(original)}
+                after={
+                  isCash
+                    ? draft.split
+                      ? draft.rows.reduce(
+                          (sum, row) => sum + poisha(row.amount),
+                          0,
+                        )
+                      : poisha(draft.amount)
+                    : draft.rows.reduce(
+                        (sum, row) => sum + poisha(row.amount),
+                        0,
+                      )
+                }
+              />
+              <label className="field">
+                <span className="field-label">{t("হিসাব মেলানোর কারণ")}</span>
+                <textarea
+                  value={draft.reconciliationReason}
+                  maxLength={2000}
+                  aria-required="true"
+                  onChange={(event) =>
+                    field("reconciliationReason", event.target.value)
+                  }
+                />
+              </label>
+            </>
+          ) : null}
+          {original &&
+          linkedPayments.length &&
+          lineTotal !== entryTotal(original) ? (
+            <section
+              className="linked-payment-correction"
+              aria-label={t("এই বিলের সঙ্গে রাখা পরিশোধ")}
+            >
+              <p>
+                {t(
+                  "বিলের দাম বদলালেও আগের দেওয়া টাকা বদলাবে না। দেওয়া টাকা ঠিক করতে সেই হিসাবটি খুলুন।",
+                )}
+              </p>
+              {onCorrectLinkedPayment
+                ? linkedPayments.map((payment) => (
+                    <button
+                      key={payment.id}
+                      type="button"
+                      className="text-button"
+                      onClick={() => void correctLinkedPayment(payment.id)}
+                    >
+                      {t("দেওয়া টাকার হিসাব ঠিক করি")} ·{" "}
+                      {money(entryTotal(payment))} ·{" "}
+                      {date(payment.date, { year: "numeric" })}
+                    </button>
+                  ))
+                : null}
+            </section>
+          ) : null}
           <div className="form-grid">
             <label className="field">
               <span className="field-label">{t("কোন কাজের হিসাব")}</span>
