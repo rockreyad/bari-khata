@@ -36,6 +36,28 @@ function sameImportedEntry(current: Entry, incoming: Entry) {
   );
 }
 
+export function preservesBackupPersonWorkLinks(
+  before: Pick<Ledger, "people">,
+  after: Pick<Ledger, "people">,
+) {
+  const people = new Map(after.people.map((person) => [person.id, person]));
+  return before.people.every((person) => {
+    if (
+      !("workIds" in person) ||
+      !Array.isArray(person.workIds) ||
+      !person.workIds.length
+    )
+      return true;
+    const next = people.get(person.id);
+    return Boolean(
+      next &&
+      Object.hasOwn(next, "workIds") &&
+      "workIds" in next &&
+      Array.isArray(next.workIds),
+    );
+  });
+}
+
 export function planBackupMerge(
   currentValue: Ledger,
   incomingValue: Ledger,

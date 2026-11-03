@@ -5,7 +5,7 @@ import { summarize } from "../domain/ledger";
 import { cashSummary } from "../domain/cashSummary";
 import { LedgerDatabase, setActiveOwner } from "./database";
 import { LedgerRepository, parseBackup } from "./repository";
-import { planBackupMerge } from "./backupMerge";
+import { planBackupMerge, preservesBackupPersonWorkLinks } from "./backupMerge";
 
 const at = "2026-11-03T14:00:00.000Z";
 const databases: LedgerDatabase[] = [];
@@ -63,6 +63,43 @@ afterEach(async () => {
 });
 
 describe("reviewed backup merging", () => {
+  it("retains explicitly selected person notebooks when importing a copy that predates those links", () => {
+    const person = Object.assign(ledger().people[0], { workIds: ["house"] });
+    expect(
+      preservesBackupPersonWorkLinks(
+        { people: [person] },
+        { people: [ledger().people[0]] },
+      ),
+    ).toBe(false);
+    expect(
+      preservesBackupPersonWorkLinks({ people: [person] }, { people: [] }),
+    ).toBe(false);
+    expect(
+      preservesBackupPersonWorkLinks(
+        { people: [person] },
+        { people: [Object.assign(ledger().people[0], { workIds: undefined })] },
+      ),
+    ).toBe(false);
+    expect(
+      preservesBackupPersonWorkLinks(
+        { people: [person] },
+        { people: [Object.assign(ledger().people[0], { workIds: [] })] },
+      ),
+    ).toBe(true);
+    expect(
+      preservesBackupPersonWorkLinks(
+        { people: [person] },
+        { people: [person] },
+      ),
+    ).toBe(true);
+    expect(
+      preservesBackupPersonWorkLinks(
+        { people: ledger().people },
+        { people: ledger().people },
+      ),
+    ).toBe(true);
+  });
+
   it("binds a cross-account import to its current owner and leaves the source account intact", async () => {
     const firstOwner = "00000000-0000-4000-8000-000000000001";
     const secondOwner = "00000000-0000-4000-8000-000000000002";

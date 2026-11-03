@@ -2,6 +2,7 @@ import { z } from "zod";
 import Dexie from "dexie";
 import {
   planBackupMerge,
+  preservesBackupPersonWorkLinks,
   sameBackupLedger,
   type BackupDecisions,
 } from "./backupMerge";
@@ -443,6 +444,8 @@ export class LedgerRepository {
           throw new Error("person_work_links_would_be_lost");
         if (!preservesMcpProvenance(current.ledger, ledger))
           throw new Error("mcp_provenance_would_be_lost");
+        if (!preservesBackupPersonWorkLinks(current.ledger, ledger))
+          throw new Error("person_work_links_would_be_lost");
         const prepared: ReceiptRow[] = [];
         for (const ref of receiptReferences(ledger)) {
           const existing = await this.database.receipts.get(
