@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { EntryCoreSchema, LedgerSchema } from "../../domain/model";
-import { notebookTimeline } from "./timeline";
+import {
+  indexTimeline,
+  notebookTimeline,
+  searchTimeline,
+  timelinePage,
+  type TimelineEvent,
+} from "./timeline";
 import { saveWorkChange } from "../../domain/workActivity";
 import { saveContractChange } from "../../domain/contracts";
 import { setEntityRemoved } from "../../domain/entityDeletion";
@@ -168,5 +174,125 @@ describe("recorded notebook activity", () => {
       "2026-11-03T08:00:00Z",
       "2026-11-03T09:00:00+06:00",
     ]);
+  });
+});
+
+describe("large timeline navigation", () => {
+  const event = (index: number): TimelineEvent => ({
+    id: `event${index}`,
+    at: "2026-11-03T10:00:00Z",
+    category: "money",
+    title: "খরচের হিসাব রেখেছি",
+    subject: `নমুনা ${index}`,
+    note: "",
+    changes: [],
+    amount: 100,
+    target: { kind: "entry", id: `bill${index}` },
+  });
+
+  it("pages a large event set without accumulating previous records or mutating the audit data", () => {
+    const events = Array.from({ length: 10005 }, (_, index) => event(index));
+    const before = JSON.stringify(events);
+    expect(timelinePage(events, null)).toMatchObject({
+      page: 1,
+      count: 251,
+      from: 1,
+      to: 40,
+    });
+    expect(
+      timelinePage(events, "125").events.map((record) => record.id),
+    ).toEqual(events.slice(4960, 5000).map((record) => record.id));
+    const last = timelinePage(events, "999999");
+    expect(last).toMatchObject({
+      page: 251,
+      count: 251,
+      from: 10001,
+      to: 10005,
+    });
+    expect(last.events).toHaveLength(5);
+    expect(timelinePage(events, "9007199254740993").page).toBe(1);
+    expect(JSON.stringify(events)).toBe(before);
+  });
+
+  it("searches a reusable localized index with either numeral script and the recorded status labels", () => {
+    const events = [
+      event(16),
+      {
+        ...event(17),
+        category: "jobs" as const,
+        title: "কাজের তথ্য বদলেছি",
+        changes: ["অবস্থা"],
+        statusChange: { before: "শুরু হয়নি", after: "চলছে" },
+      },
+    ];
+    const translations: Record<string, string> = {
+      "খরচের হিসাব রেখেছি": "Recorded a bill",
+      "কাজের তথ্য বদলেছি": "Changed a job",
+      অবস্থা: "Status",
+      "শুরু হয়নি": "Not started",
+      চলছে: "In progress",
+    };
+    const index = indexTimeline(events, (text) => translations[text] ?? text);
+    expect(searchTimeline(index, "১৬").map((record) => record.id)).toEqual([
+      "event16",
+    ]);
+    expect(
+      searchTimeline(index, "  IN   PROGRESS  ", "jobs").map(
+        (record) => record.id,
+      ),
+    ).toEqual(["event17"]);
+    expect(searchTimeline(index, "recorded A BILL", "money")).toEqual([
+      events[0],
+    ]);
+    expect(searchTimeline(index, "16", "jobs")).toEqual([]);
+    expect(searchTimeline(index, " ")).toEqual(events);
+  });
+
+  it("keeps payment subjects resolved to the right person or purpose with many contacts", () => {
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "work", name: "নমুনার খাতা" }],
+      people: Array.from({ length: 2000 }, (_, index) => ({
+        id: `person${index}`,
+        name: `নমুনা মানুষ ${index}`,
+      })),
+      paymentPurposes: [
+        { id: "purpose", name: "নমুনা কারণ", account: "materials" },
+      ],
+      entries: [
+        {
+          id: "named",
+          kind: "payment",
+          personId: "person1999",
+          createdAt: "2026-11-03T10:00:00Z",
+          allocations: [{ workId: "work", amount: 100 }],
+          paymentParts: [{ amount: 100 }],
+        },
+        {
+          id: "purpose",
+          kind: "payment",
+          paymentPurposeId: "purpose",
+          createdAt: "2026-11-03T10:00:00Z",
+          allocations: [{ workId: "work", amount: 100 }],
+          paymentParts: [{ amount: 100 }],
+        },
+        {
+          id: "refund",
+          kind: "refund",
+          createdAt: "2026-11-03T10:00:00Z",
+          allocations: [{ workId: "work", amount: 100 }],
+          paymentParts: [{ amount: 100 }],
+        },
+      ],
+    });
+    const events = notebookTimeline(ledger);
+    expect(events.find((record) => record.target.id === "named")?.subject).toBe(
+      "নমুনা মানুষ 1999",
+    );
+    expect(
+      events.find((record) => record.target.id === "purpose")?.subject,
+    ).toBe("নমুনা কারণ");
+    expect(
+      events.find((record) => record.target.id === "refund")?.subject,
+    ).toBe("টাকা ফেরত পেয়েছি");
   });
 });

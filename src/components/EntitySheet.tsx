@@ -128,8 +128,8 @@ const roleSuggestions = [
 const workActionNames = {
   expense: "খরচ লিখি",
   payment: "টাকা দিলাম",
-  labour: "মজুরি",
-  transport: "আনা-নামানো",
+  labour: "মিস্ত্রির টাকা",
+  transport: "আনার খরচ",
 };
 function amount(value: string) {
   try {
@@ -718,7 +718,7 @@ export function EntitySheet({
                       onChange={(e) => field("description", e.target.value)}
                     />
                   </label>
-                  <h3>{t("এই খাতায় কোন বোতাম রাখবেন?")}</h3>
+                  <h3>{t("হিসাব লেখার বোতাম")}</h3>
                   <div className="preset-options">
                     {Object.entries(workActionNames).map(([id, label]) => (
                       <button

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToString } from "react-dom/server";
-import { LedgerSchema } from "../../domain/model";
+import { LedgerSchema, type Ledger } from "../../domain/model";
 import { replaceEntry, setEntryVoided } from "../../domain/ledger";
 import { EntryDetail } from "./EntryDetail";
 const { notebook } = vi.hoisted(() => ({ notebook: vi.fn() }));
@@ -44,6 +44,21 @@ const calendarLabel = (value: string) =>
     month: "short",
     year: "numeric",
   }).format(new Date(`${value}T12:00:00+06:00`));
+function renderDetail(ledger: Ledger, id = ledger.entries[0].id) {
+  notebook.mockReturnValue({
+    ledger,
+    mode: "demo",
+    close: vi.fn(),
+    add: vi.fn(),
+    save: vi.fn(),
+    notify: vi.fn(),
+    go: vi.fn(),
+    detail: vi.fn(),
+  });
+  return renderToString(<EntryDetail id={id} />);
+}
+const revisionMarkup = (html: string) =>
+  html.match(/<ol class="entry-revision-list">[\s\S]*?<\/ol>/)?.[0] ?? "";
 describe("transaction detail activity", () => {
   it("renders assistant provenance changes as names, origin and reason without raw identifiers", () => {
     const source = {
@@ -160,9 +175,12 @@ describe("transaction detail activity", () => {
     expect(html).toContain("৳1250");
     expect(html).toContain(calendarLabel("2026-01-01"));
     expect(html).toContain(calendarLabel("2026-01-02"));
-    expect(html).toContain("হিসাব বাতিল করা হয়েছে");
-    expect(html).toContain("আবার হিসাবে যোগ করা হয়েছে");
-    expect(html.match(/তখনকার পুরো হিসাব/g)).toHaveLength(3);
+    expect(html).toContain("<del>হিসাবে আছে</del>");
+    expect(html).toContain("<ins>বাতিল</ins>");
+    expect(html).toContain("<del>বাতিল</del>");
+    expect(html).toContain("<ins>হিসাবে আছে</ins>");
+    expect(html.match(/class="entry-revision"/g)).toHaveLength(3);
+    expect(html).not.toContain("তখনকার পুরো হিসাব");
     expect(html).not.toContain("আগের তথ্য ব্যাকআপে");
   });
   it("shows every linked cash event and method after the purchase row is compacted", () => {
@@ -269,6 +287,322 @@ describe("transaction detail activity", () => {
     const html = renderToString(<EntryDetail id="year-change" />);
     expect(html).toContain(`<del>${calendarLabel("2025-11-01")}</del>`);
     expect(html).toContain(`<ins>${calendarLabel("2026-11-01")}</ins>`);
+  });
+  it("shows only the changed amount once and keeps stored revisions intact", () => {
+    let ledger = LedgerSchema.parse({
+      works: [{ id: "bathroom", name: "বাথরুমের খাতা" }],
+      entries: [
+        {
+          id: "bill",
+          kind: "expense",
+          account: "labour",
+          note: "মজুরির বিল",
+          createdAt: "2026-11-01T08:00:00.000Z",
+          lines: [
+            {
+              id: "line",
+              workId: "bathroom",
+              label: "মিস্ত্রির কাজ",
+              costType: "labour",
+              amount: 6000000,
+            },
+          ],
+        },
+      ],
+    });
+    ledger = replaceEntry(ledger, {
+      ...ledger.entries[0],
+      lines: [{ ...ledger.entries[0].lines[0], amount: 1000000 }],
+    });
+    const saved = JSON.stringify(ledger);
+    const html = renderDetail(ledger);
+    const history = revisionMarkup(html);
+    expect(history.match(/class="entry-revision-change"/g)).toHaveLength(1);
+    expect(history).toContain("<del>৳60000</del>");
+    expect(history).toContain("<ins>৳10000</ins>");
+    expect(history).toContain("টাকার পরিমাণ");
+    expect(history).not.toContain("মিস্ত্রির কাজ");
+    expect(history).not.toContain("বাথরুমের খাতা");
+    expect(history).not.toContain("মজুরির বিল");
+    expect(history).not.toContain("খরচের বিবরণ");
+    expect(html).not.toContain("তখনকার পুরো হিসাব");
+    expect(history.match(/class="entry-revision"/g)).toHaveLength(1);
+    expect(JSON.stringify(ledger)).toBe(saved);
+  });
+  it("identifies a changed line without repeating the other line or the total", () => {
+    let ledger = LedgerSchema.parse({
+      works: [{ id: "bathroom", name: "বাথরুমের খাতা" }],
+      entries: [
+        {
+          id: "bill",
+          kind: "expense",
+          account: "labour",
+          lines: [
+            {
+              id: "line",
+              workId: "bathroom",
+              label: "মিস্ত্রির কাজ",
+              costType: "labour",
+              amount: 6000000,
+            },
+            {
+              id: "second",
+              workId: "bathroom",
+              label: "রঙের কাজ",
+              costType: "labour",
+              amount: 200000,
+            },
+          ],
+        },
+      ],
+    });
+    ledger = replaceEntry(ledger, {
+      ...ledger.entries[0],
+      lines: ledger.entries[0].lines.map((line) =>
+        line.id === "line" ? { ...line, amount: 1000000 } : line,
+      ),
+    });
+    const history = revisionMarkup(renderDetail(ledger));
+    expect(history.match(/class="entry-revision-change"/g)).toHaveLength(1);
+    expect(history).toContain("মিস্ত্রির কাজ");
+    expect(history).toContain("<del>৳60000</del>");
+    expect(history).toContain("<ins>৳10000</ins>");
+    expect(history).not.toContain("রঙের কাজ");
+    expect(history).not.toContain("৳62000");
+    expect(history).not.toContain("৳12000");
+  });
+  it("does not repeat a payment correction in the matching work allocation", () => {
+    let ledger = LedgerSchema.parse({
+      works: [{ id: "bathroom", name: "বাথরুমের খাতা" }],
+      entries: [
+        {
+          id: "payment",
+          kind: "payment",
+          account: "labour",
+          paymentParts: [{ method: "cash", amount: 6000000 }],
+          allocations: [{ workId: "bathroom", amount: 6000000 }],
+        },
+      ],
+    });
+    ledger = replaceEntry(ledger, {
+      ...ledger.entries[0],
+      paymentParts: [{ method: "cash", amount: 1000000 }],
+      allocations: [{ workId: "bathroom", amount: 1000000 }],
+    });
+    const history = revisionMarkup(renderDetail(ledger));
+    expect(history.match(/class="entry-revision-change"/g)).toHaveLength(1);
+    expect(history.match(/৳60000/g)).toHaveLength(1);
+    expect(history.match(/৳10000/g)).toHaveLength(1);
+    expect(history).not.toContain("নগদ");
+    expect(history).not.toContain("বাথরুমের খাতা");
+  });
+  it("keeps a financial correction reason as a new sentence without repeating the old note", () => {
+    let ledger = LedgerSchema.parse({
+      works: [{ id: "bathroom", name: "বাথরুমের খাতা" }],
+      entries: [
+        {
+          id: "bill",
+          kind: "expense",
+          note: "মজুরির বিল",
+          lines: [
+            {
+              id: "line",
+              workId: "bathroom",
+              label: "মিস্ত্রির কাজ",
+              amount: 6000000,
+            },
+          ],
+        },
+      ],
+    });
+    ledger = replaceEntry(ledger, {
+      ...ledger.entries[0],
+      note: "মজুরির বিল\nহিসাব মেলানোর কারণ: আগের অঙ্কটি ভুল ছিল",
+      lines: [{ ...ledger.entries[0].lines[0], amount: 1000000 }],
+    });
+    const history = revisionMarkup(renderDetail(ledger));
+    expect(history.match(/class="entry-revision-change"/g)).toHaveLength(2);
+    expect(history).toContain("হিসাব মেলানোর কারণ");
+    expect(history).toContain("<ins>আগের অঙ্কটি ভুল ছিল</ins>");
+    expect(history).not.toContain("মজুরির বিল");
+    expect(history).not.toContain("লেখা নেই");
+  });
+  it("does not create a visible event for a new bill or internal line IDs alone", () => {
+    let ledger = LedgerSchema.parse({
+      works: [{ id: "bathroom", name: "বাথরুমের খাতা" }],
+      entries: [
+        {
+          id: "bill",
+          kind: "expense",
+          lines: [
+            {
+              id: "line",
+              workId: "bathroom",
+              label: "মিস্ত্রির কাজ",
+              amount: 6000000,
+            },
+          ],
+        },
+      ],
+    });
+    expect(renderDetail(ledger)).not.toContain("কখন কী বদলেছে");
+    ledger = replaceEntry(ledger, {
+      ...ledger.entries[0],
+      lines: [{ ...ledger.entries[0].lines[0], id: "new-internal-id" }],
+    });
+    expect(ledger.entries[0].revisions).toHaveLength(1);
+    expect(renderDetail(ledger)).not.toContain("কখন কী বদলেছে");
+  });
+  it("keeps an untitled contract change visible with its work, person and amount", () => {
+    let ledger = LedgerSchema.parse({
+      works: [{ id: "bathroom", name: "বাথরুমের খাতা" }],
+      people: [{ id: "person", name: "মিস্ত্রি" }],
+      contracts: [
+        {
+          id: "old-contract",
+          workId: "bathroom",
+          personId: "person",
+          total: 100000,
+        },
+        {
+          id: "new-contract",
+          workId: "bathroom",
+          personId: "person",
+          total: 200000,
+        },
+      ],
+      entries: [
+        {
+          id: "bill",
+          kind: "expense",
+          account: "labour",
+          personId: "person",
+          contractId: "old-contract",
+          lines: [
+            {
+              id: "line",
+              workId: "bathroom",
+              costType: "labour",
+              amount: 50000,
+            },
+          ],
+        },
+      ],
+    });
+    ledger = replaceEntry(ledger, {
+      ...ledger.entries[0],
+      contractId: "new-contract",
+    });
+    const history = revisionMarkup(renderDetail(ledger));
+    expect(history).toContain("ঠিক করা মজুরি");
+    expect(history).toContain(
+      "<del>মজুরির দর · মিস্ত্রি · বাথরুমের খাতা · ৳1000</del>",
+    );
+    expect(history).toContain(
+      "<ins>মজুরির দর · মিস্ত্রি · বাথরুমের খাতা · ৳2000</ins>",
+    );
+    expect(history).not.toContain("old-contract");
+    expect(history).not.toContain("new-contract");
+  });
+  it("keeps a reference change visible even when all human-readable details match", () => {
+    let ledger = LedgerSchema.parse({
+      works: [{ id: "bathroom", name: "বাথরুমের খাতা" }],
+      people: [
+        { id: "old-person", name: "মিস্ত্রি" },
+        { id: "new-person", name: "মিস্ত্রি" },
+      ],
+      entries: [
+        {
+          id: "bill",
+          kind: "expense",
+          personId: "old-person",
+          lines: [{ id: "line", workId: "bathroom", amount: 50000 }],
+        },
+      ],
+    });
+    ledger = replaceEntry(ledger, {
+      ...ledger.entries[0],
+      personId: "new-person",
+    });
+    const history = revisionMarkup(renderDetail(ledger));
+    expect(history.match(/class="entry-revision-change"/g)).toHaveLength(1);
+    expect(history).toContain("ব্যক্তি বা দোকান");
+    expect(history).toContain("<ins>নতুনটি বেছে নেওয়া হয়েছে</ins>");
+    expect(history).not.toContain("old-person");
+    expect(history).not.toContain("new-person");
+  });
+  it("uses unit and work description to distinguish references with equal names", () => {
+    let ledger = LedgerSchema.parse({
+      works: [
+        { id: "old-work", name: "কাজ", description: "নিচতলা" },
+        { id: "new-work", name: "কাজ", description: "দোতলা" },
+      ],
+      items: [
+        { id: "old-item", name: "রড", unit: "কেজি" },
+        { id: "new-item", name: "রড", unit: "টন" },
+      ],
+      entries: [
+        {
+          id: "bill",
+          kind: "expense",
+          lines: [
+            {
+              id: "line",
+              workId: "old-work",
+              itemId: "old-item",
+              amount: 50000,
+            },
+          ],
+        },
+      ],
+    });
+    ledger = replaceEntry(ledger, {
+      ...ledger.entries[0],
+      lines: [
+        {
+          ...ledger.entries[0].lines[0],
+          workId: "new-work",
+          itemId: "new-item",
+        },
+      ],
+    });
+    const history = revisionMarkup(renderDetail(ledger));
+    expect(history.match(/class="entry-revision-change"/g)).toHaveLength(2);
+    expect(history).toContain("<del>রড · কেজি</del>");
+    expect(history).toContain("<ins>রড · টন</ins>");
+    expect(history).toContain("<del>কাজ · নিচতলা</del>");
+    expect(history).toContain("<ins>কাজ · দোতলা</ins>");
+  });
+  it("shows a line addition and removal with enough work context to identify each", () => {
+    let ledger = LedgerSchema.parse({
+      works: [
+        { id: "roof", name: "ছাদ" },
+        { id: "door", name: "দরজা" },
+      ],
+      entries: [
+        {
+          id: "bill",
+          kind: "expense",
+          lines: [
+            { id: "keep", workId: "roof", label: "রড", amount: 10000 },
+            { id: "remove", workId: "door", label: "রড", amount: 10000 },
+          ],
+        },
+      ],
+    });
+    ledger = replaceEntry(ledger, {
+      ...ledger.entries[0],
+      lines: [
+        ledger.entries[0].lines[0],
+        { ...ledger.entries[0].lines[1], id: "add", workId: "roof" },
+      ],
+    });
+    const history = revisionMarkup(renderDetail(ledger));
+    expect(history.match(/class="entry-revision-change"/g)).toHaveLength(2);
+    expect(history).toContain("খরচ যোগ হয়েছে");
+    expect(history).toContain("<ins>রড · ছাদ · ৳100</ins>");
+    expect(history).toContain("খরচ বাদ গেছে");
+    expect(history).toContain("<del>রড · দরজা · ৳100</del>");
   });
 });
 

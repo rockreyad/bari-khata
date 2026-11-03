@@ -68,9 +68,19 @@ export function EntryList({
           paired.length && paid !== original
             ? t("দিয়েছি {{amount}}", { amount: money(paid) })
             : "";
+        const context = historySubtitle(ledger, entry, {
+          hidePerson,
+          hideWork,
+        });
+        const kindLabel = entryKindLabels[entry.kind];
         const subtitle =
           subtitles?.[entry.id] ??
-          [historySubtitle(ledger, entry, { hidePerson, hideWork }), extra]
+          [
+            context === title || (showKind && context === kindLabel)
+              ? ""
+              : context,
+            extra,
+          ]
             .filter(Boolean)
             .join(" · ");
         const sign =
@@ -95,25 +105,32 @@ export function EntryList({
               onClick={() => onEntry(entry.id)}
             >
               <span className="history-row-copy">
-                {showKind ? (
-                  <span
-                    className={`history-kind-tag history-kind-${entry.kind}`}
-                  >
-                    {t(entryKindLabels[entry.kind])}
-                  </span>
-                ) : null}
                 <strong>
                   {t(title)}
                   {entry.voided ? <i>{t("বাতিল")}</i> : null}
                 </strong>
                 <small className="history-row-meta-v4">
+                  {showKind && title !== kindLabel ? (
+                    <>
+                      <span
+                        className={`history-kind history-kind-${entry.kind}`}
+                      >
+                        {t(entryKindLabels[entry.kind])}
+                      </span>
+                      <span aria-hidden="true">·</span>
+                    </>
+                  ) : null}
                   <time dateTime={entry.date ?? undefined}>
                     {entry.date
                       ? date(entry.date, { year: "numeric" })
                       : t("তারিখ দেওয়া নেই")}
                   </time>
-                  <span aria-hidden="true">·</span>
-                  <span>{t(subtitle)}</span>
+                  {subtitle ? (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span className="history-row-context">{t(subtitle)}</span>
+                    </>
+                  ) : null}
                 </small>
               </span>
               <strong className="history-row-amount">{money(amount)}</strong>

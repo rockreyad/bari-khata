@@ -1,9 +1,8 @@
 .work-overview {
   border: 1px solid var(--line);
-  border-radius: 24px;
+  border-radius: 18px;
   background: var(--surface);
   overflow: hidden;
-  box-shadow: 0 8px 30px color-mix(in srgb, var(--accent) 5%, transparent);
 }
 .work-overview-total {
   position: relative;
@@ -11,8 +10,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 25px 24px 22px;
-  background: linear-gradient(125deg, var(--accent-soft), var(--surface) 90%);
+  padding: 22px 24px;
 }
 .work-overview-total > div {
   display: grid;
@@ -24,7 +22,7 @@
   font-size: 13px;
 }
 .work-overview-total strong {
-  font-size: clamp(34px, 6vw, 44px);
+  font-size: clamp(30px, 6vw, 38px);
   line-height: 1.35;
   font-weight: 650;
   letter-spacing: -0.04em;
@@ -33,7 +31,7 @@
 .work-chart-toggle {
   width: 44px;
   height: 44px;
-  border-radius: 15px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
   color: var(--accent);
@@ -62,6 +60,51 @@
   font-size: 19px;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+.work-shared-due {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  list-style: none;
+}
+.work-shared-due::-webkit-details-marker {
+  display: none;
+}
+.work-shared-due > strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.work-shared-dues[open] summary svg {
+  transform: rotate(90deg);
+}
+.work-shared-jobs {
+  padding: 0 24px 16px;
+}
+.work-shared-jobs button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.work-shared-jobs button > span {
+  flex: 1;
+  min-width: 0;
+}
+.work-shared-jobs small {
+  display: block;
+  color: var(--muted);
+}
+.work-due-note {
+  margin: 0;
+  padding: 0 24px 16px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
 }
 .notebook-card-due {
   padding-top: 12px;
@@ -326,9 +369,8 @@
 .work-tabs-rail {
   position: relative;
   min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 17px;
-  background: var(--surface-muted);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
   isolation: isolate;
 }
 .work-page-v3 .work-tabs-v3.work-tabs-scroll {
@@ -338,7 +380,7 @@
   gap: 4px;
   width: 100%;
   min-width: 0;
-  padding: 5px;
+  padding: 0;
   border: 0;
   border-radius: inherit;
   background: transparent;
@@ -360,8 +402,9 @@
   min-width: max-content;
   min-height: 43px;
   padding: 10px 14px;
-  border: 1px solid transparent;
-  border-radius: 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   font-size: 12px;
   font-weight: 500;
   line-height: 1.5;
@@ -369,19 +412,14 @@
   color: var(--muted);
   transition:
     color 0.18s,
-    background 0.18s,
-    box-shadow 0.18s;
+    background 0.18s;
 }
 .work-page-v3 .work-tabs-v3.work-tabs-scroll > button.selected {
   color: var(--accent);
   font-weight: 650;
-  border-color: color-mix(in srgb, var(--accent) 13%, var(--line));
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--accent) 10%, var(--surface)),
-    var(--surface)
-  );
-  box-shadow: 0 2px 7px color-mix(in srgb, var(--accent) 9%, transparent);
+  border-bottom-color: var(--accent);
+  background: transparent;
+  box-shadow: none;
 }
 .work-page-v3 .work-tabs-v3.work-tabs-scroll > button:focus-visible {
   outline: 2px solid var(--accent);
@@ -401,13 +439,11 @@
 }
 .work-tabs-rail::before {
   left: 1px;
-  border-radius: 16px 0 0 16px;
-  background: linear-gradient(90deg, var(--surface-muted) 45%, transparent);
+  background: linear-gradient(90deg, var(--surface) 45%, transparent);
 }
 .work-tabs-rail::after {
   right: 1px;
-  border-radius: 0 16px 16px 0;
-  background: linear-gradient(270deg, var(--surface-muted) 45%, transparent);
+  background: linear-gradient(270deg, var(--surface) 45%, transparent);
 }
 .work-tabs-rail.can-scroll-left::before,
 .work-tabs-rail.can-scroll-right::after {
@@ -451,19 +487,13 @@
 .work-page-v3 .work-tabs-scroll > button > span {
   flex: none;
 }
-.work-labour-paid {
-  display: flex;
+.work-action-buttons:empty {
+  display: none;
+}
+.work-page-v3 .work-scope-summary {
+  gap: 8px 14px;
   align-items: baseline;
-  flex-wrap: wrap;
-  gap: 8px 18px;
-  margin: 12px 0;
 }
-.work-labour-paid dt {
-  font-size: 13px;
-  color: var(--muted);
-}
-.work-labour-paid dd {
-  margin: 0;
-  font-size: 21px;
-  font-weight: 650;
+.work-page-v3 .work-scope-summary > strong {
+  font-size: 24px;
 }

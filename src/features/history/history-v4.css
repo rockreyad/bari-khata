@@ -1,20 +1,14 @@
 .history-row-copy > .history-row-meta-v4 {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 0 6px;
   min-width: 0;
 }
-.history-kind-tag {
-  --history-kind: #ad5b17;
-  justify-self: start;
-  padding: 2px 7px;
-  border: 1px solid color-mix(in srgb, var(--history-kind) 35%, var(--line));
-  border-inline-start: 4px solid var(--history-kind);
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--history-kind) 10%, var(--surface));
-  color: var(--text);
-  font-size: 10px;
-  line-height: 1.6;
+.history-kind {
+  --history-kind: #a45b1c;
+  color: var(--history-kind);
+  font-weight: 550;
 }
 .history-kind-payment {
   --history-kind: #7657c7;
@@ -29,7 +23,8 @@
   flex: none;
   font-variant-numeric: tabular-nums;
 }
-.history-row-meta-v4 > span:last-child {
+.history-row-meta-v4 > .history-row-context {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }

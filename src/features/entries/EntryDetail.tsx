@@ -17,25 +17,20 @@ import { Sheet } from "../../components/Sheet";
 import { AppMenu } from "../../components/ui/AppMenu";
 import { PaymentIcon } from "../../components/ui/Icons";
 import { entryTotal, entryWorkIds, setEntryVoided } from "../../domain/ledger";
-import {
-  EntryProvenanceSchema,
-  type Ledger,
-  type EntryProvenance,
-} from "../../domain/model";
-import type { LanguageContextValue } from "../../context/LanguageContext";
+import { type EntryProvenance } from "../../domain/model";
 import { costNames, methodNames } from "../../lib/display";
 import { createWorkspaceStorage } from "../../data/repository";
+import { entryAudit, type EntrySnapshot } from "../history/audit";
 import {
-  entryAudit,
-  snapshotTotal,
-  type AuditField,
-  type EntrySnapshot,
-} from "../history/audit";
+  entryDisplayChanges,
+  type EntryChangeField,
+  type EntryDisplayChange,
+} from "../history/entryChanges";
 import { entryKindLabels } from "../history/history";
 import "../history/history.css";
 import "../history/history-v4.css";
 import "./entry-detail.css";
-const auditLabels: Partial<Record<AuditField, string>> = {
+const auditLabels: Partial<Record<EntryChangeField, string>> = {
   kind: "হিসাবের ধরন",
   date: "লেনদেনের তারিখ",
   note: "নোট",
@@ -55,33 +50,49 @@ const auditLabels: Partial<Record<AuditField, string>> = {
   source: "পুরোনো খাতার তথ্য",
   paymentPurposeId: "কিসের টাকা",
   provenance: "যে সহকারী লিখেছে",
+  amount: "টাকার পরিমাণ",
+  workId: "কাজের খাতা",
+  label: "মালের নাম",
+  itemId: "মালের নাম",
+  materialGroupId: "মালের ধরন",
+  costType: "খরচের ধরন",
+  quantity: "পরিমাণ",
+  usage: "ব্যবহার",
+  method: "টাকা দেওয়ার মাধ্যম",
+  receiptName: "ভাউচার",
+  "source.file": "মূল ফাইল",
+  "source.sheet": "পাতা",
+  "source.cell": "ঘর",
+  "source.note": "পুরোনো খাতার নোট",
+  "source.ledger": "পুরোনো খাতা",
+  "provenance.actorName": "যে সহকারী লিখেছে",
+  "provenance.origin": "যেভাবে লেখা হয়েছে",
+  "provenance.reason": "কারণ",
+  correctionReason: "হিসাব মেলানোর কারণ",
 };
+const operationLabels = {
+  lines: { added: "খরচ যোগ হয়েছে", removed: "খরচ বাদ গেছে" },
+  allocations: { added: "টাকার ভাগ যোগ হয়েছে", removed: "টাকার ভাগ বাদ গেছে" },
+  paymentParts: {
+    added: "টাকার মাধ্যম যোগ হয়েছে",
+    removed: "টাকার মাধ্যম বাদ গেছে",
+  },
+  receipts: { added: "ভাউচার যোগ হয়েছে", removed: "ভাউচার বাদ গেছে" },
+} as const;
 const originLabels: Record<EntryProvenance["origin"], string> = {
   text: "লেখা নির্দেশ থেকে",
   image: "ছবির তথ্য থেকে",
   voice: "ভয়েসের নির্দেশ থেকে",
 };
-function assistantSourceText(
-  value: unknown,
-  t: LanguageContextValue["t"],
-  date: LanguageContextValue["date"],
-) {
-  const parsed = EntryProvenanceSchema.safeParse(value);
-  if (!parsed.success) return t("সহকারীর তথ্য নেই");
-  const source = parsed.data;
-  return [
-    t("সহকারী: {{name}}", { name: source.actorName }),
-    t(originLabels[source.origin]),
-    date(source.recordedAt, {
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    }),
-    source.reason ? t("কারণ: {{reason}}", { reason: source.reason }) : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
+const referenceFields = new Set<EntryChangeField>([
+  "personId",
+  "workId",
+  "itemId",
+  "materialGroupId",
+  "contractId",
+  "relatedEntryId",
+  "paymentPurposeId",
+]);
 function AssistantSource({ source }: { source: EntryProvenance }) {
   const { t, date, formatDigits } = useLanguageContext();
   return (
@@ -105,116 +116,6 @@ function AssistantSource({ source }: { source: EntryProvenance }) {
     </section>
   );
 }
-function SnapshotCard({
-  snapshot,
-  ledger,
-}: {
-  snapshot: EntrySnapshot;
-  ledger: Ledger;
-}) {
-  const { t, money, date, formatDigits } = useLanguageContext();
-  const person = ledger.people.find((p) => p.id === snapshot.personId);
-  return (
-    <div className="revision-snapshot-card">
-      <div className="revision-snapshot-head">
-        <strong>{money(snapshotTotal(snapshot))}</strong>
-        <span>{t(entryKindLabels[snapshot.kind])}</span>
-      </div>
-      <div className="detail-v3-summary">
-        <div>
-          <span>{t("লেনদেনের তারিখ")}</span>
-          <strong>{date(snapshot.date, { year: "numeric" })}</strong>
-        </div>
-        {person ? (
-          <div>
-            <span>{t("ব্যক্তি বা দোকান")}</span>
-            <strong>{formatDigits(person.name)}</strong>
-          </div>
-        ) : null}
-        <div>
-          <span>{t("হিসাবের খাত")}</span>
-          <strong>
-            {t(
-              snapshot.account === "labour"
-                ? "মজুরি"
-                : snapshot.account === "materials"
-                  ? "মালের হিসাব"
-                  : "অন্য হিসাব",
-            )}
-          </strong>
-        </div>
-        {snapshot.voided ? (
-          <div>
-            <span>{t("অবস্থা")}</span>
-            <strong>{t("বাতিল")}</strong>
-          </div>
-        ) : null}
-      </div>
-      {snapshot.lines.map((line) => (
-        <div className="detail-line" key={line.id}>
-          <div>
-            <strong>
-              {formatDigits(
-                line.label ||
-                  ledger.items.find((i) => i.id === line.itemId)?.name ||
-                  t(costNames[line.costType]),
-              )}
-            </strong>
-            <small>
-              {formatDigits(
-                ledger.works.find((w) => w.id === line.workId)?.name ?? "",
-              )}{" "}
-              · {t(costNames[line.costType])}
-            </small>
-            {line.usage ? <small>{formatDigits(line.usage)}</small> : null}
-            {line.quantity ? (
-              <small>{formatDigits(`${line.quantity} ${line.unit}`)}</small>
-            ) : null}
-          </div>
-          <strong>{money(line.amount)}</strong>
-        </div>
-      ))}
-      {snapshot.allocations.map((allocation, index) => (
-        <div className="amount-row" key={index}>
-          <span>
-            {formatDigits(
-              ledger.works.find((w) => w.id === allocation.workId)?.name ?? "",
-            )}
-          </span>
-          <strong>{money(allocation.amount)}</strong>
-        </div>
-      ))}
-      {snapshot.paymentParts.map((part, index) => (
-        <div className="amount-row" key={index}>
-          <span>{t(methodNames[part.method])}</span>
-          <strong>{money(part.amount)}</strong>
-        </div>
-      ))}
-      {snapshot.note ? <p>{formatDigits(snapshot.note)}</p> : null}
-      {snapshot.receipts.length ? (
-        <p>
-          {t("ভাউচার")}:{" "}
-          {formatDigits(
-            snapshot.receipts.map((receipt) => receipt.name).join(", "),
-          )}
-        </p>
-      ) : null}
-      {snapshot.source ? (
-        <div className="detail-source">
-          <p>
-            {formatDigits(
-              `${snapshot.source.file} · ${snapshot.source.sheet} · ${snapshot.source.cell}`,
-            )}
-          </p>
-          <p>{formatDigits(snapshot.source.note)}</p>
-        </div>
-      ) : null}
-      {snapshot.provenance ? (
-        <AssistantSource source={snapshot.provenance} />
-      ) : null}
-    </div>
-  );
-}
 export function EntryDetail({ id }: { id: string }) {
   const { ledger, mode, close, add, save, notify, go, detail } = useNotebook();
   const { t, money, date, language, formatDigits } = useLanguageContext();
@@ -225,9 +126,6 @@ export function EntryDetail({ id }: { id: string }) {
   const entry = ledger.entries.find((e) => e.id === id);
   if (!entry) return null;
   const person = ledger.people.find((p) => p.id === entry.personId);
-  const events = entryAudit(entry).filter(
-    (event) => event.kind !== "created" && event.changes.length > 0,
-  );
   const workIds = entryWorkIds(entry);
   const purpose = ledger.paymentPurposes.find(
     (value) => value.id === entry.paymentPurposeId,
@@ -284,21 +182,70 @@ export function EntryDetail({ id }: { id: string }) {
       notify(t("ভাউচার এই ফোনে পাওয়া যায়নি। অনলাইনে সিঙ্ক করে দেখুন।"), true);
     }
   }
-  function fieldText(field: AuditField, value: unknown): string {
-    if (field === "provenance") return assistantSourceText(value, t, date);
+  function fieldText(
+    field: EntryChangeField,
+    value: unknown,
+    context = false,
+  ): string {
+    if (field === "correctionReason") return value == null ? "" : String(value);
     if (value === null || value === undefined || value === "")
       return t("লেখা নেই");
-    if (field === "paymentPurposeId")
-      return (
-        ledger.paymentPurposes.find((purpose) => purpose.id === value)?.name ??
-        t("লেখা নেই")
-      );
+    if (field === "paymentPurposeId") {
+      const purpose = ledger.paymentPurposes.find((row) => row.id === value);
+      return purpose
+        ? [purpose.name, context ? fieldText("account", purpose.account) : ""]
+            .filter(Boolean)
+            .join(" · ")
+        : t("লেখা নেই");
+    }
     if (field === "date") return date(String(value), { year: "numeric" });
-    if (field === "createdAt") return stamp(String(value));
-    if (field === "personId")
-      return (
-        ledger.people.find((p) => p.id === value)?.name ?? t("নাম পাওয়া যায়নি")
+    if (field === "amount") return money(Number(value));
+    if (field === "workId") {
+      const work = ledger.works.find((row) => row.id === value);
+      return work
+        ? [work.name, context ? work.description : ""]
+            .filter(Boolean)
+            .join(" · ")
+        : t("লেখা নেই");
+    }
+    if (field === "itemId") {
+      const item = ledger.items.find((item) => item.id === value);
+      return item
+        ? [
+            item.name,
+            item.brand,
+            context ? item.unit : "",
+            context ? item.usage : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : t("লেখা নেই");
+    }
+    if (field === "materialGroupId") {
+      const group = ledger.materialGroups.find((row) => row.id === value);
+      return group
+        ? [group.name, context ? group.aliases.join(" · ") : ""]
+            .filter(Boolean)
+            .join(" · ")
+        : t("লেখা নেই");
+    }
+    if (field === "costType")
+      return t(costNames[value as keyof typeof costNames] ?? String(value));
+    if (field === "method")
+      return t(methodNames[value as keyof typeof methodNames] ?? String(value));
+    if (field === "provenance.origin")
+      return t(
+        originLabels[value as EntryProvenance["origin"]] ?? String(value),
       );
+    if (field === "createdAt") return stamp(String(value));
+    if (field === "personId") {
+      const person = ledger.people.find((row) => row.id === value);
+      return person
+        ? [person.name, context ? person.role : "", context ? person.phone : ""]
+            .filter(Boolean)
+            .join(" · ")
+        : t("নাম পাওয়া যায়নি");
+    }
     if (field === "account")
       return t(
         value === "labour"
@@ -316,69 +263,113 @@ export function EntryDetail({ id }: { id: string }) {
       return t(value === "needs_review" ? "দেখে নেওয়া বাকি" : "দেখে নিয়েছি");
     if (field === "balanceImpact")
       return t(value === "historical" ? "আগের খাতার লেখা" : "এই অ্যাপে লেখা");
-    if (field === "contractId")
-      return (
-        ledger.contracts.find((c) => c.id === value)?.title || t("মজুরির দর")
-      );
+    if (field === "contractId") {
+      const contract = ledger.contracts.find((row) => row.id === value);
+      if (!contract) return t("মজুরির দর");
+      return [
+        contract.title || t("মজুরির দর"),
+        ...(context
+          ? [
+              fieldText("personId", contract.personId),
+              contract.workId
+                ? fieldText("workId", contract.workId)
+                : t("পুরো বাড়ি"),
+              money(contract.total),
+            ]
+          : []),
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
     if (field === "relatedEntryId") {
       const related = ledger.entries.find((e) => e.id === value);
-      return related?.lines[0]?.label ?? t("আগের বিল");
-    }
-    if (field === "lines")
-      return (value as EntrySnapshot["lines"])
-        .map((line) =>
-          [
-            line.label ||
-              ledger.items.find((i) => i.id === line.itemId)?.name ||
-              t(costNames[line.costType]),
-            ledger.items.find((i) => i.id === line.itemId)?.brand,
-            ledger.materialGroups.find(
-              (g) =>
-                g.id ===
-                (line.materialGroupId ||
-                  ledger.items.find((i) => i.id === line.itemId)
-                    ?.materialGroupId),
-            )?.name,
-            t(costNames[line.costType]),
-            money(line.amount),
-            ledger.works.find((w) => w.id === line.workId)?.name,
-            line.quantity ? `${line.quantity} ${line.unit}` : "",
-            line.usage,
+      return related
+        ? [
+            related.lines[0]?.label || t("আগের বিল"),
+            ...(context
+              ? [
+                  date(related.date, { year: "numeric" }),
+                  money(entryTotal(related)),
+                  related.personId
+                    ? fieldText("personId", related.personId)
+                    : "",
+                  ...entryWorkIds(related).map((id) => fieldText("workId", id)),
+                ]
+              : []),
           ]
             .filter(Boolean)
-            .join(" · "),
-        )
-        .join(" / ");
-    if (field === "allocations")
-      return (value as EntrySnapshot["allocations"])
-        .map(
-          (part) =>
-            `${ledger.works.find((w) => w.id === part.workId)?.name ?? t("খাতা")} · ${money(part.amount)}`,
-        )
-        .join(" / ");
-    if (field === "paymentParts")
-      return (value as EntrySnapshot["paymentParts"])
-        .map((part) => `${t(methodNames[part.method])} · ${money(part.amount)}`)
-        .join(" / ");
-    if (field === "receipts")
-      return (
-        (value as EntrySnapshot["receipts"])
-          .map((file) => file.name)
-          .join(" / ") || t("কোনো ভাউচার নেই")
-      );
-    if (field === "source") {
-      const source = value as EntrySnapshot["source"];
-      return source
-        ? [source.file, source.sheet, source.cell, source.note]
-            .filter(Boolean)
             .join(" · ")
-        : t("লেখা নেই");
+        : t("আগের বিল");
     }
-    if (Array.isArray(value))
-      return value.length ? String(value.length) : t("লেখা নেই");
-    if (typeof value === "object") return t("বিস্তারিত বদলেছে");
     return String(value);
   }
+  const lineName = (line: EntrySnapshot["lines"][number]) =>
+    line.label ||
+    ledger.items.find((item) => item.id === line.itemId)?.name ||
+    t(costNames[line.costType]);
+  function changeValue(change: EntryDisplayChange, value: unknown) {
+    if (change.format && value == null) return "";
+    if (change.format === "line") {
+      const line = value as EntrySnapshot["lines"][number];
+      return [
+        lineName(line),
+        change.context?.workId ? fieldText("workId", line.workId) : "",
+        money(line.amount),
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
+    if (change.format === "allocation") {
+      const part = value as EntrySnapshot["allocations"][number];
+      return `${fieldText("workId", part.workId)} · ${money(part.amount)}`;
+    }
+    if (change.format === "payment") {
+      const part = value as EntrySnapshot["paymentParts"][number];
+      return `${t(methodNames[part.method])} · ${money(part.amount)}`;
+    }
+    if (change.format === "receipt")
+      return (value as EntrySnapshot["receipts"][number]).name;
+    return fieldText(change.field, value);
+  }
+  function changeLabel(change: EntryDisplayChange) {
+    if (change.operation && change.field in operationLabels)
+      return t(
+        operationLabels[change.field as keyof typeof operationLabels][
+          change.operation
+        ],
+      );
+    const context = change.context?.line
+      ? lineName(change.context.line)
+      : change.context?.workId
+        ? fieldText("workId", change.context.workId)
+        : change.context?.method
+          ? t(methodNames[change.context.method])
+          : "";
+    if (context && change.field === "amount") return formatDigits(context);
+    const label = t(auditLabels[change.field] ?? "তথ্য");
+    return context ? `${formatDigits(context)} · ${label}` : label;
+  }
+  const events = entryAudit(entry)
+    .filter((event) => event.kind !== "created" && event.before)
+    .map((event) => ({
+      ...event,
+      changes: entryDisplayChanges(event.before!, event.after)
+        .map((change) => {
+          let before = formatDigits(changeValue(change, change.before));
+          let after = formatDigits(changeValue(change, change.after));
+          if (before === after && referenceFields.has(change.field)) {
+            before = formatDigits(fieldText(change.field, change.before, true));
+            after = formatDigits(fieldText(change.field, change.after, true));
+            if (before === after) {
+              before = "";
+              after = t("নতুনটি বেছে নেওয়া হয়েছে");
+            }
+          }
+          return { key: change.key, label: changeLabel(change), before, after };
+        })
+        .filter((change) => change.before !== change.after),
+    }))
+    .filter((event) => event.changes.length > 0);
   return (
     <Sheet
       title={t("লেনদেনের বিস্তারিত")}
@@ -687,67 +678,29 @@ export function EntryDetail({ id }: { id: string }) {
               <ClockCounterClockwiseIcon size={19} />
               {t("কখন কী বদলেছে")}
             </summary>
-            <div className="revision-timeline">
+            <ol className="entry-revision-list">
               {[...events].reverse().map((event) => (
-                <article className="revision-event" key={event.id}>
-                  <header className="revision-event-head">
-                    <strong>
-                      {t(
-                        event.kind === "created"
-                          ? entry.source
-                            ? "পুরোনো খাতা থেকে এসেছে"
-                            : "প্রথম লেখা হয়েছে"
-                          : event.kind === "voided"
-                            ? "হিসাব বাতিল করা হয়েছে"
-                            : event.kind === "restored"
-                              ? "আবার হিসাবে যোগ করা হয়েছে"
-                              : "তথ্য বদলানো হয়েছে",
-                      )}
-                    </strong>
-                    <time dateTime={event.at || undefined}>
-                      {stamp(event.at)}
-                    </time>
-                  </header>
-                  {event.before && event.changes.length ? (
-                    <div className="revision-changes">
-                      {snapshotTotal(event.before) !==
-                      snapshotTotal(event.after) ? (
-                        <div className="revision-change">
-                          <span>{t("টাকার পরিমাণ")}</span>
-                          <div className="revision-change-values">
-                            <del>{money(snapshotTotal(event.before))}</del>
-                            <ArrowRightIcon size={13} />
-                            <ins>{money(snapshotTotal(event.after))}</ins>
-                          </div>
-                        </div>
-                      ) : null}
-                      {event.changes.map((change) => (
-                        <div className="revision-change" key={change.field}>
-                          <span>{t(auditLabels[change.field] ?? "তথ্য")}</span>
-                          <div className="revision-change-values">
-                            <del>
-                              {formatDigits(
-                                fieldText(change.field, change.before),
-                              )}
-                            </del>
-                            <ArrowRightIcon size={13} />
-                            <ins>
-                              {formatDigits(
-                                fieldText(change.field, change.after),
-                              )}
-                            </ins>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                  <details className="revision-snapshot">
-                    <summary>{t("তখনকার পুরো হিসাব")}</summary>
-                    <SnapshotCard snapshot={event.after} ledger={ledger} />
-                  </details>
-                </article>
+                <li className="entry-revision" key={event.id}>
+                  <time dateTime={event.at || undefined}>
+                    {stamp(event.at)}
+                  </time>
+                  <dl className="entry-revision-changes">
+                    {event.changes.map((change) => (
+                      <div className="entry-revision-change" key={change.key}>
+                        <dt>{change.label}</dt>
+                        <dd>
+                          {change.before ? <del>{change.before}</del> : null}
+                          {change.before && change.after ? (
+                            <ArrowRightIcon size={12} aria-hidden="true" />
+                          ) : null}
+                          {change.after ? <ins>{change.after}</ins> : null}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </li>
               ))}
-            </div>
+            </ol>
           </details>
         ) : null}
         {entry.source ||

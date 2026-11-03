@@ -10,6 +10,8 @@ import {
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router";
 import { LedgerSchema } from "../../domain/model";
+import { createDemoLedger } from "../../domain/demo";
+import { setEntityRemoved } from "../../domain/entityDeletion";
 import { WorkCard, WorkPage, WorksPage } from "./WorksPages";
 const context = vi.hoisted(() => ({
   go: vi.fn(),
@@ -37,6 +39,79 @@ vi.mock("../../context/LanguageProvider", () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+it("shows one complete remaining total without adding an already included wage bill twice", async () => {
+  const ledger = createDemoLedger();
+  context.ledger = ledger;
+  const original = JSON.stringify(ledger);
+  const { container } = render(
+    <MemoryRouter initialEntries={["/works/tiles?tab=labour"]}>
+      <WorkCard
+        work={ledger.works.find((work) => work.id === "tiles")!}
+        ledger={ledger}
+        onOpen={vi.fn()}
+      />
+      <Routes>
+        <Route path="/works/:workId" element={<WorkPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(
+    container.querySelector(".work-overview-total strong")?.textContent,
+  ).toBe("৳794000");
+  expect(container.querySelector(".work-known-due")?.textContent).toBe(
+    "মোট বাকি৳80400",
+  );
+  expect(container.querySelector(".notebook-card-due")?.textContent).toBe(
+    "মোট বাকি৳80400",
+  );
+  expect(container.querySelector(".work-scope-summary")?.textContent).toContain(
+    "মজুরির বিল৳60000",
+  );
+  expect(screen.queryByText("কাজের মজুরি")).toBeNull();
+  expect(screen.queryByText("মজুরিতে দিয়েছি")).toBeNull();
+  expect(container.querySelectorAll(".work-scope-summary strong")).toHaveLength(
+    1,
+  );
+  expect(
+    container.querySelector(".work-action-buttons")?.querySelectorAll("button"),
+  ).toHaveLength(0);
+  expect(JSON.stringify(ledger)).toBe(original);
+});
+
+it("keeps shared obligations separate and opens their exact source even after the job was archived", async () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "দরজা" }],
+    people: [{ id: "worker", name: "করিম", kind: "worker" }],
+    contracts: [
+      {
+        id: "shared",
+        title: "পুরো বাড়ির কাজ",
+        personId: "worker",
+        scope: "house",
+        total: 2000000,
+      },
+    ],
+  });
+  context.ledger = setEntityRemoved(ledger, "contract", "shared", true);
+  const { container } = render(
+    <MemoryRouter initialEntries={["/works/work?tab=labour"]}>
+      <Routes>
+        <Route path="/works/:workId" element={<WorkPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(container.querySelector(".work-shared-due")?.textContent).toContain(
+    "সব খাতা মিলিয়ে কাজের বাকি৳20000",
+  );
+  expect(
+    container.querySelector(".work-known-due:not(.work-shared-due)"),
+  ).toBeNull();
+  await userEvent.click(screen.getByText("সব খাতা মিলিয়ে কাজের বাকি"));
+  await userEvent.click(screen.getByRole("button", { name: /পুরো বাড়ির কাজ/ }));
+  const target = new URL(context.go.mock.calls[0][0], "https://bari.invalid");
+  expect(target.pathname).toBe("/jobs/shared");
+  expect(target.searchParams.get("back")).toBe("/works/work?tab=labour");
 });
 it("shows only a recent preview while keeping the complete work total and a scoped history route", async () => {
   context.ledger = LedgerSchema.parse({
@@ -127,12 +202,8 @@ it("opens a work with all payments visible and one paid total, without advance j
   expect(context.go).toHaveBeenCalledWith("/ledger?work=door");
   await user.click(screen.getByRole("button", { name: "মজুরি" }));
   expect(container.querySelectorAll(".history-payment")).toHaveLength(1);
-  expect(
-    container.querySelector(".work-scope-summary > strong")?.textContent,
-  ).toBe("৳30000");
-  expect(container.querySelector(".work-scope-summary")?.textContent).toContain(
-    "কাজের মজুরি৳0",
-  );
+  expect(container.querySelector(".work-scope-summary")).toBeNull();
+  expect(screen.queryByText("কাজের মজুরি")).toBeNull();
 });
 
 it("finds work names using either numeral script while preserving their stored names and ids", async () => {
@@ -301,9 +372,9 @@ it("shows all cash paid for doors in both its card and page while preserving the
 
 it.each([
   ["labour only", ["labour"], true],
-  ["payment only", ["payment"], true],
+  ["payment only", ["payment"], false],
   ["all presets", ["expense", "payment", "labour", "transport"], true],
-  ["defaults", null, true],
+  ["defaults", null, false],
   ["purchase only", ["expense"], false],
   ["transport only", ["transport"], false],
   ["hidden", [], false],

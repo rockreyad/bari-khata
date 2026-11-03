@@ -147,6 +147,68 @@
 .transaction-detail-v5 .detail-fold {
   padding-top: 15px;
 }
+.entry-revision-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.entry-revision {
+  padding: 13px 0;
+  border-top: 1px solid var(--line);
+}
+.entry-revision:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.entry-revision:last-child {
+  padding-bottom: 0;
+}
+.entry-revision > time {
+  font-size: 10px;
+  color: var(--muted);
+}
+.entry-revision-changes {
+  display: grid;
+  gap: 9px;
+  margin: 8px 0 0;
+}
+.entry-revision-change {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 14px;
+  flex-wrap: wrap;
+}
+.entry-revision-change > dt {
+  font-size: 11px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.entry-revision-change > dd {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.entry-revision-change del {
+  color: var(--muted);
+}
+.entry-revision-change ins {
+  color: var(--text);
+  text-decoration: none;
+}
+.entry-revision-change del,
+.entry-revision-change ins {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.entry-revision-change svg {
+  flex: none;
+  color: var(--muted);
+}
 @media (max-width: 600px) {
   .transaction-detail-v5 {
     gap: 15px;

@@ -64,7 +64,7 @@ describe("notebook quick action settings", () => {
     await user.click(screen.getByText("তারিখ, বিবরণ ও পছন্দের বোতাম"));
     await user.click(screen.getByRole("button", { name: "খরচ লিখি" }));
     await user.click(screen.getByRole("button", { name: "টাকা দিলাম" }));
-    await user.click(screen.getByRole("button", { name: "আনা-নামানো" }));
+    await user.click(screen.getByRole("button", { name: "আনার খরচ" }));
     await user.click(screen.getByRole("button", { name: "রাখুন" }));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(saved!.works[0].quickActions).toEqual(["transport"]);
@@ -90,7 +90,7 @@ describe("notebook quick action settings", () => {
     await user.click(screen.getByText("তারিখ, বিবরণ ও পছন্দের বোতাম"));
     expect(
       screen
-        .getByRole("button", { name: "আনা-নামানো" })
+        .getByRole("button", { name: "আনার খরচ" })
         .getAttribute("aria-pressed"),
     ).toBe("true");
     expect(
@@ -98,7 +98,7 @@ describe("notebook quick action settings", () => {
         .getByRole("button", { name: "খরচ লিখি" })
         .getAttribute("aria-pressed"),
     ).toBe("false");
-    await user.click(screen.getByRole("button", { name: "আনা-নামানো" }));
+    await user.click(screen.getByRole("button", { name: "আনার খরচ" }));
     await user.click(screen.getByRole("button", { name: "রাখুন" }));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2));
     expect(saved!.works[0].quickActions).toEqual([]);
@@ -119,7 +119,7 @@ describe("notebook quick action settings", () => {
       ).toBe(false),
     );
     await user.click(screen.getByText("তারিখ, বিবরণ ও পছন্দের বোতাম"));
-    for (const name of ["খরচ লিখি", "টাকা দিলাম", "মজুরি", "আনা-নামানো"])
+    for (const name of ["খরচ লিখি", "টাকা দিলাম", "মিস্ত্রির টাকা", "আনার খরচ"])
       expect(
         screen.getByRole("button", { name }).getAttribute("aria-pressed"),
       ).toBe("false");
