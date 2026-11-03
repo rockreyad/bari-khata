@@ -27,6 +27,7 @@ import { contractAppliesToWork } from "../../domain/contracts";
 import { personSummary } from "../../domain/ledger";
 import { BalanceProgress } from "../../components/ui/BalanceProgress";
 import { JobPreview } from "../jobs/JobPreview";
+import { jobBalanceTotals } from "../jobs/jobView";
 import type { Account } from "../../domain/model";
 import { PersonMark, kindLabels, accountLabels } from "./ContactIdentity";
 import { StatementSheet } from "./StatementSheet";
@@ -152,6 +153,8 @@ export function PersonPage() {
         workId || undefined,
       ).advance
     : summary.advance;
+  const jobTotals = jobBalanceTotals(ledger, personContracts);
+  const hasJobs = personContracts.some((job) => !job.archivedAt);
   const isPurchase = account === "materials";
   const metrics = [
     ...(summary.cost !== 0 && summary.cost !== summary.netPaid
@@ -268,6 +271,28 @@ export function PersonPage() {
               </div>
             ))}
           </dl>
+        ) : null}
+        {hasJobs ? (
+          <div className="contact-job-totals">
+            <h2>{t("সব কাজ মিলিয়ে")}</h2>
+            {jobTotals.valid ? (
+              <dl>
+                <div>
+                  <dt>{t("চুক্তির অবশিষ্ট")}</dt>
+                  <dd>{money(jobTotals.remaining)}</dd>
+                </div>
+                {jobTotals.extra > 0 ? (
+                  <div>
+                    <dt>{t("বেশি দিয়েছি")}</dt>
+                    <dd className="contact-credit">{money(jobTotals.extra)}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            ) : (
+              <p>{t("টাকার অঙ্ক বেশি হয়েছে।")}</p>
+            )}
+            <small>{t("কাজের মোট দর থেকে দেওয়া টাকা বাদে")}</small>
+          </div>
         ) : null}
         {kind === "shop" &&
         account === "materials" &&

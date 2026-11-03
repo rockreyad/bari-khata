@@ -783,6 +783,30 @@
 .contact-summary-card .contact-summary-metrics dd {
   font-size: 20px;
 }
+.contact-job-totals {
+  padding: 18px 24px;
+  border-top: 1px solid var(--line);
+}
+.contact-job-totals h2 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.contact-job-totals dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 28px;
+  margin: 0 0 9px;
+}
+.contact-job-totals dt,
+.contact-job-totals small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.contact-job-totals dd {
+  margin: 4px 0 0;
+  font-size: 20px;
+  font-weight: 650;
+}
 @media (max-width: 600px) {
   .contact-summary-card > .spending-chart-card {
     padding: 20px 21px 18px;

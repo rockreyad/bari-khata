@@ -127,6 +127,9 @@ it("opens a work with all payments visible and one paid total, without advance j
   expect(context.go).toHaveBeenCalledWith("/ledger?work=door");
   await user.click(screen.getByRole("button", { name: "মজুরি" }));
   expect(container.querySelectorAll(".history-payment")).toHaveLength(1);
+  expect(
+    container.querySelector(".work-scope-summary > strong")?.textContent,
+  ).toBe("৳30000");
   expect(container.querySelector(".work-scope-summary")?.textContent).toContain(
     "কাজের মজুরি৳0",
   );
@@ -341,6 +344,7 @@ it.each([
         workId: "work",
         account: "labour",
         costType: "labour",
+        purpose: "settle",
       });
     }
   },
@@ -373,6 +377,7 @@ it("keeps mixed work actions separate while routing the worker shortcut through 
     workId: "mixed",
     account: "labour",
     costType: "labour",
+    purpose: "settle",
   });
   fireEvent.click(within(actions).getByRole("button", { name: "খরচ লিখি" }));
   expect(context.add).toHaveBeenLastCalledWith({

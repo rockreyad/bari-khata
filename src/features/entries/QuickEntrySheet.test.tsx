@@ -751,12 +751,9 @@ it.each(["settle", "advance"] as const)(
       />,
     );
     await ready();
-    expect(
-      screen.getByRole("button", {
-        name: purpose === "settle" ? "আগের বাকি" : "অগ্রিম",
-        pressed: true,
-      }),
-    ).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "টাকা দিই" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "আগের বাকি" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "অগ্রিম" })).toBeNull();
     expect(screen.queryByRole("button", { name: "দিন হিসাবে" })).toBeNull();
     await user.type(screen.getByLabelText("কত টাকা"), "1500");
     await user.click(screen.getByRole("button", { name: "রাখুন" }));
@@ -771,6 +768,56 @@ it.each(["settle", "advance"] as const)(
     });
   },
 );
+
+it("selects an existing job from the labour payment page before choosing a worker and saves only money paid", async () => {
+  state.notebook.ledger = LedgerSchema.parse({
+    works: [{ id: "bath", name: "বাথরুম" }],
+    people: [{ id: "worker", name: "মোরশেদ", kind: "worker" }],
+    contracts: [
+      {
+        id: "job",
+        title: "পানির লাইন",
+        personId: "worker",
+        workId: "bath",
+        total: 1000000,
+      },
+    ],
+  });
+  const user = userEvent.setup();
+  render(
+    <QuickEntrySheet
+      presentation="page"
+      options={{
+        kind: "payment",
+        workId: "bath",
+        account: "labour",
+        costType: "labour",
+        purpose: "settle",
+      }}
+    />,
+  );
+  await ready();
+  await user.selectOptions(
+    screen.getByLabelText("কাজ", { exact: true }),
+    "job",
+  );
+  expect(
+    (screen.getByLabelText("কাকে দিচ্ছেন") as HTMLSelectElement).value,
+  ).toBe("worker");
+  await user.type(screen.getByLabelText("কত টাকা"), "1500");
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
+  const saved = state.notebook.ledger as Ledger;
+  expect(saved.entries).toHaveLength(1);
+  expect(saved.entries[0]).toMatchObject({
+    kind: "payment",
+    contractId: "job",
+    personId: "worker",
+    account: "labour",
+    paymentParts: [{ amount: 150000 }],
+  });
+  expect(summarize(saved).cost).toBe(0);
+});
 
 it("isolates unfinished payments by account while keeping each amount when its page is reopened", async () => {
   const ledger = LedgerSchema.parse({
