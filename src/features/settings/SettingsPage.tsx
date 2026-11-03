@@ -430,8 +430,8 @@ export function SettingsPage() {
         </div>
       </div>
       <p className="settings-footer-note">
-        <ShieldCheck size={14} />
-        {t("নিজের হিসাব, নিজের কাছে।")}
+        <ShieldCheck size={14} aria-hidden="true" />
+        <span>{t("নিজের হিসাব, নিজের কাছে।")}</span>
       </p>
       <input
         ref={input}
