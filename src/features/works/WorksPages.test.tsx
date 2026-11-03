@@ -69,9 +69,12 @@ it("shows one complete remaining total without adding an already included wage b
     "মজুরির বিল৳60000",
   );
   expect(screen.queryByText("কাজের মজুরি")).toBeNull();
-  expect(screen.queryByText("মজুরিতে দিয়েছি")).toBeNull();
+  expect(screen.getByText("মজুরিতে দিয়েছি")).toBeTruthy();
+  expect(
+    container.querySelector(".work-labour-primary strong")?.textContent,
+  ).toBe("৳45000");
   expect(container.querySelectorAll(".work-scope-summary strong")).toHaveLength(
-    1,
+    2,
   );
   expect(
     container.querySelector(".work-action-buttons")?.querySelectorAll("button"),
@@ -202,8 +205,195 @@ it("opens a work with all payments visible and one paid total, without advance j
   expect(context.go).toHaveBeenCalledWith("/ledger?work=door");
   await user.click(screen.getByRole("button", { name: "মজুরি" }));
   expect(container.querySelectorAll(".history-payment")).toHaveLength(1);
-  expect(container.querySelector(".work-scope-summary")).toBeNull();
+  expect(
+    container.querySelector(".work-labour-primary strong")?.textContent,
+  ).toBe("৳30000");
+  expect(container.querySelector(".work-labour-bill strong")?.textContent).toBe(
+    "৳0",
+  );
   expect(screen.queryByText("কাজের মজুরি")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "বিস্তারিত হিসাব" }));
+  expect(context.go).toHaveBeenLastCalledWith(
+    "/reports?mode=cash&account=labour&work=door",
+  );
+  await user.click(screen.getByRole("button", { name: /মজুরির বিল/ }));
+  expect(context.go).toHaveBeenLastCalledWith(
+    "/reports?mode=cost&section=labour&account=labour&work=door",
+  );
+});
+
+it("keeps both labour totals visible at zero and labels broader history as all notebook transactions", async () => {
+  context.ledger = LedgerSchema.parse({
+    works: [{ id: "empty", name: "খালি খাতা" }],
+  });
+  const { container } = render(
+    <MemoryRouter initialEntries={["/works/empty?tab=labour"]}>
+      <Routes>
+        <Route path="/works/:workId" element={<WorkPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  const summary = screen.getByRole("region", { name: "মজুরির মোট হিসাব" });
+  expect(within(summary).getByText("মজুরিতে দিয়েছি")).toBeTruthy();
+  expect(
+    within(summary).getByRole("button", { name: /মজুরির বিল/ }),
+  ).toBeTruthy();
+  expect(within(summary).getAllByText("৳0")).toHaveLength(2);
+  expect(container.querySelectorAll(".history-row")).toHaveLength(0);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "আনা-নামানো" }));
+  await user.click(screen.getByRole("button", { name: "এই খাতার সব লেনদেন" }));
+  expect(context.go).toHaveBeenLastCalledWith("/ledger?work=empty");
+});
+
+it("shows the entire labour payment total separately from a small bill, refunds and the recent preview", () => {
+  const ledger = LedgerSchema.parse({
+    works: [
+      { id: "electric", name: "কারেন্ট" },
+      { id: "other", name: "অন্য খাতা" },
+    ],
+    people: [{ id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" }],
+    entries: [
+      ...Array.from({ length: 12 }, (_, index) => ({
+        id: `wage-${index}`,
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        date: "2026-11-01",
+        createdAt: `2026-11-01T00:${String(index).padStart(2, "0")}:00Z`,
+        allocations: [
+          { workId: "electric", amount: 100000 },
+          { workId: "other", amount: 50000 },
+        ],
+        paymentParts: [{ amount: 150000 }],
+      })),
+      {
+        id: "bill",
+        kind: "expense",
+        account: "labour",
+        personId: "worker",
+        lines: [
+          {
+            id: "line",
+            workId: "electric",
+            costType: "labour",
+            label: "লাইন বসানো",
+            amount: 30000,
+          },
+        ],
+      },
+      {
+        id: "refund",
+        kind: "refund",
+        account: "labour",
+        personId: "worker",
+        allocations: [{ workId: "electric", amount: 5000 }],
+        paymentParts: [{ amount: 5000 }],
+      },
+      {
+        id: "material",
+        kind: "payment",
+        account: "materials",
+        personId: "worker",
+        allocations: [{ workId: "electric", amount: 900000 }],
+        paymentParts: [{ amount: 900000 }],
+      },
+    ],
+  });
+  context.ledger = ledger;
+  const before = JSON.stringify(ledger);
+  const { container } = render(
+    <MemoryRouter initialEntries={["/works/electric?tab=labour"]}>
+      <Routes>
+        <Route path="/works/:workId" element={<WorkPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(
+    container.querySelector(".work-labour-primary strong")?.textContent,
+  ).toBe("৳11950");
+  expect(container.querySelector(".work-labour-bill strong")?.textContent).toBe(
+    "৳300",
+  );
+  expect(screen.getByText("ফেরত পাওয়া ৳50 বাদ দিয়ে")).toBeTruthy();
+  expect(container.querySelectorAll(".history-row")).toHaveLength(10);
+  expect(JSON.stringify(ledger)).toBe(before);
+});
+
+it("keeps active wage payments and refunds visible after only their bill is cancelled", () => {
+  context.ledger = LedgerSchema.parse({
+    works: [
+      { id: "one", name: "প্রথম খাতা" },
+      { id: "two", name: "দ্বিতীয় খাতা" },
+    ],
+    people: [{ id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" }],
+    entries: [
+      {
+        id: "cancelled-bill",
+        kind: "expense",
+        account: "labour",
+        personId: "worker",
+        voided: true,
+        lines: [
+          {
+            id: "line",
+            workId: "one",
+            label: "মজুরির বিল",
+            costType: "labour",
+            amount: 60000,
+          },
+          {
+            id: "line-two",
+            workId: "two",
+            label: "দ্বিতীয় খাতার মজুরি",
+            costType: "labour",
+            amount: 40000,
+          },
+        ],
+      },
+      {
+        id: "payment",
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        relatedEntryId: "cancelled-bill",
+        allocations: [
+          { workId: "one", amount: 60000 },
+          { workId: "two", amount: 40000 },
+        ],
+        paymentParts: [{ amount: 100000 }],
+      },
+      {
+        id: "refund",
+        kind: "refund",
+        account: "labour",
+        personId: "worker",
+        relatedEntryId: "cancelled-bill",
+        allocations: [{ workId: "one", amount: 10000 }],
+        paymentParts: [{ amount: 10000 }],
+      },
+    ],
+  });
+  const { container } = render(
+    <MemoryRouter initialEntries={["/works/one?tab=labour"]}>
+      <Routes>
+        <Route path="/works/:workId" element={<WorkPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(
+    container.querySelector(".work-labour-primary strong")?.textContent,
+  ).toBe("৳500");
+  expect(container.querySelector(".work-labour-bill strong")?.textContent).toBe(
+    "৳0",
+  );
+  expect(container.querySelectorAll(".history-row")).toHaveLength(2);
+  expect(
+    screen.getByRole("button", { name: /টাকা দিয়েছি.*৳600/ }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: /টাকা ফেরত পেয়েছি.*৳-100/ }),
+  ).toBeTruthy();
 });
 
 it("finds work names using either numeral script while preserving their stored names and ids", async () => {

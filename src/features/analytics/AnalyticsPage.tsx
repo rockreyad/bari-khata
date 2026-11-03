@@ -117,8 +117,15 @@ function CostAnalyticsPage({
   const [limit, setLimit] = useState(20);
   const rawAccount = params.get("account");
   const account = ["materials", "labour", "other"].includes(rawAccount ?? "")
-    ? rawAccount
+    ? (rawAccount as Account)
     : null;
+  const sectionAccount =
+    section === "material"
+      ? "materials"
+      : section === "labour"
+        ? "labour"
+        : null;
+  const cashAccount = account ?? sectionAccount;
   const allRows = useMemo(() => {
     const rows = costRows(ledger);
     if (!account) return rows;
@@ -149,14 +156,27 @@ function CostAnalyticsPage({
     [selectedSection, filters],
   );
   const totals = useMemo(() => summarizeRows(rows), [rows]);
-  const corrections = reportAdjustments(ledger, {
-    workId: filters.workId,
-    personId: filters.personId,
-    account: (account ?? undefined) as Account | undefined,
-    from: filters.from,
-    to: filters.to,
-    query: filters.query,
-  });
+  // Corrections have account/work scope, not individual line classifications.
+  const completeCorrectionScope =
+    (section === "all" || sectionAccount !== null) &&
+    (!account || !sectionAccount || account === sectionAccount) &&
+    !filters.groupId &&
+    !filters.itemId &&
+    !filters.brand &&
+    !filters.usage &&
+    !filters.costType &&
+    !filters.query &&
+    filters.review === "all" &&
+    filters.dates === "all";
+  const costCorrection = completeCorrectionScope
+    ? reportAdjustments(ledger, {
+        workId: filters.workId,
+        personId: filters.personId,
+        account: account ?? sectionAccount ?? undefined,
+        from: filters.from,
+        to: filters.to,
+      }).costCorrection
+    : 0;
   const breakdown = useMemo(
     () => breakdownRows(rows, dimension),
     [rows, dimension],
@@ -355,12 +375,19 @@ function CostAnalyticsPage({
         className="text-button"
         onClick={() => {
           const next = new URLSearchParams();
-          for (const key of ["work", "person", "from", "to", "account"])
+          for (const key of ["work", "person", "from", "to"])
             if (params.get(key)) next.set(key, params.get(key)!);
+          if (cashAccount) next.set("account", cashAccount);
           setParams(next);
         }}
       >
-        {t("টাকা দেওয়ার হিসাব দেখি")}
+        {t(
+          cashAccount === "other"
+            ? "অন্য খাতে দেওয়া টাকার হিসাব দেখি"
+            : cashAccount
+              ? "টাকা দেওয়ার হিসাব দেখি"
+              : "সব ধরনের টাকা দেওয়ার হিসাব দেখি",
+        )}
         <ArrowRightIcon size={16} />
       </button>
       <div
@@ -434,9 +461,9 @@ function CostAnalyticsPage({
       <section className="report-total">
         <span>{heading}</span>
         <strong>{money(totals.total)}</strong>
-        {corrections.costCorrection !== 0 ? (
+        {costCorrection !== 0 ? (
           <p>
-            {t("সমন্বয়")} · {t("মোট খরচ")}: {money(corrections.costCorrection)}
+            {t("সমন্বয়")} · {t("মোট খরচ")}: {money(costCorrection)}
           </p>
         ) : null}
         <small>
