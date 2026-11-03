@@ -535,8 +535,7 @@
   flex-wrap: wrap;
   gap: 8px 14px;
 }
-.work-labour-primary > span,
-.work-labour-bill > span {
+.work-labour-primary > span {
   color: var(--muted);
   font-size: 13px;
 }
@@ -551,40 +550,6 @@
 }
 .work-labour-primary > .text-button {
   margin-left: auto;
-}
-.work-labour-bill {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  margin-top: 14px;
-  padding: 13px 0 0;
-  border: 0;
-  border-top: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-  text-align: left;
-}
-.work-labour-bill > span {
-  flex: 1;
-}
-.work-labour-bill small {
-  display: block;
-  margin-top: 3px;
-  font-weight: 400;
-}
-.work-labour-bill > strong {
-  color: var(--text);
-  font-size: 18px;
-  font-weight: 600;
-  min-width: 0;
-  max-width: 70%;
-  overflow-x: auto;
-  white-space: nowrap;
-}
-.work-labour-bill > svg {
-  color: var(--muted);
-  flex: none;
 }
 .work-labour-note {
   margin: 5px 0 0;

@@ -65,16 +65,18 @@ it("shows one complete remaining total without adding an already included wage b
   expect(container.querySelector(".notebook-card-due")?.textContent).toBe(
     "মোট বাকি৳80400",
   );
-  expect(container.querySelector(".work-scope-summary")?.textContent).toContain(
-    "মজুরির বিল৳60000",
-  );
+  expect(
+    within(
+      screen.getByRole("region", { name: "মজুরির মোট হিসাব" }),
+    ).queryByText("মজুরির বিল"),
+  ).toBeNull();
   expect(screen.queryByText("কাজের মজুরি")).toBeNull();
   expect(screen.getByText("মজুরিতে দিয়েছি")).toBeTruthy();
   expect(
     container.querySelector(".work-labour-primary strong")?.textContent,
   ).toBe("৳45000");
   expect(container.querySelectorAll(".work-scope-summary strong")).toHaveLength(
-    2,
+    1,
   );
   expect(
     container.querySelector(".work-action-buttons")?.querySelectorAll("button"),
@@ -208,21 +210,15 @@ it("opens a work with all payments visible and one paid total, without advance j
   expect(
     container.querySelector(".work-labour-primary strong")?.textContent,
   ).toBe("৳30000");
-  expect(container.querySelector(".work-labour-bill strong")?.textContent).toBe(
-    "৳0",
-  );
+  expect(screen.queryByRole("button", { name: /মজুরির বিল/ })).toBeNull();
   expect(screen.queryByText("কাজের মজুরি")).toBeNull();
   await user.click(screen.getByRole("button", { name: "বিস্তারিত হিসাব" }));
   expect(context.go).toHaveBeenLastCalledWith(
     "/reports?mode=cash&account=labour&work=door",
   );
-  await user.click(screen.getByRole("button", { name: /মজুরির বিল/ }));
-  expect(context.go).toHaveBeenLastCalledWith(
-    "/reports?mode=cost&section=labour&account=labour&work=door",
-  );
 });
 
-it("keeps both labour totals visible at zero and labels broader history as all notebook transactions", async () => {
+it("keeps one labour paid total visible at zero and labels broader history as all notebook transactions", async () => {
   context.ledger = LedgerSchema.parse({
     works: [{ id: "empty", name: "খালি খাতা" }],
   });
@@ -236,9 +232,9 @@ it("keeps both labour totals visible at zero and labels broader history as all n
   const summary = screen.getByRole("region", { name: "মজুরির মোট হিসাব" });
   expect(within(summary).getByText("মজুরিতে দিয়েছি")).toBeTruthy();
   expect(
-    within(summary).getByRole("button", { name: /মজুরির বিল/ }),
-  ).toBeTruthy();
-  expect(within(summary).getAllByText("৳0")).toHaveLength(2);
+    within(summary).queryByRole("button", { name: /মজুরির বিল/ }),
+  ).toBeNull();
+  expect(within(summary).getAllByText("৳0")).toHaveLength(1);
   expect(container.querySelectorAll(".history-row")).toHaveLength(0);
   const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: "আনা-নামানো" }));
@@ -246,7 +242,7 @@ it("keeps both labour totals visible at zero and labels broader history as all n
   expect(context.go).toHaveBeenLastCalledWith("/ledger?work=empty");
 });
 
-it("shows the entire labour payment total separately from a small bill, refunds and the recent preview", () => {
+it("shows only the entire labour payment total without treating a small bill or the recent preview as that total", () => {
   const ledger = LedgerSchema.parse({
     works: [
       { id: "electric", name: "কারেন্ট" },
@@ -312,9 +308,11 @@ it("shows the entire labour payment total separately from a small bill, refunds 
   expect(
     container.querySelector(".work-labour-primary strong")?.textContent,
   ).toBe("৳11950");
-  expect(container.querySelector(".work-labour-bill strong")?.textContent).toBe(
-    "৳300",
-  );
+  expect(
+    within(
+      screen.getByRole("region", { name: "মজুরির মোট হিসাব" }),
+    ).queryByText("৳300"),
+  ).toBeNull();
   expect(screen.getByText("ফেরত পাওয়া ৳50 বাদ দিয়ে")).toBeTruthy();
   expect(container.querySelectorAll(".history-row")).toHaveLength(10);
   expect(JSON.stringify(ledger)).toBe(before);
@@ -384,8 +382,8 @@ it("keeps active wage payments and refunds visible after only their bill is canc
   expect(
     container.querySelector(".work-labour-primary strong")?.textContent,
   ).toBe("৳500");
-  expect(container.querySelector(".work-labour-bill strong")?.textContent).toBe(
-    "৳0",
+  expect(container.querySelectorAll(".work-scope-summary strong")).toHaveLength(
+    1,
   );
   expect(container.querySelectorAll(".history-row")).toHaveLength(2);
   expect(

@@ -59,26 +59,17 @@ const fixture = (entries: unknown[] = [], contracts: unknown[] = []) =>
   });
 const at = "2026-11-03T12:00:00.000Z";
 
-describe("notebook labour cash and recorded costs", () => {
+describe("notebook labour paid total", () => {
   it("returns valid zero totals for an empty notebook", () => {
     expect(workLabourSummary(fixture(), "one")).toEqual({
       valid: true,
-      hasHistorical: false,
-      actualPaid: 0,
       actualRefunds: 0,
       actualNetPaid: 0,
       paidCorrection: 0,
       reconciledNetPaid: 0,
-      billTotal: 0,
-      historicalCost: 0,
-      recordedCost: 0,
-      costCorrection: 0,
-      reconciledCost: 0,
-      balanceCorrection: 0,
-      owedCorrection: 0,
     });
   });
-  it("retains a paid-only notebook and separates a second notebook's 300-taka bill from 1000-taka paid", () => {
+  it("retains paid-only wages and never substitutes a small bill for the paid total", () => {
     const ledger = fixture([
       cash("paid-one", 100000),
       cash("paid-two", 100000, "two"),
@@ -87,18 +78,13 @@ describe("notebook labour cash and recorded costs", () => {
     const before = structuredClone(ledger);
     expect(workLabourSummary(ledger, "one")).toMatchObject({
       valid: true,
-      actualPaid: 100000,
       actualNetPaid: 100000,
       reconciledNetPaid: 100000,
-      billTotal: 0,
-      recordedCost: 0,
     });
     expect(workLabourSummary(ledger, "two")).toMatchObject({
       valid: true,
       actualNetPaid: 100000,
       reconciledNetPaid: 100000,
-      billTotal: 30000,
-      recordedCost: 30000,
     });
     expect(ledger).toEqual(before);
   });
@@ -107,10 +93,8 @@ describe("notebook labour cash and recorded costs", () => {
       workLabourSummary(fixture([bill("bill", 30000)]), "one"),
     ).toMatchObject({
       valid: true,
-      actualPaid: 0,
       actualNetPaid: 0,
       reconciledNetPaid: 0,
-      billTotal: 30000,
     });
   });
   it("sums the complete notebook instead of its recent preview rows", () => {
@@ -121,7 +105,11 @@ describe("notebook labour cash and recorded costs", () => {
         ),
         "one",
       ),
-    ).toMatchObject({ valid: true, actualPaid: 2500, actualNetPaid: 2500 });
+    ).toMatchObject({
+      valid: true,
+      actualNetPaid: 2500,
+      reconciledNetPaid: 2500,
+    });
   });
   it("uses exact work allocations and subtracts only the current notebook's refund", () => {
     const ledger = fixture([
@@ -136,13 +124,11 @@ describe("notebook labour cash and recorded costs", () => {
     ]);
     expect(workLabourSummary(ledger, "one")).toMatchObject({
       valid: true,
-      actualPaid: 6000,
       actualRefunds: 2000,
       actualNetPaid: 4000,
     });
     expect(workLabourSummary(ledger, "two")).toMatchObject({
       valid: true,
-      actualPaid: 4000,
       actualRefunds: 0,
       actualNetPaid: 4000,
     });
@@ -154,14 +140,12 @@ describe("notebook labour cash and recorded costs", () => {
     ]);
     expect(workLabourSummary(ledger, "one")).toMatchObject({
       valid: true,
-      actualPaid: 1000,
       actualRefunds: 1500,
       actualNetPaid: -500,
       reconciledNetPaid: -500,
-      billTotal: 0,
     });
   });
-  it("separates historical spending while excluding historical and cancelled cash", () => {
+  it("excludes historical spending and cash, cancelled cash and bill credits from paid totals", () => {
     const ledger = fixture([
       bill("old", 10000, "one", "labour", { balanceImpact: "historical" }),
       bill("earned", 3000),
@@ -181,14 +165,8 @@ describe("notebook labour cash and recorded costs", () => {
     ]);
     expect(workLabourSummary(ledger, "one")).toMatchObject({
       valid: true,
-      actualPaid: 2000,
       actualRefunds: 0,
       actualNetPaid: 2000,
-      billTotal: 2500,
-      historicalCost: 10000,
-      recordedCost: 12500,
-      reconciledCost: 12500,
-      hasHistorical: true,
     });
   });
   it("retains active paid cash and refunds when their original wage bill is cancelled", () => {
@@ -203,8 +181,6 @@ describe("notebook labour cash and recorded costs", () => {
     const cancelled = setEntryVoided(ledger, "bill", true);
     expect(workLabourSummary(cancelled, "one")).toMatchObject({
       valid: true,
-      billTotal: 0,
-      actualPaid: 6000,
       actualRefunds: 1000,
       actualNetPaid: 5000,
     });
@@ -218,10 +194,7 @@ describe("notebook labour cash and recorded costs", () => {
     ]);
     expect(workLabourSummary(ledger, "one")).toMatchObject({
       valid: true,
-      actualPaid: 2000,
       actualNetPaid: 2000,
-      billTotal: 0,
-      recordedCost: 0,
     });
   });
   it("does not copy house-contract cash or a person's notebook links into every notebook", () => {
@@ -239,12 +212,10 @@ describe("notebook labour cash and recorded costs", () => {
     );
     expect(workLabourSummary(ledger, "one")).toMatchObject({
       valid: true,
-      actualPaid: 0,
       reconciledNetPaid: 0,
     });
     expect(workLabourSummary(ledger, "two")).toMatchObject({
       valid: true,
-      actualPaid: 10000,
       reconciledNetPaid: 10000,
     });
   });
@@ -286,9 +257,6 @@ describe("notebook labour cash and recorded costs", () => {
       actualNetPaid: 1000,
       paidCorrection: 0,
       reconciledNetPaid: 1000,
-      billTotal: 0,
-      costCorrection: 0,
-      reconciledCost: 0,
     });
   });
   it("keeps a person's all-notebook correction unallocated to particular notebook wages", () => {
@@ -321,7 +289,7 @@ describe("notebook labour cash and recorded costs", () => {
       reconciledNetPaid: 2000,
     });
   });
-  it("includes a legitimate explicitly scoped labour correction without inventing actual cash or earned bills", () => {
+  it("includes a legitimate explicitly scoped labour correction without changing actual cash", () => {
     const ledger = fixture([
       cash("one-paid", 1000),
       cash("two-paid", 2000, "two"),
@@ -356,20 +324,14 @@ describe("notebook labour cash and recorded costs", () => {
     );
     expect(workLabourSummary(next, "one")).toMatchObject({
       valid: true,
-      actualPaid: 1000,
       actualNetPaid: 1000,
       paidCorrection: 500,
       reconciledNetPaid: 1500,
-      billTotal: 0,
-      recordedCost: 0,
-      costCorrection: 300,
-      reconciledCost: 300,
     });
     expect(workLabourSummary(next, "two")).toMatchObject({
       actualNetPaid: 2000,
       paidCorrection: 0,
       reconciledNetPaid: 2000,
-      costCorrection: 0,
     });
     expect(next.entries.filter((entry) => entry.kind === "payment")).toEqual(
       ledger.entries,
@@ -382,10 +344,9 @@ describe("notebook labour cash and recorded costs", () => {
       actualNetPaid: 1000,
       paidCorrection: 0,
       reconciledNetPaid: 1000,
-      costCorrection: 300,
     });
   });
-  it("does not turn a balance-only correction into paid money or a new bill", () => {
+  it("does not turn a balance-only correction into paid money", () => {
     const ledger = fixture([bill("earned", 3000), cash("paid", 1000)]);
     const next = appendBalanceAdjustment(
       ledger,
@@ -404,11 +365,6 @@ describe("notebook labour cash and recorded costs", () => {
     expect(workLabourSummary(next, "one")).toMatchObject({
       actualNetPaid: 1000,
       reconciledNetPaid: 1000,
-      billTotal: 3000,
-      recordedCost: 3000,
-      reconciledCost: 3000,
-      balanceCorrection: -500,
-      owedCorrection: -500,
     });
   });
   it("does not present an unknown notebook as financial zero", () => {
@@ -416,7 +372,34 @@ describe("notebook labour cash and recorded costs", () => {
       valid: false,
       actualNetPaid: null,
       reconciledNetPaid: null,
-      billTotal: null,
+    });
+  });
+  it("keeps a safe boundary exact and rejects an overflowing input instead of rounding money", () => {
+    const ledger = fixture([cash("maximum", Number.MAX_SAFE_INTEGER)]);
+    expect(workLabourSummary(ledger, "one")).toMatchObject({
+      valid: true,
+      actualNetPaid: Number.MAX_SAFE_INTEGER,
+      reconciledNetPaid: Number.MAX_SAFE_INTEGER,
+    });
+    const unsafe = {
+      ...ledger,
+      entries: [
+        ...ledger.entries,
+        {
+          ...ledger.entries[0],
+          id: "extra",
+          paymentParts: [{ method: "cash" as const, amount: 1 }],
+          allocations: [{ workId: "one", amount: 1 }],
+        },
+      ],
+    };
+    expect(LedgerSchema.safeParse(unsafe).success).toBe(false);
+    expect(workLabourSummary(unsafe, "one")).toEqual({
+      valid: false,
+      actualRefunds: null,
+      actualNetPaid: null,
+      paidCorrection: null,
+      reconciledNetPaid: null,
     });
   });
 });
