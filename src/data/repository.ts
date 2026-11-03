@@ -439,6 +439,8 @@ export class LedgerRepository {
           throw new Error("contract_history_would_be_lost");
         if (!preservesWorkHistory(current.ledger, ledger))
           throw new Error("work_history_would_be_lost");
+        if (!preservesPersonWorkLinks(current.ledger, ledger))
+          throw new Error("person_work_links_would_be_lost");
         if (!preservesMcpProvenance(current.ledger, ledger))
           throw new Error("mcp_provenance_would_be_lost");
         const prepared: ReceiptRow[] = [];

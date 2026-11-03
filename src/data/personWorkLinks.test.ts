@@ -95,3 +95,32 @@ it("keeps the local links and creates a conflict if a newer cloud copy strips th
   ]);
   expect(await repo.database.conflicts.get("real")).toBeTruthy();
 });
+
+it("keeps notebook links during reviewed backup merging and requires explicit clearing", async () => {
+  const repo = repository();
+  const current = fixture();
+  await repo.ensure("real", current);
+  const copy = JSON.parse(await repo.exportBackup());
+  delete copy.ledger.people[0].workIds;
+  const options = {
+    expectedLedger: current,
+    decisions: { "people:worker": "backup" as const },
+    confirmed: true as const,
+    at: "2026-11-03T14:00:00.000Z",
+  };
+  await expect(repo.mergeBackup(JSON.stringify(copy), options)).rejects.toThrow(
+    "person_work_links_would_be_lost",
+  );
+  expect((await repo.read())?.ledger.people[0].workIds).toEqual([
+    "bathroom",
+    "electric",
+  ]);
+  expect(await repo.database.recoveries.count()).toBe(0);
+  copy.ledger.people[0].workIds = [];
+  expect(await repo.mergeBackup(JSON.stringify(copy), options)).toEqual({
+    changed: true,
+  });
+  expect((await repo.read())?.ledger.people[0].workIds).toEqual([]);
+  expect((await repo.read())?.ledger.entries).toEqual([]);
+  expect((await repo.read())?.ledger.contracts).toEqual([]);
+});
