@@ -4,6 +4,27 @@
   gap: 6px;
   min-width: 0;
 }
+.history-kind-tag {
+  --history-kind: #ad5b17;
+  justify-self: start;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--history-kind) 35%, var(--line));
+  border-inline-start: 4px solid var(--history-kind);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--history-kind) 10%, var(--surface));
+  color: var(--text);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.history-kind-payment {
+  --history-kind: #7657c7;
+}
+.history-kind-expense_credit {
+  --history-kind: #16796d;
+}
+.history-kind-refund {
+  --history-kind: #24749b;
+}
 .history-row-meta-v4 time {
   flex: none;
   font-variant-numeric: tabular-nums;

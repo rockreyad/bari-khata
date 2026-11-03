@@ -95,6 +95,13 @@ export function EntryList({
               onClick={() => onEntry(entry.id)}
             >
               <span className="history-row-copy">
+                {showKind ? (
+                  <span
+                    className={`history-kind-tag history-kind-${entry.kind}`}
+                  >
+                    {t(entryKindLabels[entry.kind])}
+                  </span>
+                ) : null}
                 <strong>
                   {t(title)}
                   {entry.voided ? <i>{t("বাতিল")}</i> : null}
@@ -106,12 +113,6 @@ export function EntryList({
                       : t("তারিখ দেওয়া নেই")}
                   </time>
                   <span aria-hidden="true">·</span>
-                  {showKind && subtitle !== entryKindLabels[entry.kind] ? (
-                    <>
-                      <span>{t(entryKindLabels[entry.kind])}</span>
-                      <span aria-hidden="true">·</span>
-                    </>
-                  ) : null}
                   <span>{t(subtitle)}</span>
                 </small>
               </span>
