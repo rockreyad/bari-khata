@@ -849,35 +849,6 @@ export function WorkPage() {
                   {t("আসলে দেওয়া টাকা")} {money(labour.actualNetPaid)}
                 </p>
               ) : null}
-              <button
-                className="work-labour-bill"
-                onClick={() =>
-                  go(
-                    `/reports?mode=cost&section=labour&account=labour&work=${work.id}`,
-                  )
-                }
-              >
-                <span>
-                  {t(
-                    labour.valid &&
-                      (labour.hasHistorical || labour.costCorrection !== 0)
-                      ? "লেখা মজুরির খরচ"
-                      : "মজুরির বিল",
-                  )}
-                  {labour.valid && labour.costCorrection !== 0 ? (
-                    <small>{t("সমন্বয়সহ")}</small>
-                  ) : null}
-                  {labour.valid && labour.hasHistorical ? (
-                    <small>{t("আগের হিসাবসহ")}</small>
-                  ) : null}
-                </span>
-                <strong>
-                  {labour.valid
-                    ? money(labour.reconciledCost)
-                    : t("টাকার অঙ্ক বেশি হয়েছে।")}
-                </strong>
-                <ArrowRightIcon size={15} aria-hidden="true" />
-              </button>
             </section>
           ) : tab !== "all" ? (
             <section className="work-scope-summary">
