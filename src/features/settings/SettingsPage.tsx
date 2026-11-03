@@ -376,6 +376,13 @@ export function SettingsPage() {
                 tone="amber"
                 onClick={() => go("/review")}
               />
+              <SettingsRow
+                title={t("হিসাব মিলিয়ে নিই")}
+                description={t("বিল, দেওয়া টাকা বা চুক্তির ভুল অঙ্ক ঠিক করুন")}
+                icon={<PencilSimple size={21} weight="duotone" />}
+                tone="violet"
+                onClick={() => go("/reconcile")}
+              />
             </div>
           </section>
           <section

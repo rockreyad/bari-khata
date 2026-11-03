@@ -384,6 +384,7 @@ export function PersonPage() {
           </button>
         </div>
         <EntryList
+          showKind
           ledger={ledger}
           entries={entries.slice(0, 5)}
           order="newest"

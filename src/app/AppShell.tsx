@@ -5,6 +5,7 @@ import {
   Routes,
   useLocation,
   useSearchParams,
+  useNavigate,
 } from "react-router";
 import {
   BookOpenIcon,
@@ -18,6 +19,7 @@ import {
   UsersIcon,
 } from "@phosphor-icons/react";
 import { entryUrl, contractUrl, isEntryPage } from "./entryRoutes";
+import { reconciliationEditUrl } from "../features/reconciliation/reconciliation";
 import { NotebookNavLink, notebookSectionActive } from "./navigation";
 import { useNotebook, type AddOptions } from "./NotebookProvider";
 import { useLanguageContext } from "../context/LanguageProvider";
@@ -41,6 +43,11 @@ const EntryDetail = lazy(() =>
 );
 const EntrySheet = lazy(() =>
   import("../components/EntrySheet").then((m) => ({ default: m.EntrySheet })),
+);
+const ReconciliationPage = lazy(() =>
+  import("../features/reconciliation/ReconciliationPage").then((m) => ({
+    default: m.ReconciliationPage,
+  })),
 );
 const EntitySheet = lazy(() =>
   import("../components/EntitySheet").then((m) => ({ default: m.EntitySheet })),
@@ -110,7 +117,8 @@ function Reports() {
 function EntryRoute() {
   const { entryId } = useParams();
   const [params] = useSearchParams();
-  const { ledger, mode, close, save } = useNotebook();
+  const { ledger, mode, close, save, base } = useNotebook();
+  const navigate = useNavigate();
   const raw = params.get("kind") ?? "expense";
   const kind: AddOptions["kind"] = [
     "expense",
@@ -141,6 +149,17 @@ function EntryRoute() {
       ledger={ledger}
       mode={mode}
       editEntryId={entryId}
+      reconciliation={params.get("reconcile") === "1"}
+      onCorrectLinkedPayment={(id) => {
+        navigate(
+          reconciliationEditUrl(
+            base,
+            "payment",
+            id,
+            `${base}/reconcile?type=payment&id=${encodeURIComponent(id)}`,
+          ),
+        );
+      }}
       onClose={close}
       onSave={async (next, attachments) =>
         save(
@@ -173,6 +192,7 @@ function ContractRoute() {
       ledger={ledger}
       mode={mode}
       editId={contractId}
+      reconciliation={params.get("reconcile") === "1"}
       defaultWorkId={params.get("work") ?? undefined}
       defaultPersonId={params.get("person") ?? undefined}
       onClose={close}
@@ -373,6 +393,7 @@ export function AppShell() {
                 <Route path="reports" element={<Reports />} />
                 <Route path="materials/:groupId" element={<Reports />} />
                 <Route path="review" element={<ReviewPage />} />
+                <Route path="reconcile" element={<ReconciliationPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route
                   path="settings/assistants"

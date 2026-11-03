@@ -1,0 +1,61 @@
+.reconciliation-page {
+  max-width: 680px;
+  margin-inline: auto;
+}
+.reconciliation-page h1 {
+  margin: 12px 0;
+}
+.reconciliation-page p,
+.linked-payment-correction p {
+  color: var(--muted);
+  line-height: 1.8;
+  font-size: 13px;
+}
+.reconciliation-choice {
+  display: grid;
+  gap: 20px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+}
+.reconciliation-choice label {
+  display: grid;
+  gap: 8px;
+}
+.money-correction-summary,
+.linked-payment-correction {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-muted);
+}
+.money-correction-summary dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+  margin: 0;
+}
+.money-correction-summary dl > div {
+  flex: 1 1 90px;
+}
+.money-correction-summary dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.money-correction-summary dd {
+  margin: 6px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.linked-payment-correction {
+  display: grid;
+  gap: 10px;
+}
+.linked-payment-correction p {
+  margin: 0;
+}
+.linked-payment-correction button {
+  min-height: 44px;
+  text-align: start;
+}
