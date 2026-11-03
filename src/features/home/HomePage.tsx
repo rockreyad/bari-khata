@@ -14,6 +14,7 @@ import { cashSummary } from "../../domain/cashSummary";
 import { EntryList } from "../../components/ui/EntryList";
 import { pendingReviewEntries } from "../import/bulkReview";
 import { WorkCard } from "../works/WorksPages";
+import { orderedWorks } from "../works/workOverview";
 import "./home-summary.css";
 export function HomePage() {
   const { ledger, add, go, detail } = useNotebook();
@@ -21,6 +22,9 @@ export function HomePage() {
   const s = summarize(ledger);
   const paid = cashSummary(ledger);
   const pending = pendingReviewEntries(ledger).length;
+  const ongoingWorks = orderedWorks(ledger).filter(
+    (work) => work.status === "ongoing",
+  );
   const cards = [
     {
       label: "মাল কিনতে দিয়েছি",
@@ -168,23 +172,25 @@ export function HomePage() {
             <ArrowRightIcon size={16} />
           </button>
         </div>
-        {ledger.works.some((work) => !work.archivedAt) ? (
+        {ongoingWorks.length ? (
           <div className="work-carousel">
-            {ledger.works
-              .filter((work) => !work.archivedAt)
-              .map((work) => (
-                <WorkCard
-                  key={work.id}
-                  work={work}
-                  ledger={ledger}
-                  onOpen={() => go(`/works/${work.id}`)}
-                />
-              ))}
+            {ongoingWorks.map((work) => (
+              <WorkCard
+                key={work.id}
+                work={work}
+                ledger={ledger}
+                onOpen={() => go(`/works/${work.id}`)}
+              />
+            ))}
           </div>
         ) : (
           <button className="empty-panel" onClick={() => go("/works")}>
             <PlusIcon size={28} />
-            {t("কাজের খাতা খুলুন")}
+            {t(
+              ledger.works.some((work) => !work.archivedAt)
+                ? "এখন কোনো কাজ চলছে না। সব খাতা দেখুন"
+                : "কাজের খাতা খুলুন",
+            )}
           </button>
         )}
       </section>

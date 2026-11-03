@@ -30,6 +30,7 @@ import { useEntityRemoval } from "../../components/EntityRemoval";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { summarize } from "../../domain/ledger";
+import { cashSummary } from "../../domain/cashSummary";
 import { contractAppliesToWork } from "../../domain/contracts";
 import { JobPreview } from "../jobs/JobPreview";
 import type { Ledger, Work, WorkSnapshot } from "../../domain/model";
@@ -49,6 +50,7 @@ import {
 import "./works.css";
 import { SpendingChart } from "../../components/ui/SpendingChart";
 import { AppMenu } from "../../components/ui/AppMenu";
+import { orderedWorks } from "./workOverview";
 const statusNames = {
   planned: "শুরু হয়নি",
   ongoing: "কাজ চলছে",
@@ -127,11 +129,9 @@ export function WorksPage() {
     : "all";
   const search = params.get("q") ?? "";
   const query = latinDigits(search).trim().toLocaleLowerCase();
-  const matches = ledger.works
-    .filter((work) => !work.archivedAt)
-    .filter((work) =>
-      latinDigits(work.name).toLocaleLowerCase().includes(query),
-    );
+  const matches = orderedWorks(ledger).filter((work) =>
+    latinDigits(work.name).toLocaleLowerCase().includes(query),
+  );
   const works = matches.filter(
     (work) => status === "all" || work.status === status,
   );
@@ -368,6 +368,10 @@ export function WorkPage() {
       </div>
     );
   const s = summarize(ledger, work.id);
+  const labourPaid = cashSummary(ledger, {
+    workId: work.id,
+    account: "labour",
+  }).netPaid;
   const typeMatches = (type: string) =>
     tab === "labour"
       ? type === "labour"
@@ -417,6 +421,7 @@ export function WorkPage() {
       workId: work.id,
       account: "labour",
       costType: "labour",
+      purpose: "settle",
     });
   const timestamp = (at: string) =>
     formatDigits(
@@ -686,7 +691,7 @@ export function WorkPage() {
               <span>
                 {t(
                   tab === "labour"
-                    ? "কাজের মজুরি"
+                    ? "মজুরিতে দিয়েছি"
                     : tab === "transport"
                       ? "আনা-নামানোর খরচ"
                       : tab === "other"
@@ -694,7 +699,13 @@ export function WorkPage() {
                         : "মালের দাম",
                 )}
               </span>
-              <strong>{money(amount)}</strong>
+              <strong>{money(tab === "labour" ? labourPaid : amount)}</strong>
+              {tab === "labour" ? (
+                <dl className="work-labour-paid">
+                  <dt>{t("কাজের মজুরি")}</dt>
+                  <dd>{money(amount)}</dd>
+                </dl>
+              ) : null}
               <button
                 className="text-button"
                 onClick={() =>

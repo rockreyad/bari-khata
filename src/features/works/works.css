@@ -451,3 +451,19 @@
 .work-page-v3 .work-tabs-scroll > button > span {
   flex: none;
 }
+.work-labour-paid {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 12px 0;
+}
+.work-labour-paid dt {
+  font-size: 13px;
+  color: var(--muted);
+}
+.work-labour-paid dd {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 650;
+}

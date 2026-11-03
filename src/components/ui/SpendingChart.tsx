@@ -203,7 +203,15 @@ export function SpendingChart({
                   strokeWidth="2.5"
                   vectorEffect="non-scaling-stroke"
                   strokeLinecap="round"
+                  strokeDasharray={
+                    category === "labour"
+                      ? "6 4"
+                      : category === "other"
+                        ? "2 4"
+                        : undefined
+                  }
                   className="spending-chart-line"
+                  data-series={category}
                 />
               </g>
             );

@@ -154,6 +154,49 @@ const copy = {
   },
 };
 
+it("shows aggregate remaining and overpaid job totals on the worker profile without offsetting them", () => {
+  const ledger = LedgerSchema.parse({
+    works: [
+      { id: "bath", name: "বাথরুম" },
+      { id: "electric", name: "বিদ্যুৎ" },
+    ],
+    people: [{ id: "worker", name: "মোরশেদ", kind: "worker" }],
+    contracts: [
+      { id: "a", personId: "worker", workId: "bath", total: 100000 },
+      { id: "b", personId: "worker", workId: "electric", total: 200000 },
+    ],
+    entries: [
+      {
+        id: "pay-a",
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        contractId: "a",
+        allocations: [{ workId: "bath", amount: 120000 }],
+        paymentParts: [{ amount: 120000 }],
+      },
+      {
+        id: "pay-b",
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        contractId: "b",
+        allocations: [{ workId: "electric", amount: 50000 }],
+        paymentParts: [{ amount: 50000 }],
+      },
+    ],
+  });
+  const before = JSON.stringify(ledger);
+  const view = mount(ledger, "/people/worker");
+  const totals = view.container.querySelector<HTMLElement>(
+    ".contact-job-totals",
+  )!;
+  expect(totals.textContent).toContain("৳\u202f১,৫০০");
+  expect(totals.textContent).toContain("৳\u202f২০০");
+  expect(within(totals).getByText("বেশি দিয়েছি")).toBeTruthy();
+  expect(JSON.stringify(ledger)).toBe(before);
+});
+
 describe.each(["bn", "en"] as const)("profile progress in %s", (language) => {
   it("keeps a compact house-job preview on the profile and opens full totals and history in the dedicated job page", () => {
     const ledger = fixture();
