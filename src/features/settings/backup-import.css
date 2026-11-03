@@ -1,0 +1,91 @@
+.backup-import-review {
+  display: grid;
+  gap: 16px;
+}
+.backup-import-review h3 {
+  font-size: 16px;
+  margin: 0;
+}
+.backup-import-summary,
+.backup-import-result {
+  padding: 16px;
+  background: var(--surface-muted);
+  border-radius: 14px;
+}
+.backup-import-summary > small {
+  color: var(--muted);
+}
+.backup-import-summary > p {
+  margin: 4px 0 12px;
+  color: var(--muted);
+}
+.backup-import-review dl {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+.backup-import-review dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.backup-import-review dd {
+  margin: 0;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.backup-import-changes > p {
+  margin: 6px 0;
+}
+.backup-import-differences {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.backup-import-differences > p {
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.backup-import-differences > label {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.backup-import-differences > label > span:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.backup-import-differences small {
+  color: var(--muted);
+}
+.backup-import-differences select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+}
+.backup-import-confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1.7;
+}
+.backup-import-confirm input[type="checkbox"] {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  max-height: 20px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.backup-import-warning {
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--danger-soft);
+  color: var(--danger);
+}

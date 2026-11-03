@@ -1,4 +1,11 @@
 import { z } from "zod";
+import Dexie from "dexie";
+import {
+  planBackupMerge,
+  preservesBackupPersonWorkLinks,
+  sameBackupLedger,
+  type BackupDecisions,
+} from "./backupMerge";
 import { preservesPaymentPurposes } from "../domain/paymentPurposes";
 import { preservesRemovalHistory } from "../domain/entityDeletion";
 import { preservesContractHistory } from "../domain/contracts";
@@ -74,6 +81,13 @@ const BackupSchema = z.object({
 
 export type LedgerBackup = z.infer<typeof BackupSchema>;
 export type LedgerChange = Ledger | ((current: Ledger) => Ledger);
+export type BackupMergeOptions = {
+  mode?: WorkspaceMode;
+  confirmed: true;
+  expectedLedger: Ledger;
+  decisions: BackupDecisions;
+  at: string;
+};
 export type ReceiptInput = {
   id: string;
   entryId: string;
@@ -370,6 +384,120 @@ export class LedgerRepository {
       },
     );
   }
+
+  async mergeBackup(
+    text: string,
+    options: BackupMergeOptions,
+  ): Promise<{ changed: boolean }> {
+    if (options.confirmed !== true)
+      throw new Error("restore_confirmation_required");
+    const backup = parseBackup(text);
+    const expected = validateLedger(options.expectedLedger);
+    const decisions = z
+      .record(z.string(), z.enum(["current", "backup"]))
+      .parse(options.decisions);
+    const at = z.string().datetime().parse(options.at);
+    const mode = options.mode ?? "real";
+    if (backup.ledger.isDemo !== (mode === "demo"))
+      throw new Error("workspace_mode_mismatch");
+    const incomingReceipts = new Map(
+      backup.receipts.map((receipt) => [receipt.id, receipt]),
+    );
+    const checkOwner = () => {
+      if (this.database.ownerId && getActiveOwner() !== this.database.ownerId)
+        throw new Error("account_changed");
+    };
+    checkOwner();
+    return this.database.transaction(
+      "rw",
+      this.database.workspaces,
+      this.database.receipts,
+      this.database.conflicts,
+      this.database.recoveries,
+      async () => {
+        checkOwner();
+        const current = await this.read(mode);
+        if (!current || !sameBackupLedger(current.ledger, expected))
+          throw new Error("backup_preview_changed");
+        if (await this.database.conflicts.get(mode))
+          throw new Error("backup_sync_conflict");
+        const plan = planBackupMerge(
+          current.ledger,
+          backup.ledger,
+          decisions,
+          at,
+        );
+        if (plan.unresolved.length)
+          throw new Error("backup_decisions_required");
+        if (plan.historyConflict) throw new Error("backup_history_conflict");
+        if (!plan.ledger) throw new Error("backup_merge_invalid");
+        const ledger = validateLedger(plan.ledger);
+        if (!preservesRemovalHistory(current.ledger, ledger))
+          throw new Error("removal_history_would_be_lost");
+        if (!preservesPaymentPurposes(current.ledger, ledger))
+          throw new Error("payment_purpose_would_be_lost");
+        if (!preservesContractHistory(current.ledger, ledger))
+          throw new Error("contract_history_would_be_lost");
+        if (!preservesWorkHistory(current.ledger, ledger))
+          throw new Error("work_history_would_be_lost");
+        if (!preservesMcpProvenance(current.ledger, ledger))
+          throw new Error("mcp_provenance_would_be_lost");
+        if (!preservesBackupPersonWorkLinks(current.ledger, ledger))
+          throw new Error("person_work_links_would_be_lost");
+        const prepared: ReceiptRow[] = [];
+        for (const ref of receiptReferences(ledger)) {
+          const existing = await this.database.receipts.get(
+            receiptKey(mode, ref.id),
+          );
+          const incoming = incomingReceipts.get(ref.id);
+          if (existing && incoming) {
+            // Blob পড়ার সময়ও IndexedDB-এর transaction সচল রাখতে হবে।
+            const contents = await Dexie.waitFor(blobToBase64(existing.blob));
+            if (
+              existing.entryId !== incoming.entryId ||
+              existing.mime !== incoming.mime ||
+              contents !== incoming.base64
+            )
+              throw new Error("receipt_content_conflict");
+          }
+          if (!existing) {
+            if (!incoming) throw new Error("receipt_missing");
+            prepared.push({
+              ...incoming,
+              key: receiptKey(mode, incoming.id),
+              workspace: mode,
+              blob: base64ToBlob(incoming.base64, incoming.mime),
+              uploadedFor: null,
+            });
+          }
+        }
+        checkOwner();
+        if (sameBackupLedger(current.ledger, ledger) && !prepared.length)
+          return { changed: false };
+        await this.database.recoveries.add({
+          id: crypto.randomUUID(),
+          workspace: mode,
+          ledger: current.ledger,
+          receipts: await this.database.receipts
+            .where("workspace")
+            .equals(mode)
+            .toArray(),
+          reason: "restore",
+          createdAt: now(),
+        });
+        await this.database.receipts.bulkPut(prepared);
+        await this.database.workspaces.put({
+          ...current,
+          ledger,
+          generation: current.generation + 1,
+          pending: mode === "real",
+          updatedAt: now(),
+        });
+        checkOwner();
+        return { changed: true };
+      },
+    );
+  }
 }
 
 export function parseBackup(text: string): LedgerBackup {
@@ -552,6 +680,15 @@ export function createWorkspaceStorage(mode: WorkspaceMode = "real") {
     },
     importBackup: (text: string, options: { replace: true }) =>
       repository.importBackup(text, { ...options, mode }),
+    mergeBackup: async (
+      text: string,
+      options: Omit<BackupMergeOptions, "mode">,
+    ) => {
+      checkAccount();
+      const result = await repository.mergeBackup(text, { ...options, mode });
+      checkAccount();
+      return result;
+    },
   };
 }
 
