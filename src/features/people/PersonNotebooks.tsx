@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import type { Ledger, Person } from "../../domain/model";
 import { personWorks } from "../../domain/personWorkLinks";
 import { useLanguageContext } from "../../context/LanguageProvider";
+import { AppSelect } from "../../components/ui/AppSelect";
 import "./person-work-links.css";
 
 export function PersonNotebooks({
@@ -15,31 +17,28 @@ export function PersonNotebooks({
   onSelect: (workId: string) => void;
 }) {
   const { t, formatDigits } = useLanguageContext();
-  const works = useMemo(() => personWorks(ledger, person), [ledger, person]);
+  const works = useMemo(() => {
+    const linked = personWorks(ledger, person);
+    const selected = ledger.works.find((work) => work.id === selectedWorkId);
+    return selected && !linked.some((work) => work.id === selected.id)
+      ? [...linked, selected]
+      : linked;
+  }, [ledger, person, selectedWorkId]);
   if (!works.length) return null;
   return (
-    <section className="person-notebooks" aria-label={t("এই নামের খাতাগুলো")}>
-      <h2>{t("এই নামের খাতাগুলো")}</h2>
-      <div>
-        <button
-          type="button"
-          aria-pressed={!selectedWorkId}
-          onClick={() => onSelect("")}
-        >
-          {t("সব খাতা")}
-        </button>
+    <div className="person-notebooks">
+      <AppSelect
+        aria-label={t("খাতা বেছে দেখুন")}
+        value={selectedWorkId}
+        onChange={(event) => onSelect(event.target.value)}
+      >
+        <option value="">{t("সব খাতা")}</option>
         {works.map((work) => (
-          <button
-            type="button"
-            key={work.id}
-            aria-pressed={selectedWorkId === work.id}
-            onClick={() => onSelect(work.id)}
-          >
+          <option key={work.id} value={work.id}>
             {formatDigits(work.name)}
-          </button>
+          </option>
         ))}
-      </div>
-    </section>
+      </AppSelect>
+    </div>
   );
 }
-import { useMemo } from "react";

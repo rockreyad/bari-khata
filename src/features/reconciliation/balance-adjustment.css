@@ -76,16 +76,6 @@
   font-size: 13px;
   line-height: 1.7;
 }
-.contact-adjustment-link {
-  display: flex;
-  justify-content: flex-end;
-  border-top: 1px solid var(--line);
-  padding: 10px 20px;
-}
-.contact-adjustment-link button {
-  min-height: 36px;
-  font-size: 12px;
-}
 @media (max-width: 600px) {
   .balance-adjustment-form {
     padding: 18px;

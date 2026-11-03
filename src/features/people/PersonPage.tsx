@@ -147,34 +147,35 @@ export function PersonPage() {
             (!workId || contractAppliesToWork(c, workId)),
         )
       : [];
-  const uncontractedAdvance = personContracts.length
-    ? personSummary(
-        {
-          ...ledger,
-          entries: summary.entries.filter((entry) => !entry.contractId),
-        },
-        person.id,
-        workId || undefined,
-      ).advance
-    : summary.reconciledAdvance;
+  const uncontractedAdvance =
+    !workId && summary.owedCorrection !== 0 && summary.reconciledAdvance > 0
+      ? summary.reconciledAdvance
+      : personContracts.length
+        ? personSummary(
+            {
+              ...ledger,
+              entries: summary.entries.filter((entry) => !entry.contractId),
+            },
+            person.id,
+            workId || undefined,
+          ).advance
+        : summary.reconciledAdvance;
   const jobTotals = jobBalanceTotals(ledger, personContracts);
   const hasJobs = personContracts.some((job) => !job.archivedAt);
   const isPurchase = account === "materials";
-  const metrics = [
-    ...((summary.reconciledCost !== 0 || summary.costCorrection !== 0) &&
+  const costMetric =
+    (summary.reconciledCost !== 0 || summary.costCorrection !== 0) &&
     summary.reconciledCost !== summary.reconciledNetPaid
-      ? [
-          {
-            label: isPurchase
-              ? "মালের দাম"
-              : account === "labour"
-                ? "কাজের মজুরি"
-                : "অন্য খরচ",
-            amount: summary.reconciledCost,
-            tone: "contact-expense",
-          },
-        ]
-      : []),
+      ? {
+          label: isPurchase
+            ? "মালের দাম"
+            : account === "labour"
+              ? "কাজের মজুরি"
+              : "অন্য খরচ",
+          amount: summary.reconciledCost,
+        }
+      : null;
+  const metrics = [
     ...((summary.balanceAmbiguous
       ? summary.payable
       : summary.reconciledPayable) > 0
@@ -199,6 +200,24 @@ export function PersonPage() {
       amount: summary.reconciledAdvance,
       tone: "contact-credit",
     });
+  const showJobDetails =
+    hasJobs &&
+    (!jobTotals.valid ||
+      summary.balanceAmbiguous ||
+      (workId &&
+        personContracts.some(
+          (job) => job.scope === "house" && !job.archivedAt,
+        )) ||
+      jobTotals.extra > 0 ||
+      jobTotals.remaining !==
+        (metrics.find((metric) => metric.tone === "contact-due")?.amount ?? 0));
+  const showAdvanceDetails =
+    uncontractedAdvance > 0 && (kind !== "shop" || summary.confirmedCost <= 0);
+  const showMainActions =
+    account === defaultAccount &&
+    actions.some((action) =>
+      ["payment", "purchase", "transport"].includes(action),
+    );
   const menu = [
     {
       label: t("তথ্য ও বোতাম বদলাই"),
@@ -206,6 +225,14 @@ export function PersonPage() {
       disabled: removal.archived,
     },
     { label: t("হিসাবের কপি পাঠাই"), onSelect: () => setShareOpen(true) },
+    ...(!removal.archived
+      ? [
+          {
+            label: t("মোট হিসাব মেলাই"),
+            onSelect: () => setAdjustmentOpen(true),
+          },
+        ]
+      : []),
     ...(kind === "shop" && actions.includes("return")
       ? [
           {
@@ -271,51 +298,76 @@ export function PersonPage() {
         className={`contact-summary-card contact-summary-${kind}`}
         aria-label={t("এই নামের মোট হিসাব")}
       >
-        <div className="contact-summary-hero">
-          <span>{t("মোট টাকা দিয়েছি")}</span>
-          <strong>{money(summary.reconciledNetPaid)}</strong>
-          {summary.paidCorrection !== 0 ||
-          summary.costCorrection !== 0 ||
-          summary.balanceCorrection !== 0 ? (
-            <small>{t("সমন্বয়সহ")}</small>
-          ) : null}
-          {summary.refunds > 0 ? <small>{t("ফেরত বাদে")}</small> : null}
-        </div>
-        {metrics.length ? (
-          <dl
-            className="contact-summary-metrics"
-            style={{
-              gridTemplateColumns: `repeat(${metrics.length}, minmax(0, 1fr))`,
-            }}
-          >
-            {metrics.map((metric) => (
-              <div key={metric.label}>
-                <dt>{t(metric.label)}</dt>
-                <dd className={metric.tone}>{money(metric.amount)}</dd>
-              </div>
-            ))}
-          </dl>
-        ) : null}
-        {hasJobs ? (
-          <div className="contact-job-totals">
-            <h2>{t("সব কাজ মিলিয়ে")}</h2>
-            {jobTotals.valid ? (
-              <dl>
-                <div>
-                  <dt>{t("চুক্তির অবশিষ্ট")}</dt>
-                  <dd className="contact-due">{money(jobTotals.remaining)}</dd>
+        <div
+          className={`contact-summary-top ${metrics.length ? "has-balance" : ""}`}
+        >
+          <div className="contact-summary-hero">
+            <span>{t("মোট টাকা দিয়েছি")}</span>
+            <strong>{money(summary.reconciledNetPaid)}</strong>
+            {summary.paidCorrection !== 0 ||
+            summary.costCorrection !== 0 ||
+            summary.balanceCorrection !== 0 ? (
+              <small>{t("সমন্বয়সহ")}</small>
+            ) : null}
+            {summary.refunds > 0 ? <small>{t("ফেরত বাদে")}</small> : null}
+          </div>
+          {metrics.length ? (
+            <dl className="contact-summary-metrics">
+              {metrics.map((metric) => (
+                <div key={metric.label}>
+                  <dt>{t(metric.label)}</dt>
+                  <dd className={metric.tone}>{money(metric.amount)}</dd>
                 </div>
-                {jobTotals.extra > 0 ? (
-                  <div>
-                    <dt>{t("বেশি দিয়েছি")}</dt>
-                    <dd className="contact-credit">{money(jobTotals.extra)}</dd>
-                  </div>
-                ) : null}
-              </dl>
-            ) : (
-              <p>{t("টাকার অঙ্ক বেশি হয়েছে।")}</p>
-            )}
-            <small>{t("কাজের মোট দর থেকে দেওয়া টাকা বাদে")}</small>
+              ))}
+            </dl>
+          ) : null}
+        </div>
+        {account !== defaultAccount ? (
+          <div className="contact-account-note">
+            <span>{t(accountLabels[account])}</span>
+            <button onClick={() => filter("account", "")}>
+              {t("মূল হিসাবে ফিরি")}
+            </button>
+          </div>
+        ) : null}
+        {showMainActions ? (
+          <div
+            className="contact-main-actions"
+            role="group"
+            aria-label={t("হিসাব লেখার বোতাম")}
+          >
+            {actions.includes("payment") ? (
+              <button className="primary-button" onClick={addPayment}>
+                <WalletIcon size={20} weight="duotone" />
+                {t("টাকা দিই")}
+              </button>
+            ) : null}
+            {actions.includes("purchase") ? (
+              <button
+                className={
+                  actions.includes("payment")
+                    ? "secondary-button"
+                    : "primary-button"
+                }
+                onClick={addPurchase}
+              >
+                <PlusIcon size={19} />
+                {t("মাল কিনলাম")}
+              </button>
+            ) : null}
+            {actions.includes("transport") ? (
+              <button
+                className={
+                  actions.includes("payment") || actions.includes("purchase")
+                    ? "secondary-button"
+                    : "primary-button"
+                }
+                onClick={addTransport}
+              >
+                <TruckIcon size={20} />
+                {t("আনার খরচ লিখি")}
+              </button>
+            ) : null}
           </div>
         ) : null}
         {kind === "shop" &&
@@ -332,35 +384,6 @@ export function PersonPage() {
             />
           </div>
         ) : null}
-        {uncontractedAdvance > 0 &&
-        (kind !== "shop" || summary.confirmedCost <= 0) ? (
-          <details className="contact-reconciliation">
-            <summary>
-              {t("আরও হিসাব")}
-              <CaretDownIcon size={16} />
-            </summary>
-            <dl>
-              <dt>
-                {t(summary.owedCorrection !== 0 ? "আমার জমা" : "অগ্রিম দিয়েছি")}
-              </dt>
-              <dd>{money(uncontractedAdvance)}</dd>
-            </dl>
-          </details>
-        ) : null}
-        {workId || account !== defaultAccount ? (
-          <div className="contact-account-note">
-            <span>
-              {workId
-                ? formatDigits(
-                    ledger.works.find((work) => work.id === workId)!.name,
-                  )
-                : t(accountLabels[account])}
-            </span>
-            <button onClick={() => filter(workId ? "work" : "account", "")}>
-              {t(workId ? "সব কাজের হিসাব" : "মূল হিসাবে ফিরি")}
-            </button>
-          </div>
-        ) : null}
         <SpendingChart
           ledger={chartLedger}
           personId={person.id}
@@ -369,54 +392,57 @@ export function PersonPage() {
           title="মাসের হিসাব"
           presentation="embedded"
         />
+        {showAdvanceDetails || costMetric || showJobDetails ? (
+          <details className="contact-reconciliation">
+            <summary>
+              {t("আরও হিসাব")}
+              <CaretDownIcon size={16} />
+            </summary>
+            {showAdvanceDetails ? (
+              <dl>
+                <dt>
+                  {t(
+                    summary.owedCorrection !== 0 ? "আমার জমা" : "অগ্রিম দিয়েছি",
+                  )}
+                </dt>
+                <dd>{money(uncontractedAdvance)}</dd>
+              </dl>
+            ) : null}
+            {costMetric ? (
+              <dl className="contact-detail-metrics">
+                <dt>{t(costMetric.label)}</dt>
+                <dd>{money(costMetric.amount)}</dd>
+              </dl>
+            ) : null}
+            {showJobDetails ? (
+              <div className="contact-job-totals">
+                <h2>{t("সব কাজ মিলিয়ে")}</h2>
+                {jobTotals.valid ? (
+                  <dl>
+                    <div>
+                      <dt>{t("চুক্তির অবশিষ্ট")}</dt>
+                      <dd className="contact-due">
+                        {money(jobTotals.remaining)}
+                      </dd>
+                    </div>
+                    {jobTotals.extra > 0 ? (
+                      <div>
+                        <dt>{t("বেশি দিয়েছি")}</dt>
+                        <dd className="contact-credit">
+                          {money(jobTotals.extra)}
+                        </dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                ) : (
+                  <p>{t("টাকার অঙ্ক বেশি হয়েছে।")}</p>
+                )}
+                <small>{t("কাজের মোট দর থেকে দেওয়া টাকা বাদে")}</small>
+              </div>
+            ) : null}
+          </details>
+        ) : null}
       </section>
-      {!removal.archived ? (
-        <div className="contact-adjustment-link">
-          <button
-            className="text-button"
-            onClick={() => setAdjustmentOpen(true)}
-          >
-            {t("মোট হিসাব মেলাই")}
-          </button>
-        </div>
-      ) : null}
-      {account === defaultAccount ? (
-        <div
-          className={`contact-main-actions ${kind === "shop" ? "contact-shop-actions" : ""}`}
-        >
-          {kind === "shop" && actions.includes("purchase") ? (
-            <button className="primary-button" onClick={addPurchase}>
-              <PlusIcon size={20} />
-              {t("মাল কিনলাম")}
-            </button>
-          ) : null}
-          {actions.includes("payment") ? (
-            <button
-              className={
-                kind === "shop" && actions.includes("purchase")
-                  ? "secondary-button"
-                  : "primary-button"
-              }
-              onClick={addPayment}
-            >
-              <WalletIcon size={20} weight="duotone" />
-              {t("টাকা দিই")}
-            </button>
-          ) : null}
-          {kind !== "shop" && actions.includes("purchase") ? (
-            <button className="secondary-button" onClick={addPurchase}>
-              <PlusIcon size={19} />
-              {t("মাল কিনলাম")}
-            </button>
-          ) : null}
-          {actions.includes("transport") ? (
-            <button className="secondary-button" onClick={addTransport}>
-              <TruckIcon size={20} />
-              {t("আনার খরচ লিখি")}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
       {kind === "worker" && account === "labour" ? (
         <JobPreview
           ledger={ledger}
@@ -453,15 +479,6 @@ export function PersonPage() {
           workId={workId || undefined}
           onEntry={detail}
         />
-        {entries.length > 5 ? (
-          <button
-            className="contact-all-history"
-            onClick={() => go(fullHistoryPath)}
-          >
-            {t("শুরু থেকে সব লেনদেন দেখুন")}
-            <ArrowRightIcon size={18} />
-          </button>
-        ) : null}
       </section>
       {shareOpen ? (
         <StatementSheet

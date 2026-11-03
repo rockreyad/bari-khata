@@ -343,7 +343,9 @@ it("hides a paid shop bar while retaining the exact surplus as advance", () => {
   expect(
     container.querySelector(".contact-summary-metrics")?.textContent,
   ).toContain("অগ্রিম৳\u202f৭,০০০");
-  expect(container.querySelector(".contact-reconciliation")).toBeNull();
+  expect(
+    container.querySelector(".contact-reconciliation")?.textContent,
+  ).not.toContain("অগ্রিম");
 });
 
 it("excludes historical bills with unknown payment from the shop settlement progress", () => {

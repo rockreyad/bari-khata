@@ -17,6 +17,7 @@ export const peopleEnglish: Record<string, string> = {
   "{{name}} (সরানো)": "{{name}} (removed)",
   "পছন্দের বোতাম": "Quick actions",
   "এই নামের খাতাগুলো": "This contact’s notebooks",
+  "খাতা বেছে দেখুন": "Choose a notebook",
   "সব খাতা": "All notebooks",
   "মোট কেনাকাটা": "Total purchases",
   "মোট টাকা নিয়েছেন": "Total received",

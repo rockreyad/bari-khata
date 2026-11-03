@@ -37,28 +37,16 @@
   accent-color: var(--accent);
 }
 .person-notebooks {
-  display: grid;
-  gap: 10px;
+  width: min(100%, 280px);
+  min-width: 0;
 }
-.person-notebooks h2 {
-  font-size: 13px;
-  font-weight: 550;
-  color: var(--muted);
-}
-.person-notebooks > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.person-notebooks button {
-  padding: 9px 13px;
+.person-notebooks .app-select {
+  min-height: 44px;
+  padding: 9px 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
+  background: var(--surface);
   color: var(--muted);
-  font-size: 12px;
-}
-.person-notebooks button[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
+  font-size: 13px;
+  font-weight: 400;
 }
