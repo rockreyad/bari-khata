@@ -123,4 +123,12 @@ it("keeps notebook links during reviewed backup merging and requires explicit cl
   expect((await repo.read())?.ledger.people[0].workIds).toEqual([]);
   expect((await repo.read())?.ledger.entries).toEqual([]);
   expect((await repo.read())?.ledger.contracts).toEqual([]);
+  const cleared = (await repo.read())!.ledger;
+  delete copy.ledger.people[0].workIds;
+  await expect(
+    repo.mergeBackup(JSON.stringify(copy), {
+      ...options,
+      expectedLedger: cleared,
+    }),
+  ).rejects.toThrow("person_work_links_would_be_lost");
 });
