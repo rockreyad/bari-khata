@@ -1,7 +1,6 @@
 import { useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import {
-  Archive,
   ArrowDown,
   ArrowUp,
   ArrowUpRight,
@@ -400,13 +399,6 @@ export function SettingsPage() {
                   onClick={() => go("/settings/account")}
                 />
               )}
-              <SettingsRow
-                title={t("মুছে রাখা তথ্য")}
-                description={t("সরানো খাতা ও নাম ফিরিয়ে আনুন")}
-                icon={<Archive size={21} weight="duotone" />}
-                tone="amber"
-                onClick={() => go("/settings/removed")}
-              />
               <SettingsRow
                 title={t("ফোনে অ্যাপ রাখুন")}
                 description={t("এক ট্যাপেই নিজের খাতা খুলুন")}

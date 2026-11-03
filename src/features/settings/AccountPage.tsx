@@ -4,7 +4,6 @@ import {
   ArrowLeftIcon,
   ArrowDownIcon,
   ArrowRightIcon,
-  ArchiveIcon,
   CaretRightIcon,
   EnvelopeSimpleIcon,
   KeyIcon,
@@ -255,13 +254,6 @@ export function AccountPage() {
               copySaved ? t("কপি নামানো হয়েছে") : t("হিসাব ও ভাউচার একসাথে")
             }
             onClick={() => void copy()}
-            disabled={busy}
-          />
-          <AccountRow
-            icon={<ArchiveIcon size={22} weight="duotone" />}
-            title={t("মুছে রাখা তথ্য")}
-            detail={t("সরানো খাতা ও নাম ফিরিয়ে আনুন")}
-            onClick={() => go("/settings/removed")}
             disabled={busy}
           />
         </div>
