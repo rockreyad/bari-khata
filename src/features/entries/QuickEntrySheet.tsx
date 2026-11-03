@@ -257,6 +257,22 @@ export function QuickEntrySheet({
     total = 0;
   }
   const suggestedItems = useMemo(() => materialItems(ledger), [ledger]);
+  const materialChoices = useMemo(
+    () =>
+      suggestedItems.flatMap((item) =>
+        [item.name, ...item.aliases].map((name) => ({
+          value: name,
+          description: [
+            name !== item.name ? item.name : "",
+            item.brand,
+            item.usage,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        })),
+      ),
+    [suggestedItems],
+  );
   const groups = ledger.materialGroups.length
     ? ledger.materialGroups
     : defaultTaxonomy().materialGroups;
@@ -376,6 +392,7 @@ export function QuickEntrySheet({
   const selectedKind = selectedPerson ? personKind(selectedPerson) : null;
   const labour = wage || (!cash && draft.costType === "labour");
   const transport = ["transport", "unload"].includes(draft.costType);
+  const material = draft.costType === "material";
   const returning = draft.kind === "return";
   const allowedPeople = ledger.people
     .filter((p) => !p.archivedAt)
@@ -453,7 +470,9 @@ export function QuickEntrySheet({
           ? "গাড়িভাড়া দিই"
           : labour
             ? "মিস্ত্রির টাকা"
-            : "মাল কিনলাম";
+            : material
+              ? "মাল কিনলাম"
+              : "খরচ লিখি";
   return (
     <Frame
       title={t(title)}
@@ -560,7 +579,9 @@ export function QuickEntrySheet({
                     ? "কোন মিস্ত্রি"
                     : transport
                       ? "গাড়ির লোক / শ্রমিক"
-                      : "কোন দোকান",
+                      : material
+                        ? "কোন দোকান"
+                        : "কার সঙ্গে হিসাব",
               )}
               <AppSelect
                 value={draft.personId}
@@ -617,7 +638,9 @@ export function QuickEntrySheet({
                     ? "মিস্ত্রির নাম"
                     : transport
                       ? "নাম"
-                      : "দোকানের নাম",
+                      : material
+                        ? "দোকানের নাম"
+                        : "নাম",
               )}
               <input
                 value={draft.personName}
@@ -850,7 +873,7 @@ export function QuickEntrySheet({
                     {t(
                       labour
                         ? "কী কাজের মজুরি"
-                        : transport
+                        : !material
                           ? "কী বাবদ খরচ"
                           : returning
                             ? "কোন মাল ফেরত দিলেন"
@@ -867,28 +890,21 @@ export function QuickEntrySheet({
                           ? `${formId}-error`
                           : undefined
                       }
-                      suggestions={
-                        labour || transport
-                          ? []
-                          : suggestedItems.map((item) => ({
-                              value: item.name,
-                              description: [item.brand, item.usage]
-                                .filter(Boolean)
-                                .join(" · "),
-                            }))
-                      }
+                      suggestions={material ? materialChoices : []}
                       value={r.label}
                       placeholder={t(
                         labour
                           ? "যেমন: এই সপ্তাহের প্লাস্টার"
-                          : transport
-                            ? "যেমন: দরজা আনার ভাড়া"
+                          : !material
+                            ? transport
+                              ? "যেমন: দরজা আনার ভাড়া"
+                              : "যেমন: কাজের জায়গায় খাবার"
                             : "যেমন: সিমেন্ট, টাইলসের আঠা",
                       )}
                       onChange={(e) => {
                         changeRow(
                           r.id,
-                          labour || transport
+                          !material
                             ? { label: e.target.value }
                             : materialSuggestion(
                                 suggestedItems,
@@ -911,10 +927,10 @@ export function QuickEntrySheet({
                       }
                     >
                       <TrashIcon size={15} />
-                      {t("এই মাল বাদ দিন")}
+                      {t(material ? "এই মাল বাদ দিন" : "এই খরচ বাদ দিন")}
                     </button>
                   ) : null}
-                  {!labour && r.unit ? (
+                  {!labour && r.unit && (material || transport) ? (
                     <label>
                       {t("পরিমাণ")} · {formatDigits(r.unit)}
                       <NumericInput
@@ -929,7 +945,7 @@ export function QuickEntrySheet({
                       />
                     </label>
                   ) : null}
-                  {!labour ? (
+                  {material || transport ? (
                     <details className="item-extra-v3">
                       <summary>
                         {t(
@@ -1029,7 +1045,7 @@ export function QuickEntrySheet({
               onClick={() => field("rows", [...draft.rows, row()])}
             >
               <PlusIcon size={17} />
-              {t("আরেকটি মাল")}
+              {t(material ? "আরেকটি মাল" : "আরেকটি খরচ")}
             </button>
           ) : null}
           {cash ? (

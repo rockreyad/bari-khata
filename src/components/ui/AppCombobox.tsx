@@ -11,6 +11,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { CaretDownIcon, CheckIcon } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { valueChange } from "./controlEvents";
+import { normalizeLabel as normalized } from "../../lib/normalizeLabel";
 import "./controls.css";
 
 export type AppSuggestion = {
@@ -24,13 +25,6 @@ export type AppComboboxProps = Omit<
 > & {
   suggestions: readonly AppSuggestion[];
 };
-const normalized = (value: string) =>
-  value
-    .normalize("NFKC")
-    .toLocaleLowerCase()
-    .replace(/[০-৯]/g, (digit) => String("০১২৩৪৫৬৭৮৯".indexOf(digit)))
-    .replace(/\s+/g, " ")
-    .trim();
 export function comboboxSuggestions(
   suggestions: readonly AppSuggestion[],
 ): AppSuggestion[] {
