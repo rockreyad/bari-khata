@@ -316,12 +316,10 @@ it("opens account settings on a separate page for either real sign-in method", a
   }
 });
 it.each(["real", "demo"] as const)(
-  "opens removed-record recovery in %s mode",
-  async (mode) => {
+  "does not show the unused removed-record option in %s mode",
+  (mode) => {
     api.mode = mode;
-    const user = userEvent.setup();
     mount();
-    await user.click(screen.getByRole("button", { name: "মুছে রাখা তথ্য" }));
-    expect(api.go).toHaveBeenLastCalledWith("/settings/removed");
+    expect(screen.queryByRole("button", { name: "মুছে রাখা তথ্য" })).toBeNull();
   },
 );
