@@ -3,6 +3,9 @@ import { entryAudit, snapshotTotal } from "./audit";
 import { historyTitle } from "./history";
 import { workChanges } from "../../domain/workActivity";
 import { contractChanges } from "../../domain/contracts";
+import { z } from "zod";
+
+const RecordedTime = z.string().datetime({ offset: true });
 
 export type TimelineCategory = "money" | "notebooks" | "jobs" | "removed";
 export type TimelineEvent = {
@@ -199,7 +202,13 @@ export function notebookTimeline(ledger: Ledger): TimelineEvent[] {
           target: { kind, id: record.id },
         });
   }
-  return events.sort(
-    (a, b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id),
-  );
+  return events
+    .filter(
+      (event) =>
+        RecordedTime.safeParse(event.at).success &&
+        Number.isFinite(Date.parse(event.at)),
+    )
+    .sort(
+      (a, b) => Date.parse(b.at) - Date.parse(a.at) || a.id.localeCompare(b.id),
+    );
 }
