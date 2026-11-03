@@ -308,12 +308,15 @@
 }
 .settings-footer-note {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: center;
   gap: 6px;
   margin-top: 1px;
   color: var(--muted);
   font-size: 11px;
+}
+.settings-footer-note > svg {
+  flex: none;
 }
 .settings-conflict-notice {
   display: flex;
