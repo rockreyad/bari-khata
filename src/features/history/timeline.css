@@ -1,0 +1,125 @@
+.timeline-page {
+  max-width: 920px;
+  margin-inline: auto;
+}
+.timeline-page .page-heading p {
+  color: var(--muted);
+  margin-top: 6px;
+}
+.timeline-search {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-inline: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.timeline-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.timeline-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.timeline-filters button {
+  padding: 9px 13px;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 13px;
+  background: var(--surface);
+}
+.timeline-filters button.selected {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.timeline-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.timeline-event h2 {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 22px 0 12px;
+}
+.timeline-event-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  text-align: left;
+}
+.timeline-marker {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.timeline-jobs .timeline-marker {
+  background: var(--purple);
+}
+.timeline-removed .timeline-marker {
+  background: var(--warning);
+}
+.timeline-event-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+.timeline-event-copy > span {
+  overflow-wrap: anywhere;
+}
+.timeline-event-copy small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.timeline-event-note {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.timeline-event-money {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  font-variant-numeric: tabular-nums;
+}
+.timeline-event-money del {
+  color: var(--muted);
+  font-size: 12px;
+}
+.timeline-event-card time {
+  color: var(--muted);
+  font-size: 11px;
+  flex: none;
+}
+@media (max-width: 600px) {
+  .timeline-event-card {
+    gap: 9px;
+    padding: 13px;
+  }
+  .timeline-event-card time {
+    max-width: 70px;
+    text-align: right;
+  }
+}

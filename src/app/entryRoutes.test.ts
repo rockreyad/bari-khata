@@ -44,6 +44,7 @@ describe("safe entry return routes", () => {
       "/materials",
       "/review",
       "/settings",
+      "/timeline",
     ]) {
       const params = new URLSearchParams({
         work: "door",

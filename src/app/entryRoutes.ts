@@ -24,7 +24,7 @@ export function entryReturn(path: string | null | undefined, base = "") {
       /^\/jobs(?:\/[^/]+)?$/.test(relative) && relative !== "/jobs/new";
     if (
       !jobPage &&
-      !/^(?:\/(?:works|people|ledger|reports|materials|review|settings)(?:\/[^/]*)*|\/)?$/.test(
+      !/^(?:\/(?:works|people|ledger|reports|materials|review|settings|timeline)(?:\/[^/]*)*|\/)?$/.test(
         relative,
       )
     )
