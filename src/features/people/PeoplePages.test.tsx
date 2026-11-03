@@ -156,7 +156,9 @@ it("opens the contextual adjustment sheet without navigating to reconciliation",
     state.ledger = fixture();
     const user = userEvent.setup();
     renderPage();
-    await user.click(screen.getByRole("button", { name: "মোট হিসাব মেলাই" }));
+    screen.getByRole("button", { name: "আরও" }).focus();
+    await user.keyboard("{Enter}");
+    await user.click(screen.getByRole("menuitem", { name: "মোট হিসাব মেলাই" }));
     const sheet = await screen.findByRole("dialog", {
       name: "মোট হিসাব মেলাই",
     });
@@ -217,6 +219,194 @@ function fixture() {
     ],
   });
 }
+
+it("puts payment before the chart and shows a matching job balance only once", () => {
+  state.ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "নমুনা কাজ" }],
+    people: [{ id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" }],
+    contracts: [
+      { id: "job", personId: "worker", workId: "work", total: 100000 },
+    ],
+    entries: [
+      {
+        id: "paid",
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        contractId: "job",
+        date: "2026-11-03",
+        allocations: [{ workId: "work", amount: 40000 }],
+        paymentParts: [{ amount: 40000 }],
+      },
+    ],
+  });
+  const before = JSON.stringify(state.ledger);
+  renderPage();
+  const summary = screen.getByRole("region", { name: "এই নামের মোট হিসাব" });
+  expect(within(summary).getAllByText("৳600")).toHaveLength(1);
+  expect(summary.querySelector(".contact-job-totals")).toBeNull();
+  const payment = within(summary).getByRole("button", { name: "টাকা দিই" });
+  const chart = within(summary).getByRole("region", { name: "মাসের হিসাব" });
+  expect(
+    payment.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(screen.getAllByRole("button", { name: "পুরো হিসাব" })).toHaveLength(1);
+  expect(JSON.stringify(state.ledger)).toBe(before);
+});
+
+it("keeps credit from an aggregate correction visible when a contact has an agreed job", async () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "নমুনা কাজ" }],
+    people: [{ id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" }],
+    contracts: [
+      { id: "job", scope: "house", personId: "worker", total: 100000 },
+    ],
+    entries: [
+      {
+        id: "paid",
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        contractId: "job",
+        allocations: [{ workId: "work", amount: 40000 }],
+        paymentParts: [{ amount: 40000 }],
+      },
+      {
+        id: "adjust",
+        kind: "adjustment",
+        personId: "worker",
+        account: "labour",
+        note: "নমুনার মোট মিলিয়েছি",
+        adjustment: {
+          target: "person",
+          basis: "paid",
+          account: "labour",
+          workId: null,
+          before: 40000,
+          after: 110000,
+          delta: 70000,
+        },
+      },
+    ],
+  });
+  state.ledger = ledger;
+  const before = JSON.stringify(ledger);
+  const { container } = renderPage();
+  expect(
+    container.querySelector(".contact-summary-hero > strong")?.textContent,
+  ).toBe("৳1100");
+  await userEvent.click(screen.getByText("আরও হিসাব"));
+  expect(
+    container.querySelector(".contact-reconciliation")?.textContent,
+  ).toContain("আমার জমা৳100");
+  expect(
+    container.querySelector(".contact-reconciliation")?.textContent,
+  ).not.toContain("অগ্রিম দিয়েছি");
+  expect(
+    ledger.entries.filter((entry) => entry.kind === "payment"),
+  ).toHaveLength(1);
+  expect(JSON.stringify(ledger)).toBe(before);
+});
+
+it("retains a recorded unassigned advance when a correction leaves aggregate credit at zero", () => {
+  state.ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "নমুনা কাজ" }],
+    people: [{ id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" }],
+    contracts: [
+      { id: "job", scope: "house", personId: "worker", total: 100000 },
+    ],
+    entries: [
+      {
+        id: "paid",
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        contractId: "job",
+        allocations: [{ workId: "work", amount: 40000 }],
+        paymentParts: [{ amount: 40000 }],
+      },
+      {
+        id: "advance",
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        allocations: [{ workId: "work", amount: 20000 }],
+        paymentParts: [{ amount: 20000 }],
+      },
+      {
+        id: "adjust",
+        kind: "adjustment",
+        personId: "worker",
+        account: "labour",
+        note: "নমুনার খরচ মিলিয়েছি",
+        adjustment: {
+          target: "person",
+          basis: "cost",
+          account: "labour",
+          workId: null,
+          before: 0,
+          after: 10000,
+          delta: 10000,
+        },
+      },
+    ],
+  });
+  const { container } = renderPage();
+  expect(
+    container.querySelector(".contact-summary-metrics")?.textContent,
+  ).toContain("দিতে বাকি৳500");
+  expect(
+    container.querySelector(".contact-reconciliation")?.textContent,
+  ).toContain("আমার জমা৳200");
+});
+
+it("keeps a house commitment accessible when its remaining amount happens to equal a selected notebook bill", () => {
+  state.ledger = LedgerSchema.parse({
+    works: [
+      { id: "work", name: "নমুনা খাতা" },
+      { id: "other", name: "অন্য খাতা" },
+    ],
+    people: [{ id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" }],
+    contracts: [
+      { id: "job", scope: "house", personId: "worker", total: 100000 },
+    ],
+    entries: [
+      {
+        id: "paid",
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        contractId: "job",
+        allocations: [{ workId: "other", amount: 40000 }],
+        paymentParts: [{ amount: 40000 }],
+      },
+      {
+        id: "bill",
+        kind: "expense",
+        account: "labour",
+        personId: "worker",
+        lines: [
+          {
+            id: "line",
+            workId: "work",
+            label: "আলাদা মজুরি",
+            costType: "labour",
+            amount: 60000,
+          },
+        ],
+      },
+    ],
+  });
+  const { container } = renderPage("/people/worker?work=work");
+  expect(
+    container.querySelector(".contact-summary-metrics")?.textContent,
+  ).toContain("৳600");
+  const extra = container.querySelector(".contact-job-totals")!;
+  expect(extra.textContent).toContain("সব কাজ মিলিয়ে");
+  expect(extra.textContent).toContain("চুক্তির অবশিষ্ট৳600");
+  expect(extra.closest("details")?.hasAttribute("open")).toBe(false);
+});
+
 describe("minimal people pages", () => {
   it("opens all contractor work from the people page even before a job exists", () => {
     state.ledger = fixture();
@@ -289,13 +479,13 @@ describe("minimal people pages", () => {
     expect(rows[0].textContent).toContain("বিল 7");
     expect(rows[4].textContent).toContain("বিল 3");
   });
-  it("makes purchasing the shop primary action and keeps returns out of the main buttons", async () => {
+  it("prioritises payment while keeping purchasing available and returns in the menu", async () => {
     state.ledger = fixture();
     renderPage("/people/shop");
     const purchase = screen.getByRole("button", { name: "মাল কিনলাম" });
-    expect(purchase.className).toBe("primary-button");
+    expect(purchase.className).toBe("secondary-button");
     expect(screen.getByRole("button", { name: "টাকা দিই" }).className).toBe(
-      "secondary-button",
+      "primary-button",
     );
     expect(screen.queryByRole("button", { name: "মাল ফেরত লিখি" })).toBeNull();
     await userEvent.click(purchase);
@@ -385,7 +575,7 @@ it("puts cash paid first for a shop and its monthly chart while preserving mater
   expect(hero.textContent).toContain("মোট টাকা দিয়েছি");
   expect(hero.textContent).toContain("৳30000");
   expect(
-    container.querySelector(".contact-summary-metrics")?.textContent,
+    container.querySelector(".contact-detail-metrics")?.textContent,
   ).toContain("মালের দাম৳93000");
   expect(
     container.querySelector(".contact-summary-metrics")?.textContent,

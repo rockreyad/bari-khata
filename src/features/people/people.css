@@ -305,18 +305,6 @@
   background: var(--surface);
   flex: none;
 }
-.contact-all-history {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 16px;
-  border-top: 1px solid var(--line);
-  width: 100%;
-  font-size: 13px;
-  color: var(--accent);
-  margin-top: 5px;
-}
 .contact-collapse-history {
   display: flex;
   width: 100%;
@@ -581,9 +569,6 @@
   .contact-statement-totals strong {
     font-size: 17px;
   }
-  .contact-all-history {
-    font-size: 12px;
-  }
   .statement-buttons .primary-button,
   .statement-buttons .secondary-button {
     font-size: 13px;
@@ -592,19 +577,53 @@
 .statement-buttons {
   width: 100%;
 }
+.contact-detail-page {
+  gap: 16px;
+}
+.contact-detail-page .contact-profile-header {
+  gap: 12px;
+}
+.contact-detail-page .contact-profile-header h1 {
+  font-size: 26px;
+  line-height: 1.35;
+}
+.contact-detail-page .contact-mark-large {
+  width: 48px;
+  height: 48px;
+  border-radius: 15px;
+  color: var(--muted);
+  background: var(--surface-muted);
+}
+.contact-detail-page .contact-mark-large svg {
+  width: 27px;
+}
+.contact-detail-page .contact-profile-header .icon-button {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 13px;
+}
 .contact-detail-page .contact-summary-card {
   padding: 0;
-  border-radius: 25px;
+  border-radius: 20px;
   overflow: hidden;
   background: var(--surface);
-  box-shadow: var(--shadow);
+  box-shadow: none;
+}
+.contact-summary-top {
+  display: grid;
+  gap: 18px;
+  padding: 22px 22px 0;
+}
+.contact-summary-top.has-balance {
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
 }
 .contact-summary-hero {
   position: relative;
   display: grid;
-  gap: 7px;
-  padding: 27px 29px 25px;
-  background: var(--surface-muted);
+  min-width: 0;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
   overflow: hidden;
 }
 .contact-summary-hero::after {
@@ -618,11 +637,13 @@
   position: relative;
   z-index: 1;
   color: var(--text);
-  font-size: clamp(35px, 5vw, 46px);
-  font-weight: 680;
+  font-size: clamp(28px, 6.7vw, 38px);
+  font-weight: 650;
   line-height: 1.3;
-  letter-spacing: -0.035em;
-  overflow-wrap: anywhere;
+  letter-spacing: normal;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow-x: auto;
 }
 .contact-summary-hero > small {
   color: var(--muted);
@@ -630,14 +651,14 @@
 }
 .contact-summary-metrics {
   display: grid;
-  gap: 17px;
-  padding: 21px 29px 23px;
+  gap: 12px;
+  padding: 0;
   margin: 0;
 }
 .contact-summary-metrics > div {
   min-width: 0;
   display: grid;
-  gap: 7px;
+  gap: 6px;
 }
 .contact-summary-metrics dt {
   color: var(--muted);
@@ -645,9 +666,11 @@
 }
 .contact-summary-metrics dd {
   margin: 0;
-  font-size: 23px;
+  font-size: clamp(20px, 5.3vw, 26px);
   font-weight: 650;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow-x: auto;
 }
 .contact-reconciliation {
   border-top: 1px solid var(--line);
@@ -695,7 +718,23 @@
 }
 .contact-detail-page .contact-main-actions > button {
   min-height: 48px;
-  border-radius: 15px;
+  border-radius: 13px;
+  min-width: 0;
+  margin: 0;
+}
+.contact-summary-card > .contact-main-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 18px 22px 22px;
+}
+.contact-summary-card > .contact-main-actions > .primary-button,
+.contact-summary-card > .contact-main-actions > :last-child:nth-child(2) {
+  grid-column: 1 / -1;
+}
+.contact-summary-card > .contact-main-actions > .primary-button {
+  background: var(--accent);
+  box-shadow: none;
 }
 .contact-detail-page .contact-history {
   border-radius: 23px;
@@ -705,23 +744,27 @@
 }
 @media (max-width: 600px) {
   .contact-detail-page .contact-summary-card {
-    border-radius: 23px;
+    border-radius: 18px;
   }
-  .contact-summary-hero {
-    padding: 24px 21px 22px;
+  .contact-summary-top {
+    padding: 20px 18px 0;
+    gap: 14px;
+  }
+  .contact-summary-card > .contact-main-actions {
+    padding: 16px 18px 18px;
   }
   .contact-summary-hero > span {
     font-size: 12px;
   }
   .contact-summary-metrics {
-    padding: 19px 21px 21px;
+    padding: 0;
     gap: 12px;
   }
   .contact-summary-metrics dt {
     font-size: 11px;
   }
   .contact-summary-metrics dd {
-    font-size: clamp(17px, 4.7vw, 22px);
+    font-size: clamp(19px, 5.2vw, 24px);
   }
   .contact-detail-page .contact-account-note {
     padding: 11px 21px;
@@ -737,17 +780,6 @@
 .contact-bill-progress {
   padding: 0 29px 23px;
 }
-.contact-main-actions.contact-shop-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-.contact-shop-actions .contact-advance-action {
-  grid-column: 1 / -1;
-  justify-self: start;
-  min-height: 32px;
-  padding: 4px 2px;
-}
 @media (max-width: 600px) {
   .contact-bill-progress {
     padding: 0 21px 21px;
@@ -758,22 +790,11 @@
   padding: 22px 29px 20px;
   border-top: 1px solid var(--line);
 }
-.contact-summary-card > .contact-summary-hero:last-child {
-  padding-bottom: 27px;
-}
 .contact-summary-card .contact-bill-progress {
   padding-bottom: 24px;
 }
-.contact-summary-card .contact-summary-metrics {
-  padding-top: 19px;
-  padding-bottom: 18px;
-}
-.contact-summary-card .contact-summary-metrics dd {
-  font-size: 20px;
-}
 .contact-job-totals {
-  padding: 18px 24px;
-  border-top: 1px solid var(--line);
+  padding: 0 29px 20px;
 }
 .contact-job-totals h2 {
   margin: 0 0 12px;
@@ -799,8 +820,8 @@
   .contact-summary-card > .spending-chart-card {
     padding: 20px 21px 18px;
   }
-  .contact-summary-card .contact-summary-metrics dd {
-    font-size: clamp(17px, 4.7vw, 20px);
+  .contact-job-totals {
+    padding: 0 21px 18px;
   }
 }
 
