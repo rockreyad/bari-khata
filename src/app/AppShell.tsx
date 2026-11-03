@@ -65,6 +65,11 @@ const ReviewPage = lazy(() =>
     default: m.ReviewPage,
   })),
 );
+const TimelinePage = lazy(() =>
+  import("../features/history/TimelinePage").then((module) => ({
+    default: module.TimelinePage,
+  })),
+);
 const JobsPage = lazy(() =>
   import("../features/jobs/JobPages").then((m) => ({ default: m.JobsPage })),
 );
@@ -368,6 +373,7 @@ export function AppShell() {
                 <Route path="works" element={<WorksPage />} />
                 <Route path="works/:workId" element={<WorkPage />} />
                 <Route path="ledger" element={<LedgerPage />} />
+                <Route path="timeline" element={<TimelinePage />} />
                 <Route path="people" element={<PeoplePage />} />
                 <Route path="people/:personId" element={<PersonPage />} />
                 <Route path="reports" element={<Reports />} />
