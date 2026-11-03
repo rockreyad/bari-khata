@@ -63,9 +63,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     status: AuthStatus;
     user: AccountUser | null;
   }>({ status: "loading", user: null });
+  const [returnHomeAfterSignOut, setReturnHomeAfterSignOut] = useState(false);
   const accept = useCallback((user: AccountUser, status: AuthStatus) => {
     setActiveOwner(user.id);
     rememberAccount(user);
+    setReturnHomeAfterSignOut(false);
     setState({ status, user });
   }, []);
   const clear = useCallback(() => {
@@ -197,6 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [accept],
   );
   const signOut = useCallback(async () => {
+    setReturnHomeAfterSignOut(true);
     await passwordSignOut();
   }, []);
   const requestPhoneOtp = useCallback(
@@ -305,6 +308,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       ...state,
+      returnHomeAfterSignOut,
       signIn,
       signOut,
       requestPhoneOtp,
@@ -312,7 +316,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       phoneOtpEnabled,
       phoneAuthMode,
     }),
-    [state, signIn, signOut, requestPhoneOtp, verifyPhoneOtp],
+    [
+      state,
+      returnHomeAfterSignOut,
+      signIn,
+      signOut,
+      requestPhoneOtp,
+      verifyPhoneOtp,
+    ],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
