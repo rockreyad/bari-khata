@@ -420,6 +420,62 @@ export function replaceEntry(ledger: Ledger, replacement: Entry): Ledger {
   });
 }
 
+export function replaceExpenseAndSettlements(
+  ledger: Ledger,
+  replacement: Entry,
+): Ledger {
+  const original = ledger.entries.find((entry) => entry.id === replacement.id);
+  if (!original) throw new Error("Unknown entry");
+  const linked = ledger.entries.filter(
+    (entry) => entry.relatedEntryId === original.id,
+  );
+  if (original.kind !== "expense" || !linked.length)
+    return replaceEntry(ledger, replacement);
+  const beforeWorks = entryWorkIds(original).sort();
+  const afterWorks = entryWorkIds(replacement).sort();
+  const moved = JSON.stringify(beforeWorks) !== JSON.stringify(afterWorks);
+  if (
+    replacement.kind !== "expense" ||
+    original.account !== replacement.account ||
+    original.contractId !== replacement.contractId ||
+    (original.personId !== replacement.personId &&
+      original.personId !== null) ||
+    (moved && (beforeWorks.length !== 1 || afterWorks.length !== 1))
+  )
+    throw new Error("Linked payment: keep the same person, account and work");
+  if (!moved && original.personId === replacement.personId)
+    return replaceEntry(ledger, replacement);
+  const now = new Date().toISOString();
+  const revise = (entry: Entry, next: Entry): Entry => ({
+    ...next,
+    provenance: next.provenance ?? entry.provenance,
+    updatedAt: now,
+    revisions: [
+      ...entry.revisions,
+      { at: now, before: EntryCoreSchema.parse(entry) },
+    ],
+  });
+  const linkedIds = new Set(linked.map((entry) => entry.id));
+  return validateLedger({
+    ...ledger,
+    entries: ledger.entries.map((entry) => {
+      if (entry.id === original.id) return revise(original, replacement);
+      if (!linkedIds.has(entry.id)) return entry;
+      // Cancelled settlements still share the bill's identity if restored later.
+      return revise(entry, {
+        ...entry,
+        personId: replacement.personId,
+        lines: entry.lines.map((line) =>
+          moved ? { ...line, workId: afterWorks[0] } : line,
+        ),
+        allocations: entry.allocations.map((allocation) =>
+          moved ? { ...allocation, workId: afterWorks[0] } : allocation,
+        ),
+      });
+    }),
+  });
+}
+
 export function parseAmount(value: string): number {
   return parseMoneyText(value);
 }

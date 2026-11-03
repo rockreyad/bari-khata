@@ -22,7 +22,7 @@ import {
   type Ledger,
 } from "../domain/model";
 import { canAssignContact } from "../domain/contacts";
-import { parseAmount, replaceEntry } from "../domain/ledger";
+import { parseAmount, replaceExpenseAndSettlements } from "../domain/ledger";
 import { AppCombobox } from "./ui/AppCombobox";
 import { AppSelect } from "./ui/AppSelect";
 import { AppDatePicker } from "./ui/AppDatePicker";
@@ -337,13 +337,6 @@ export function EntrySheet({
       entry.id !== original?.id &&
       entry.account === draft.account,
   );
-  const hasLinkedPayments = Boolean(
-    original?.kind === "expense" &&
-    ledger.entries.some(
-      (entry) => entry.relatedEntryId === original.id && !entry.voided,
-    ),
-  );
-
   useEffect(() => {
     mounted.current = true;
     let active = true;
@@ -741,25 +734,6 @@ export function EntrySheet({
           allocations: [],
           paymentParts: [],
         };
-        if (original && hasLinkedPayments) {
-          const before = [...new Set(original.lines.map((line) => line.workId))]
-            .sort()
-            .join("|");
-          const after = [...new Set(lines.map((line) => line.workId))]
-            .sort()
-            .join("|");
-          if (
-            original.personId !== personId ||
-            original.account !== account ||
-            original.contractId !== contractId ||
-            before !== after
-          )
-            throw new Error(
-              t(
-                "এই বিলের সঙ্গে টাকা দেওয়ার হিসাব আছে। কাজ, ব্যক্তি বা চুক্তি বদলাতে আগে যুক্ত হিসাবটি দেখুন। দাম ও বিবরণ বদলানো যাবে।",
-              ),
-            );
-        }
         if (!original && draft.paidNow && draft.kind !== "return") {
           const paid = poisha(
             draft.paidAmount.trim() || moneyInputValue(total),
@@ -808,7 +782,7 @@ export function EntrySheet({
         )
           throw new Error(t("কার কাছে বাকি থাকবে, তার নাম দিন।"));
       }
-      if (original) next = replaceEntry(next, entry);
+      if (original) next = replaceExpenseAndSettlements(next, entry);
       else
         next.entries = [
           ...next.entries.filter(
@@ -840,11 +814,15 @@ export function EntrySheet({
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "";
       setError(
-        /[\u0980-\u09ff]/.test(message)
-          ? message
-          : t(
-              "হিসাবটি রাখা যায়নি। তথ্য ও ফোনের খালি জায়গা দেখে আবার চেষ্টা করুন।",
-            ),
+        message === "Linked payment: keep the same person, account and work"
+          ? t(
+              "এই বিলের সঙ্গে টাকা দেওয়ার হিসাব আছে। কাজ, ব্যক্তি বা চুক্তি বদলাতে আগে যুক্ত হিসাবটি দেখুন। দাম ও বিবরণ বদলানো যাবে।",
+            )
+          : /[\u0980-\u09ff]/.test(message)
+            ? message
+            : t(
+                "হিসাবটি রাখা যায়নি। তথ্য ও ফোনের খালি জায়গা দেখে আবার চেষ্টা করুন।",
+              ),
       );
       lock.current = false;
       setSaving(false);
