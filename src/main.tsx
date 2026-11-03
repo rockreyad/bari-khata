@@ -8,6 +8,7 @@ import "./styles-v2.css";
 import "./styles-v3.css";
 import "./styles-v4.css";
 import "./theme.css";
+import "./semantic-colors.css";
 import "./scrollbars.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

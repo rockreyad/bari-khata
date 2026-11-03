@@ -1,0 +1,151 @@
+:root {
+  --state-expense: #ad4524;
+  --state-paid: #2e5077;
+  --state-due: #855409;
+  --state-advance: #146b63;
+  --state-refund: #34664d;
+  --state-credit: #6c4b8d;
+  --state-ongoing: #22577a;
+  --state-done: #34664d;
+  --state-planned: #5e6673;
+  --state-unknown: #5e6673;
+  --state-voided: #aa3848;
+
+  --state-expense-night: #f0a58a;
+  --state-paid-night: #a8c8ec;
+  --state-due-night: #f3c06d;
+  --state-advance-night: #79d7be;
+  --state-refund-night: #a1d5aa;
+  --state-credit-night: #cdb3e6;
+  --state-ongoing-night: #8fcae5;
+  --state-done-night: #a1d5aa;
+  --state-planned-night: #aab4c3;
+  --state-unknown-night: #aab4c3;
+  --state-voided-night: #f2a1ac;
+
+  --state-expense-soft: color-mix(
+    in srgb,
+    var(--state-expense) 10%,
+    var(--surface)
+  );
+  --state-paid-soft: color-mix(in srgb, var(--state-paid) 10%, var(--surface));
+  --state-due-soft: color-mix(in srgb, var(--state-due) 10%, var(--surface));
+  --state-advance-soft: color-mix(
+    in srgb,
+    var(--state-advance) 10%,
+    var(--surface)
+  );
+  --state-refund-soft: color-mix(
+    in srgb,
+    var(--state-refund) 10%,
+    var(--surface)
+  );
+  --state-credit-soft: color-mix(
+    in srgb,
+    var(--state-credit) 10%,
+    var(--surface)
+  );
+  --state-ongoing-soft: color-mix(
+    in srgb,
+    var(--state-ongoing) 10%,
+    var(--surface)
+  );
+  --state-done-soft: color-mix(in srgb, var(--state-done) 10%, var(--surface));
+  --state-planned-soft: color-mix(
+    in srgb,
+    var(--state-planned) 10%,
+    var(--surface)
+  );
+  --state-unknown-soft: color-mix(
+    in srgb,
+    var(--state-unknown) 10%,
+    var(--surface)
+  );
+  --state-voided-soft: color-mix(
+    in srgb,
+    var(--state-voided) 10%,
+    var(--surface)
+  );
+  --danger-soft: var(--state-voided-soft);
+  --warning-soft: var(--state-due-soft);
+  --success-soft: var(--state-done-soft);
+}
+
+:root[data-theme="dark"] {
+  --state-expense: var(--state-expense-night);
+  --state-paid: var(--state-paid-night);
+  --state-due: var(--state-due-night);
+  --state-advance: var(--state-advance-night);
+  --state-refund: var(--state-refund-night);
+  --state-credit: var(--state-credit-night);
+  --state-ongoing: var(--state-ongoing-night);
+  --state-done: var(--state-done-night);
+  --state-planned: var(--state-planned-night);
+  --state-unknown: var(--state-unknown-night);
+  --state-voided: var(--state-voided-night);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --state-expense: var(--state-expense-night);
+    --state-paid: var(--state-paid-night);
+    --state-due: var(--state-due-night);
+    --state-advance: var(--state-advance-night);
+    --state-refund: var(--state-refund-night);
+    --state-credit: var(--state-credit-night);
+    --state-ongoing: var(--state-ongoing-night);
+    --state-done: var(--state-done-night);
+    --state-planned: var(--state-planned-night);
+    --state-unknown: var(--state-unknown-night);
+    --state-voided: var(--state-voided-night);
+  }
+}
+
+:root .positive {
+  color: var(--text);
+}
+:root .credit-hint {
+  color: var(--muted);
+  background: var(--surface-muted);
+}
+:root .form-error {
+  color: var(--state-voided);
+  background: var(--state-voided-soft);
+  border-color: color-mix(in srgb, var(--state-voided) 30%, var(--line));
+}
+:root .status-tag.planned {
+  --status-dot: var(--state-planned);
+}
+:root .status-tag.ongoing {
+  --status-dot: var(--state-ongoing);
+}
+:root .status-tag.done {
+  --status-dot: var(--state-done);
+}
+:root :is(.status-tag.planned, .status-tag.ongoing, .status-tag.done) {
+  color: var(--muted);
+  background: var(--surface-muted);
+}
+:root .status-tag > i {
+  background: var(--status-dot, currentColor);
+}
+:root .status-choices button {
+  color: var(--muted);
+}
+:root .status-choices button.planned {
+  --status-dot: var(--state-planned);
+}
+:root .status-choices button.ongoing {
+  --status-dot: var(--state-ongoing);
+}
+:root .status-choices button.done {
+  --status-dot: var(--state-done);
+}
+:root .status-choices button > i {
+  background: var(--status-dot, currentColor);
+}
+:root .status-choices button.selected {
+  color: var(--text);
+  background: var(--surface-muted);
+  border-color: var(--line);
+}

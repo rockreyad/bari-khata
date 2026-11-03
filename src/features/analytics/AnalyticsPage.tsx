@@ -321,7 +321,7 @@ function CostAnalyticsPage({
             ? ["transport", "unload"]
             : ["rental", "other"];
   return (
-    <div className="report-page">
+    <div className="report-page report-basis-expense">
       <header className="page-heading">
         <div>
           <h1>{t("মাল ও কাজের দাম")}</h1>

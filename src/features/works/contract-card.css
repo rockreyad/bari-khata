@@ -77,8 +77,17 @@
   font-weight: 650;
   overflow-wrap: anywhere;
 }
+.job-detail-paid dd {
+  color: var(--text);
+}
+.job-detail-due dd {
+  color: var(--text);
+}
+.job-detail-settled dd {
+  color: var(--text);
+}
 .job-extra-paid dd {
-  color: var(--accent);
+  color: var(--text);
 }
 .contract-card > .balance-progress {
   padding: 0;
@@ -209,6 +218,15 @@
   overflow-wrap: anywhere;
 }
 .job-before-value {
+  color: var(--muted);
+}
+.contract-history-fields
+  :is(
+    .contract-status-ongoing,
+    .contract-status-done,
+    .contract-status-planned,
+    .contract-status-unknown
+  ) {
   color: var(--muted);
 }
 .contract-history-reason {

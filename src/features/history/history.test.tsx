@@ -103,6 +103,35 @@ function fixture() {
   });
 }
 
+it("keeps the transaction kind in metadata once when a scoped payment has no other context", () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "কাজ" }],
+    people: [{ id: "worker", name: "করিম মিস্ত্রি" }],
+    entries: [
+      {
+        id: "paid",
+        kind: "payment",
+        personId: "worker",
+        allocations: [{ workId: "work", amount: 200000 }],
+        paymentParts: [{ amount: 200000 }],
+      },
+    ],
+  });
+  const html = renderToString(
+    <EntryList
+      ledger={ledger}
+      entries={ledger.entries}
+      onEntry={() => {}}
+      hideWork
+      showKind
+    />,
+  );
+  expect(html.match(/টাকা দিয়েছি/g)).toHaveLength(1);
+  expect(html).toContain("history-row-meta-v4");
+  expect(html).toContain("করিম মিস্ত্রি");
+  expect(html).not.toContain("history-kind-tag");
+});
+
 describe("minimal homeowner history", () => {
   it("finds a purchase by brand, usage, work, party and Bengali amount without adding payments to it", () => {
     const ledger = fixture();

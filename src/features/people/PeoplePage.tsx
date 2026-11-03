@@ -159,9 +159,13 @@ export function PeoplePage() {
                   {summary.historicalCount &&
                   !summary.entries.some(
                     (entry) => entry.balanceImpact !== "historical",
-                  )
-                    ? t("যাচাই বাকি")
-                    : money(summary.netPaid)}
+                  ) ? (
+                    t("যাচাই বাকি")
+                  ) : (
+                    <span className="contact-paid-amount">
+                      {money(summary.netPaid)}
+                    </span>
+                  )}
                 </strong>
                 {summary.payable > 0 ? (
                   <small className="contact-due">

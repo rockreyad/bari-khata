@@ -194,13 +194,23 @@ export function ContractHistory({
                       <dd>
                         {event.before ? (
                           <>
-                            <span className="job-before-value">
+                            <span
+                              className={`job-before-value${key === "status" ? ` contract-status-${event.before.status ?? "unknown"}` : ""}`}
+                            >
                               {value(event.before, key)}
                             </span>
                             <ArrowRightIcon size={12} aria-hidden="true" />
                           </>
                         ) : null}
-                        <span>{value(event.after!, key)}</span>
+                        <span
+                          className={
+                            key === "status"
+                              ? `contract-status-${event.after!.status ?? "unknown"}`
+                              : undefined
+                          }
+                        >
+                          {value(event.after!, key)}
+                        </span>
                       </dd>
                     </div>
                   ))}
@@ -297,11 +307,15 @@ export function ContractCard({
         <strong>{money(contract.total)}</strong>
       </div>
       <dl className="job-detail-money">
-        <div>
+        <div className="job-detail-paid">
           <dt>{t("দিয়েছি")}</dt>
           <dd>{money(summary.netPaid)}</dd>
         </div>
-        <div>
+        <div
+          className={
+            summary.remaining > 0 ? "job-detail-due" : "job-detail-settled"
+          }
+        >
           <dt>{t("বাকি")}</dt>
           <dd>{money(summary.remaining)}</dd>
         </div>

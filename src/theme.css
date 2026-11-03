@@ -1,17 +1,15 @@
 :root {
-  --light-bg: #f1f4f8;
-  --light-surface: #fcfdff;
-  --light-surface-muted: #e9eef5;
+  --light-bg: #f5f6f7;
+  --light-surface: #ffffff;
+  --light-surface-muted: #f0f2f4;
   --light-text: #243247;
   --light-muted: #53647a;
   --light-line: #dce3ed;
   --light-accent: #3e5879;
   --light-accent-strong: #213555;
   --light-accent-soft: #e2eaf5;
-  --light-hero-gradient: linear-gradient(120deg, #e0e9f5, #ede8e5 75%, #f5efe7);
-  --light-page-wash:
-    radial-gradient(ellipse at 12% 0%, #dce6f184, transparent 58%),
-    linear-gradient(135deg, #f1f4f8, #f6f4f0);
+  --light-hero-gradient: linear-gradient(120deg, #f0f2f4, #ffffff);
+  --light-page-wash: #f5f6f7;
   --light-primary-gradient: linear-gradient(120deg, #213555, #3e5879);
   --light-primary-hover: linear-gradient(120deg, #1b2d49, #354d6b);
   --dark-accent: #adc4e5;
@@ -36,16 +34,12 @@
   --primary-ink: #fff;
   --hero-gradient: var(--light-hero-gradient);
   --page-wash: var(--light-page-wash);
-  --surface-gradient: linear-gradient(
-    145deg,
-    var(--surface),
-    color-mix(in srgb, var(--accent-soft) 20%, var(--surface))
-  );
-  --danger: #b83c4e;
-  --warning: #90601f;
-  --success: #267b58;
-  --info: #4773ac;
-  --purple: #7655ae;
+  --surface-gradient: var(--surface);
+  --danger: var(--state-voided);
+  --warning: var(--state-due);
+  --success: var(--state-done);
+  --info: var(--state-ongoing);
+  --purple: var(--state-credit);
   --green: var(--accent);
   --green-dark: var(--accent-strong);
   --lime: var(--accent-soft);
@@ -146,11 +140,11 @@
   --primary-ink: #17191d;
   --hero-gradient: var(--dark-hero-gradient);
   --page-wash: var(--dark-page-wash);
-  --danger: #f0909a;
-  --warning: #e8b56f;
-  --success: #7cc9a6;
-  --info: #91b5ed;
-  --purple: #c2a5ee;
+  --danger: var(--state-voided);
+  --warning: var(--state-due);
+  --success: var(--state-done);
+  --info: var(--state-ongoing);
+  --purple: var(--state-credit);
   --shadow: 0 6px 26px #00000020;
   color-scheme: dark;
 }
@@ -170,11 +164,11 @@
     --primary-ink: #17191d;
     --hero-gradient: var(--dark-hero-gradient);
     --page-wash: var(--dark-page-wash);
-    --danger: #f0909a;
-    --warning: #e8b56f;
-    --success: #7cc9a6;
-    --info: #91b5ed;
-    --purple: #c2a5ee;
+    --danger: var(--state-voided);
+    --warning: var(--state-due);
+    --success: var(--state-done);
+    --info: var(--state-ongoing);
+    --purple: var(--state-credit);
     --shadow: 0 6px 26px #00000020;
     color-scheme: dark;
   }
@@ -192,9 +186,6 @@ body {
 }
 :root .home-total-heading {
   background: var(--hero-gradient);
-}
-:root .home-total-heading strong {
-  color: var(--accent-strong);
 }
 :root .primary-button,
 :root .brand-symbol,
@@ -269,37 +260,22 @@ body {
   background: color-mix(in srgb, var(--danger) 9%, var(--surface));
 }
 :root
-  :is(
-    .settings-sync,
-    .contact-credit,
-    .status-choices button.done,
-    .history-expense_credit .history-row-amount,
-    .history-refund .history-row-amount,
-    .auth-private svg,
-    .auth-illustration svg:last-child
-  ) {
+  :is(.settings-sync, .auth-private svg, .auth-illustration svg:last-child) {
   color: var(--success);
 }
 :root
   :is(
     .settings-sync.is-pending,
-    .contact-due,
-    .status-choices button.ongoing,
     .review-progress span,
     .home-review-symbol,
     .auth-registration-symbol.is-invalid
   ) {
   color: var(--warning);
 }
-:root .status-tag.ongoing,
 :root .review-dot,
 :root .callout-mark {
   color: var(--warning);
   background: color-mix(in srgb, var(--warning) 10%, var(--surface));
-}
-:root .status-tag.done {
-  color: var(--success);
-  background: color-mix(in srgb, var(--success) 10%, var(--surface));
 }
 :root .sync-indicator svg {
   color: var(--success);

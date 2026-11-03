@@ -1,17 +1,28 @@
 import type { Ledger } from "../../domain/model";
-import { entryAudit, snapshotTotal } from "./audit";
-import { historyTitle } from "./history";
+import { entryAudit, snapshotTotal, type EntrySnapshot } from "./audit";
 import { workChanges } from "../../domain/workActivity";
 import { contractChanges } from "../../domain/contracts";
+import { latinDigits } from "../../lib/numerals";
 import { z } from "zod";
 
 const RecordedTime = z.string().datetime({ offset: true });
 
 export type TimelineCategory = "money" | "notebooks" | "jobs" | "removed";
+type TimelineState =
+  | "expense"
+  | "paid"
+  | "credit"
+  | "refund"
+  | "voided"
+  | "planned"
+  | "ongoing"
+  | "done"
+  | "unknown";
 export type TimelineEvent = {
   id: string;
   at: string;
   category: TimelineCategory;
+  state?: TimelineState;
   title: string;
   subject: string;
   note: string;
@@ -21,6 +32,70 @@ export type TimelineEvent = {
   statusChange?: { before: string; after: string };
   target: { kind: "entry" | "work" | "job" | "person"; id: string };
 };
+export type TimelineSearchRecord = { event: TimelineEvent; text: string };
+export const timelinePageSize = 40;
+export const normalizeTimelineSearch = (text: string) =>
+  latinDigits(text)
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+export function indexTimeline(
+  events: TimelineEvent[],
+  translate: (text: string) => string,
+): TimelineSearchRecord[] {
+  return events.map((event) => ({
+    event,
+    text: normalizeTimelineSearch(
+      [
+        translate(event.title),
+        event.subject,
+        event.note,
+        ...event.changes.map((field) => translate(field)),
+        ...(event.statusChange
+          ? [
+              translate(event.statusChange.before),
+              translate(event.statusChange.after),
+            ]
+          : []),
+      ].join(" "),
+    ),
+  }));
+}
+
+export function searchTimeline(
+  index: TimelineSearchRecord[],
+  query: string,
+  category: TimelineCategory | "all" = "all",
+) {
+  const normalized = normalizeTimelineSearch(query);
+  return index
+    .filter(
+      ({ event, text }) =>
+        (category === "all" || event.category === category) &&
+        (!normalized || text.includes(normalized)),
+    )
+    .map(({ event }) => event);
+}
+
+export function timelinePage(
+  events: TimelineEvent[],
+  requested: string | null,
+) {
+  const value =
+    requested && /^[1-9]\d*$/.test(requested) ? Number(requested) : 1;
+  const count = Math.max(1, Math.ceil(events.length / timelinePageSize));
+  const page = Math.min(Number.isSafeInteger(value) ? value : 1, count);
+  const offset = (page - 1) * timelinePageSize;
+  return {
+    page,
+    count,
+    from: events.length ? offset + 1 : 0,
+    to: Math.min(offset + timelinePageSize, events.length),
+    events: events.slice(offset, offset + timelinePageSize),
+  };
+}
 const entryFields: Record<string, string> = {
   lines: "খরচের বিবরণ",
   allocations: "কাজে টাকার ভাগ",
@@ -69,13 +144,47 @@ const jobStatuses = {
 
 export function notebookTimeline(ledger: Ledger): TimelineEvent[] {
   const events: TimelineEvent[] = [];
+  const people = new Map(
+    ledger.people.map((person) => [person.id, person.name]),
+  );
+  const purposes = new Map(
+    ledger.paymentPurposes.map((purpose) => [purpose.id, purpose.name]),
+  );
+  const subject = (entry: EntrySnapshot) => {
+    if (entry.kind === "payment" || entry.kind === "refund")
+      return (
+        people.get(entry.personId ?? "") ||
+        purposes.get(entry.paymentPurposeId ?? "") ||
+        (entry.kind === "refund"
+          ? "টাকা ফেরত পেয়েছি"
+          : entry.account === "labour"
+            ? "মজুরি দিয়েছি"
+            : "টাকা দিয়েছি")
+      );
+    return (
+      entry.lines[0]?.label ||
+      entry.note ||
+      (entry.account === "labour" ? "মজুরির হিসাব" : "খরচ")
+    );
+  };
   for (const entry of ledger.entries) {
+    if (!entry.createdAt && !entry.revisions.length) continue;
     for (const event of entryAudit(entry)) {
       if (!event.at) continue;
       events.push({
         id: `entry:${event.id}`,
         at: event.at,
         category: "money",
+        state: event.after.voided
+          ? "voided"
+          : (
+              {
+                expense: "expense",
+                payment: "paid",
+                expense_credit: "credit",
+                refund: "refund",
+              } as const
+            )[event.after.kind],
         title:
           event.kind === "created"
             ? (
@@ -91,7 +200,7 @@ export function notebookTimeline(ledger: Ledger): TimelineEvent[] {
               : event.kind === "restored"
                 ? "বাতিল হিসাব ফিরিয়েছি"
                 : "হিসাব বদলেছি",
-        subject: historyTitle(ledger, { ...event.after, revisions: [] }),
+        subject: subject(event.after),
         note: event.after.note,
         changes: [
           ...new Set(
@@ -112,6 +221,7 @@ export function notebookTimeline(ledger: Ledger): TimelineEvent[] {
         id: `work:${work.id}:${event.id}`,
         at: event.at,
         category: "notebooks",
+        state: event.after.status,
         title: event.before ? "খাতার তথ্য বদলেছি" : "খাতা খুলেছি",
         subject: event.after.name,
         note: event.after.description,
@@ -135,11 +245,9 @@ export function notebookTimeline(ledger: Ledger): TimelineEvent[] {
         id: `job:${job.id}:${event.id}`,
         at: event.at,
         category: "jobs",
+        state: event.after.status ?? "unknown",
         title: event.before ? "কাজের তথ্য বদলেছি" : "মিস্ত্রির কাজ রেখেছি",
-        subject:
-          event.after.title ||
-          ledger.people.find((person) => person.id === job.personId)?.name ||
-          "কাজ",
+        subject: event.after.title || people.get(job.personId) || "কাজ",
         note: event.reason,
         changes: (event.before
           ? contractChanges(event.before, event.after)
@@ -169,10 +277,7 @@ export function notebookTimeline(ledger: Ledger): TimelineEvent[] {
         at: event.at,
         category: "jobs",
         title: "আগের চুক্তির অঙ্ক রেখেছি",
-        subject:
-          job.title ||
-          ledger.people.find((person) => person.id === job.personId)?.name ||
-          "কাজ",
+        subject: job.title || people.get(job.personId) || "কাজ",
         note: event.note,
         changes: [],
         amount: event.total,
@@ -203,12 +308,11 @@ export function notebookTimeline(ledger: Ledger): TimelineEvent[] {
         });
   }
   return events
-    .filter(
-      (event) =>
-        RecordedTime.safeParse(event.at).success &&
-        Number.isFinite(Date.parse(event.at)),
-    )
-    .sort(
-      (a, b) => Date.parse(b.at) - Date.parse(a.at) || a.id.localeCompare(b.id),
-    );
+    .map((event) => ({
+      event,
+      at: RecordedTime.safeParse(event.at).success ? Date.parse(event.at) : NaN,
+    }))
+    .filter(({ at }) => Number.isFinite(at))
+    .sort((a, b) => b.at - a.at || a.event.id.localeCompare(b.event.id))
+    .map(({ event }) => event);
 }

@@ -166,12 +166,9 @@
   flex: none;
   color: var(--text);
 }
-.history-expense_credit .history-row-amount,
-.history-refund .history-row-amount {
-  color: #269475;
-}
-.history-row.is-void {
-  opacity: 0.5;
+.history-row.is-void .history-row-amount,
+.history-row.is-void .history-kind {
+  text-decoration: line-through;
 }
 .history-load-more {
   display: flex;
@@ -641,7 +638,7 @@
   flex: none;
 }
 .detail-linked-row.is-void {
-  opacity: 0.5;
+  color: var(--muted);
 }
 .detail-linked p {
   font-size: 10px;

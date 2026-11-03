@@ -1,35 +1,43 @@
 .history-row-copy > .history-row-meta-v4 {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 0 6px;
   min-width: 0;
 }
-.history-kind-tag {
-  --history-kind: #ad5b17;
-  justify-self: start;
-  padding: 2px 7px;
-  border: 1px solid color-mix(in srgb, var(--history-kind) 35%, var(--line));
-  border-inline-start: 4px solid var(--history-kind);
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--history-kind) 10%, var(--surface));
-  color: var(--text);
-  font-size: 10px;
-  line-height: 1.6;
+.history-kind {
+  --history-kind: var(--state-expense);
+  color: var(--muted);
+  font-weight: 550;
+}
+.history-kind::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-inline-end: 5px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--history-kind);
+}
+.history-row.is-void .history-kind::before {
+  background: var(--state-voided);
 }
 .history-kind-payment {
-  --history-kind: #7657c7;
+  --history-kind: var(--state-paid);
 }
 .history-kind-expense_credit {
-  --history-kind: #16796d;
+  --history-kind: var(--state-credit);
 }
 .history-kind-refund {
-  --history-kind: #24749b;
+  --history-kind: var(--state-refund);
 }
 .history-row-meta-v4 time {
   flex: none;
   font-variant-numeric: tabular-nums;
 }
-.history-row-meta-v4 > span:last-child {
+.history-row-meta-v4 > .history-row-context {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
