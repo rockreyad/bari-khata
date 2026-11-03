@@ -19,6 +19,10 @@ export function accountPlugin(env: Record<string, string | undefined>): Plugin {
       const url = `http://${request.headers.host ?? "invalid"}/api/account-delete`;
       const handler = createAccountDeleteHandler({
         ...accountDeleteConfig(env),
+        serviceKey:
+          env.BARI_DEV_SUPABASE_SERVICE_ROLE_KEY ||
+          env.BARI_SUPABASE_SERVICE_ROLE_KEY ||
+          "",
         origin: new URL(url).origin,
         vercel: false,
         local: true,
