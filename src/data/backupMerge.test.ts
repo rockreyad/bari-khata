@@ -65,6 +65,19 @@ afterEach(async () => {
 describe("reviewed backup merging", () => {
   it("retains explicitly selected person notebooks when importing a copy that predates those links", () => {
     const person = Object.assign(ledger().people[0], { workIds: ["house"] });
+    const cleared = Object.assign(ledger().people[0], { workIds: [] });
+    expect(
+      preservesBackupPersonWorkLinks(
+        { people: [cleared] },
+        { people: [ledger().people[0]] },
+      ),
+    ).toBe(false);
+    expect(
+      preservesBackupPersonWorkLinks(
+        { people: [cleared] },
+        { people: [cleared] },
+      ),
+    ).toBe(true);
     expect(
       preservesBackupPersonWorkLinks(
         { people: [person] },
