@@ -113,7 +113,7 @@ export function CashReport({
     );
   }
   return (
-    <div className="report-page cash-report-page">
+    <div className="report-page cash-report-page report-basis-paid">
       <header className="page-heading">
         <div>
           <h1>{t("টাকা কোথায় দিলাম")}</h1>

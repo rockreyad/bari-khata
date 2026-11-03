@@ -2,13 +2,33 @@
   gap: 18px;
 }
 .entry-amount-card-v5 {
+  --entry-state: var(--state-expense);
   display: grid;
   justify-items: center;
   gap: 10px;
   padding: 27px 16px 29px;
   border-radius: 22px;
-  background: var(--hero-gradient);
-  border: 1px solid color-mix(in srgb, var(--accent) 9%, var(--line));
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+}
+.entry-amount-card-v5[data-kind="payment"] {
+  --entry-state: var(--state-paid);
+}
+.entry-amount-card-v5[data-kind="expense_credit"] {
+  --entry-state: var(--state-credit);
+}
+.entry-amount-card-v5[data-kind="refund"] {
+  --entry-state: var(--state-refund);
+}
+.entry-amount-card-v5.is-void {
+  --entry-state: var(--muted);
+}
+.entry-amount-card-v5.is-void > strong {
+  text-decoration: line-through;
+}
+.entry-amount-card-v5 .status-tag.voided {
+  color: var(--state-voided);
+  background: var(--surface);
 }
 .entry-kind-v5 {
   display: inline-flex;
@@ -25,6 +45,9 @@
   letter-spacing: -0.035em;
   overflow-wrap: anywhere;
   text-align: center;
+}
+.entry-kind-v5 > svg {
+  color: var(--entry-state);
 }
 .entry-person-card-v5,
 .entry-related-bill-v5 {
@@ -110,7 +133,7 @@
   display: none;
 }
 .entry-payment-fold-v5 > summary > svg {
-  color: var(--accent);
+  color: var(--state-paid);
   flex: none;
 }
 .entry-payment-fold-v5 > summary > span:not(.entry-fold-mark-v5) {
@@ -122,6 +145,7 @@
   font-size: 16px;
   font-weight: 600;
   white-space: nowrap;
+  color: var(--text);
 }
 .entry-fold-mark-v5 {
   color: var(--muted);
@@ -139,7 +163,17 @@
   padding: 0 14px 5px;
 }
 .entry-related-bill-v5 > svg:first-child {
-  color: var(--accent);
+  color: var(--state-expense);
+}
+.detail-linked-row > strong {
+  color: var(--text);
+}
+.detail-linked-row > span > strong {
+  color: var(--muted);
+}
+.detail-linked-row.is-void > strong,
+.detail-linked-row.is-void > span > strong {
+  text-decoration: line-through;
 }
 .transaction-detail-v5 .entry-note {
   margin: 0;

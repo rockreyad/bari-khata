@@ -15,27 +15,23 @@
   color: var(--muted);
 }
 .balance-progress-heading strong {
-  color: var(--accent);
+  color: var(--text);
   font-weight: 600;
 }
 .balance-progress-track {
   position: relative;
   height: 40px;
-  border: 1px solid color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid var(--line);
   border-radius: 14px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  background: var(--surface-muted);
 }
 .balance-progress-track > span {
   position: relative;
   display: block;
   height: 100%;
   overflow: hidden;
-  background: linear-gradient(
-    90deg,
-    var(--accent),
-    color-mix(in srgb, var(--accent) 72%, var(--surface))
-  );
+  background: var(--muted);
   border-radius: inherit;
   transition: width 0.65s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -114,19 +110,19 @@
 .balance-progress-amounts > span:last-child {
   text-align: right;
 }
-.balance-progress-settled,
+.balance-progress-settled {
+  font-size: 11px;
+  color: var(--muted);
+}
 .balance-progress-credit {
   font-size: 11px;
-  color: var(--accent);
+  color: var(--muted);
 }
 .balance-progress.is-compact {
   border: 0;
   padding: 0;
   border-radius: 0;
   background: none;
-}
-.balance-progress.has-credit .balance-progress-track > span {
-  background: linear-gradient(90deg, var(--accent), #8d81c3);
 }
 @media (prefers-reduced-motion: reduce) {
   .balance-progress-track > span {

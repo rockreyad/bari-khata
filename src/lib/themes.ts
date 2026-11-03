@@ -6,10 +6,10 @@ export const themePalettes = [
     colors: ["#213555", "#3e5879", "#d8c4b6", "#f5efe7"],
     source: "https://colorhunt.co/palette/2135553e5879d8c4b6f5efe7",
     preview: {
-      background: "#f1f4f8",
-      surface: "#fcfdff",
+      background: "#f5f6f7",
+      surface: "#ffffff",
       accent: "#3e5879",
-      gradient: "linear-gradient(125deg, #e0e9f5, #f5efe7)",
+      gradient: "linear-gradient(125deg, #f0f2f4, #ffffff)",
     },
   },
   {

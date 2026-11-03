@@ -141,10 +141,16 @@
   font-size: 10px;
 }
 .contact-due {
-  color: #c78322;
+  color: var(--text);
 }
 .contact-credit {
-  color: #279a79;
+  color: var(--text);
+}
+.contact-paid-amount {
+  color: var(--text);
+}
+.contact-expense {
+  color: var(--text);
 }
 .contact-row-chevron {
   color: var(--muted);
@@ -200,7 +206,7 @@
 }
 .contact-paid > strong {
   font-size: 35px;
-  color: var(--accent);
+  color: var(--text);
   font-weight: 650;
   letter-spacing: -0.04em;
 }
@@ -363,6 +369,15 @@
   font-size: 20px;
   font-weight: 650;
   margin-top: 3px;
+}
+.contact-statement-totals > div:first-child strong {
+  color: var(--text);
+}
+.contact-statement-totals > div:nth-child(2) strong {
+  color: var(--text);
+}
+.contact-statement-totals > div:last-child strong {
+  color: var(--text);
 }
 .statement-explainer {
   color: var(--muted);
@@ -574,26 +589,6 @@
     font-size: 13px;
   }
 }
-:root {
-  --contact-due: #9e6617;
-  --contact-credit: #20785c;
-}
-:root[data-theme="dark"] {
-  --contact-due: #efba66;
-  --contact-credit: #74d9b5;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --contact-due: #efba66;
-    --contact-credit: #74d9b5;
-  }
-}
-.contact-due {
-  color: var(--contact-due);
-}
-.contact-credit {
-  color: var(--contact-credit);
-}
 .statement-buttons {
   width: 100%;
 }
@@ -609,19 +604,11 @@
   display: grid;
   gap: 7px;
   padding: 27px 29px 25px;
-  background: var(--hero-gradient);
+  background: var(--surface-muted);
   overflow: hidden;
 }
 .contact-summary-hero::after {
-  content: "";
-  position: absolute;
-  right: -44px;
-  top: -85px;
-  width: 230px;
-  height: 230px;
-  border-radius: 50%;
-  border: 34px solid color-mix(in srgb, var(--accent) 4%, transparent);
-  pointer-events: none;
+  content: none;
 }
 .contact-summary-hero > span {
   color: var(--muted);
@@ -699,6 +686,7 @@
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  color: var(--text);
   overflow-wrap: anywhere;
 }
 .contact-detail-page .contact-account-note {
@@ -824,9 +812,9 @@
   width: 100%;
   padding: 12px 16px;
   border-radius: 16px;
-  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
-  color: var(--accent);
-  background: linear-gradient(115deg, var(--accent-soft), var(--surface));
+  border: 1px solid var(--line);
+  color: var(--text);
+  background: var(--surface);
   text-align: left;
   font-size: 13px;
   font-weight: 600;

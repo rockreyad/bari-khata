@@ -167,7 +167,7 @@ export function PersonPage() {
                 ? "কাজের মজুরি"
                 : "অন্য খরচ",
             amount: summary.cost,
-            tone: "",
+            tone: "contact-expense",
           },
         ]
       : []),
@@ -286,7 +286,7 @@ export function PersonPage() {
               <dl>
                 <div>
                   <dt>{t("চুক্তির অবশিষ্ট")}</dt>
-                  <dd>{money(jobTotals.remaining)}</dd>
+                  <dd className="contact-due">{money(jobTotals.remaining)}</dd>
                 </div>
                 {jobTotals.extra > 0 ? (
                   <div>

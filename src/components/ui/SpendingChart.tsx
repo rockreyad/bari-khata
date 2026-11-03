@@ -118,6 +118,7 @@ export function SpendingChart({
   return (
     <section
       className={`spending-chart-card${embedded ? " is-embedded" : ""}`}
+      data-basis={basis}
       aria-label={t(chartTitle)}
     >
       <header className="spending-chart-header">

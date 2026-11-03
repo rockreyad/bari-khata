@@ -171,6 +171,7 @@ export function TimelinePage() {
                 <li
                   key={event.id}
                   className={`timeline-event timeline-${event.category}`}
+                  data-state={event.state}
                 >
                   {newDay ? <h2>{day}</h2> : null}
                   <button

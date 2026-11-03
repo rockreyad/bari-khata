@@ -8,10 +8,21 @@ import { z } from "zod";
 const RecordedTime = z.string().datetime({ offset: true });
 
 export type TimelineCategory = "money" | "notebooks" | "jobs" | "removed";
+type TimelineState =
+  | "expense"
+  | "paid"
+  | "credit"
+  | "refund"
+  | "voided"
+  | "planned"
+  | "ongoing"
+  | "done"
+  | "unknown";
 export type TimelineEvent = {
   id: string;
   at: string;
   category: TimelineCategory;
+  state?: TimelineState;
   title: string;
   subject: string;
   note: string;
@@ -164,6 +175,16 @@ export function notebookTimeline(ledger: Ledger): TimelineEvent[] {
         id: `entry:${event.id}`,
         at: event.at,
         category: "money",
+        state: event.after.voided
+          ? "voided"
+          : (
+              {
+                expense: "expense",
+                payment: "paid",
+                expense_credit: "credit",
+                refund: "refund",
+              } as const
+            )[event.after.kind],
         title:
           event.kind === "created"
             ? (
@@ -200,6 +221,7 @@ export function notebookTimeline(ledger: Ledger): TimelineEvent[] {
         id: `work:${work.id}:${event.id}`,
         at: event.at,
         category: "notebooks",
+        state: event.after.status,
         title: event.before ? "খাতার তথ্য বদলেছি" : "খাতা খুলেছি",
         subject: event.after.name,
         note: event.after.description,
@@ -223,6 +245,7 @@ export function notebookTimeline(ledger: Ledger): TimelineEvent[] {
         id: `job:${job.id}:${event.id}`,
         at: event.at,
         category: "jobs",
+        state: event.after.status ?? "unknown",
         title: event.before ? "কাজের তথ্য বদলেছি" : "মিস্ত্রির কাজ রেখেছি",
         subject: event.after.title || people.get(job.personId) || "কাজ",
         note: event.reason,

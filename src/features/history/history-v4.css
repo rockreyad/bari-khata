@@ -6,18 +6,31 @@
   min-width: 0;
 }
 .history-kind {
-  --history-kind: #a45b1c;
-  color: var(--history-kind);
+  --history-kind: var(--state-expense);
+  color: var(--muted);
   font-weight: 550;
 }
+.history-kind::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-inline-end: 5px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--history-kind);
+}
+.history-row.is-void .history-kind::before {
+  background: var(--state-voided);
+}
 .history-kind-payment {
-  --history-kind: #7657c7;
+  --history-kind: var(--state-paid);
 }
 .history-kind-expense_credit {
-  --history-kind: #16796d;
+  --history-kind: var(--state-credit);
 }
 .history-kind-refund {
-  --history-kind: #24749b;
+  --history-kind: var(--state-refund);
 }
 .history-row-meta-v4 time {
   flex: none;

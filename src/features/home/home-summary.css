@@ -16,17 +16,27 @@
 .home-other-paid > strong,
 .home-known-due > strong {
   margin-left: auto;
-  color: var(--text);
   font-size: 14px;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+.home-v3 .home-total-card .home-total-heading strong,
+.home-total-breakdown strong,
+.home-other-paid > strong {
+  color: var(--text);
+}
+.home-known-due > strong {
+  color: var(--text);
+}
+.home-v3 .home-total-card .home-total-heading {
+  background: var(--surface-muted);
 }
 .home-other-paid > svg {
   flex-shrink: 0;
   color: var(--accent);
 }
 .home-known-due {
-  background: color-mix(in srgb, var(--accent-soft) 35%, var(--surface));
+  background: var(--surface-muted);
 }
 @media (max-width: 760px) {
   .home-other-paid,
@@ -53,8 +63,8 @@
   width: 44px;
   height: 44px;
   border-radius: 15px;
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--surface-muted);
+  color: var(--muted);
   flex-shrink: 0;
 }
 .home-jobs-link > span:nth-child(2) {

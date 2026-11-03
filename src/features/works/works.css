@@ -22,6 +22,7 @@
   font-size: 13px;
 }
 .work-overview-total strong {
+  color: var(--text);
   font-size: clamp(30px, 6vw, 38px);
   line-height: 1.35;
   font-weight: 650;
@@ -99,6 +100,9 @@
   display: block;
   color: var(--muted);
 }
+.work-shared-jobs strong {
+  color: var(--text);
+}
 .work-due-note {
   margin: 0;
   padding: 0 24px 16px;
@@ -126,6 +130,7 @@
   color: var(--muted);
 }
 .notebook-card-total > strong {
+  color: var(--text);
   font-size: 25px;
   line-height: 1.4;
   font-weight: 650;
@@ -184,6 +189,19 @@
   font-weight: 500;
   border-radius: 7px;
 }
+:is(.work-notebook-card, .work-title) .status-tag {
+  color: var(--muted);
+  background: var(--surface-muted);
+}
+:is(.work-notebook-card, .work-title) .status-tag.ongoing > i {
+  background: var(--state-ongoing);
+}
+:is(.work-notebook-card, .work-title) .status-tag.done > i {
+  background: var(--state-done);
+}
+:is(.work-notebook-card, .work-title) .status-tag.planned > i {
+  background: var(--state-planned);
+}
 .work-notebook-card.notebook-card-v3 .notebook-card-heading {
   display: flex;
   align-items: flex-start;
@@ -235,7 +253,7 @@
 }
 .work-notebook-card.notebook-card-v3 .notebook-card-due > strong {
   font-size: 13px;
-  color: var(--warning);
+  color: var(--text);
 }
 .works-directory {
   gap: 20px;
@@ -332,9 +350,9 @@
   white-space: nowrap;
 }
 .works-status-filters > button.selected {
-  color: var(--accent-strong);
+  color: var(--muted);
   border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
-  background: var(--accent-soft);
+  background: var(--surface-muted);
   font-weight: 600;
 }
 .works-status-filters small {
@@ -496,4 +514,8 @@
 }
 .work-page-v3 .work-scope-summary > strong {
   font-size: 24px;
+  color: var(--text);
+}
+.work-activity-status {
+  color: var(--muted);
 }

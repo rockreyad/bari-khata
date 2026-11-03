@@ -449,7 +449,8 @@ export function EntryDetail({ id }: { id: string }) {
     >
       <div className="entry-detail detail-v3 transaction-detail-v5">
         <section
-          className="entry-amount-card-v5"
+          className={`entry-amount-card-v5${entry.voided ? " is-void" : ""}`}
+          data-kind={entry.kind}
           aria-label={t("টাকার পরিমাণ")}
         >
           <span className="entry-kind-v5">
@@ -458,7 +459,7 @@ export function EntryDetail({ id }: { id: string }) {
           </span>
           <strong>{money(amount)}</strong>
           {entry.voided ? (
-            <span className="status-tag planned">{t("বাতিল")}</span>
+            <span className="status-tag voided">{t("বাতিল")}</span>
           ) : null}
         </section>
         {person ? (
@@ -607,6 +608,7 @@ export function EntryDetail({ id }: { id: string }) {
                 <button
                   key={row.id}
                   className={`detail-linked-row ${row.voided ? "is-void" : ""}`}
+                  data-kind={row.kind}
                   onClick={() => detail(row.id)}
                 >
                   <span>

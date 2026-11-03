@@ -222,7 +222,7 @@ export function WorksPage() {
                   key={value}
                   aria-label={t(label)}
                   aria-pressed={status === value}
-                  className={status === value ? "selected" : ""}
+                  className={`work-status-filter-${value}${status === value ? " selected" : ""}`}
                   onClick={() => changeFilter("status", value)}
                 >
                   <span>{t(label)}</span>
@@ -733,11 +733,23 @@ export function WorkPage() {
                             <div key={key}>
                               <dt>{t(fields[key])}</dt>
                               <dd>
-                                <span>
+                                <span
+                                  className={
+                                    key === "status"
+                                      ? `work-activity-status ${event.before!.status}`
+                                      : undefined
+                                  }
+                                >
                                   {showValue(key, event.before![key])}
                                 </span>
                                 <ArrowRightIcon size={13} />
-                                <strong>
+                                <strong
+                                  className={
+                                    key === "status"
+                                      ? `work-activity-status ${event.after.status}`
+                                      : undefined
+                                  }
+                                >
                                   {showValue(key, event.after[key])}
                                 </strong>
                               </dd>
@@ -747,7 +759,11 @@ export function WorkPage() {
                       ) : (
                         <p>
                           {formatDigits(event.after.name)} ·{" "}
-                          {t(statusNames[event.after.status])}
+                          <span
+                            className={`work-activity-status ${event.after.status}`}
+                          >
+                            {t(statusNames[event.after.status])}
+                          </span>
                         </p>
                       )}
                     </div>

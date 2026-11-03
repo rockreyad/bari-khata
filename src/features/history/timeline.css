@@ -93,6 +93,37 @@
   background: var(--accent);
   opacity: 0.55;
 }
+.timeline-event[data-state="expense"] {
+  --timeline-state: var(--state-expense);
+}
+.timeline-event[data-state="paid"] {
+  --timeline-state: var(--state-paid);
+}
+.timeline-event[data-state="credit"] {
+  --timeline-state: var(--state-credit);
+}
+.timeline-event[data-state="refund"] {
+  --timeline-state: var(--state-refund);
+}
+.timeline-event[data-state="voided"] {
+  --timeline-state: var(--state-voided);
+}
+.timeline-event[data-state="planned"] {
+  --timeline-state: var(--state-planned);
+}
+.timeline-event[data-state="ongoing"] {
+  --timeline-state: var(--state-ongoing);
+}
+.timeline-event[data-state="done"] {
+  --timeline-state: var(--state-done);
+}
+.timeline-event[data-state="unknown"] {
+  --timeline-state: var(--state-unknown);
+}
+.timeline-event[data-state] .timeline-marker {
+  background: var(--timeline-state);
+  opacity: 1;
+}
 .timeline-event-copy {
   display: grid;
   gap: 5px;

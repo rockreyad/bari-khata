@@ -1,13 +1,16 @@
 .spending-chart-card {
-  --chart-total: var(--accent);
+  --chart-total: var(--muted);
   --chart-material: light-dark(#a9541c, #efb37c);
   --chart-labour: light-dark(#7952ad, #bba0e5);
   --chart-other: light-dark(#087c6d, #5acbb8);
   padding: 22px 24px;
-  background: var(--surface-gradient, var(--surface));
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 22px;
   min-width: 0;
+}
+.spending-chart-card[data-basis="paid"] {
+  --chart-total: var(--muted);
 }
 .spending-chart-header {
   display: flex;
@@ -27,6 +30,7 @@
   font-size: clamp(24px, 4vw, 30px);
   font-weight: 650;
   letter-spacing: -0.035em;
+  color: var(--text);
 }
 .spending-chart-period {
   font-size: 11px;
