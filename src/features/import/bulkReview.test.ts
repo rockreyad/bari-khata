@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LedgerSchema } from "../../domain/model";
+import { EntryCoreSchema, LedgerSchema } from "../../domain/model";
 import { summarize } from "../../domain/ledger";
 import {
   bulkOrganizeHistoricalEntries,
@@ -42,6 +42,70 @@ function fixture() {
   });
 }
 describe("bulk historical review", () => {
+  it("classifies explicit bulk labour safely while preserving signed costs, dates, source and unrelated rows", () => {
+    const source = fixture(),
+      original = structuredClone(source);
+    const result = bulkOrganizeHistoricalEntries(
+      source,
+      structuredClone(source.entries.slice(0, 2)),
+      { costType: "labour" },
+    );
+    for (let index = 0; index < 2; index++) {
+      expect(result.entries[index]).toMatchObject({
+        account: "labour",
+        kind: source.entries[index].kind,
+        personId: source.entries[index].personId,
+        date: source.entries[index].date,
+        note: source.entries[index].note,
+        source: source.entries[index].source,
+        balanceImpact: "historical",
+        reviewStatus: "confirmed",
+      });
+      expect(result.entries[index].lines[0]).toMatchObject({
+        ...source.entries[index].lines[0],
+        costType: "labour",
+      });
+      expect(result.entries[index].revisions[0].before).toEqual(
+        EntryCoreSchema.parse(source.entries[index]),
+      );
+    }
+    expect(result.entries[2]).toEqual(source.entries[2]);
+    expect(summarize(result)).toMatchObject({
+      cost: summarize(source).cost,
+      historicalCost: summarize(source).historicalCost,
+      paid: 0,
+      refunds: 0,
+      payable: 0,
+      advance: 0,
+    });
+    expect(source).toEqual(original);
+  });
+  it("leaves the whole original selection unchanged when a later row has a linked account constraint", () => {
+    const base = fixture();
+    const source = LedgerSchema.parse({
+      ...base,
+      entries: [
+        ...base.entries,
+        {
+          id: "paid",
+          kind: "payment",
+          account: "materials",
+          relatedEntryId: "e3",
+          allocations: [{ workId: "old", amount: 1000 }],
+          paymentParts: [{ amount: 1000 }],
+        },
+      ],
+    });
+    const original = structuredClone(source);
+    expect(() =>
+      bulkOrganizeHistoricalEntries(
+        source,
+        structuredClone([source.entries[0], source.entries[2]]),
+        { costType: "labour" },
+      ),
+    ).toThrow("historical_review_linked_account");
+    expect(source).toEqual(original);
+  });
   it("classifies selected rows together while preserving every money/date/provenance field", () => {
     const source = fixture();
     const originals = structuredClone(source.entries.slice(0, 2));

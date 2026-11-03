@@ -132,6 +132,19 @@ export function EntryDetail({ id }: { id: string }) {
   if (!entry) return null;
   const person = ledger.people.find((p) => p.id === entry.personId);
   const workIds = entryWorkIds(entry);
+  const openMissingInformation = () => {
+    if (
+      !entry.voided &&
+      entry.source &&
+      entry.balanceImpact === "historical" &&
+      (entry.kind === "expense" || entry.kind === "expense_credit")
+    ) {
+      close();
+      go(
+        `/review?q=${encodeURIComponent(entry.lines[0]?.label ?? entry.note)}`,
+      );
+    } else add({ editId: entry.id });
+  };
   const purpose = ledger.paymentPurposes.find(
     (value) => value.id === entry.paymentPurposeId,
   );
@@ -442,10 +455,7 @@ export function EntryDetail({ id }: { id: string }) {
                 ? [
                     {
                       label: t("এই তথ্য ঠিক করি"),
-                      onSelect: () =>
-                        go(
-                          `/review?q=${encodeURIComponent(entry.lines[0]?.label ?? entry.note)}`,
-                        ),
+                      onSelect: openMissingInformation,
                     },
                   ]
                 : []),
@@ -805,12 +815,7 @@ export function EntryDetail({ id }: { id: string }) {
               {entry.reviewStatus === "needs_review" ? (
                 <button
                   className="detail-v3-review"
-                  onClick={() => {
-                    close();
-                    go(
-                      `/review?q=${encodeURIComponent(entry.lines[0]?.label ?? entry.note)}`,
-                    );
-                  }}
+                  onClick={openMissingInformation}
                 >
                   {t("এই তথ্য দেখে নিন")}
                   <ArrowRightIcon size={16} />

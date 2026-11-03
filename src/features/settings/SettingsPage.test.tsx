@@ -333,3 +333,22 @@ it.each(["real", "demo"] as const)(
     expect(screen.queryByRole("button", { name: "মুছে রাখা তথ্য" })).toBeNull();
   },
 );
+
+it.each(["real", "demo"] as const)(
+  "keeps record corrections and adjustments in their own context instead of settings in %s mode",
+  (mode) => {
+    api.mode = mode;
+    mount();
+    expect(
+      screen.queryByRole("button", { name: "পুরোনো হিসাব ঠিক করি" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "হিসাব মিলিয়ে নিই" }),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: "হিসাবের কপি" })).toBeTruthy();
+    if (mode === "real")
+      expect(
+        screen.getByRole("button", { name: "সংরক্ষণের অবস্থা" }),
+      ).toBeTruthy();
+  },
+);

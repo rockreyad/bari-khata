@@ -11,8 +11,6 @@ export const settingsEnglish: Record<string, string> = {
   "হিসাব ও সংরক্ষণ": "Records and storage",
   "কপি নামান বা আগের কপি খুলুন": "Download or restore a copy",
   "সংরক্ষণের অবস্থা": "Storage status",
-  "পুরোনো হিসাব ঠিক করি": "Review imported entries",
-  "আগের খাতার তথ্য দেখুন": "Check information from your old notebook",
   "আরও কিছু": "More",
   অ্যাকাউন্ট: "Account",
   "ফোনে অ্যাপ রাখুন": "Add the app to your phone",

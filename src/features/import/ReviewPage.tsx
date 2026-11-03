@@ -18,7 +18,12 @@ import { Sheet } from "../../components/Sheet";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { entryTotal } from "../../domain/ledger";
 import type { CostType, Entry } from "../../domain/model";
-import { organizeHistoricalEntry, reviewDraft, type LineDraft } from "./review";
+import {
+  historicalReviewErrorMessage,
+  organizeHistoricalEntry,
+  reviewDraft,
+  type LineDraft,
+} from "./review";
 import { costNames } from "../../lib/display";
 import "./review.css";
 import "../history/history-v4.css";
@@ -51,8 +56,13 @@ function OrganizeSheet({
         organizeHistoricalEntry(current, entry, drafts),
       );
       onClose();
-    } catch {
-      setError(t("এখন রাখা যায়নি। লেখা আছে; আবার চেষ্টা করুন।"));
+    } catch (cause) {
+      setError(
+        t(
+          historicalReviewErrorMessage(cause) ??
+            "এখন রাখা যায়নি। লেখা আছে; আবার চেষ্টা করুন।",
+        ),
+      );
     } finally {
       setSaving(false);
     }

@@ -55,10 +55,10 @@ export function TotalAdjustmentForm({
   beforeCloseRef,
 }: {
   target: TotalAdjustmentTarget;
-  onSaved?: () => void;
+  onSaved: () => void;
   beforeCloseRef?: RefObject<(() => Promise<boolean>) | null>;
 }) {
-  const { ledger, mode, save, go } = useNotebook();
+  const { ledger, mode, save } = useNotebook();
   const { t, money } = useLanguageContext();
   const [owner] = useState(() => (mode === "real" ? getActiveOwner() : null));
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode, owner]);
@@ -259,13 +259,7 @@ export function TotalAdjustmentForm({
       await queue.current.catch(() => {});
       await storage.removeDraft(key).catch(() => {});
       if (current()) {
-        if (onSaved) onSaved();
-        else
-          go(
-            target.target === "person"
-              ? `/people/${encodeURIComponent(target.id)}?${new URLSearchParams({ account: target.account! })}`
-              : `/works/${encodeURIComponent(target.id)}`,
-          );
+        onSaved();
       }
     } catch (cause) {
       const errors: Record<string, string> = {
