@@ -3,6 +3,7 @@ import { preservesPaymentPurposes } from "../domain/paymentPurposes";
 import { preservesRemovalHistory } from "../domain/entityDeletion";
 import { preservesContractHistory } from "../domain/contracts";
 import { preservesWorkHistory } from "../domain/workActivity";
+import { preservesPersonWorkLinks } from "../domain/personWorkLinks";
 import { preservesMcpProvenance } from "../domain/mcpProvenance.js";
 import {
   LedgerSchema,
@@ -209,6 +210,8 @@ export class LedgerRepository {
           throw new Error("removal_history_would_be_lost");
         if (!preservesContractHistory(current.ledger, ledger))
           throw new Error("contract_history_would_be_lost");
+        if (!preservesPersonWorkLinks(current.ledger, ledger))
+          throw new Error("person_work_links_would_be_lost");
         if (!preservesMcpProvenance(current.ledger, ledger))
           throw new Error("mcp_provenance_would_be_lost");
         if (ledger.isDemo !== (mode === "demo"))
@@ -334,6 +337,8 @@ export class LedgerRepository {
           throw new Error("contract_history_would_be_lost");
         if (current && !preservesWorkHistory(current.ledger, backup.ledger))
           throw new Error("work_history_would_be_lost");
+        if (current && !preservesPersonWorkLinks(current.ledger, backup.ledger))
+          throw new Error("person_work_links_would_be_lost");
         if (current && !preservesMcpProvenance(current.ledger, backup.ledger))
           throw new Error("mcp_provenance_would_be_lost");
         if (current)

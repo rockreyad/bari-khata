@@ -9,6 +9,7 @@ import type { Ledger } from "../domain/model";
 import { preservesRemovalHistory } from "../domain/entityDeletion";
 import { preservesContractHistory } from "../domain/contracts";
 import { preservesWorkHistory } from "../domain/workActivity";
+import { preservesPersonWorkLinks } from "../domain/personWorkLinks";
 import { preservesMcpProvenance } from "../domain/mcpProvenance.js";
 import {
   getActiveOwner,
@@ -228,6 +229,7 @@ export async function synchronizeWorkspace(
         if (
           !preservesContractHistory(row.ledger, document) ||
           !preservesWorkHistory(row.ledger, document) ||
+          !preservesPersonWorkLinks(row.ledger, document) ||
           !preservesMcpProvenance(row.ledger, document) ||
           !preservesRemovalHistory(row.ledger, document)
         ) {
@@ -323,6 +325,7 @@ export async function synchronizeWorkspace(
     if (
       !preservesContractHistory(latest.ledger, document) ||
       !preservesWorkHistory(latest.ledger, document) ||
+      !preservesPersonWorkLinks(latest.ledger, document) ||
       !preservesMcpProvenance(latest.ledger, document) ||
       !preservesRemovalHistory(latest.ledger, document)
     ) {
