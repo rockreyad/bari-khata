@@ -44,6 +44,10 @@
   color: var(--muted);
   font-size: 13px;
 }
+.job-detail-total > s {
+  color: var(--muted);
+  font-size: 18px;
+}
 .job-detail-total > strong {
   color: var(--text);
   font-size: clamp(29px, 5vw, 38px);
