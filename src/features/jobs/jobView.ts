@@ -91,3 +91,22 @@ export function jobBalances(ledger: Ledger): Map<string, JobBalance> {
     }),
   );
 }
+
+export function jobBalanceTotals(ledger: Ledger, contracts: Contract[]) {
+  const balances = jobBalances(ledger);
+  let remaining = 0n,
+    extra = 0n;
+  for (const contract of contracts) {
+    if (contract.archivedAt) continue;
+    const balance = balances.get(contract.id);
+    if (!balance?.valid) return { remaining: 0, extra: 0, valid: false };
+    remaining += BigInt(balance.remaining);
+    extra += BigInt(balance.extra);
+  }
+  const maximum = BigInt(Number.MAX_SAFE_INTEGER);
+  return {
+    remaining: remaining <= maximum ? Number(remaining) : 0,
+    extra: extra <= maximum ? Number(extra) : 0,
+    valid: remaining <= maximum && extra <= maximum,
+  };
+}

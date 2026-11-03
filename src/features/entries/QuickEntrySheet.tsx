@@ -55,6 +55,7 @@ import {
 } from "./entryContext";
 import { defaultTaxonomy } from "../../domain/importWallet";
 import { parseAmount, contractSummary } from "../../domain/ledger";
+import { contractAppliesToWork } from "../../domain/contracts";
 import { getActiveOwner } from "../../data/database";
 const row = () => ({
   id: crypto.randomUUID(),
@@ -215,6 +216,9 @@ export function QuickEntrySheet({
           : name === "personId" || (name === "account" && value !== "labour")
             ? { contractId: "" }
             : {}),
+      ...(name === "personId" && options.purpose
+        ? { purpose: options.purpose }
+        : {}),
     }));
   };
   const changeRow = (id: string, change: Partial<QuickDraft["rows"][number]>) =>
@@ -256,11 +260,15 @@ export function QuickEntrySheet({
   const groups = ledger.materialGroups.length
     ? ledger.materialGroups
     : defaultTaxonomy().materialGroups;
-  const contracts = applicableQuickContracts(
-    ledger,
-    draft.personId,
-    draft.workId,
-  );
+  const contracts = draft.personId
+    ? applicableQuickContracts(ledger, draft.personId, draft.workId)
+    : ledger.contracts.filter(
+        (job) =>
+          !job.archivedAt &&
+          !ledger.people.find((person) => person.id === job.personId)
+            ?.archivedAt &&
+          (!draft.workId || contractAppliesToWork(job, draft.workId)),
+      );
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (locked.current || !ready || finished.current) return;
@@ -439,18 +447,13 @@ export function QuickEntrySheet({
     ? "মাল ফেরত"
     : draft.kind === "refund"
       ? "টাকা ফেরত"
-      : selectedKind === "worker" ||
-          (selectedKind === "shop" && cash && draft.kind === "payment")
+      : draft.kind === "payment"
         ? "টাকা দিই"
-        : draft.kind === "payment"
-          ? draft.purpose === "advance"
-            ? "অগ্রিম দিই"
-            : "বাকি মেটাই"
-          : transport
-            ? "গাড়িভাড়া দিই"
-            : labour
-              ? "মিস্ত্রির টাকা"
-              : "মাল কিনলাম";
+        : transport
+          ? "গাড়িভাড়া দিই"
+          : labour
+            ? "মিস্ত্রির টাকা"
+            : "মাল কিনলাম";
   return (
     <Frame
       title={t(title)}
@@ -622,7 +625,9 @@ export function QuickEntrySheet({
               />
             </label>
           ) : null}
-          {selectedKind === "worker" && !returning ? (
+          {(selectedKind === "worker" ||
+            (draft.kind === "payment" && draft.account === "labour")) &&
+          !returning ? (
             <section className="entry-worker-flow">
               {contracts.length || removedJob ? (
                 <label>
@@ -630,15 +635,23 @@ export function QuickEntrySheet({
                   <AppSelect
                     aria-label={t("কাজ")}
                     value={draft.contractId}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const job = contracts.find(
+                        (job) => job.id === e.target.value,
+                      );
                       setDraft((current) => ({
                         ...current,
-                        contractId: e.target.value,
+                        personId: job?.personId ?? current.personId,
+                        workId:
+                          job?.scope === "work" ? job.workId! : current.workId,
+                        contractId: job?.id ?? "",
                         kind: "payment",
-                        purpose: e.target.value ? "settle" : "wage",
+                        purpose: "settle",
+                        account: "labour",
+                        costType: "labour",
                         payment: "full",
-                      }))
-                    }
+                      }));
+                    }}
                   >
                     <option value="">{t("অন্য কাজ")}</option>
                     {removedJob ? (
@@ -650,12 +663,17 @@ export function QuickEntrySheet({
                     {contracts.map((contract) => (
                       <option key={contract.id} value={contract.id}>
                         {contract.title || money(contract.total)}
+                        {!draft.personId
+                          ? ` · ${ledger.people.find((person) => person.id === contract.personId)?.name ?? ""}`
+                          : ""}
                       </option>
                     ))}
                   </AppSelect>
                 </label>
               ) : null}
-              {!draft.contractId ? (
+              {selectedKind === "worker" &&
+              !draft.contractId &&
+              !options.purpose ? (
                 <div
                   className="entry-intent-options"
                   role="group"
@@ -700,6 +718,7 @@ export function QuickEntrySheet({
             </section>
           ) : null}
           {cash &&
+          draft.account !== "labour" &&
           draft.kind !== "refund" &&
           !["worker", "shop"].includes(selectedKind ?? "") ? (
             <div

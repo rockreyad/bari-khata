@@ -119,6 +119,20 @@ const labels = {
     materials: "Material payment",
   },
 };
+it("shows only ongoing notebooks on home", () => {
+  const ledger = LedgerSchema.parse({
+    works: [
+      { id: "current", name: "চলতি খাতা", status: "ongoing" },
+      { id: "later", name: "পরের খাতা", status: "planned" },
+      { id: "finished", name: "শেষ খাতা", status: "done" },
+    ],
+  });
+  const view = mount(ledger, "bn");
+  expect(view.container.querySelectorAll(".work-carousel h3")).toHaveLength(1);
+  expect(view.container.querySelector(".work-carousel h3")?.textContent).toBe(
+    "চলতি খাতা",
+  );
+});
 describe.each(["bn", "en"] as const)(
   "home numeric ledger in %s",
   (language) => {

@@ -1,8 +1,8 @@
 .spending-chart-card {
   --chart-total: var(--accent);
-  --chart-material: var(--accent);
-  --chart-labour: color-mix(in srgb, var(--purple) 78%, var(--text));
-  --chart-other: color-mix(in srgb, var(--warning) 80%, var(--text));
+  --chart-material: light-dark(#a9541c, #efb37c);
+  --chart-labour: light-dark(#7952ad, #bba0e5);
+  --chart-other: light-dark(#087c6d, #5acbb8);
   padding: 22px 24px;
   background: var(--surface-gradient, var(--surface));
   border: 1px solid var(--line);
