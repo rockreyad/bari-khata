@@ -57,7 +57,11 @@ function AccountNotebook() {
     return (
       <Navigate
         to="/login"
-        state={{ from: location.pathname + location.search }}
+        state={{
+          from: auth.returnHomeAfterSignOut
+            ? "/"
+            : location.pathname + location.search,
+        }}
         replace
       />
     );

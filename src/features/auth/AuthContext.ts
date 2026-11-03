@@ -6,6 +6,7 @@ export type AuthStatus = "loading" | "signed-out" | "signed-in" | "offline";
 export type AuthContextValue = {
   status: AuthStatus;
   user: AccountUser | null;
+  returnHomeAfterSignOut: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   requestPhoneOtp: (
