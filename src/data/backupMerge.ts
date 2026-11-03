@@ -42,12 +42,7 @@ export function preservesBackupPersonWorkLinks(
 ) {
   const people = new Map(after.people.map((person) => [person.id, person]));
   return before.people.every((person) => {
-    if (
-      !("workIds" in person) ||
-      !Array.isArray(person.workIds) ||
-      !person.workIds.length
-    )
-      return true;
+    if (!("workIds" in person) || !Array.isArray(person.workIds)) return true;
     const next = people.get(person.id);
     return Boolean(
       next &&
