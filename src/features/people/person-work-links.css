@@ -1,0 +1,64 @@
+.person-work-picker {
+  min-width: 0;
+  margin: 0;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.person-work-picker > legend {
+  padding: 0 5px;
+  font-size: 13px;
+  font-weight: 550;
+}
+.person-work-picker > .field-hint {
+  margin: 0 0 12px;
+}
+.person-work-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 8px;
+}
+.entity-form-v3 .person-work-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  overflow-wrap: anywhere;
+}
+.entity-form-v3 .person-work-option > input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.person-notebooks {
+  display: grid;
+  gap: 10px;
+}
+.person-notebooks h2 {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--muted);
+}
+.person-notebooks > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.person-notebooks button {
+  padding: 9px 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.person-notebooks button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}

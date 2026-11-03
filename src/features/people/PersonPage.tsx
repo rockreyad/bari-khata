@@ -31,6 +31,7 @@ import type { Account } from "../../domain/model";
 import { PersonMark, kindLabels, accountLabels } from "./ContactIdentity";
 import { StatementSheet } from "./StatementSheet";
 import { phoneLink } from "./people";
+import { PersonNotebooks } from "./PersonNotebooks";
 import "./people.css";
 export function PersonPage() {
   const { ledger, go, add, entity, detail, base } = useNotebook();
@@ -243,6 +244,12 @@ export function PersonPage() {
           items={menu}
         />
       </header>
+      <PersonNotebooks
+        ledger={ledger}
+        person={person}
+        selectedWorkId={workId}
+        onSelect={(id) => filter("work", id)}
+      />
       {removal.notice}
       {removal.dialog}
       <section
