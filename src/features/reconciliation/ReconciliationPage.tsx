@@ -1,124 +1,138 @@
-import { useNavigate, useSearchParams } from "react-router";
-import { useMemo } from "react";
+import { useSearchParams } from "react-router";
+import { useRef } from "react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { useLanguageContext } from "../../context/LanguageProvider";
-import { entryTotal } from "../../domain/ledger";
-import {
-  sortHistory,
-  entryKindLabels,
-  historyTitle,
-  historySubtitle,
-} from "../history/history";
-import { jobName } from "../jobs/jobView";
-import {
-  reconciliationEditUrl,
-  type ReconciliationType,
-} from "./reconciliation";
 import "./reconciliation.css";
+import "./balance-adjustment.css";
+import { TotalAdjustmentForm } from "./TotalAdjustmentForm";
+import { AccountSchema } from "../../domain/model";
+import { defaultContactAccount } from "../../domain/contacts";
+import { accountLabels } from "../people/ContactIdentity";
+import { getActiveOwner } from "../../data/database";
 
 export function ReconciliationPage() {
-  const { ledger, base, go } = useNotebook();
-  const { t, money, date, formatDigits } = useLanguageContext();
-  const navigate = useNavigate();
+  const { ledger, mode, go } = useNotebook();
+  const { t, formatDigits } = useLanguageContext();
   const [params, setParams] = useSearchParams();
-  const raw = params.get("type");
-  const type: ReconciliationType =
-    raw === "payment" || raw === "contract" ? raw : "bill";
-  const selectedId = params.get("id") ?? "";
-  const records = useMemo(
-    () =>
-      type === "contract"
-        ? ledger.contracts
-            .filter((contract) => !contract.archivedAt)
-            .map((contract) => ({
-              id: contract.id,
-              total: contract.total,
-              label: `${formatDigits(jobName(contract, t))} · ${formatDigits(ledger.people.find((person) => person.id === contract.personId)?.name ?? "")} · ${formatDigits(ledger.works.find((work) => work.id === contract.workId)?.name ?? t("সব খাতা"))} · ${money(contract.total)}`,
-            }))
-        : sortHistory(
-            ledger.entries.filter(
-              (entry) =>
-                !entry.voided &&
-                (type === "payment"
-                  ? entry.kind === "payment" || entry.kind === "refund"
-                  : entry.kind === "expense" ||
-                    entry.kind === "expense_credit"),
-            ),
-          ).map((entry) => ({
-            id: entry.id,
-            total: entryTotal(entry),
-            label: `${t(entryKindLabels[entry.kind])} · ${formatDigits(historyTitle(ledger, entry))} · ${formatDigits(historySubtitle(ledger, entry, {}))} · ${date(entry.date, { year: "numeric" })} · ${money(entryTotal(entry))}`,
-          })),
-    [ledger, type, t, formatDigits, money, date],
+  const beforeClose = useRef<(() => Promise<boolean>) | null>(null);
+  async function changeParams(next: Record<string, string>) {
+    if (!beforeClose.current || (await beforeClose.current())) setParams(next);
+  }
+  async function back() {
+    if (beforeClose.current && !(await beforeClose.current())) return;
+    go(
+      person
+        ? `/people/${encodeURIComponent(person.id)}`
+        : selected && target === "work"
+          ? `/works/${encodeURIComponent(selected.id)}`
+          : "/settings",
+    );
+  }
+  const target =
+    params.get("target") === "work" ||
+    (!params.has("person") && params.has("work"))
+      ? "work"
+      : "person";
+  const selectedId = params.get(target === "person" ? "person" : "work") ?? "";
+  const records = (target === "person" ? ledger.people : ledger.works).filter(
+    (record) => !record.archivedAt,
   );
   const selected = records.find((record) => record.id === selectedId);
+  const person =
+    target === "person"
+      ? ledger.people.find((record) => record.id === selectedId)
+      : undefined;
+  const parsedAccount = AccountSchema.safeParse(params.get("account"));
+  const account =
+    target === "person"
+      ? parsedAccount.success
+        ? parsedAccount.data
+        : person
+          ? defaultContactAccount(person)
+          : "materials"
+      : null;
+  const owner = mode === "real" ? getActiveOwner() : "demo";
   return (
     <div className="reconciliation-page page-flow">
       <header>
         <button
           type="button"
           className="text-button"
-          onClick={() => go("/settings")}
+          onClick={() => void back()}
         >
           {t("ফিরুন")}
         </button>
         <h1>{t("হিসাব মিলিয়ে নিই")}</h1>
-        <p>{t("আগের ভুল অঙ্কটি ঠিক করুন। কেন বদলালেন, তা ইতিহাসে থাকবে।")}</p>
+        <p>{t("সঠিক মোট লিখুন। পার্থক্যটি সমন্বয় হিসেবে থাকবে।")}</p>
       </header>
       <section className="reconciliation-choice">
         <label>
-          {t("কোন অঙ্ক ঠিক করবেন")}
+          {t("কার হিসাব")}
           <AppSelect
-            value={type}
-            onChange={(event) => setParams({ type: event.target.value })}
+            value={target}
+            onChange={(event) =>
+              void changeParams({ target: event.target.value })
+            }
           >
-            <option value="bill">{t("বিলের খরচ")}</option>
-            <option value="payment">{t("দেওয়া বা ফেরত পাওয়া টাকা")}</option>
-            <option value="contract">{t("কাজের চুক্তির টাকা")}</option>
+            <option value="person">{t("ব্যক্তি বা দোকান")}</option>
+            <option value="work">{t("কাজের খাতা")}</option>
           </AppSelect>
         </label>
         <label>
-          {t("যে হিসাবটি বদলাবেন")}
+          {t(
+            target === "person" ? "ব্যক্তি বা দোকান বেছে নিন" : "খাতা বেছে নিন",
+          )}
           <AppSelect
             value={selectedId}
-            onChange={(event) => setParams({ type, id: event.target.value })}
+            onChange={(event) =>
+              void changeParams({
+                target,
+                [target === "person" ? "person" : "work"]: event.target.value,
+              })
+            }
           >
-            <option value="">{t("হিসাব বেছে নিন")}</option>
+            <option value="">{t("একটি বেছে নিন")}</option>
             {records.map((record) => (
               <option key={record.id} value={record.id}>
-                {record.label}
+                {formatDigits(record.name)}
               </option>
             ))}
           </AppSelect>
         </label>
-        {!records.length ? (
-          <p>{t("এখানে বদলানোর মতো কোনো হিসাব নেই।")}</p>
+        {person && account ? (
+          <details className="adjustment-extra">
+            <summary>{t(accountLabels[account])}</summary>
+            <label>
+              {t("হিসাবের খাত")}
+              <AppSelect
+                value={account}
+                onChange={(event) =>
+                  void changeParams({
+                    target,
+                    person: person.id,
+                    account: event.target.value,
+                  })
+                }
+              >
+                {(["materials", "labour", "other"] as const).map((value) => (
+                  <option key={value} value={value}>
+                    {t(accountLabels[value])}
+                  </option>
+                ))}
+              </AppSelect>
+            </label>
+            <small>{t("সব খাতা মিলিয়ে")}</small>
+          </details>
         ) : null}
-        {selected ? (
-          <p>
-            {t("আগের অঙ্ক")} <strong>{money(selected.total)}</strong>
-          </p>
-        ) : null}
-        <button
-          type="button"
-          className="primary-button"
-          disabled={!selected}
-          onClick={() => {
-            if (selected)
-              navigate(
-                reconciliationEditUrl(
-                  base,
-                  type,
-                  selected.id,
-                  `${base}/reconcile?${new URLSearchParams({ type, id: selected.id })}`,
-                ),
-              );
-          }}
-        >
-          {t("এই হিসাব ঠিক করি")}
-        </button>
       </section>
+      {selected ? (
+        <TotalAdjustmentForm
+          key={`${owner}:${target}:${selected.id}:${account}`}
+          target={{ target, id: selected.id, account }}
+          beforeCloseRef={beforeClose}
+        />
+      ) : null}
     </div>
   );
 }

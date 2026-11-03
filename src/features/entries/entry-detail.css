@@ -261,3 +261,6 @@
     font-size: 14px;
   }
 }
+.entry-amount-card-v5[data-kind="adjustment"] .entry-kind-v5 > svg {
+  color: var(--muted);
+}

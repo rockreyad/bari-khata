@@ -90,7 +90,7 @@ describe("work notebook balances", () => {
     expect(workBalances(ledger, "work")).toMatchObject({
       valid: true,
       billPayable: 11500000,
-      workCommitmentOutstanding: 8040000,
+      workCommitmentOutstanding: 11500000,
       additionalCommitment: 0,
       totalOutstanding: 11500000,
     });

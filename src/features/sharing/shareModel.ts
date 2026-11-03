@@ -24,6 +24,19 @@ export const SharedStatementSchema = z.object({
     payable: SafeAmount,
     advance: SafeAmount,
     historicalCost: SafeAmount,
+    adjustment: SafeAmount.optional(),
+    costCorrection: SafeAmount.optional(),
+    paidCorrection: SafeAmount.optional(),
+    balanceCorrection: SafeAmount.optional(),
+    reconciledCost: SafeAmount.optional(),
+    reconciledNetPaid: SafeAmount.optional(),
+    reconciledBalance: SafeAmount.optional(),
+    reconciledPayable: SafeAmount.optional(),
+    reconciledAdvance: SafeAmount.optional(),
+    actualCost: SafeAmount.optional(),
+    actualPaid: SafeAmount.optional(),
+    actualRefunds: SafeAmount.optional(),
+    actualNetPaid: SafeAmount.optional(),
   }),
   counts: z
     .object({
@@ -31,6 +44,7 @@ export const SharedStatementSchema = z.object({
       payment: z.number().int().nonnegative().max(100000).default(0),
       expense_credit: z.number().int().nonnegative().max(100000).default(0),
       refund: z.number().int().nonnegative().max(100000).default(0),
+      adjustment: z.number().int().nonnegative().max(100000).optional(),
     })
     .default({ expense: 0, payment: 0, expense_credit: 0, refund: 0 }),
   contracts: z
@@ -47,19 +61,47 @@ export const SharedStatementSchema = z.object({
     .default([]),
   rows: z
     .array(
-      z.object({
-        key: z.string().max(160),
-        date: z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/)
-          .nullable(),
-        kind: z.enum(["expense", "payment", "expense_credit", "refund"]),
-        historical: z.boolean(),
-        charge: SafeAmount,
-        paid: SafeAmount,
-        description: z.string().max(310000),
-        works: z.string().max(210000),
-      }),
+      z
+        .object({
+          key: z.string().max(160),
+          date: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/)
+            .nullable(),
+          kind: z.enum([
+            "expense",
+            "payment",
+            "expense_credit",
+            "refund",
+            "adjustment",
+          ]),
+          historical: z.boolean(),
+          charge: SafeAmount,
+          paid: SafeAmount,
+          adjustment: SafeAmount.optional(),
+          adjustmentBasis: z
+            .enum(["paid", "cost", "balance"])
+            .nullable()
+            .optional(),
+          description: z.string().max(310000),
+          works: z.string().max(210000),
+        })
+        .superRefine((row, ctx) => {
+          if (
+            row.kind === "adjustment"
+              ? !row.adjustment ||
+                !row.adjustmentBasis ||
+                row.charge !== 0 ||
+                row.paid !== 0 ||
+                row.historical
+              : Boolean(row.adjustment) || Boolean(row.adjustmentBasis)
+          )
+            ctx.addIssue({
+              code: "custom",
+              path: ["adjustment"],
+              message: "Invalid noncash adjustment row",
+            });
+        }),
     )
     .max(60),
 });

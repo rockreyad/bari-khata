@@ -1,5 +1,6 @@
 import type { SharedStatement } from "./shareModel";
 import type { StatementFormat } from "../people/statement";
+import { adjustmentBasisLabels } from "../history/adjustmentDisplay";
 
 export type ShareReader = (
   token: string,
@@ -51,6 +52,7 @@ const kinds = {
   payment: "পরিশোধ",
   expense_credit: "মাল ফেরত",
   refund: "টাকা ফেরত",
+  adjustment: "সমন্বয়",
 };
 export function sharedStatementCsv(
   statement: SharedStatement,
@@ -60,6 +62,7 @@ export function sharedStatementCsv(
   const safeCell = (value: string) =>
     `"${(/^[\s]*[=+\-@]/.test(value) ? `'${value}` : value).replaceAll('"', '""')}"`;
   const row = (...values: string[]) => values.map(safeCell).join(",");
+  const adjustments = statement.rows.some((row) => row.kind === "adjustment");
   const lines = [
     row(t("নাম"), formatDigits(statement.person.name)),
     row(t("খাতা"), formatDigits(statement.projectName)),
@@ -68,11 +71,31 @@ export function sharedStatementCsv(
       : []),
     row(
       t(statement.account === "materials" ? "মোট কেনাকাটা" : "কাজের বিল"),
-      money(statement.totals.cost),
+      money(statement.totals.reconciledCost ?? statement.totals.cost),
     ),
-    row(t("পরিশোধ হয়েছে"), money(statement.totals.paid)),
-    row(t("আর পাবেন"), money(statement.totals.payable)),
-    row(t("অগ্রিম"), money(statement.totals.advance)),
+    row(
+      t("পরিশোধ হয়েছে"),
+      money(statement.totals.reconciledNetPaid ?? statement.totals.paid),
+    ),
+    row(
+      t("আর পাবেন"),
+      money(statement.totals.reconciledPayable ?? statement.totals.payable),
+    ),
+    row(
+      t("আমার জমা"),
+      money(statement.totals.reconciledAdvance ?? statement.totals.advance),
+    ),
+    ...(["paid", "cost", "balance"] as const).flatMap((basis) => {
+      const correction = statement.totals[`${basis}Correction`] ?? 0;
+      return correction
+        ? [
+            row(
+              `${t("সমন্বয়")} · ${t(adjustmentBasisLabels[basis])}`,
+              money(correction),
+            ),
+          ]
+        : [];
+    }),
     ...statement.contracts.flatMap((contract) => [
       row(t("চুক্তি"), formatDigits(contract.title || contract.workName)),
       row(t("চুক্তির মোট"), money(contract.total)),
@@ -87,16 +110,20 @@ export function sharedStatementCsv(
       t("বিবরণ"),
       t("বিল / ফেরত"),
       t("টাকা দেওয়া"),
+      ...(adjustments ? [t("সমন্বয়")] : []),
       t("পুরোনো তথ্য"),
     ),
     ...statement.rows.map((entry) =>
       row(
         date(entry.date),
-        t(kinds[entry.kind]),
+        entry.kind === "adjustment" && entry.adjustmentBasis
+          ? `${t(kinds.adjustment)} · ${t(adjustmentBasisLabels[entry.adjustmentBasis])}`
+          : t(kinds[entry.kind]),
         formatDigits(entry.works),
         formatDigits(entry.description),
         money(entry.charge),
         money(entry.paid),
+        ...(adjustments ? [money(entry.adjustment ?? 0)] : []),
         entry.historical ? t("পরিশোধ জানা নেই") : "",
       ),
     ),

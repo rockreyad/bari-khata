@@ -1,5 +1,6 @@
 import { latinDigits } from "../lib/numerals.js";
 import { z } from "zod";
+import { assertSafeReconciliations } from "./adjustmentMath.js";
 
 export const MoneySchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 export const AccountSchema = z.enum(["materials", "labour", "other"]);
@@ -293,52 +294,132 @@ export const EntryProvenanceSchema = z.object({
 });
 export type EntryProvenance = z.infer<typeof EntryProvenanceSchema>;
 
-export const EntryCoreSchema = z.object({
-  id: Id,
-  provenance: EntryProvenanceSchema.nullable().optional(),
-  balanceImpact: z.enum(["normal", "historical"]).default("normal"),
-  reviewStatus: z.enum(["confirmed", "needs_review"]).default("confirmed"),
-  reviewReason: Text.default(""),
-  source: z
-    .object({
-      file: z.string().max(300),
-      sheet: z.string().max(200).default(""),
-      cell: z.string().max(100),
-      note: Text.default(""),
-      checksum: z.string().max(128),
-      ledger: z.string().max(200).default(""),
-    })
-    .nullable()
-    .default(null),
-  kind: z.enum(["expense", "payment", "expense_credit", "refund"]),
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .nullable()
-    .default(null),
-  note: Text.default(""),
-  personId: Id.nullable().default(null),
-  account: AccountSchema.default("materials"),
-  paymentPurposeId: Id.nullable().default(null),
-  contractId: Id.nullable().default(null),
-  relatedEntryId: Id.nullable().default(null),
-  lines: z.array(EntryLineSchema).max(1000).default([]),
-  allocations: z
-    .array(z.object({ workId: Id, amount: MoneySchema }))
-    .max(1000)
-    .default([]),
-  paymentParts: z.array(PaymentPartSchema).max(100).default([]),
-  receipts: z.array(ReceiptSchema).max(30).default([]),
-  createdAt: z.string().datetime().or(z.literal("")).default(""),
-  updatedAt: z.string().datetime().or(z.literal("")).default(""),
-  voided: z.boolean().default(false),
-});
+export const SignedMoneySchema = z
+  .number()
+  .int()
+  .min(-Number.MAX_SAFE_INTEGER)
+  .max(Number.MAX_SAFE_INTEGER);
+export const BalanceAdjustmentSchema = z
+  .object({
+    target: z.enum(["person", "work"]),
+    basis: z.enum(["paid", "cost", "balance"]),
+    account: AccountSchema.nullable(),
+    delta: SignedMoneySchema.refine(
+      (amount) => amount !== 0,
+      "Adjustment cannot be zero",
+    ),
+    before: SignedMoneySchema,
+    after: SignedMoneySchema,
+    workId: Id.nullable(),
+  })
+  .strict()
+  .superRefine((adjustment, ctx) => {
+    if (
+      BigInt(adjustment.after) - BigInt(adjustment.before) !==
+      BigInt(adjustment.delta)
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Adjustment must equal its balance difference",
+      });
+  });
+
+export const EntryCoreSchema = z
+  .object({
+    id: Id,
+    provenance: EntryProvenanceSchema.nullable().optional(),
+    balanceImpact: z.enum(["normal", "historical"]).default("normal"),
+    reviewStatus: z.enum(["confirmed", "needs_review"]).default("confirmed"),
+    reviewReason: Text.default(""),
+    source: z
+      .object({
+        file: z.string().max(300),
+        sheet: z.string().max(200).default(""),
+        cell: z.string().max(100),
+        note: Text.default(""),
+        checksum: z.string().max(128),
+        ledger: z.string().max(200).default(""),
+      })
+      .nullable()
+      .default(null),
+    kind: z.enum([
+      "expense",
+      "payment",
+      "expense_credit",
+      "refund",
+      "adjustment",
+    ]),
+    adjustment: BalanceAdjustmentSchema.nullable().optional(),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .default(null),
+    note: Text.default(""),
+    personId: Id.nullable().default(null),
+    account: AccountSchema.default("materials"),
+    paymentPurposeId: Id.nullable().default(null),
+    contractId: Id.nullable().default(null),
+    relatedEntryId: Id.nullable().default(null),
+    lines: z.array(EntryLineSchema).max(1000).default([]),
+    allocations: z
+      .array(z.object({ workId: Id, amount: MoneySchema }))
+      .max(1000)
+      .default([]),
+    paymentParts: z.array(PaymentPartSchema).max(100).default([]),
+    receipts: z.array(ReceiptSchema).max(30).default([]),
+    createdAt: z.string().datetime().or(z.literal("")).default(""),
+    updatedAt: z.string().datetime().or(z.literal("")).default(""),
+    voided: z.boolean().default(false),
+  })
+  .superRefine((entry, ctx) => {
+    if (entry.kind !== "adjustment") {
+      if (entry.adjustment != null)
+        ctx.addIssue({
+          code: "custom",
+          path: ["adjustment"],
+          message: "Only a balance adjustment can have adjustment data",
+        });
+      return;
+    }
+    if (
+      !entry.adjustment ||
+      !entry.note.trim() ||
+      entry.lines.length ||
+      entry.paymentParts.length ||
+      entry.allocations.length ||
+      entry.receipts.length ||
+      entry.relatedEntryId ||
+      entry.paymentPurposeId ||
+      entry.balanceImpact !== "normal" ||
+      entry.reviewStatus !== "confirmed"
+    )
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "A balance adjustment needs its person, reason and balance difference without a bill or cash event",
+      });
+    if (
+      entry.adjustment &&
+      (entry.adjustment.target === "person"
+        ? !entry.personId || entry.adjustment.account !== entry.account
+        : entry.personId !== null ||
+          !entry.adjustment.workId ||
+          entry.adjustment.account !== null ||
+          entry.account !== "other" ||
+          entry.contractId !== null)
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Adjustment target and account scope must agree",
+      });
+  });
 export const EntryRevisionSchema = z.object({
   at: z.string().datetime(),
   before: EntryCoreSchema,
 });
 export type EntryRevision = z.infer<typeof EntryRevisionSchema>;
-export const EntrySchema = EntryCoreSchema.extend({
+export const EntrySchema = EntryCoreSchema.safeExtend({
   revisions: z.array(EntryRevisionSchema).max(2000).default([]),
 });
 export type Entry = z.infer<typeof EntrySchema>;
@@ -410,7 +491,13 @@ export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
   const entryIds = unique(ledger.entries, "entries");
   const entriesById = new Map(ledger.entries.map((entry) => [entry.id, entry]));
   const receiptIds = new Set<string>();
-  const kindTotals = { expense: 0, payment: 0, expense_credit: 0, refund: 0 };
+  const kindTotals = {
+    expense: 0,
+    payment: 0,
+    expense_credit: 0,
+    refund: 0,
+    adjustment: 0,
+  };
   ledger.contracts.forEach((contract, index) => {
     const snapshots = [
       contract,
@@ -490,6 +577,34 @@ export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
   ledger.entries.forEach((entry, index) => {
     const path = ["entries", index];
     for (const snapshot of [entry, ...entry.revisions.map((r) => r.before)]) {
+      if (snapshot.kind === "adjustment" && snapshot.adjustment) {
+        const job = snapshot.contractId
+          ? contractsById.get(snapshot.contractId)
+          : null;
+        if (
+          snapshot.adjustment.target === "person" &&
+          (!snapshot.personId || !people.has(snapshot.personId))
+        )
+          error("Unknown adjustment person", [...path, "personId"]);
+        if (
+          snapshot.adjustment.workId &&
+          !works.has(snapshot.adjustment.workId)
+        )
+          error("Unknown adjustment work", [...path, "adjustment", "workId"]);
+        if (
+          snapshot.contractId &&
+          (!job ||
+            job.personId !== snapshot.personId ||
+            snapshot.account !== "labour" ||
+            (job.scope === "house"
+              ? snapshot.adjustment.workId !== null
+              : snapshot.adjustment.workId !== job.workId))
+        )
+          error("Adjustment must use its contract person, account and scope", [
+            ...path,
+            "adjustment",
+          ]);
+      }
       if (
         snapshot.paymentPurposeId &&
         (!purposes.has(snapshot.paymentPurposeId) ||
@@ -557,7 +672,9 @@ export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
       receiptIds.add(receipt.id);
     });
     const isCost = entry.kind === "expense" || entry.kind === "expense_credit";
-    if (isCost) {
+    if (entry.kind === "adjustment") {
+      // This changes the amount owed; it never creates a bill or cash movement.
+    } else if (isCost) {
       if (!entry.lines.length || !sum(entry.lines.map((l) => l.amount)))
         error("An expense needs positive cost lines", path);
       if (entry.paymentParts.length || entry.allocations.length)
@@ -619,9 +736,12 @@ export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
           a,
         ]);
     });
-    const total = isCost
-      ? sum(entry.lines.map((l) => l.amount))
-      : sum(entry.paymentParts.map((p) => p.amount));
+    const total =
+      entry.kind === "adjustment"
+        ? Math.abs(entry.adjustment?.delta ?? 0)
+        : isCost
+          ? sum(entry.lines.map((l) => l.amount))
+          : sum(entry.paymentParts.map((p) => p.amount));
     if (!Number.isSafeInteger(total)) error("Entry total is too large", path);
     if (!entry.voided) kindTotals[entry.kind] += total;
     if (entry.date) {
@@ -643,6 +763,16 @@ export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
     )
   )
     error("Ledger total is too large");
+  const adjustments = ledger.entries.filter(
+    (entry) => entry.kind === "adjustment" && !entry.voided && entry.adjustment,
+  );
+  if (adjustments.length) {
+    try {
+      assertSafeReconciliations(ledger);
+    } catch {
+      error("Adjusted ledger balance is too large");
+    }
+  }
 });
 
 export type Ledger = z.infer<typeof LedgerSchema>;

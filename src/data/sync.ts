@@ -11,6 +11,7 @@ import { preservesContractHistory } from "../domain/contracts";
 import { preservesWorkHistory } from "../domain/workActivity";
 import { preservesPersonWorkLinks } from "../domain/personWorkLinks";
 import { preservesMcpProvenance } from "../domain/mcpProvenance.js";
+import { preservesBalanceAdjustments } from "../domain/adjustmentHistory.js";
 import {
   getActiveOwner,
   receiptKey,
@@ -231,6 +232,7 @@ export async function synchronizeWorkspace(
           !preservesWorkHistory(row.ledger, document) ||
           !preservesPersonWorkLinks(row.ledger, document) ||
           !preservesMcpProvenance(row.ledger, document) ||
+          !preservesBalanceAdjustments(row.ledger, document) ||
           !preservesRemovalHistory(row.ledger, document)
         ) {
           await recordConflict(repo, transport, cloud);
@@ -327,6 +329,7 @@ export async function synchronizeWorkspace(
       !preservesWorkHistory(latest.ledger, document) ||
       !preservesPersonWorkLinks(latest.ledger, document) ||
       !preservesMcpProvenance(latest.ledger, document) ||
+      !preservesBalanceAdjustments(latest.ledger, document) ||
       !preservesRemovalHistory(latest.ledger, document)
     ) {
       await recordConflict(repo, transport, confirmed);

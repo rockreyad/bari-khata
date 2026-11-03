@@ -40,6 +40,8 @@ import { v4English } from "./v4English";
 import { v3English } from "./v3English";
 import { controlsEnglish } from "../components/ui/controlsEnglish";
 import { historyReportsEnglish } from "../features/history/historyReportsEnglish";
+import { adjustmentEnglish } from "../features/history/adjustmentEnglish";
+import { balanceAdjustmentEnglish } from "../features/reconciliation/balanceAdjustmentEnglish";
 import { v2English } from "./v2English";
 import { authEnglish } from "../features/auth/authEnglish";
 import { settingsEnglish } from "../features/settings/settingsEnglish";
@@ -80,6 +82,8 @@ const english: Record<string, string> = {
   ...integrationsEnglish,
   ...controlsEnglish,
   ...historyReportsEnglish,
+  ...adjustmentEnglish,
+  ...balanceAdjustmentEnglish,
   ...analyticsEnglish,
   ...reviewEnglish,
   ...authEnglish,

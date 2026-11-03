@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import {
   ArrowRightIcon,
+  ArrowsLeftRightIcon,
   ArrowSquareOutIcon,
   ClockCounterClockwiseIcon,
   DotsThreeIcon,
@@ -27,6 +28,7 @@ import {
   type EntryDisplayChange,
 } from "../history/entryChanges";
 import { entryKindLabels } from "../history/history";
+import { adjustmentBasisLabels } from "../history/adjustmentDisplay";
 import "../history/history.css";
 import "../history/history-v4.css";
 import "./entry-detail.css";
@@ -69,6 +71,9 @@ const auditLabels: Partial<Record<EntryChangeField, string>> = {
   "provenance.origin": "যেভাবে লেখা হয়েছে",
   "provenance.reason": "কারণ",
   correctionReason: "হিসাব মেলানোর কারণ",
+  "adjustment.before": "আগের হিসাব",
+  "adjustment.after": "নতুন হিসাব",
+  "adjustment.delta": "সমন্বয়ের অঙ্ক",
 };
 const operationLabels = {
   lines: { added: "খরচ যোগ হয়েছে", removed: "খরচ বাদ গেছে" },
@@ -141,6 +146,11 @@ export function EntryDetail({ id }: { id: string }) {
     .filter((row) => !row.voided && row.kind === "refund")
     .reduce((sum, row) => sum + entryTotal(row), 0);
   const amount = entryTotal(entry);
+  const adjustment = entry.kind === "adjustment" ? entry.adjustment : null;
+  const balanceText = (value: number) =>
+    value === 0
+      ? t("বাকি নেই")
+      : `${t(value < 0 ? "আমার জমা" : "বাকি")} ${money(Math.abs(value))}`;
   const kind = entryKindLabels[entry.kind];
   const amountLabel =
     entry.kind === "expense"
@@ -200,6 +210,9 @@ export function EntryDetail({ id }: { id: string }) {
     }
     if (field === "date") return date(String(value), { year: "numeric" });
     if (field === "amount") return money(Number(value));
+    if (field === "adjustment.before" || field === "adjustment.after")
+      return balanceText(Number(value));
+    if (field === "adjustment.delta") return money(Number(value));
     if (field === "workId") {
       const work = ledger.works.find((row) => row.id === value);
       return work
@@ -377,13 +390,15 @@ export function EntryDetail({ id }: { id: string }) {
       onClose={close}
       footer={
         <div className="detail-footer">
-          <button
-            className="secondary-button"
-            onClick={() => add({ editId: entry.id })}
-          >
-            <PencilSimpleIcon size={18} />
-            {t("সংশোধন করুন")}
-          </button>
+          {entry.kind !== "adjustment" ? (
+            <button
+              className="secondary-button"
+              onClick={() => add({ editId: entry.id })}
+            >
+              <PencilSimpleIcon size={18} />
+              {t("সংশোধন করুন")}
+            </button>
+          ) : null}
           <AppMenu
             trigger={
               <button
@@ -454,14 +469,62 @@ export function EntryDetail({ id }: { id: string }) {
           aria-label={t("টাকার পরিমাণ")}
         >
           <span className="entry-kind-v5">
-            <ReceiptIcon size={17} weight="duotone" />
+            {adjustment ? (
+              <ArrowsLeftRightIcon size={17} />
+            ) : (
+              <ReceiptIcon size={17} weight="duotone" />
+            )}
             {t(amountLabel)}
+            {adjustment
+              ? ` · ${t(adjustmentBasisLabels[adjustment.basis])}`
+              : ""}
           </span>
-          <strong>{money(amount)}</strong>
+          <strong>{money(adjustment?.delta ?? amount)}</strong>
           {entry.voided ? (
             <span className="status-tag voided">{t("বাতিল")}</span>
           ) : null}
         </section>
+        {adjustment ? (
+          <>
+            <div className="detail-v3-summary entry-adjustment-summary">
+              <div>
+                <span>{t("আগের অঙ্ক")}</span>
+                <strong>
+                  {adjustment.basis === "balance"
+                    ? balanceText(adjustment.before)
+                    : money(adjustment.before)}
+                </strong>
+              </div>
+              <div>
+                <span>{t("নতুন অঙ্ক")}</span>
+                <strong>
+                  {adjustment.basis === "balance"
+                    ? balanceText(adjustment.after)
+                    : money(adjustment.after)}
+                </strong>
+              </div>
+              <div>
+                <span>{t("হিসাবের খাত")}</span>
+                <strong>
+                  {adjustment.account
+                    ? fieldText("account", adjustment.account)
+                    : t("সব হিসাব")}
+                </strong>
+              </div>
+              <div>
+                <span>{t("কাজের খাতা")}</span>
+                <strong>
+                  {adjustment.workId
+                    ? fieldText("workId", adjustment.workId)
+                    : t("সব খাতা")}
+                </strong>
+              </div>
+            </div>
+            <p className="helper-text">
+              {t("আগের বিল বা টাকা দেওয়ার তথ্য বদলায়নি।")}
+            </p>
+          </>
+        ) : null}
         {person ? (
           <button
             className="entry-person-card-v5"
@@ -587,7 +650,11 @@ export function EntryDetail({ id }: { id: string }) {
           </div>
         ) : null}
         {showNote ? (
-          <p className="entry-note">{formatDigits(entry.note)}</p>
+          <p className="entry-note">
+            {adjustment
+              ? t("কারণ: {{reason}}", { reason: formatDigits(entry.note) })
+              : formatDigits(entry.note)}
+          </p>
         ) : null}
         {linked.length ? (
           <details className="entry-payment-fold-v5">

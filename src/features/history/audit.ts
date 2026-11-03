@@ -15,6 +15,8 @@ export type EntryAuditEvent = {
   changes: AuditChange[];
 };
 export function snapshotTotal(entry: EntrySnapshot) {
+  if (entry.kind === "adjustment")
+    return Math.abs(entry.adjustment?.delta ?? 0);
   return entry.kind === "expense" || entry.kind === "expense_credit"
     ? entry.lines.reduce((sum, line) => sum + line.amount, 0)
     : entry.paymentParts.reduce((sum, part) => sum + part.amount, 0);

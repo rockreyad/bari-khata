@@ -48,6 +48,28 @@ it("uses only the current work allocation and preserves refund signs", () => {
     workEntryAmount({ ...bill, kind: "expense_credit" }, "doors", "all"),
   ).toBe(-9300000);
 });
+it("keeps an adjustment signed in all activity without assigning it an expense category", () => {
+  const entry = EntrySchema.parse({
+    id: "adjust",
+    kind: "adjustment",
+    personId: "person",
+    note: "অঙ্ক মিলিয়েছি",
+    adjustment: {
+          target: "person", basis: "balance", account: "materials",
+      before: 100000,
+      after: 50000,
+      delta: -50000,
+      workId: "doors",
+    },
+  });
+  expect(workEntryAmount(entry, "doors", "all")).toBe(-50000);
+  expect(workEntryAmount(entry, "windows", "all")).toBe(0);
+  expect(workTabEntries([entry], "doors", "all")).toEqual([entry]);
+  for (const tab of ["material", "labour", "transport", "other"] as const) {
+    expect(workTabEntries([entry], "doors", tab)).toEqual([]);
+    expect(workEntryAmount(entry, "doors", tab)).toBe(0);
+  }
+});
 it("keeps linked transport payment with its bill and keeps bill/payment pairs intact at the preview boundary", () => {
   const transport = EntrySchema.parse({
     ...bill,

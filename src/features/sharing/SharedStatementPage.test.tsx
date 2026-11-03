@@ -55,6 +55,97 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 describe("public live statements", () => {
+  it("identifies the adjusted metric even when a public row has no description", async () => {
+    const source = page();
+    mocked.read.mockResolvedValue(
+      SharedStatementSchema.parse({
+        ...source,
+        total: 1,
+        nextOffset: null,
+        rows: [
+          {
+            key: "adjust",
+            date: "2026-11-03",
+            kind: "adjustment",
+            historical: false,
+            charge: 0,
+            paid: 0,
+            adjustment: 5000,
+            adjustmentBasis: "paid",
+            description: "",
+            works: "টাইলস",
+          },
+        ],
+      }),
+    );
+    const { container } = render(<SharedStatementPage />);
+    await screen.findByText("মোট দিয়েছি");
+    expect(
+      container.querySelector(".shared-kind-adjustment")?.textContent,
+    ).toBe("৳50মোট দিয়েছি");
+  });
+  it("shows a corrected paid headline with an explicit correction while preserving raw received-cash totals", async () => {
+    const source = page();
+    mocked.read.mockResolvedValue(
+      SharedStatementSchema.parse({
+        ...source,
+        nextOffset: null,
+        totals: {
+          ...source.totals,
+          paidCorrection: 5000,
+          reconciledNetPaid: 15000,
+        },
+        rows: [],
+      }),
+    );
+    const { container } = render(<SharedStatementPage />);
+    await screen.findByText("মোট পেয়েছেন");
+    expect(
+      container.querySelector(".shared-total-main > strong")?.textContent,
+    ).toBe("৳150");
+    expect(
+      container.querySelector(".shared-total-main")?.textContent,
+    ).toContain("সমন্বয়");
+    expect(
+      container.querySelector(".shared-total-main")?.textContent,
+    ).toContain("৳50");
+    expect(source.totals.paid).toBe(10000);
+  });
+  it("shows signed adjustments without adding them to the received-cash headline", async () => {
+    const source = page();
+    mocked.read.mockResolvedValue(
+      SharedStatementSchema.parse({
+        ...source,
+        total: 1,
+        nextOffset: null,
+        counts: { adjustment: 1 },
+        totals: { ...source.totals, adjustment: -5000, payable: 15000 },
+        rows: [
+          {
+            key: "adjust",
+            date: "2026-11-03",
+            kind: "adjustment",
+            historical: false,
+            charge: 0,
+            paid: 0,
+            adjustment: -5000,
+            adjustmentBasis: "balance",
+            description: "আগের হিসাব মিলিয়েছি",
+            works: "টাইলস",
+          },
+        ],
+      }),
+    );
+    const { container } = render(<SharedStatementPage />);
+    await screen.findByText("আগের হিসাব মিলিয়েছি");
+    expect(
+      container.querySelector(".shared-total-main > strong")?.textContent,
+    ).toBe("৳100");
+    expect(
+      container.querySelector(".shared-kind-adjustment")?.textContent,
+    ).toBe("৳-50সমন্বয় · বাকি");
+    expect(screen.getByRole("button", { name: "সমন্বয়" })).toBeTruthy();
+  });
   it("loads another bounded page on request and refreshes without stale rows", async () => {
     const first = page();
     mocked.read

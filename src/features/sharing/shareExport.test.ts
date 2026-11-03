@@ -37,6 +37,48 @@ const first = () =>
     ],
   });
 describe("shared statement export", () => {
+  it("keeps signed noncash adjustments in a separate export column with zero payment/charge", () => {
+    const source = first();
+    const page = SharedStatementSchema.parse({
+      ...source,
+      nextOffset: null,
+      totals: { ...source.totals, adjustment: -400000 },
+      rows: [
+        {
+          key: "adjust",
+          date: "2026-11-03",
+          kind: "adjustment",
+          historical: false,
+          charge: 0,
+          paid: 0,
+          adjustment: -400000,
+          adjustmentBasis: "balance",
+          description: "হিসাব মিলিয়েছি",
+          works: "দরজা",
+        },
+      ],
+    });
+    const csv = sharedStatementCsv(page, {
+      t: (value) => value,
+      money: (value) => `৳${value / 100}`,
+      date: (value) => value ?? "",
+    });
+    expect(csv).toContain('"টাকা দেওয়া","সমন্বয়"');
+    expect(csv).toContain('"৳0","৳0","৳-4000"');
+    expect(csv).toContain('"সমন্বয় · বাকি"');
+    for (const invalid of [
+      { adjustment: 0 },
+      { paid: 1 },
+      { charge: 1 },
+      { historical: true },
+    ])
+      expect(
+        SharedStatementSchema.safeParse({
+          ...page,
+          rows: [{ ...page.rows[0], ...invalid }],
+        }).success,
+      ).toBe(false);
+  });
   it.each(["bn", "en"] as const)(
     "keeps currency spacing in the downloadable %s account copy",
     (language) => {

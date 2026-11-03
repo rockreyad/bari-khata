@@ -168,6 +168,10 @@ export function SettingsPage() {
           "বেছে নেওয়া তথ্যের সঙ্গে যুক্ত হিসাব মিলছে না। পছন্দগুলো আবার দেখুন।",
         backup_history_conflict:
           "ফাইলের এই তথ্য নিলে আগের পরিবর্তনের ইতিহাস বাদ যাবে। এখনকারটি রাখুন অথবা নতুন কপি নিন।",
+        balance_adjustment_would_be_lost:
+          "এই কপিতে সমন্বয়ের আগের তথ্য নেই। এখনকারটি রাখুন অথবা নতুন কপি নিন।",
+        balance_adjustment_history_invalid:
+          "এই কপির সমন্বয়ের তথ্য মিলছে না। নতুন কপি বেছে নিন।",
         receipt_content_conflict:
           "একই ভাউচারের দুই কপিতে আলাদা ফাইল আছে। নতুন কপি নিয়ে আবার চেষ্টা করুন।",
         account_changed:
@@ -407,7 +411,7 @@ export function SettingsPage() {
               />
               <SettingsRow
                 title={t("হিসাব মিলিয়ে নিই")}
-                description={t("বিল, দেওয়া টাকা বা চুক্তির ভুল অঙ্ক ঠিক করুন")}
+                description={t("ব্যক্তি বা খাতার মোট মিলিয়ে নিন")}
                 icon={<PencilSimple size={21} weight="duotone" />}
                 tone="violet"
                 onClick={() => go("/reconcile")}

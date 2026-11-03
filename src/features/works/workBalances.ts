@@ -1,11 +1,16 @@
 import { effectiveAccounts } from "../../domain/effectiveAccounts";
 import type { Account, Ledger } from "../../domain/model";
+import {
+  adjustmentBalanceDelta,
+  reconciledTotals,
+} from "../../domain/adjustmentMath";
 
 type Bucket = {
   personId: string | null;
   account: Account;
   contractId: string | null;
   billed: bigint;
+  adjustment: bigint;
   paid: bigint;
   refunds: bigint;
 };
@@ -24,6 +29,20 @@ type Amounts = {
   workCommitmentOutstanding: number;
   unassignedAdvance: number;
   sharedOutstanding: number;
+  actualCost: number;
+  actualPaid: number;
+  actualRefunds: number;
+  actualNetPaid: number;
+  costCorrection: number;
+  paidCorrection: number;
+  balanceCorrection: number;
+  owedCorrection: number;
+  reconciledCost: number;
+  reconciledNetPaid: number;
+  reconciledBalance: number;
+  reconciledAdvance: number;
+  unallocatedWorkOwedCorrection: number;
+  unallocatedWorkBalanceCorrection: number;
 };
 export type WorkBalances =
   | ({
@@ -31,6 +50,7 @@ export type WorkBalances =
       additionalCommitment: number | null;
       scopedOutstanding: number | null;
       totalOutstanding: number | null;
+      reconciledPayable: number | null;
       byAccount: Record<Account, number | null>;
       sharedCommitments: SharedCommitment[];
       ambiguousLabourPersonIds: (string | null)[];
@@ -40,6 +60,7 @@ export type WorkBalances =
       additionalCommitment: null;
       scopedOutstanding: null;
       totalOutstanding: null;
+      reconciledPayable: null;
       byAccount: Record<Account, null>;
       sharedCommitments: [];
       ambiguousLabourPersonIds: [];
@@ -55,6 +76,21 @@ const invalid = (): WorkBalances => ({
   workCommitmentOutstanding: null,
   unassignedAdvance: null,
   sharedOutstanding: null,
+  actualCost: null,
+  actualPaid: null,
+  actualRefunds: null,
+  actualNetPaid: null,
+  costCorrection: null,
+  paidCorrection: null,
+  balanceCorrection: null,
+  owedCorrection: null,
+  reconciledCost: null,
+  reconciledNetPaid: null,
+  reconciledBalance: null,
+  reconciledAdvance: null,
+  reconciledPayable: null,
+  unallocatedWorkOwedCorrection: null,
+  unallocatedWorkBalanceCorrection: null,
   additionalCommitment: null,
   scopedOutstanding: null,
   totalOutstanding: null,
@@ -65,9 +101,18 @@ const invalid = (): WorkBalances => ({
 
 export function workBalances(ledger: Ledger, workId: string): WorkBalances {
   if (!ledger.works.some((work) => work.id === workId)) return invalid();
+  let reconciled: ReturnType<typeof reconciledTotals>;
+  try {
+    reconciled = reconciledTotals(ledger, { workId });
+  } catch {
+    return invalid();
+  }
   const accounts = effectiveAccounts(ledger);
   const buckets = new Map<string, Bucket>();
-  const shared = new Map<string, { billed: bigint; netPaid: bigint }>();
+  const shared = new Map<
+    string,
+    { billed: bigint; netPaid: bigint; adjustment: bigint }
+  >();
   const sharedIds = new Set(
     ledger.contracts
       .filter((contract) => contract.scope === "house")
@@ -77,12 +122,32 @@ export function workBalances(ledger: Ledger, workId: string): WorkBalances {
     refunds = 0n;
   for (const entry of ledger.entries) {
     if (entry.voided || entry.balanceImpact === "historical") continue;
+    if (
+      entry.kind === "adjustment" &&
+      (!entry.contractId || entry.adjustment?.target !== "person")
+    )
+      continue;
     const cost = entry.kind === "expense" || entry.kind === "expense_credit";
-    const parts = cost ? entry.lines : entry.allocations;
+    const parts =
+      entry.kind === "adjustment" && entry.adjustment
+        ? [
+            {
+              workId: entry.adjustment.workId,
+              amount: adjustmentBalanceDelta(entry),
+            },
+          ]
+        : cost
+          ? entry.lines
+          : entry.allocations;
     if (entry.contractId && sharedIds.has(entry.contractId)) {
-      const row = shared.get(entry.contractId) ?? { billed: 0n, netPaid: 0n };
+      const row = shared.get(entry.contractId) ?? {
+        billed: 0n,
+        netPaid: 0n,
+        adjustment: 0n,
+      };
       const amount = parts.reduce((sum, part) => sum + BigInt(part.amount), 0n);
-      if (cost)
+      if (entry.kind === "adjustment") row.adjustment += amount;
+      else if (cost)
         row.billed += entry.kind === "expense_credit" ? -amount : amount;
       else row.netPaid += entry.kind === "refund" ? -amount : amount;
       shared.set(entry.contractId, row);
@@ -98,11 +163,13 @@ export function workBalances(ledger: Ledger, workId: string): WorkBalances {
         account,
         contractId: entry.contractId,
         billed: 0n,
+        adjustment: 0n,
         paid: 0n,
         refunds: 0n,
       };
       const amount = BigInt(part.amount);
-      if (cost)
+      if (entry.kind === "adjustment") bucket.adjustment += amount;
+      else if (cost)
         bucket.billed += entry.kind === "expense_credit" ? -amount : amount;
       else if (entry.kind === "payment") {
         bucket.paid += amount;
@@ -120,11 +187,11 @@ export function workBalances(ledger: Ledger, workId: string): WorkBalances {
     unassignedAdvance = 0n;
   for (const bucket of buckets.values()) {
     const net = bucket.paid - bucket.refunds;
-    const payable = positive(bucket.billed - net);
+    const payable = positive(bucket.billed + bucket.adjustment - net);
     billPayable += payable;
     byAccount[bucket.account] += payable;
     if (bucket.contractId) byContract.set(bucket.contractId, bucket);
-    else unassignedAdvance += positive(net - bucket.billed);
+    else unassignedAdvance += positive(net - bucket.billed - bucket.adjustment);
   }
   const localContracts = ledger.contracts.filter(
     (contract) => contract.scope === "work" && contract.workId === workId,
@@ -139,7 +206,9 @@ export function workBalances(ledger: Ledger, workId: string): WorkBalances {
           (bucket) =>
             bucket.account === "labour" &&
             !bucket.contractId &&
-            positive(bucket.billed - bucket.paid + bucket.refunds) > 0n &&
+            positive(
+              bucket.billed + bucket.adjustment - bucket.paid + bucket.refunds,
+            ) > 0n &&
             (bucket.personId === null
               ? localContracts.length > 0
               : contractedPeople.has(bucket.personId)),
@@ -155,10 +224,13 @@ export function workBalances(ledger: Ledger, workId: string): WorkBalances {
     const billed = bucket?.billed ?? 0n;
     const net = (bucket?.paid ?? 0n) - (bucket?.refunds ?? 0n);
     const agreed = BigInt(contract.total);
-    const outstanding = positive((agreed > billed ? agreed : billed) - net);
-    const extra = outstanding - positive(billed - net);
+    const adjustment = bucket?.adjustment ?? 0n;
+    const outstanding = positive(
+      (agreed > billed ? agreed : billed) + adjustment - net,
+    );
+    const extra = outstanding - positive(billed + adjustment - net);
     additionalCommitment += extra;
-    workCommitmentOutstanding += positive(agreed - net);
+    workCommitmentOutstanding += outstanding;
     byAccount.labour += extra;
   }
   let sharedOutstanding = 0n;
@@ -169,7 +241,9 @@ export function workBalances(ledger: Ledger, workId: string): WorkBalances {
       const agreed = BigInt(contract.total);
       const billed = global?.billed ?? 0n;
       const remaining = positive(
-        (agreed > billed ? agreed : billed) - (global?.netPaid ?? 0n),
+        (agreed > billed ? agreed : billed) +
+          (global?.adjustment ?? 0n) -
+          (global?.netPaid ?? 0n),
       );
       if (!remaining) return [];
       sharedOutstanding += remaining;
@@ -180,7 +254,8 @@ export function workBalances(ledger: Ledger, workId: string): WorkBalances {
           archived: Boolean(contract.archivedAt),
           remaining,
           billPayableForWork: positive(
-            (bucket?.billed ?? 0n) -
+            (bucket?.billed ?? 0n) +
+              (bucket?.adjustment ?? 0n) -
               (bucket?.paid ?? 0n) +
               (bucket?.refunds ?? 0n),
           ),
@@ -213,6 +288,7 @@ export function workBalances(ledger: Ledger, workId: string): WorkBalances {
     return invalid();
   const ambiguous = ambiguousLabourPersonIds.length > 0;
   return {
+    ...reconciled,
     valid: true,
     paid: Number(paid),
     refunds: Number(refunds),
@@ -225,6 +301,10 @@ export function workBalances(ledger: Ledger, workId: string): WorkBalances {
     scopedOutstanding: ambiguous ? null : Number(scopedOutstanding),
     totalOutstanding:
       ambiguous || sharedCommitments.length ? null : Number(scopedOutstanding),
+    reconciledPayable:
+      ambiguous || reconciled.balanceAmbiguous
+        ? null
+        : reconciled.reconciledPayable,
     byAccount: {
       materials: Number(byAccount.materials),
       labour: ambiguous ? null : Number(byAccount.labour),

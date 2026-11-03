@@ -51,6 +51,57 @@ vi.mock("../../context/LanguageProvider", () => ({
 }));
 afterEach(cleanup);
 describe("entry detail navigation", () => {
+  it("keeps adjustment records immutable while retaining audited void and restore controls", async () => {
+    let ledger = LedgerSchema.parse({
+      people: [{ id: "person", name: "পরীক্ষার নাম" }],
+      entries: [
+        {
+          id: "adjust",
+          kind: "adjustment",
+          personId: "person",
+          note: "হিসাব মিলিয়েছি",
+          adjustment: {
+          target: "person", basis: "balance", account: "materials",
+            before: 10000,
+            after: 5000,
+            delta: -5000,
+            workId: null,
+          },
+        },
+      ],
+    });
+    const save = vi.fn(async (next: Ledger | ((current: Ledger) => Ledger)) => {
+      ledger = typeof next === "function" ? next(ledger) : next;
+    });
+    const add = vi.fn();
+    const useState = () => ({
+      ledger,
+      mode: "demo",
+      add,
+      close: vi.fn(),
+      go: vi.fn(),
+      detail: vi.fn(),
+      save,
+      notify: vi.fn(),
+    });
+    notebook.mockImplementation(useState);
+    const page = render(<EntryDetail id="adjust" />);
+    expect(screen.queryByRole("button", { name: "সংশোধন করুন" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "হিসাব বাতিল করুন" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "হিসাব বাদ দিন",
+      }),
+    );
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(ledger.entries[0].voided).toBe(true);
+    expect(ledger.entries[0].revisions).toHaveLength(1);
+    page.rerender(<EntryDetail id="adjust" />);
+    expect(
+      screen.getByRole("button", { name: "হিসাবে ফিরিয়ে আনুন" }),
+    ).toBeTruthy();
+    expect(add).not.toHaveBeenCalled();
+  });
   it("opens the exact shop, notebook and scoped history without retaining the detail modal", () => {
     const ledger = LedgerSchema.parse({
       people: [{ id: "shop", name: "বাবুল ইলেকট্রনিক্স", kind: "shop" }],

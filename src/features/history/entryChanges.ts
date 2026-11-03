@@ -14,6 +14,7 @@ export type EntryChangeField =
   | "method"
   | "receiptName"
   | "correctionReason"
+  | `adjustment.${"before" | "after" | "delta"}`
   | `source.${"file" | "sheet" | "cell" | "note" | "ledger"}`
   | `provenance.${"actorName" | "origin" | "reason"}`;
 export type EntryDisplayChange = {
@@ -76,6 +77,19 @@ export function entryDisplayChanges(
   ];
   for (const field of scalarFields)
     add(field, field, before[field], after[field]);
+  for (const field of ["before", "after", "delta"] as const)
+    add(
+      `adjustment:${field}`,
+      `adjustment.${field}`,
+      before.adjustment?.[field],
+      after.adjustment?.[field],
+    );
+  add(
+    "adjustment:workId",
+    "workId",
+    before.adjustment?.workId,
+    after.adjustment?.workId,
+  );
   const appendedNote =
     before.note && after.note.startsWith(`${before.note}\n`)
       ? after.note.slice(before.note.length + 1)

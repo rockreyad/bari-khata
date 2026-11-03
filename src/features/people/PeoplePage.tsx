@@ -39,11 +39,13 @@ export function PeoplePage() {
         matchesContact(person, query) &&
         (kind === "all" || personKind(person) === kind) &&
         (status === "all" ||
-          (status === "due" ? summary.payable > 0 : summary.advance > 0)),
+          (status === "due"
+            ? summary.reconciledPayable > 0
+            : summary.reconciledAdvance > 0)),
     )
     .sort(
       (a, b) =>
-        b.summary.netPaid - a.summary.netPaid ||
+        b.summary.reconciledNetPaid - a.summary.reconciledNetPaid ||
         a.person.name.localeCompare(b.person.name),
     );
   const filter = (key: string, value: string) =>
@@ -107,7 +109,7 @@ export function PeoplePage() {
               onSelect: () => filter("status", "due"),
             },
             {
-              label: t("অগ্রিম দিয়েছি"),
+              label: t("আমার জমা"),
               onSelect: () => filter("status", "advance"),
             },
           ]}
@@ -163,13 +165,20 @@ export function PeoplePage() {
                     t("যাচাই বাকি")
                   ) : (
                     <span className="contact-paid-amount">
-                      {money(summary.netPaid)}
+                      {money(summary.reconciledNetPaid)}
                     </span>
                   )}
                 </strong>
-                {summary.payable > 0 ? (
+                {summary.paidCorrection !== 0 ? (
+                  <small>
+                    {t("সমন্বয়")}: {money(summary.paidCorrection)}
+                  </small>
+                ) : null}
+                {summary.reconciledPayable > 0 ? (
                   <small className="contact-due">
-                    {t("বাকি {{amount}}", { amount: money(summary.payable) })}
+                    {t("বাকি {{amount}}", {
+                      amount: money(summary.reconciledPayable),
+                    })}
                   </small>
                 ) : null}
               </span>

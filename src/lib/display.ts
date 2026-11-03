@@ -1,5 +1,7 @@
 import { poishaDecimal } from "../domain/money";
 import type { CostType, Entry, Ledger } from "../domain/model";
+import { entryWorkAmount, entryWorkIds } from "../domain/ledger";
+import { adjustmentBasisLabels } from "../features/history/adjustmentDisplay";
 
 export const costNames: Record<CostType, string> = {
   material: "মালামাল",
@@ -38,17 +40,16 @@ export function todayDhaka() {
     .join("-");
 }
 export function entryWorks(ledger: Ledger, entry: Entry) {
-  const ids = [
-    ...new Set([
-      ...entry.lines.map((line) => line.workId),
-      ...entry.allocations.map((line) => line.workId),
-    ]),
-  ];
+  const ids = entryWorkIds(entry);
   return ids
     .map((id) => ledger.works.find((work) => work.id === id))
     .filter(Boolean);
 }
 export function entryAmount(entry: Entry, workId?: string) {
+  if (entry.kind === "adjustment") {
+    const amount = entryWorkAmount(entry, workId);
+    return amount ? amount * ((entry.adjustment?.delta ?? 0) < 0 ? -1 : 1) : 0;
+  }
   return entry.lines.length
     ? entry.lines
         .filter((line) => !workId || line.workId === workId)
@@ -83,17 +84,19 @@ export function buildCsv(
   for (const entry of entries)
     rows.push([
       entry.date ?? "",
-      t(
-        entry.kind === "payment"
-          ? "টাকা দিয়েছি"
-          : entry.kind === "refund"
-            ? "টাকা ফেরত পেয়েছি"
-            : entry.kind === "expense_credit"
-              ? "মাল ফেরত দিয়েছি"
-              : entry.account === "labour"
-                ? "মজুরির হিসাব"
-                : "মাল কিনেছি",
-      ),
+      entry.kind === "adjustment"
+        ? `${t("সমন্বয়")} · ${entry.adjustment ? t(adjustmentBasisLabels[entry.adjustment.basis]) : ""}`
+        : t(
+            entry.kind === "payment"
+              ? "টাকা দিয়েছি"
+              : entry.kind === "refund"
+                ? "টাকা ফেরত পেয়েছি"
+                : entry.kind === "expense_credit"
+                  ? "মাল ফেরত দিয়েছি"
+                  : entry.account === "labour"
+                    ? "মজুরির হিসাব"
+                    : "মাল কিনেছি",
+          ),
       entryWorks(ledger, entry)
         .filter((work) => !workId || work!.id === workId)
         .map((work) => work!.name)

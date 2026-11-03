@@ -33,13 +33,16 @@ import { PersonMark, kindLabels, accountLabels } from "./ContactIdentity";
 import { StatementSheet } from "./StatementSheet";
 import { phoneLink } from "./people";
 import { PersonNotebooks } from "./PersonNotebooks";
+import { TotalAdjustmentSheet } from "../reconciliation/TotalAdjustmentSheet";
 import "./people.css";
+import "../reconciliation/balance-adjustment.css";
 export function PersonPage() {
   const { ledger, go, add, entity, detail, base } = useNotebook();
   const { t, money, formatDigits } = useLanguageContext();
   const { id, personId } = useParams();
   const [params, setParams] = useSearchParams();
   const [shareOpen, setShareOpen] = useState(false);
+  const [adjustmentOpen, setAdjustmentOpen] = useState(false);
   const person = ledger.people.find((record) => record.id === (id ?? personId));
   const removal = useEntityRemoval("person", id ?? personId);
   const kind = person ? personKind(person) : "other";
@@ -153,12 +156,13 @@ export function PersonPage() {
         person.id,
         workId || undefined,
       ).advance
-    : summary.advance;
+    : summary.reconciledAdvance;
   const jobTotals = jobBalanceTotals(ledger, personContracts);
   const hasJobs = personContracts.some((job) => !job.archivedAt);
   const isPurchase = account === "materials";
   const metrics = [
-    ...(summary.cost !== 0 && summary.cost !== summary.netPaid
+    ...((summary.reconciledCost !== 0 || summary.costCorrection !== 0) &&
+    summary.reconciledCost !== summary.reconciledNetPaid
       ? [
           {
             label: isPurchase
@@ -166,25 +170,33 @@ export function PersonPage() {
               : account === "labour"
                 ? "কাজের মজুরি"
                 : "অন্য খরচ",
-            amount: summary.cost,
+            amount: summary.reconciledCost,
             tone: "contact-expense",
           },
         ]
       : []),
-    ...(summary.payable > 0
+    ...((summary.balanceAmbiguous
+      ? summary.payable
+      : summary.reconciledPayable) > 0
       ? [
           {
-            label: "দিতে বাকি",
-            amount: summary.payable,
+            label: summary.balanceAmbiguous ? "বিলের বাকি" : "দিতে বাকি",
+            amount: summary.balanceAmbiguous
+              ? summary.payable
+              : summary.reconciledPayable,
             tone: "contact-due",
           },
         ]
       : []),
   ];
-  if (kind === "shop" && summary.confirmedCost > 0 && summary.advance > 0)
+  if (
+    kind === "shop" &&
+    summary.confirmedCost > 0 &&
+    summary.reconciledAdvance > 0
+  )
     metrics.push({
-      label: "অগ্রিম",
-      amount: summary.advance,
+      label: summary.owedCorrection !== 0 ? "আমার জমা" : "অগ্রিম",
+      amount: summary.reconciledAdvance,
       tone: "contact-credit",
     });
   const menu = [
@@ -261,7 +273,12 @@ export function PersonPage() {
       >
         <div className="contact-summary-hero">
           <span>{t("মোট টাকা দিয়েছি")}</span>
-          <strong>{money(summary.netPaid)}</strong>
+          <strong>{money(summary.reconciledNetPaid)}</strong>
+          {summary.paidCorrection !== 0 ||
+          summary.costCorrection !== 0 ||
+          summary.balanceCorrection !== 0 ? (
+            <small>{t("সমন্বয়সহ")}</small>
+          ) : null}
           {summary.refunds > 0 ? <small>{t("ফেরত বাদে")}</small> : null}
         </div>
         {metrics.length ? (
@@ -323,7 +340,9 @@ export function PersonPage() {
               <CaretDownIcon size={16} />
             </summary>
             <dl>
-              <dt>{t("অগ্রিম দিয়েছি")}</dt>
+              <dt>
+                {t(summary.owedCorrection !== 0 ? "আমার জমা" : "অগ্রিম দিয়েছি")}
+              </dt>
               <dd>{money(uncontractedAdvance)}</dd>
             </dl>
           </details>
@@ -351,6 +370,16 @@ export function PersonPage() {
           presentation="embedded"
         />
       </section>
+      {!removal.archived ? (
+        <div className="contact-adjustment-link">
+          <button
+            className="text-button"
+            onClick={() => setAdjustmentOpen(true)}
+          >
+            {t("মোট হিসাব মেলাই")}
+          </button>
+        </div>
+      ) : null}
       {account === defaultAccount ? (
         <div
           className={`contact-main-actions ${kind === "shop" ? "contact-shop-actions" : ""}`}
@@ -440,6 +469,13 @@ export function PersonPage() {
           account={account}
           workId={workId || undefined}
           onClose={() => setShareOpen(false)}
+        />
+      ) : null}
+      {adjustmentOpen ? (
+        <TotalAdjustmentSheet
+          target={{ target: "person", id: person.id, account }}
+          name={person.name}
+          onClose={() => setAdjustmentOpen(false)}
         />
       ) : null}
     </div>

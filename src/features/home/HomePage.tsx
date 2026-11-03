@@ -73,7 +73,12 @@ export function HomePage() {
         <div className="home-total-heading">
           <div>
             <span>{t("মোট টাকা দিয়েছি")}</span>
-            <strong>{money(paid.netPaid)}</strong>
+            <strong>{money(s.reconciledNetPaid)}</strong>
+            {s.paidCorrection !== 0 ? (
+              <small>
+                {t("সমন্বয়")}: {money(s.paidCorrection)}
+              </small>
+            ) : null}
           </div>
           <button className="home-total-report" onClick={() => go("/reports")}>
             {t("ভাগ করে দেখি")}
@@ -102,10 +107,10 @@ export function HomePage() {
             <ArrowRightIcon size={15} />
           </button>
         ) : null}
-        {s.payable > 0 ? (
+        {s.reconciledPayable > 0 ? (
           <div className="home-known-due">
             <span>{t("দিতে বাকি")}</span>
-            <strong>{money(s.payable)}</strong>
+            <strong>{money(s.reconciledPayable)}</strong>
           </div>
         ) : null}
       </section>

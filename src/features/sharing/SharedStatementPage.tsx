@@ -19,11 +19,13 @@ import {
   sharedStatementCsv,
 } from "./shareExport";
 import "./sharing.css";
+import { adjustmentBasisLabels } from "../history/adjustmentDisplay";
 const kinds = {
   expense: "বিল",
   payment: "পরিশোধ",
   expense_credit: "মাল ফেরত",
   refund: "টাকা ফেরত",
+  adjustment: "সমন্বয়",
 };
 export function SharedStatementPage() {
   const { t, money, date, formatDigits } = useLanguageContext();
@@ -168,10 +170,13 @@ export function SharedStatementPage() {
     ...(statement?.counts.refund
       ? [{ kind: "refund" as const, label: "টাকা ফেরত" }]
       : []),
+    ...(statement?.counts.adjustment
+      ? [{ kind: "adjustment" as const, label: "সমন্বয়" }]
+      : []),
   ];
   const metrics = statement
     ? [
-        ...(statement.totals.cost !== 0
+        ...((statement.totals.reconciledCost ?? statement.totals.cost) !== 0
           ? [
               {
                 label: isWorker
@@ -179,13 +184,22 @@ export function SharedStatementPage() {
                   : isShop
                     ? "মালের দাম"
                     : "অন্য খরচ",
-                amount: statement.totals.cost,
+                amount:
+                  statement.totals.reconciledCost ?? statement.totals.cost,
                 due: false,
               },
             ]
           : []),
-        ...(statement.totals.payable > 0
-          ? [{ label: "আর পাবেন", amount: statement.totals.payable, due: true }]
+        ...((statement.totals.reconciledPayable ?? statement.totals.payable) > 0
+          ? [
+              {
+                label: "আর পাবেন",
+                amount:
+                  statement.totals.reconciledPayable ??
+                  statement.totals.payable,
+                due: true,
+              },
+            ]
           : []),
       ]
     : [];
@@ -250,7 +264,16 @@ export function SharedStatementPage() {
           <section className="shared-overview" aria-label={t("হিসাবের সারাংশ")}>
             <div className="shared-total-main">
               <span>{t("মোট পেয়েছেন")}</span>
-              <strong>{money(statement.totals.paid)}</strong>
+              <strong>
+                {money(
+                  statement.totals.reconciledNetPaid ?? statement.totals.paid,
+                )}
+              </strong>
+              {statement.totals.paidCorrection ? (
+                <small>
+                  {t("সমন্বয়")}: {money(statement.totals.paidCorrection)}
+                </small>
+              ) : null}
               <small>
                 {t(statement.workName ? "এই কাজের হিসাব" : "সব সময়ের হিসাব")}
               </small>
@@ -273,15 +296,21 @@ export function SharedStatementPage() {
                 ))}
               </dl>
             ) : null}
-            {statement.totals.advance > 0 ? (
+            {(statement.totals.reconciledAdvance ?? statement.totals.advance) >
+            0 ? (
               <details className="shared-reconciliation">
                 <summary>
                   {t("আরও হিসাব")}
                   <CaretDownIcon size={16} />
                 </summary>
                 <dl>
-                  <dt>{t("অগ্রিম")}</dt>
-                  <dd>{money(statement.totals.advance)}</dd>
+                  <dt>{t("আমার জমা")}</dt>
+                  <dd>
+                    {money(
+                      statement.totals.reconciledAdvance ??
+                        statement.totals.advance,
+                    )}
+                  </dd>
                 </dl>
               </details>
             ) : null}
@@ -403,9 +432,20 @@ export function SharedStatementPage() {
                     ) : null}
                   </div>
                   <div className={`shared-row-amount shared-kind-${row.kind}`}>
-                    <strong>{money(Math.abs(row.charge || row.paid))}</strong>
-                    {row.description ? (
-                      <small>{t(kinds[row.kind])}</small>
+                    <strong>
+                      {money(
+                        row.kind === "adjustment"
+                          ? (row.adjustment ?? 0)
+                          : Math.abs(row.charge || row.paid),
+                      )}
+                    </strong>
+                    {row.description || row.kind === "adjustment" ? (
+                      <small>
+                        {row.description ? t(kinds[row.kind]) : ""}
+                        {row.kind === "adjustment" && row.adjustmentBasis
+                          ? `${row.description ? " · " : ""}${t(adjustmentBasisLabels[row.adjustmentBasis])}`
+                          : ""}
+                      </small>
                     ) : null}
                   </div>
                 </article>
