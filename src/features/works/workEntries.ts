@@ -4,7 +4,22 @@ import { historyGroups, sortHistory } from "../history/history";
 
 export type WorkTab =
   "all" | "material" | "labour" | "transport" | "other" | "activity";
-export function workTabEntries(entries: Entry[], workId: string, tab: WorkTab) {
+function isWorkLabourAdjustment(entry: Entry, workId: string) {
+  return (
+    entry.kind === "adjustment" &&
+    !entry.voided &&
+    entry.adjustment?.target === "person" &&
+    entry.account === "labour" &&
+    entry.adjustment.account === "labour" &&
+    entry.adjustment.workId === workId
+  );
+}
+export function workTabEntries(
+  entries: Entry[],
+  workId: string,
+  tab: WorkTab,
+  classificationEntries: readonly Entry[] = entries,
+) {
   if (tab === "all") return entries;
   const types =
     tab === "transport"
@@ -12,7 +27,8 @@ export function workTabEntries(entries: Entry[], workId: string, tab: WorkTab) {
       : tab === "other"
         ? ["other", "rental"]
         : [tab];
-  const bills = entries.filter((entry) =>
+  // A cancelled bill still identifies the category of its active payments.
+  const bills = classificationEntries.filter((entry) =>
     entry.lines.some(
       (line) => line.workId === workId && types.includes(line.costType),
     ),
@@ -30,6 +46,7 @@ export function workTabEntries(entries: Entry[], workId: string, tab: WorkTab) {
   return entries.filter(
     (entry) =>
       billIds.has(entry.id) ||
+      (tab === "labour" && isWorkLabourAdjustment(entry, workId)) ||
       ((entry.kind === "payment" || entry.kind === "refund") &&
         (entry.relatedEntryId
           ? unambiguousBills.has(entry.relatedEntryId)
@@ -42,7 +59,11 @@ export function workTabEntries(entries: Entry[], workId: string, tab: WorkTab) {
 }
 export function workEntryAmount(entry: Entry, workId: string, tab: WorkTab) {
   if (entry.kind === "adjustment") {
-    const amount = tab === "all" ? entryWorkAmount(entry, workId) : 0;
+    const amount =
+      tab === "all" ||
+      (tab === "labour" && isWorkLabourAdjustment(entry, workId))
+        ? entryWorkAmount(entry, workId)
+        : 0;
     return amount ? amount * ((entry.adjustment?.delta ?? 0) < 0 ? -1 : 1) : 0;
   }
   if (entry.kind === "payment" || entry.kind === "refund" || tab === "all")

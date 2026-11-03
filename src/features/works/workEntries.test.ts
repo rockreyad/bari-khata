@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { EntrySchema, LedgerSchema } from "../../domain/model";
-import { summarize } from "../../domain/ledger";
+import { setEntryVoided, summarize } from "../../domain/ledger";
 import {
   recentWorkEntries,
   workEntryAmount,
@@ -55,7 +55,9 @@ it("keeps an adjustment signed in all activity without assigning it an expense c
     personId: "person",
     note: "অঙ্ক মিলিয়েছি",
     adjustment: {
-          target: "person", basis: "balance", account: "materials",
+      target: "person",
+      basis: "balance",
+      account: "materials",
       before: 100000,
       after: 50000,
       delta: -50000,
@@ -141,4 +143,237 @@ it("leaves ambiguous cash for a mixed transport/rental bill in all transactions"
   expect(workTabEntries([mixed, cash], "doors", "all")).toEqual([mixed, cash]);
   expect(workTabEntries([mixed, cash], "doors", "transport")).toEqual([mixed]);
   expect(workTabEntries([mixed, cash], "doors", "other")).toEqual([mixed]);
+});
+
+it.each([
+  {
+    tab: "material" as const,
+    account: "materials" as const,
+    costType: "material" as const,
+  },
+  {
+    tab: "labour" as const,
+    account: "labour" as const,
+    costType: "labour" as const,
+  },
+])(
+  "keeps split-work payment and refund in $tab after the linked bill is cancelled",
+  ({ tab, account, costType }) => {
+    const original = EntrySchema.parse({
+      id: "cancelled-bill",
+      kind: "expense",
+      account,
+      personId: "person",
+      voided: true,
+      lines: [
+        { id: "door-line", workId: "doors", costType, amount: 6000 },
+        { id: "window-line", workId: "windows", costType, amount: 4000 },
+      ],
+    });
+    const cash = EntrySchema.parse({
+      id: "split-payment",
+      kind: "payment",
+      account,
+      personId: "person",
+      relatedEntryId: original.id,
+      allocations: [
+        { workId: "doors", amount: 600 },
+        { workId: "windows", amount: 400 },
+      ],
+      paymentParts: [{ method: "cash", amount: 1000 }],
+    });
+    const refund = EntrySchema.parse({
+      ...cash,
+      id: "split-refund",
+      kind: "refund",
+      allocations: [
+        { workId: "doors", amount: 200 },
+        { workId: "windows", amount: 100 },
+      ],
+      paymentParts: [{ method: "cash", amount: 300 }],
+    });
+    const ledger = LedgerSchema.parse({
+      works: [
+        { id: "doors", name: "দরজা" },
+        { id: "windows", name: "জানালা" },
+      ],
+      people: [{ id: "person", name: "নমুনা ব্যক্তি" }],
+      entries: [original, cash, refund],
+    });
+    const before = structuredClone(ledger);
+    for (const [workId, paid, returned] of [
+      ["doors", 600, 200],
+      ["windows", 400, 100],
+    ] as const) {
+      const summary = summarize(ledger, workId);
+      const visible = workTabEntries(
+        summary.entries,
+        workId,
+        tab,
+        ledger.entries,
+      );
+      expect(visible.map((entry) => entry.id)).toEqual([cash.id, refund.id]);
+      expect(
+        visible.map((entry) => workEntryAmount(entry, workId, tab)),
+      ).toEqual([paid, -returned]);
+      expect(recentWorkEntries(visible).map((entry) => entry.id)).toEqual([
+        refund.id,
+        cash.id,
+      ]);
+      expect(summary.cost).toBe(0);
+      expect(summary.netPaid).toBe(paid - returned);
+    }
+    expect(ledger).toEqual(before);
+  },
+);
+
+it("uses the cancelled mixed bill's current-work lines without guessing a category for ambiguous or standalone cash", () => {
+  const mixed = EntrySchema.parse({
+    id: "mixed-cancelled",
+    kind: "expense",
+    account: "other",
+    voided: true,
+    lines: [
+      {
+        id: "door-transport",
+        workId: "doors",
+        costType: "transport",
+        amount: 20000,
+      },
+      {
+        id: "window-rental",
+        workId: "windows",
+        costType: "rental",
+        amount: 50000,
+      },
+    ],
+  });
+  const cash = EntrySchema.parse({
+    ...van,
+    id: "mixed-payment",
+    relatedEntryId: mixed.id,
+    allocations: [
+      { workId: "doors", amount: 10000 },
+      { workId: "windows", amount: 25000 },
+    ],
+    paymentParts: [{ amount: 35000 }],
+  });
+  const refund = EntrySchema.parse({
+    ...cash,
+    id: "mixed-refund",
+    kind: "refund",
+  });
+  expect(
+    workTabEntries([cash, refund, van], "doors", "transport", [
+      mixed,
+      cash,
+      refund,
+      van,
+    ]),
+  ).toEqual([cash, refund]);
+  expect(
+    workTabEntries([cash, refund, van], "windows", "other", [
+      mixed,
+      cash,
+      refund,
+      van,
+    ]),
+  ).toEqual([cash, refund]);
+  expect(workEntryAmount(refund, "doors", "transport")).toBe(-10000);
+  expect(workEntryAmount(refund, "windows", "other")).toBe(-25000);
+
+  const ambiguous = EntrySchema.parse({
+    ...mixed,
+    lines: mixed.lines.map((line) => ({ ...line, workId: "doors" })),
+  });
+  for (const tab of ["transport", "other"] as const)
+    expect(
+      workTabEntries([cash, refund, van], "doors", tab, [
+        ambiguous,
+        cash,
+        refund,
+        van,
+      ]),
+    ).toEqual([]);
+});
+
+it("shows only active person labour adjustments explicitly scoped to the current work", () => {
+  const adjustments = (["paid", "cost", "balance"] as const).map((basis) =>
+    EntrySchema.parse({
+      id: `labour-${basis}`,
+      kind: "adjustment",
+      account: "labour",
+      personId: "worker",
+      note: "নমুনা সমন্বয়",
+      adjustment: {
+        target: "person",
+        basis,
+        account: "labour",
+        workId: "doors",
+        before: 10000,
+        after: 8000,
+        delta: -2000,
+      },
+    }),
+  );
+  const unscoped = EntrySchema.parse({
+    ...adjustments[0],
+    id: "all-work",
+    adjustment: { ...adjustments[0].adjustment!, workId: null },
+  });
+  const anotherWork = EntrySchema.parse({
+    ...adjustments[0],
+    id: "windows-only",
+    adjustment: { ...adjustments[0].adjustment!, workId: "windows" },
+  });
+  const allAccounts = EntrySchema.parse({
+    ...adjustments[0],
+    id: "all-account",
+    account: "other",
+    personId: null,
+    adjustment: {
+      ...adjustments[0].adjustment!,
+      target: "work",
+      account: null,
+    },
+  });
+  const material = EntrySchema.parse({
+    ...adjustments[0],
+    id: "material-only",
+    account: "materials",
+    adjustment: { ...adjustments[0].adjustment!, account: "materials" },
+  });
+  const ledger = LedgerSchema.parse({
+    works: [
+      { id: "doors", name: "দরজা" },
+      { id: "windows", name: "জানালা" },
+    ],
+    people: [{ id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" }],
+    entries: [...adjustments, unscoped, anotherWork, allAccounts, material],
+  });
+  const cancelled = setEntryVoided(ledger, adjustments[1].id, true);
+  const visible = workTabEntries(
+    cancelled.entries,
+    "doors",
+    "labour",
+    cancelled.entries,
+  );
+  expect(visible.map((entry) => entry.id)).toEqual([
+    adjustments[0].id,
+    adjustments[2].id,
+  ]);
+  expect(
+    visible.map((entry) => workEntryAmount(entry, "doors", "labour")),
+  ).toEqual([-2000, -2000]);
+  for (const excluded of [
+    unscoped,
+    anotherWork,
+    allAccounts,
+    material,
+    cancelled.entries[1],
+  ])
+    expect(workEntryAmount(excluded, "doors", "labour")).toBe(0);
+  expect(workTabEntries(cancelled.entries, "windows", "labour")).toEqual([
+    anotherWork,
+  ]);
 });

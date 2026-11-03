@@ -1,4 +1,10 @@
 export const worksRefreshEnglish: Record<string, string> = {
+  "মজুরির মোট হিসাব": "Labour totals",
+  "মজুরিতে দিয়েছি": "Labour paid",
+  "আসলে দেওয়া টাকা": "Actual net payments",
+  "আগের হিসাবসহ": "Including earlier records",
+  "লেখা মজুরির খরচ": "Recorded labour cost",
+  "এই খাতার সব লেনদেন": "All transactions in this notebook",
   "হিসাব লেখার বোতাম": "Entry shortcuts",
   "মোট বাকি": "Total remaining",
   "এই খাতায় বাকি": "Remaining in this notebook",

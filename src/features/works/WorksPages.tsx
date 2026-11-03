@@ -53,6 +53,7 @@ import { SpendingChart } from "../../components/ui/SpendingChart";
 import { AppMenu } from "../../components/ui/AppMenu";
 import { orderedWorks } from "./workOverview";
 import { workBalances, type WorkBalances } from "./workBalances";
+import { workLabourSummary } from "./workLabourSummary";
 const statusNames = {
   planned: "শুরু হয়নি",
   ongoing: "কাজ চলছে",
@@ -402,7 +403,8 @@ export function WorkPage() {
         : tab === "other"
           ? ["rental", "other"].includes(type)
           : type === "material";
-  const scoped = workTabEntries(s.entries, work.id, tab);
+  const scoped = workTabEntries(s.entries, work.id, tab, ledger.entries);
+  const labour = tab === "labour" ? workLabourSummary(ledger, work.id) : null;
   const account =
     tab === "labour"
       ? "labour"
@@ -433,7 +435,7 @@ export function WorkPage() {
       (entry) => entry.kind === "expense" || entry.kind === "expense_credit",
     )
     .reduce((sum, entry) => sum + workEntryAmount(entry, work.id, tab), 0);
-  const historyPath = `/ledger?work=${work.id}${tab === "all" ? "" : `&account=${account}`}`;
+  const historyPath = `/ledger?work=${work.id}${tab === "labour" || tab === "material" ? `&account=${account}` : ""}`;
   const actions = removal.archived
     ? []
     : (work.quickActions ?? ["expense", "payment"]);
@@ -810,17 +812,82 @@ export function WorkPage() {
         </>
       ) : (
         <>
-          {tab !== "all" && (tab !== "labour" || amount !== 0) ? (
+          {tab === "labour" && labour ? (
+            <section
+              className="work-scope-summary work-labour-summary"
+              aria-label={t("মজুরির মোট হিসাব")}
+            >
+              <div className="work-labour-primary">
+                <span>{t("মজুরিতে দিয়েছি")}</span>
+                <strong>
+                  {labour.valid
+                    ? money(labour.reconciledNetPaid)
+                    : t("টাকার অঙ্ক বেশি হয়েছে।")}
+                </strong>
+                <button
+                  className="text-button"
+                  onClick={() =>
+                    go(`/reports?mode=cash&account=labour&work=${work.id}`)
+                  }
+                >
+                  {t("বিস্তারিত হিসাব")}
+                  <ArrowRightIcon size={15} />
+                </button>
+              </div>
+              {labour.valid && labour.actualRefunds > 0 ? (
+                <p className="work-labour-note">
+                  {t("ফেরত পাওয়া {{amount}} বাদ দিয়ে").replace(
+                    "{{amount}}",
+                    money(labour.actualRefunds),
+                  )}
+                </p>
+              ) : null}
+              {labour.valid && labour.paidCorrection !== 0 ? (
+                <p className="work-labour-note">
+                  {t("সমন্বয়সহ")}
+                  {" · "}
+                  {t("আসলে দেওয়া টাকা")} {money(labour.actualNetPaid)}
+                </p>
+              ) : null}
+              <button
+                className="work-labour-bill"
+                onClick={() =>
+                  go(
+                    `/reports?mode=cost&section=labour&account=labour&work=${work.id}`,
+                  )
+                }
+              >
+                <span>
+                  {t(
+                    labour.valid &&
+                      (labour.hasHistorical || labour.costCorrection !== 0)
+                      ? "লেখা মজুরির খরচ"
+                      : "মজুরির বিল",
+                  )}
+                  {labour.valid && labour.costCorrection !== 0 ? (
+                    <small>{t("সমন্বয়সহ")}</small>
+                  ) : null}
+                  {labour.valid && labour.hasHistorical ? (
+                    <small>{t("আগের হিসাবসহ")}</small>
+                  ) : null}
+                </span>
+                <strong>
+                  {labour.valid
+                    ? money(labour.reconciledCost)
+                    : t("টাকার অঙ্ক বেশি হয়েছে।")}
+                </strong>
+                <ArrowRightIcon size={15} aria-hidden="true" />
+              </button>
+            </section>
+          ) : tab !== "all" ? (
             <section className="work-scope-summary">
               <span>
                 {t(
-                  tab === "labour"
-                    ? "মজুরির বিল"
-                    : tab === "transport"
-                      ? "আনা-নামানোর খরচ"
-                      : tab === "other"
-                        ? "অন্য খরচ"
-                        : "মালের দাম",
+                  tab === "transport"
+                    ? "আনা-নামানোর খরচ"
+                    : tab === "other"
+                      ? "অন্য খরচ"
+                      : "মালের দাম",
                 )}
               </span>
               <strong>{money(amount)}</strong>
@@ -919,7 +986,11 @@ export function WorkPage() {
                 {t(tab === "all" ? "এই খাতার লেনদেন" : "সাম্প্রতিক হিসাব")}
               </h2>
               <button className="text-button" onClick={() => go(historyPath)}>
-                {t("পুরো হিসাব")}
+                {t(
+                  tab === "transport" || tab === "other"
+                    ? "এই খাতার সব লেনদেন"
+                    : "পুরো হিসাব",
+                )}
                 <ArrowRightIcon size={15} />
               </button>
             </div>

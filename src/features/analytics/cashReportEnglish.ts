@@ -16,6 +16,8 @@ export const cashReportEnglish: Record<string, string> = {
   "মাল ও কাজের দাম দেখি": "View material and work prices",
   "মাল ও কাজের দাম": "Material and work prices",
   "টাকা দেওয়ার হিসাব দেখি": "View payments",
+  "সব ধরনের টাকা দেওয়ার হিসাব দেখি": "View payments across all accounts",
+  "অন্য খাতে দেওয়া টাকার হিসাব দেখি": "View payments in other accounts",
   "কোন হিসাব দেখবেন?": "Which records?",
   "শুরু থেকে": "From",
   "শেষ পর্যন্ত": "Until",
