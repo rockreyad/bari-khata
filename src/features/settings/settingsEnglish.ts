@@ -1,4 +1,7 @@
+import { backupImportEnglish } from "./backupImportEnglish";
+
 export const settingsEnglish: Record<string, string> = {
+  ...backupImportEnglish,
   "লগইন ও গোপনীয়তা": "Sign-in and privacy",
   "আপনার খাতা, আপনার পছন্দ।": "Your notebook, your preferences.",
   "খাতার নাম বদলান": "Rename notebook",
