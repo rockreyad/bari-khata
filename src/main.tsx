@@ -10,6 +10,11 @@ import "./styles-v4.css";
 import "./theme.css";
 import "./semantic-colors.css";
 import "./scrollbars.css";
+import { applyPalette, applyTheme, readPreferences } from "./lib/preferences";
+
+const preferences = readPreferences();
+applyPalette(preferences.palette);
+applyTheme(preferences.theme);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

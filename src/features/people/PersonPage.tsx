@@ -306,11 +306,6 @@ export function PersonPage() {
           <div className="contact-summary-hero">
             <span>{t("মোট টাকা দিয়েছি")}</span>
             <strong>{money(summary.reconciledNetPaid)}</strong>
-            {summary.paidCorrection !== 0 ||
-            summary.costCorrection !== 0 ||
-            summary.balanceCorrection !== 0 ? (
-              <small>{t("সমন্বয়সহ")}</small>
-            ) : null}
             {summary.refunds > 0 ? <small>{t("ফেরত বাদে")}</small> : null}
           </div>
           {metrics.length ? (

@@ -27,9 +27,9 @@
   height: 48px;
   width: 48px;
   margin-bottom: 17px;
-  color: #d85656;
+  color: var(--danger);
   border-radius: 17px;
-  background: color-mix(in srgb, #d85656 12%, var(--surface));
+  background: var(--danger-soft);
 }
 .confirmation-title {
   margin: 0;
@@ -114,7 +114,7 @@
 }
 .confirmation-error {
   margin: 14px 0 0;
-  color: #d85656;
+  color: var(--danger);
   font-size: 13px;
   line-height: 1.7;
 }

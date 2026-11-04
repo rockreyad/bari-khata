@@ -1,0 +1,80 @@
+.appearance-page {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding-bottom: 36px;
+}
+.appearance-page-header {
+  margin-bottom: 28px;
+}
+.appearance-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  margin-left: -4px;
+  color: var(--accent);
+  font-size: 14px;
+}
+.appearance-page-header h1 {
+  margin: 9px 0 5px;
+  font-size: clamp(28px, 4vw, 36px);
+  font-weight: 700;
+}
+.appearance-page-header > p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.appearance-choices {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface);
+}
+.appearance-page .settings-theme-grid {
+  max-width: 540px;
+}
+.appearance-page .settings-palette-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+.appearance-page .settings-palette-description {
+  font-size: 12px;
+  min-height: 42px;
+}
+.appearance-page .settings-palette-copy {
+  padding: 7px 5px;
+}
+@media (max-width: 1180px) {
+  .appearance-page .settings-palette-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .appearance-page .settings-palette-description {
+    min-height: 21px;
+  }
+  .appearance-page .settings-palette-swatches > i {
+    width: 22px;
+    height: 9px;
+  }
+  .appearance-page .settings-palette-copy {
+    padding: 9px;
+  }
+}
+@media (max-width: 600px) {
+  .appearance-page {
+    padding-bottom: 12px;
+  }
+  .appearance-page-header {
+    margin-bottom: 20px;
+  }
+  .appearance-choices {
+    padding: 18px;
+    border-radius: 20px;
+  }
+  .appearance-page .settings-palette-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .appearance-page .settings-palette-description {
+    min-height: 42px;
+  }
+}
