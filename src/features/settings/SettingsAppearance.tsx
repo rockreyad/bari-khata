@@ -1,11 +1,5 @@
-import type { CSSProperties } from "react";
-import {
-  ArrowUpRight,
-  Check,
-  DeviceMobile,
-  Moon,
-  Sun,
-} from "@phosphor-icons/react";
+import { useId } from "react";
+import { Check, DeviceMobile, Moon, Sun } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import type { Preferences } from "../../lib/preferences";
 import { themePalettes } from "../../lib/themes";
@@ -18,77 +12,13 @@ export function SettingsAppearance({
   onChange: (change: Partial<Preferences>) => void;
 }) {
   const { t } = useLanguageContext();
+  const id = useId();
   const selectedPalette =
     themePalettes.find((palette) => palette.value === preferences.palette) ??
     themePalettes[0];
   return (
     <div className="settings-appearance">
-      <p className="settings-sheet-intro">
-        {t("রঙ বদলালে পুরো খাতাই নতুন সাজে।")}
-      </p>
-      <div
-        className="settings-palette-grid"
-        role="group"
-        aria-label={t("খাতার রং")}
-      >
-        {themePalettes.map((palette) => (
-          <button
-            key={palette.value}
-            type="button"
-            aria-pressed={preferences.palette === palette.value}
-            className={`settings-palette ${preferences.palette === palette.value ? "is-selected" : ""}`}
-            onClick={() => onChange({ palette: palette.value })}
-            style={
-              {
-                "--preview-light-bg": palette.preview.background,
-                "--preview-light-surface": palette.preview.surface,
-                "--preview-accent": palette.preview.accent,
-                "--preview-gradient": palette.preview.gradient,
-              } as CSSProperties
-            }
-          >
-            <span className="settings-theme-preview" aria-hidden="true">
-              <span className="settings-preview-header">
-                <i />
-                <i />
-              </span>
-              <span className="settings-preview-total">
-                <i />
-                <i />
-              </span>
-              <span className="settings-preview-row">
-                <i />
-                <i />
-                <i />
-              </span>
-              <span className="settings-preview-row">
-                <i />
-                <i />
-                <i />
-              </span>
-            </span>
-            <span className="settings-palette-copy">
-              <span className="settings-palette-name">
-                <strong>{t(palette.label)}</strong>
-                {preferences.palette === palette.value && (
-                  <span className="settings-palette-check" aria-hidden="true">
-                    <Check size={13} weight="bold" />
-                  </span>
-                )}
-              </span>
-              <span className="settings-palette-description">
-                {t(palette.description)}
-              </span>
-              <span className="settings-palette-swatches" aria-hidden="true">
-                {palette.colors.map((color) => (
-                  <i key={color} style={{ background: color }} />
-                ))}
-              </span>
-            </span>
-          </button>
-        ))}
-      </div>
-      <div className="settings-mode-heading">
+      <div className="settings-appearance-heading">
         <h3>{t("আলোর ধরন")}</h3>
         <p>{t("দিনে হালকা, রাতে গাঢ়—যেভাবে আরাম লাগে।")}</p>
       </div>
@@ -121,15 +51,55 @@ export function SettingsAppearance({
           </button>
         ))}
       </div>
-      <a
-        className="settings-theme-source"
-        href={selectedPalette.source}
-        target="_blank"
-        rel="noreferrer"
+      <div className="settings-appearance-heading settings-palette-heading">
+        <h3>{t("খাতার রং")}</h3>
+        <p role="status" aria-live="polite">
+          {t("এখন বেছে নেওয়া: {{name}}", { name: t(selectedPalette.label) })}
+        </p>
+      </div>
+      <div
+        className="settings-palette-grid"
+        role="group"
+        aria-label={t("খাতার রং")}
       >
-        {t("রঙের উৎস: Color Hunt")}
-        <ArrowUpRight size={13} />
-      </a>
+        {themePalettes.map((palette) => {
+          return (
+            <button
+              key={palette.value}
+              type="button"
+              aria-pressed={preferences.palette === palette.value}
+              aria-labelledby={`${id}-${palette.value}-name`}
+              aria-describedby={`${id}-${palette.value}-description`}
+              className={`settings-palette ${preferences.palette === palette.value ? "is-selected" : ""}`}
+              onClick={() => onChange({ palette: palette.value })}
+            >
+              <span className="settings-palette-copy">
+                <span className="settings-palette-name">
+                  <strong id={`${id}-${palette.value}-name`}>
+                    {t(palette.label)}
+                  </strong>
+                  {preferences.palette === palette.value && (
+                    <span className="settings-palette-check" aria-hidden="true">
+                      <Check size={13} weight="bold" />
+                    </span>
+                  )}
+                </span>
+                <span
+                  className="settings-palette-description"
+                  id={`${id}-${palette.value}-description`}
+                >
+                  {t(palette.description)}
+                </span>
+                <span className="settings-palette-swatches" aria-hidden="true">
+                  {palette.colors.map((color, index) => (
+                    <i key={index} style={{ background: color }} />
+                  ))}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

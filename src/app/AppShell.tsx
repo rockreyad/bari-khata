@@ -108,6 +108,11 @@ const SettingsPage = lazy(() =>
     default: m.SettingsPage,
   })),
 );
+const AppearancePage = lazy(() =>
+  import("../features/settings/AppearancePage").then((m) => ({
+    default: m.AppearancePage,
+  })),
+);
 const AssistantSettingsPage = lazy(() =>
   import("../features/integrations/AssistantSettingsPage").then((m) => ({
     default: m.AssistantSettingsPage,
@@ -439,6 +444,10 @@ export function AppShell() {
                   element={<Navigate replace to={`${base}/people`} />}
                 />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route
+                  path="settings/appearance"
+                  element={<AppearancePage />}
+                />
                 <Route
                   path="settings/assistants"
                   element={<AssistantSettingsPage />}

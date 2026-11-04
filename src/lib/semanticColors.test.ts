@@ -14,6 +14,9 @@ type Appearance = {
   deviceDark: boolean;
 };
 const theme = readFileSync(new URL("../theme.css", import.meta.url), "utf8");
+const workStyles = ["../styles-v2.css", "../styles-v3.css"].map((path) =>
+  readFileSync(new URL(path, import.meta.url), "utf8"),
+);
 const semantic = readFileSync(
   new URL("../semantic-colors.css", import.meta.url),
   "utf8",
@@ -57,8 +60,18 @@ function rules(source: string, media: string[] = []): Rule[] {
   }
   return found;
 }
-const rootRules = [...rules(theme), ...rules(semantic)];
+const workRules = workStyles.flatMap((source) => rules(source));
+const rootRules = [...workRules, ...rules(theme), ...rules(semantic)];
 const progressRules = rules(progress);
+const workMarkColors = workRules
+  .filter((rule) => /^\.(work-mark|tone-[\w-]+)$/.test(rule.selector))
+  .map(({ selector, declarations }) => {
+    const foreground = declarations.get("color");
+    const background = declarations.get("background");
+    if (!foreground || !background)
+      throw new Error(`Missing work mark colors: ${selector}`);
+    return { selector, foreground, background };
+  });
 
 function matchesRoot(selector: string, appearance: Appearance) {
   const explicit = appearance.mode === "system" ? undefined : appearance.mode;
@@ -183,6 +196,41 @@ function contrast(first: RGB, second: RGB) {
     b = luminance(second);
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
+
+function resolve(
+  value: string,
+  tokens: Map<string, string>,
+  seen = new Set<string>(),
+): string {
+  return value.replace(/var\((--[\w-]+)\)/g, (_, name: string) => {
+    const next = tokens.get(name);
+    if (!next || seen.has(name))
+      throw new Error(`Missing or circular token ${name}`);
+    return resolve(next, tokens, new Set([...seen, name]));
+  });
+}
+
+function gradientSamples(value: string, tokens: Map<string, string>): RGB[] {
+  const resolved = resolve(value, tokens).replace(/\s+/g, " ").trim();
+  if (!resolved.startsWith("linear-gradient(") || !resolved.endsWith(")"))
+    throw new Error(`Expected a linear gradient: ${resolved}`);
+  const stops = parts(resolved.slice(16, -1))
+    .slice(1)
+    .map((stop) => color(stop.replace(/\s+[\d.]+%$/, ""), tokens));
+  if (stops.length < 2) throw new Error(`Missing gradient stops: ${resolved}`);
+  return stops.flatMap((stop, index) => {
+    const next = stops[index + 1];
+    if (!next) return [stop];
+    return Array.from({ length: 21 }, (_, sample) => {
+      const fraction = sample / 20;
+      return stop.map(
+        (channel, channelIndex) =>
+          channel * (1 - fraction) + next[channelIndex] * fraction,
+      ) as RGB;
+    });
+  });
+}
+
 const states = [
   "expense",
   "paid",
@@ -259,6 +307,124 @@ describe("semantic state color contrast", () => {
   });
 
   it.each(appearances)(
+    "keeps actual work mark icons distinguishable for $palette / $mode / deviceDark=$deviceDark",
+    (appearance) => {
+      const tokens = tokensFor(appearance);
+      for (const { selector, foreground, background } of workMarkColors)
+        expect(
+          contrast(color(foreground, tokens), color(background, tokens)),
+          `${selector} icon on its own background`,
+        ).toBeGreaterThanOrEqual(3);
+    },
+  );
+
+  it.each(themePalettes)(
+    "keeps work mark colors consistent between explicit and system modes for $value",
+    ({ value: palette }) => {
+      for (const dark of [false, true]) {
+        const system = tokensFor({ palette, mode: "system", deviceDark: dark });
+        const explicit = tokensFor({
+          palette,
+          mode: dark ? "dark" : "light",
+          deviceDark: !dark,
+        });
+        for (const { selector, foreground, background } of workMarkColors)
+          for (const value of [foreground, background])
+            expect(
+              color(value, system),
+              `${selector} system/explicit parity`,
+            ).toEqual(color(value, explicit));
+      }
+    },
+  );
+
+  it.each(appearances)(
+    "keeps body, supporting and placeholder text readable for $palette / $mode / deviceDark=$deviceDark",
+    (appearance) => {
+      const tokens = tokensFor(appearance);
+      for (const foreground of [
+        "--text",
+        "--muted",
+        "--placeholder",
+        "--accent",
+        "--accent-strong",
+      ])
+        for (const background of [
+          "--bg",
+          "--surface",
+          "--surface-muted",
+          "--accent-soft",
+        ])
+          expect(
+            contrast(
+              color(`var(${foreground})`, tokens),
+              color(`var(${background})`, tokens),
+            ),
+            `${foreground} on ${background}`,
+          ).toBeGreaterThanOrEqual(4.5);
+      for (const foreground of [
+        "--text",
+        "--muted",
+        "--accent",
+        "--accent-strong",
+      ])
+        for (const [index, background] of gradientSamples(
+          "var(--hero-gradient)",
+          tokens,
+        ).entries())
+          expect(
+            contrast(color(`var(${foreground})`, tokens), background),
+            `${foreground} on hero gradient sample ${index}`,
+          ).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+
+  it.each(appearances)(
+    "keeps primary button labels readable through normal and hover gradients for $palette / $mode / deviceDark=$deviceDark",
+    (appearance) => {
+      const tokens = tokensFor(appearance);
+      const ink = color("var(--primary-ink)", tokens);
+      for (const gradient of ["--primary-gradient", "--primary-gradient-hover"])
+        for (const [index, background] of gradientSamples(
+          `var(${gradient})`,
+          tokens,
+        ).entries())
+          expect(
+            contrast(ink, background),
+            `primary ink on ${gradient} sample ${index}`,
+          ).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+
+  it.each(appearances)(
+    "keeps field boundaries, focus rings and selected text distinguishable for $palette / $mode / deviceDark=$deviceDark",
+    (appearance) => {
+      const tokens = tokensFor(appearance);
+      for (const foreground of ["--control-border", "--focus-ring"])
+        for (const background of [
+          "--bg",
+          "--surface",
+          "--surface-muted",
+          "--accent-soft",
+        ])
+          expect(
+            contrast(
+              color(`var(${foreground})`, tokens),
+              color(`var(${background})`, tokens),
+            ),
+            `${foreground} on ${background}`,
+          ).toBeGreaterThanOrEqual(3);
+      expect(
+        contrast(
+          color("var(--selection-ink)", tokens),
+          color("var(--selection-bg)", tokens),
+        ),
+        "selected text on highlight",
+      ).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+
+  it.each(appearances)(
     "keeps normal state text legible for $palette / $mode / deviceDark=$deviceDark",
     (appearance) => {
       const tokens = tokensFor(appearance);
@@ -305,6 +471,36 @@ describe("semantic state color contrast", () => {
           mode: dark ? "dark" : "light",
           deviceDark: !dark,
         });
+        for (const token of [
+          "--bg",
+          "--surface",
+          "--surface-muted",
+          "--text",
+          "--muted",
+          "--line",
+          "--accent",
+          "--accent-strong",
+          "--accent-soft",
+          "--primary-ink",
+          "--control-border",
+          "--focus-ring",
+          "--placeholder",
+          "--selection-bg",
+          "--selection-ink",
+        ])
+          expect(
+            color(`var(${token})`, system),
+            `${token} system/explicit parity`,
+          ).toEqual(color(`var(${token})`, explicit));
+        for (const token of [
+          "--hero-gradient",
+          "--primary-gradient",
+          "--primary-gradient-hover",
+        ])
+          expect(
+            gradientSamples(`var(${token})`, system),
+            `${token} system/explicit parity`,
+          ).toEqual(gradientSamples(`var(${token})`, explicit));
         for (const state of states) {
           expect(color(`var(--state-${state})`, system)).toEqual(
             color(`var(--state-${state})`, explicit),

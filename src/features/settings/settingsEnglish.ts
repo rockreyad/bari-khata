@@ -1,7 +1,9 @@
 import { backupImportEnglish } from "./backupImportEnglish";
+import { appearanceEnglish } from "./appearanceEnglish";
 
 export const settingsEnglish: Record<string, string> = {
   ...backupImportEnglish,
+  ...appearanceEnglish,
   "লগইন ও গোপনীয়তা": "Sign-in and privacy",
   "আপনার খাতা, আপনার পছন্দ।": "Your notebook, your preferences.",
   "খাতার নাম বদলান": "Rename notebook",
@@ -30,6 +32,16 @@ export const settingsEnglish: Record<string, string> = {
   "নিজের মতো সাজান": "Make it yours",
   "রঙ বদলালে পুরো খাতাই নতুন সাজে।": "A fresh look for your whole notebook.",
   "খাতার রং": "Notebook colours",
+  "রং আর আলো বেছে নিন। সঙ্গে সঙ্গেই পুরো খাতায় দেখা যাবে।":
+    "Choose your colours and appearance. Your whole notebook updates straight away.",
+  "এখন বেছে নেওয়া: {{name}}": "Selected: {{name}}",
+  হিমেল: "Himel",
+  "বরফনীল, কুয়াশামাখা সকাল": "Icy blue, a misty winter morning",
+  গোলাপ: "Golap",
+  "গোলাপি আভায় মিষ্টি উষ্ণতা": "The gentle warmth of rose petals",
+  "রঙের অনুপ্রেরণা: Color Hunt": "Colour inspiration: Color Hunt",
+  "রঙের অনুপ্রেরণা: Coolors": "Colour inspiration: Coolors",
+  "রঙের প্যালেট: Coolors": "Colour palette: Coolors",
   নীলিমা: "Nilima",
   "আকাশের নীল, শান্তির ছোঁয়া": "Sky blue, a sense of calm",
   "সবুজে ঘেরা আপন ঘর": "A home wrapped in green",
