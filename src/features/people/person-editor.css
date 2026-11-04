@@ -1,0 +1,432 @@
+.person-editor-page {
+  background: var(--bg);
+}
+.person-editor-page .entry-page-header-inner {
+  max-width: 688px;
+  min-height: 90px;
+  padding: 16px 24px;
+}
+.person-editor-page .entry-page-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+}
+.person-editor-page .entry-page-header p {
+  margin-top: 1px;
+  font-size: 12px;
+}
+.person-editor-page .entry-back {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+}
+.person-editor-page .entry-private {
+  display: none;
+}
+.person-editor-page .entry-page-body {
+  max-width: 688px;
+  padding: 26px 24px 20px;
+}
+.person-editor-page .entry-page-footer > div {
+  max-width: 640px;
+}
+.person-editor-page .entry-page-footer .primary-button {
+  min-height: 52px;
+  border-radius: 15px;
+  background: var(--text);
+  color: var(--surface);
+  box-shadow: none;
+  font-size: 16px;
+}
+.person-editor-form .entity-fields-v3 {
+  gap: 18px;
+}
+.person-editor-kind {
+  min-width: 0;
+  margin: 0 0 2px;
+  padding: 0;
+  border: 0;
+}
+.person-editor-kind > legend {
+  margin-bottom: 12px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--muted);
+}
+.person-editor-kind-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+.person-editor-kind-options > button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 100px;
+  padding: 16px 10px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.person-editor-kind-options > button[aria-pressed="true"] {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--surface);
+}
+.person-editor-kind-options > button > svg {
+  flex: none;
+}
+.person-editor-kind-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+}
+.person-editor-section {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding: 23px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+}
+.person-editor-section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.person-editor-section h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  font-weight: 600;
+  color: var(--text);
+}
+.person-editor-section > header > span,
+.person-editor-section header p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.person-editor-section header p {
+  margin-top: 4px;
+  max-width: 36ch;
+}
+.person-editor-form label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+.person-editor-form input:not([type="checkbox"]),
+.person-editor-form .app-select-trigger {
+  min-height: 48px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.5;
+  box-shadow: none;
+}
+.person-editor-form input::placeholder {
+  color: color-mix(in srgb, var(--muted) 80%, var(--surface));
+  font-size: 14px;
+}
+.person-editor-form .person-editor-name input {
+  min-height: 54px;
+  font-size: 19px;
+  font-weight: 500;
+}
+.person-editor-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.person-editor-label small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+.person-editor-phone {
+  display: grid;
+  gap: 10px;
+}
+.person-editor-phone .contact-import-trigger {
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.person-editor-phone .contact-import-trigger:hover {
+  color: var(--text);
+}
+.person-editor-section .person-editor-count {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  min-height: 28px;
+  padding: 3px 8px;
+  border-radius: 9px;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-size: 12px;
+}
+.person-editor-work-picker {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.person-editor-work-picker > legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.person-editor-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.person-editor-search > svg {
+  position: absolute;
+  left: 12px;
+  pointer-events: none;
+  color: var(--muted);
+}
+.person-editor-search > input {
+  width: 100%;
+  padding-left: 38px !important;
+}
+.person-editor-work-options {
+  display: grid;
+  gap: 2px;
+  max-height: 250px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding: 3px;
+  margin: -3px;
+}
+.person-editor-work-options > label {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  min-height: 47px;
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.65;
+  font-weight: 400;
+  cursor: pointer;
+}
+.person-editor-work-options > label:has(input:checked) {
+  background: var(--surface-muted);
+}
+.person-editor-work-options input[type="checkbox"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.person-editor-work-options > label > span:first-of-type {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.person-editor-work-check,
+.person-editor-action-options button > span {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--surface);
+}
+.person-editor-work-options label:has(input:checked) .person-editor-work-check,
+.person-editor-action-options button[aria-pressed="true"] > span {
+  border-color: var(--text);
+  background: var(--text);
+}
+.person-editor-work-options label:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.person-editor-empty {
+  padding: 10px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.person-editor-disclosure {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.person-editor-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 76px;
+  padding: 17px 21px;
+  list-style: none;
+  cursor: pointer;
+}
+.person-editor-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.person-editor-disclosure > summary > svg:first-child {
+  flex: none;
+  color: var(--muted);
+}
+.person-editor-disclosure > summary > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  font-weight: 550;
+}
+.person-editor-disclosure summary small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.person-editor-caret {
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+}
+.person-editor-disclosure[open] .person-editor-caret {
+  transform: rotate(180deg);
+}
+.person-editor-disclosure-body {
+  display: grid;
+  gap: 18px;
+  padding: 0 21px 21px;
+}
+.person-editor-disclosure-body > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.person-editor-action-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.person-editor-action-options button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 46px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  font-size: 13px;
+}
+.person-editor-action-options button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--text) 25%, var(--line));
+  background: var(--surface-muted);
+}
+.person-editor-kind-options button:focus-visible,
+.person-editor-action-options button:focus-visible,
+.person-editor-disclosure > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+@media (max-width: 540px) {
+  .person-editor-page .entry-page-header-inner {
+    min-height: 84px;
+    padding-inline: 18px;
+  }
+  .person-editor-page .entry-page-body {
+    padding: 23px 18px 12px;
+  }
+  .person-editor-page .entry-page-header h1 {
+    font-size: 19px;
+  }
+  .person-editor-kind-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .person-editor-kind-options > button {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 10px;
+    min-height: 60px;
+    padding: 12px;
+    border-radius: 13px;
+    font-size: 12px;
+  }
+  .person-editor-kind-options > button > svg {
+    width: 21px;
+    height: 21px;
+  }
+  .person-editor-kind-check {
+    top: 6px;
+    right: 6px;
+    width: 12px;
+    height: 12px;
+  }
+  .person-editor-section {
+    gap: 19px;
+    padding: 20px 17px;
+    border-radius: 18px;
+  }
+  .person-editor-identity > header {
+    align-items: baseline;
+    gap: 8px;
+  }
+  .person-editor-section h2 {
+    font-size: 14px;
+  }
+  .person-editor-identity > header > span {
+    font-size: 10px;
+  }
+  .person-editor-disclosure > summary {
+    padding-inline: 17px;
+  }
+  .person-editor-disclosure-body {
+    padding-inline: 17px;
+  }
+}

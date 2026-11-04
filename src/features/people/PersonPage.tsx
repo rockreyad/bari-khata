@@ -3,6 +3,7 @@ import { Navigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  ArrowUUpLeftIcon,
   CaretDownIcon,
   DotsThreeIcon,
   PhoneCallIcon,
@@ -25,7 +26,6 @@ import {
 } from "../../domain/contacts";
 import { contractAppliesToWork } from "../../domain/contracts";
 import { personSummary } from "../../domain/ledger";
-import { BalanceProgress } from "../../components/ui/BalanceProgress";
 import { JobPreview } from "../jobs/JobPreview";
 import { jobBalanceTotals } from "../jobs/jobView";
 import type { Account } from "../../domain/model";
@@ -35,6 +35,8 @@ import { phoneLink } from "./people";
 import { PersonNotebooks } from "./PersonNotebooks";
 import { TotalAdjustmentSheet } from "../reconciliation/TotalAdjustmentSheet";
 import "./people.css";
+import "./person-page.css";
+import "./person-activity.css";
 import "../reconciliation/balance-adjustment.css";
 export function PersonPage() {
   const { ledger, go, add, entity, detail, base } = useNotebook();
@@ -139,6 +141,13 @@ export function PersonPage() {
       account: "other",
       costType: "transport",
     });
+  const addReturn = () =>
+    add({
+      kind: "return",
+      personId: person.id,
+      workId: workId || undefined,
+      account: "materials",
+    });
   const personContracts =
     account === "labour"
       ? ledger.contracts.filter(
@@ -216,7 +225,7 @@ export function PersonPage() {
   const showMainActions =
     account === defaultAccount &&
     actions.some((action) =>
-      ["payment", "purchase", "transport"].includes(action),
+      ["payment", "purchase", "transport", "return"].includes(action),
     );
   const menu = [
     {
@@ -233,21 +242,6 @@ export function PersonPage() {
           },
         ]
       : []),
-    ...(kind === "shop" && actions.includes("return")
-      ? [
-          {
-            label: t("মাল ফেরত লিখি"),
-            onSelect: () =>
-              add({
-                kind: "return",
-                personId: person.id,
-                account: "materials",
-                workId: workId || undefined,
-              }),
-            separatorBefore: true,
-          },
-        ]
-      : []),
     ...otherAccounts.map((value) => ({
       label: t(accountLabels[value]),
       onSelect: () => filter("account", value),
@@ -257,41 +251,49 @@ export function PersonPage() {
   ];
   return (
     <div className="contacts-page contact-detail-page">
-      <button className="back-link" onClick={() => go("/people")}>
-        <ArrowLeftIcon size={17} />
-        {t("মানুষ ও দোকান")}
-      </button>
+      <nav className="contact-navigation" aria-label={t("মানুষ ও দোকান")}>
+        <button className="back-link" onClick={() => go("/people")}>
+          <ArrowLeftIcon size={18} />
+          {t("মানুষ ও দোকান")}
+        </button>
+        <div className="contact-navigation-actions">
+          {href ? (
+            <a className="icon-button" href={href} aria-label={t("ফোন করি")}>
+              <PhoneCallIcon size={22} weight="duotone" />
+            </a>
+          ) : null}
+          <AppMenu
+            label={t("এই নামের আরও কাজ")}
+            trigger={
+              <button
+                className="icon-button"
+                aria-label={t("আরও")}
+                ref={removal.triggerRef}
+              >
+                <DotsThreeIcon size={25} />
+              </button>
+            }
+            items={menu}
+          />
+        </div>
+      </nav>
       <header className="contact-profile-header">
         <PersonMark person={person} large />
         <div>
           <h1>{formatDigits(person.name)}</h1>
-          <p>{formatDigits(person.role || t(kindLabels[kind]))}</p>
+          <div className="contact-profile-meta">
+            <p title={formatDigits(person.role || t(kindLabels[kind]))}>
+              {formatDigits(person.role || t(kindLabels[kind]))}
+            </p>
+            <PersonNotebooks
+              ledger={ledger}
+              person={person}
+              selectedWorkId={workId}
+              onSelect={(id) => filter("work", id)}
+            />
+          </div>
         </div>
-        {href ? (
-          <a className="icon-button" href={href} aria-label={t("ফোন করি")}>
-            <PhoneCallIcon size={22} weight="duotone" />
-          </a>
-        ) : null}
-        <AppMenu
-          label={t("এই নামের আরও কাজ")}
-          trigger={
-            <button
-              className="icon-button"
-              aria-label={t("আরও")}
-              ref={removal.triggerRef}
-            >
-              <DotsThreeIcon size={25} />
-            </button>
-          }
-          items={menu}
-        />
       </header>
-      <PersonNotebooks
-        ledger={ledger}
-        person={person}
-        selectedWorkId={workId}
-        onSelect={(id) => filter("work", id)}
-      />
       {removal.notice}
       {removal.dialog}
       <section
@@ -332,66 +334,84 @@ export function PersonPage() {
         ) : null}
         {showMainActions ? (
           <div
-            className="contact-main-actions"
+            className={`contact-main-actions ${kind === "shop" ? "contact-shop-actions" : ""}`}
             role="group"
             aria-label={t("হিসাব লেখার বোতাম")}
           >
-            {actions.includes("payment") ? (
-              <button className="primary-button" onClick={addPayment}>
-                <WalletIcon size={20} weight="duotone" />
-                {t("টাকা দিই")}
-              </button>
-            ) : null}
-            {actions.includes("purchase") ? (
-              <button
-                className={
-                  actions.includes("payment")
-                    ? "secondary-button"
-                    : "primary-button"
-                }
-                onClick={addPurchase}
-              >
-                <PlusIcon size={19} />
-                {t("মাল কিনলাম")}
-              </button>
-            ) : null}
-            {actions.includes("transport") ? (
-              <button
-                className={
-                  actions.includes("payment") || actions.includes("purchase")
-                    ? "secondary-button"
-                    : "primary-button"
-                }
-                onClick={addTransport}
-              >
-                <TruckIcon size={20} />
-                {t("আনার খরচ লিখি")}
-              </button>
-            ) : null}
+            {kind === "shop" ? (
+              <>
+                {actions.includes("purchase") ? (
+                  <button className="primary-button" onClick={addPurchase}>
+                    <PlusIcon size={20} />
+                    <span>{t("মাল কিনলাম")}</span>
+                    <ArrowRightIcon
+                      className="contact-action-arrow"
+                      size={18}
+                      aria-hidden="true"
+                    />
+                  </button>
+                ) : null}
+                {actions.includes("payment") || actions.includes("return") ? (
+                  <div className="contact-shop-secondary">
+                    {actions.includes("payment") ? (
+                      <button className="secondary-button" onClick={addPayment}>
+                        <WalletIcon size={18} />
+                        {t("টাকা দিই")}
+                      </button>
+                    ) : null}
+                    {actions.includes("return") ? (
+                      <button className="secondary-button" onClick={addReturn}>
+                        <ArrowUUpLeftIcon size={18} />
+                        {t("মাল ফেরত দিই")}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <>
+                {actions.includes("payment") ? (
+                  <button className="primary-button" onClick={addPayment}>
+                    <WalletIcon size={20} weight="duotone" />
+                    <span>{t("টাকা দিই")}</span>
+                    <ArrowRightIcon
+                      className="contact-action-arrow"
+                      size={18}
+                      aria-hidden="true"
+                    />
+                  </button>
+                ) : null}
+                {actions.includes("purchase") ? (
+                  <button
+                    className={
+                      actions.includes("payment")
+                        ? "secondary-button"
+                        : "primary-button"
+                    }
+                    onClick={addPurchase}
+                  >
+                    <PlusIcon size={19} />
+                    {t("মাল কিনলাম")}
+                  </button>
+                ) : null}
+                {actions.includes("transport") ? (
+                  <button
+                    className={
+                      actions.includes("payment") ||
+                      actions.includes("purchase")
+                        ? "secondary-button"
+                        : "primary-button"
+                    }
+                    onClick={addTransport}
+                  >
+                    <TruckIcon size={20} />
+                    {t("আনার খরচ লিখি")}
+                  </button>
+                ) : null}
+              </>
+            )}
           </div>
         ) : null}
-        {kind === "shop" &&
-        account === "materials" &&
-        summary.confirmedCost > 0 &&
-        summary.payable > 0 ? (
-          <div className="contact-bill-progress">
-            <BalanceProgress
-              total={summary.confirmedCost}
-              paid={summary.netPaid}
-              compact
-              showAmounts={false}
-              showStatus={false}
-            />
-          </div>
-        ) : null}
-        <SpendingChart
-          ledger={chartLedger}
-          personId={person.id}
-          workId={workId || undefined}
-          basis="paid"
-          title="মাসের হিসাব"
-          presentation="embedded"
-        />
         {showAdvanceDetails || costMetric || showJobDetails ? (
           <details className="contact-reconciliation">
             <summary>
@@ -443,6 +463,16 @@ export function PersonPage() {
           </details>
         ) : null}
       </section>
+      <div className="contact-trend-card">
+        <SpendingChart
+          ledger={chartLedger}
+          personId={person.id}
+          workId={workId || undefined}
+          basis="paid"
+          title="মাসের হিসাব"
+          presentation="embedded"
+        />
+      </div>
       {kind === "worker" && account === "labour" ? (
         <JobPreview
           ledger={ledger}
@@ -476,6 +506,7 @@ export function PersonPage() {
           entries={entries.slice(0, 5)}
           order="newest"
           hidePerson
+          hideWork={Boolean(workId)}
           workId={workId || undefined}
           onEntry={detail}
         />
@@ -490,7 +521,12 @@ export function PersonPage() {
       ) : null}
       {adjustmentOpen ? (
         <TotalAdjustmentSheet
-          target={{ target: "person", id: person.id, account }}
+          target={{
+            target: "person",
+            id: person.id,
+            account,
+            workId: workId || null,
+          }}
           name={person.name}
           onClose={() => setAdjustmentOpen(false)}
         />

@@ -39,6 +39,23 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
+function reveal<T extends HTMLElement>(element: T): T {
+  const ancestors: HTMLDetailsElement[] = [];
+  for (
+    let parent = element.parentElement;
+    parent;
+    parent = parent.parentElement
+  )
+    if (parent instanceof HTMLDetailsElement) ancestors.unshift(parent);
+  for (const section of ancestors)
+    if (!section.open) {
+      const summary = section.querySelector<HTMLElement>(":scope > summary");
+      if (!summary) throw new Error("Expected a disclosure summary");
+      fireEvent.click(summary);
+    }
+  return element;
+}
+
 async function ready() {
   await waitFor(() =>
     expect(
@@ -134,6 +151,7 @@ it.each([
     const user = userEvent.setup();
     let view = mount(original);
     await ready();
+    reveal(screen.getByLabelText("কার সঙ্গে হিসাব"));
     if (person)
       fireEvent.change(
         screen.getByRole("combobox", { name: "কার সঙ্গে হিসাব" }),
@@ -189,6 +207,7 @@ it.each([
     );
     view = mount(saved);
     await ready();
+    reveal(screen.getByLabelText("কার সঙ্গে হিসাব"));
     expect(
       (
         screen.getByRole("combobox", {

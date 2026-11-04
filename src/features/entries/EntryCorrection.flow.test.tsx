@@ -80,6 +80,23 @@ function fixture() {
     ],
   });
 }
+function reveal<T extends HTMLElement>(element: T): T {
+  const ancestors: HTMLDetailsElement[] = [];
+  for (
+    let parent = element.parentElement;
+    parent;
+    parent = parent.parentElement
+  )
+    if (parent instanceof HTMLDetailsElement) ancestors.unshift(parent);
+  for (const section of ancestors)
+    if (!section.open) {
+      const summary = section.querySelector<HTMLElement>(":scope > summary");
+      if (!summary) throw new Error("Expected a disclosure summary");
+      fireEvent.click(summary);
+    }
+  return element;
+}
+
 async function ready(name = "সংরক্ষণ করুন") {
   await waitFor(() =>
     expect(
@@ -131,8 +148,10 @@ it.each([
     expect(screen.queryByLabelText("হিসাব মেলানোর কারণ")).toBeNull();
     if (id === "bill")
       expect(
-        screen.getByText(
-          "বিলের দাম বদলালেও আগের দেওয়া টাকা বদলাবে না। দেওয়া টাকা ঠিক করতে সেই হিসাবটি খুলুন।",
+        reveal(
+          screen.getByText(
+            "দামের সঙ্গে দেওয়া টাকা বদলাবে না। প্রয়োজন হলে পরিশোধটি খুলে বদলান।",
+          ),
         ),
       ).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "ফিরুন" }));
@@ -149,7 +168,9 @@ it.each([
     await storage.saveDraft(`entry:${id}`, pending);
     view = mount();
     await ready();
-    const note = screen.getByLabelText("মনে রাখার কথা") as HTMLTextAreaElement;
+    const note = reveal(
+      screen.getByLabelText("মনে রাখার কথা"),
+    ) as HTMLTextAreaElement;
     expect(note.value).toContain("হিসাব মেলানোর কারণ: আগের অঙ্কটি ভুল ছিল");
     expect(note.value).toContain(
       original.entries.find((entry) => entry.id === id)!.note,
@@ -216,6 +237,7 @@ it("flushes the unfinished bill before explicitly opening its recorded payment c
   fireEvent.change(screen.getByLabelText(/^মোট দাম/), {
     target: { value: "1700" },
   });
+  reveal(screen.getByText(/^দেওয়া টাকার হিসাব ঠিক করি/));
   await userEvent.click(
     screen.getByRole("button", { name: /^দেওয়া টাকার হিসাব ঠিক করি/ }),
   );

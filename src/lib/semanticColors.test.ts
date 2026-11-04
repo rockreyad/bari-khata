@@ -208,6 +208,46 @@ const property = (selector: string, name: string) => {
   if (!value) throw new Error(`Missing ${selector} ${name}`);
   return value;
 };
+const selectedControlColors = [
+  {
+    path: "../features/entries/entry-page.css",
+    selectors: [
+      '.entry-page-form .expense-sections > button[aria-pressed="true"]',
+      ".entry-intent-options > button.selected",
+    ],
+  },
+  {
+    path: "../styles-v2.css",
+    selectors: [
+      ".choice-chips button.selected",
+      ".payment-methods > button.selected",
+    ],
+  },
+  {
+    path: "../styles-v3.css",
+    selectors: [".small-switch > button.selected"],
+  },
+  {
+    path: "../features/people/people-role-tabs.css",
+    selectors: [".contacts-tabs.people-role-tabs > button.active"],
+  },
+  {
+    path: "../components/ui/controls.css",
+    selectors: ['.app-select-option[data-state="checked"]'],
+  },
+].flatMap(({ path, selectors }) => {
+  const stylesheet = rules(
+    readFileSync(new URL(path, import.meta.url), "utf8"),
+  );
+  return selectors.map((selector) => {
+    const foreground = stylesheet
+      .find((rule) => rule.selector === selector)
+      ?.declarations.get("color");
+    if (!foreground)
+      throw new Error(`Missing selected text color: ${selector}`);
+    return { selector, foreground };
+  });
+});
 
 describe("semantic state color contrast", () => {
   it("uses the WCAG sRGB contrast formula without rounding threshold values", () => {
@@ -236,6 +276,22 @@ describe("semantic state color contrast", () => {
           ).toBeGreaterThanOrEqual(4.5);
         }
       }
+    },
+  );
+
+  it.each(appearances)(
+    "keeps actual selected control text legible on neutral surfaces for $palette / $mode / deviceDark=$deviceDark",
+    (appearance) => {
+      const tokens = tokensFor(appearance);
+      for (const { selector, foreground } of selectedControlColors)
+        for (const surface of ["--surface", "--surface-muted"])
+          expect(
+            contrast(
+              color(foreground, tokens),
+              color(`var(${surface})`, tokens),
+            ),
+            `${selector} on ${surface}`,
+          ).toBeGreaterThanOrEqual(4.5);
     },
   );
 

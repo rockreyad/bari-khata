@@ -21,6 +21,7 @@ try {
     path.join(root, "node_modules/typescript/bin/tsc"),
     "api/phone-login.ts",
     "api/account-delete.ts",
+    "api/shared-receipt.ts",
     "api/mcp.ts",
     "api/mcp-admin.ts",
     "api/mcp-auth.ts",
@@ -56,6 +57,9 @@ try {
     path.join(output, "api/account-delete.js"),
   ).href;
   const mcpEntry = pathToFileURL(path.join(output, "api/mcp.js")).href;
+  const sharedReceiptEntry = pathToFileURL(
+    path.join(output, "api/shared-receipt.js"),
+  ).href;
   run(
     [
       "--input-type=module",
@@ -70,6 +74,10 @@ try {
   const accountResponse=await accountRoute.default.fetch(new Request('https://bari.invalid/api/account-delete',{method:'POST'}));
   assert.equal(accountResponse.status,404);
   assert.deepEqual(await accountResponse.json(),{error:'account_delete_unavailable'});
+  const sharedReceiptRoute=await import(${JSON.stringify(sharedReceiptEntry)});
+  const sharedReceiptResponse=await sharedReceiptRoute.default.fetch(new Request('https://bari.invalid/api/shared-receipt',{method:'POST'}));
+  assert.equal(sharedReceiptResponse.status,503);
+  assert.deepEqual(await sharedReceiptResponse.json(),{error:'share_unavailable'});
   const mcpRoute=await import(${JSON.stringify(mcpEntry)});
   const mcpResponse=await mcpRoute.default.fetch(new Request('https://bari.invalid/api/mcp',{method:'POST'}));
   assert.equal(mcpResponse.status,404);

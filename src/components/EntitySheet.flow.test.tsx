@@ -69,6 +69,23 @@ afterEach(() => {
   vi.useRealTimers();
   localStorage.clear();
 });
+function reveal<T extends HTMLElement>(element: T): T {
+  const ancestors: HTMLDetailsElement[] = [];
+  for (
+    let parent = element.parentElement;
+    parent;
+    parent = parent.parentElement
+  )
+    if (parent instanceof HTMLDetailsElement) ancestors.unshift(parent);
+  for (const section of ancestors)
+    if (!section.open) {
+      const summary = section.querySelector<HTMLElement>(":scope > summary");
+      if (!summary) throw new Error("Expected a disclosure summary");
+      fireEvent.click(summary);
+    }
+  return element;
+}
+
 function mount(children: ReactNode) {
   return render(<LanguageProvider>{children}</LanguageProvider>);
 }
@@ -188,7 +205,9 @@ it("adds a new worker with a whole-house contract before there are work notebook
     target: { value: "শাহ আলম" },
   });
   await userEvent.click(
-    screen.getByText("কাজের টাকা", { selector: "summary" }),
+    screen
+      .getByText("কাজের টাকা", { selector: "summary > span" })
+      .closest("summary")!,
   );
   fireEvent.change(screen.getByLabelText("কাজের টাকা"), {
     target: { value: "600000" },
@@ -326,7 +345,7 @@ it("shows invalid entry money before all fields and preserves the unsaved amount
   fireEvent.change(screen.getByRole("textbox", { name: /^মোট দাম/ }), {
     target: { value: "0" },
   });
-  fireEvent.change(screen.getByLabelText("মনে রাখার কথা"), {
+  fireEvent.change(reveal(screen.getByLabelText("মনে রাখার কথা")), {
     target: { value: "আমার অসমাপ্ত নোট" },
   });
   await userEvent.click(screen.getByRole("button", { name: "সংরক্ষণ করুন" }));
@@ -349,7 +368,8 @@ it("shows invalid entry money before all fields and preserves the unsaved amount
       .value,
   ).toBe("০");
   expect(
-    (screen.getByLabelText("মনে রাখার কথা") as HTMLTextAreaElement).value,
+    (reveal(screen.getByLabelText("মনে রাখার কথা")) as HTMLTextAreaElement)
+      .value,
   ).toBe("আমার অসমাপ্ত নোট");
 });
 
@@ -425,16 +445,21 @@ it("flushes an edited entry's amount, note and voucher on immediate unmount and 
   const view = mount(<EntrySheet {...props} />);
   await ready("সংরক্ষণ করুন");
   const file = new File(["voucher"], "door.pdf", { type: "application/pdf" });
-  fireEvent.change(view.container.querySelector('input[type="file"]')!, {
-    target: { files: [file] },
-  });
+  fireEvent.change(
+    reveal(
+      view.container.querySelector<HTMLInputElement>('input[type="file"]')!,
+    ),
+    {
+      target: { files: [file] },
+    },
+  );
   await screen.findByText("door.pdf");
   storage.writes.mockClear();
   vi.useFakeTimers();
   fireEvent.change(screen.getByRole("textbox", { name: /^মোট দাম/ }), {
     target: { value: "94000" },
   });
-  fireEvent.change(screen.getByLabelText("মনে রাখার কথা"), {
+  fireEvent.change(reveal(screen.getByLabelText("মনে রাখার কথা")), {
     target: { value: "ডেলিভারিসহ দাম" },
   });
   expect(storage.writes).not.toHaveBeenCalled();
@@ -454,7 +479,8 @@ it("flushes an edited entry's amount, note and voucher on immediate unmount and 
       .value,
   ).toBe("৯৪০০০");
   expect(
-    (screen.getByLabelText("মনে রাখার কথা") as HTMLTextAreaElement).value,
+    (reveal(screen.getByLabelText("মনে রাখার কথা")) as HTMLTextAreaElement)
+      .value,
   ).toBe("ডেলিভারিসহ দাম");
   expect(screen.getByText("door.pdf")).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "সংরক্ষণ করুন" }));
@@ -557,14 +583,19 @@ async function savedEntryChanges() {
   const file = new File(["my voucher"], "my-changes.pdf", {
     type: "application/pdf",
   });
-  fireEvent.change(view.container.querySelector('input[type="file"]')!, {
-    target: { files: [file] },
-  });
+  fireEvent.change(
+    reveal(
+      view.container.querySelector<HTMLInputElement>('input[type="file"]')!,
+    ),
+    {
+      target: { files: [file] },
+    },
+  );
   await screen.findByText("my-changes.pdf");
   fireEvent.change(screen.getByRole("textbox", { name: /^মোট দাম/ }), {
     target: { value: "94000" },
   });
-  fireEvent.change(screen.getByLabelText("মনে রাখার কথা"), {
+  fireEvent.change(reveal(screen.getByLabelText("মনে রাখার কথা")), {
     target: { value: "আমার অসমাপ্ত কথা" },
   });
   view.unmount();
@@ -618,7 +649,8 @@ it("shows a stale edit and its voucher for read-only review without overwriting 
       .value,
   ).toBe("৯৪০০০");
   expect(
-    (screen.getByLabelText("মনে রাখার কথা") as HTMLTextAreaElement).value,
+    (reveal(screen.getByLabelText("মনে রাখার কথা")) as HTMLTextAreaElement)
+      .value,
   ).toBe("আমার অসমাপ্ত কথা");
   expect(screen.getByText("my-changes.pdf")).toBeTruthy();
   expect(view.container.querySelector("fieldset")?.disabled).toBe(true);
@@ -668,7 +700,8 @@ it("rebases a stale draft only after explicit choice and audits the current entr
       .value,
   ).toBe("৯৪০০০");
   expect(
-    (screen.getByLabelText("মনে রাখার কথা") as HTMLTextAreaElement).value,
+    (reveal(screen.getByLabelText("মনে রাখার কথা")) as HTMLTextAreaElement)
+      .value,
   ).toBe("আমার অসমাপ্ত কথা");
   expect(screen.getByText("my-changes.pdf")).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "সংরক্ষণ করুন" }));
@@ -815,7 +848,9 @@ it("adds an optional job to a new worker using only its chosen notebook and amou
   );
   fireEvent.change(screen.getByLabelText("নাম"), { target: { value: "করিম" } });
   await userEvent.click(
-    screen.getByText("কাজের টাকা", { selector: "summary" }),
+    screen
+      .getByText("কাজের টাকা", { selector: "summary > span" })
+      .closest("summary")!,
   );
   expect(screen.queryByRole("group", { name: "কোন কাজের চুক্তি" })).toBeNull();
   fireEvent.change(screen.getByLabelText("কাজের খাতা"), {

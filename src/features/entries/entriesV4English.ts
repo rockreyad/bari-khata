@@ -1,4 +1,7 @@
 export const entriesV4English: Record<string, string> = {
+  "পরিশোধের বিস্তারিত": "Payment details",
+  "পরিশোধের ইতিহাস": "Payment history",
+  "পরিশোধ ও ফেরত": "Payments and returns",
   "সহকারীর লেখা": "Written by your assistant",
   "যে সহকারী লিখেছে": "Assistant source",
   "সহকারীর তথ্য নেই": "No assistant information",

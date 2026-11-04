@@ -1,17 +1,24 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowClockwiseIcon,
+  CheckCircleIcon,
   CaretDownIcon,
+  CaretLeftIcon,
+  CaretRightIcon,
   DownloadSimpleIcon,
+  HardHatIcon,
   HouseLineIcon,
   LinkBreakIcon,
-  StorefrontIcon,
-  HardHatIcon,
+  MagnifyingGlassIcon,
   ReceiptIcon,
+  ShieldCheckIcon,
+  StorefrontIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { readShare, type SharedStatement } from "./shareClient";
-import type { SharedKind } from "./shareModel";
+import { useSharedStatement } from "./useSharedStatement";
+import { SharedEntryDetail } from "./SharedEntryDetail";
 import {
   completeSharedStatement,
   downloadSharedCsv,
@@ -19,115 +26,296 @@ import {
   sharedStatementCsv,
 } from "./shareExport";
 import "./sharing.css";
-import { adjustmentBasisLabels } from "../history/adjustmentDisplay";
-const kinds = {
+
+const recipientBasis = {
+  paid: "পরিশোধ",
+  cost: "বিলের মোট",
+  balance: "বাকি",
+};
+const rowLabels = {
   expense: "বিল",
   payment: "পরিশোধ",
   expense_credit: "মাল ফেরত",
   refund: "টাকা ফেরত",
-  adjustment: "সমন্বয়",
+  adjustment: "হিসাবের সমন্বয়",
 };
+const errorLabels = {
+  share_request_failed:
+    "লিংক খোলা যায়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।",
+  share_changed: "নতুন হিসাব এসেছে। হালনাগাদ করে আবার দেখুন।",
+  share_invalid_page: "হিসাবের পাতা মিলছে না। হালনাগাদ করে আবার দেখুন।",
+};
+type SharedRow = SharedStatement["rows"][number];
+
+function SharedTransactionRow({
+  row,
+  account,
+  onOpen,
+}: {
+  row: SharedRow;
+  account: SharedStatement["account"];
+  onOpen: () => void;
+}) {
+  const { t, money, date, formatDigits } = useLanguageContext();
+  const label =
+    row.kind === "expense"
+      ? account === "materials"
+        ? "বিল"
+        : account === "labour"
+          ? "কাজের বিল"
+          : "খরচের বিল"
+      : row.kind === "payment"
+        ? "টাকা পেয়েছেন"
+        : rowLabels[row.kind];
+  const amount =
+    row.kind === "adjustment" ? (row.adjustment ?? 0) : row.charge || row.paid;
+  const description = row.description.trim().slice(0, 100);
+  const works = row.works.trim().slice(0, 70);
+  const signed = (value: number) =>
+    (value < 0 ? "−" : "") + money(Math.abs(value));
+  const settlement = row.settlement;
+  const status = settlement
+    ? settlement.balance > 0
+      ? settlement.paid === 0 &&
+        settlement.returned === 0 &&
+        settlement.refunded === 0
+        ? t("পুরোটাই বাকি")
+        : t("বাকি {{amount}}", { amount: money(settlement.balance) })
+      : settlement.balance < 0
+        ? t("জমা {{amount}}", { amount: money(-settlement.balance) })
+        : t(
+            settlement.returned || settlement.refunded
+              ? "হিসাব মিটেছে"
+              : "মেটানো",
+          )
+    : "";
+  return (
+    <article className={"shared-entry shared-entry-" + row.kind}>
+      <button
+        type="button"
+        className="shared-ledger-row"
+        onClick={onOpen}
+        aria-label={[
+          t(label),
+          ...(description ? [formatDigits(description)] : []),
+          signed(amount),
+          ...(status ? [status] : []),
+          date(row.date),
+          t("বিস্তারিত"),
+        ].join(" · ")}
+      >
+        <span className="shared-ledger-info">
+          <span className="shared-ledger-label">
+            <span>
+              {row.kind === "expense" && description
+                ? formatDigits(description)
+                : t(label)}
+            </span>
+          </span>
+          {description && row.kind !== "expense" ? (
+            <span className="shared-ledger-description">
+              {formatDigits(description)}
+            </span>
+          ) : null}
+          <span className="shared-entry-meta">
+            <time dateTime={row.date ?? undefined}>
+              {date(row.date, { day: "numeric", month: "short" })}
+            </time>
+            {works ? (
+              <span className="shared-entry-works">{formatDigits(works)}</span>
+            ) : null}
+          </span>
+          {row.kind === "adjustment" && row.adjustmentBasis ? (
+            <span className="shared-entry-basis">
+              {t(recipientBasis[row.adjustmentBasis])}
+            </span>
+          ) : null}
+          {row.historical ? (
+            <span className="shared-historical-note">
+              {t("পুরোনো তথ্য; বর্তমান হিসাবে ধরা হয়নি")}
+            </span>
+          ) : null}
+        </span>
+        <span className="shared-ledger-value">
+          <strong>{signed(amount)}</strong>
+          {settlement ? (
+            <span
+              className={
+                "shared-bill-status " +
+                (settlement.balance > 0
+                  ? "shared-bill-outstanding"
+                  : "shared-bill-settled")
+              }
+            >
+              {settlement.balance === 0 ? (
+                <CheckCircleIcon size={13} aria-hidden="true" />
+              ) : null}
+              {status}
+            </span>
+          ) : row.kind === "adjustment" ? (
+            <small>{t("সমন্বয়")}</small>
+          ) : null}
+          {settlement && settlement.balance > 0 && settlement.paid > 0 ? (
+            <small>
+              {t("পেয়েছেন {{amount}}", { amount: money(settlement.paid) })}
+            </small>
+          ) : null}
+        </span>
+        <CaretRightIcon
+          className="shared-ledger-open"
+          size={16}
+          aria-hidden="true"
+        />
+      </button>
+    </article>
+  );
+}
+
+function SharedShopSummary({ statement }: { statement: SharedStatement }) {
+  const { t, money } = useLanguageContext();
+  const totals = statement.totals;
+  const cost = totals.reconciledCost ?? totals.cost;
+  const paid = totals.reconciledNetPaid ?? totals.paid;
+  const due = totals.reconciledPayable ?? totals.payable;
+  const credit = totals.reconciledAdvance ?? totals.advance;
+  const fullyPaid =
+    cost > 0 &&
+    cost === paid &&
+    due === 0 &&
+    credit === 0 &&
+    !totals.costCorrection &&
+    !totals.paidCorrection &&
+    !totals.balanceCorrection &&
+    !totals.historicalCost;
+  const correction = (value: number | undefined) =>
+    value ? (
+      <small className="shared-metric-note">
+        {t("সমন্বয়সহ")} · {value > 0 ? "+" : ""}
+        {money(value)}
+      </small>
+    ) : null;
+  return (
+    <section className="shared-shop-summary" aria-label={t("হিসাবের সারাংশ")}>
+      <div className="shared-shop-bill">
+        <span>{t("মোট বিল")}</span>
+        <strong>{money(cost)}</strong>
+        {correction(totals.costCorrection)}
+        {statement.counts.expense_credit ? (
+          <small>{t("মাল ফেরত বাদে")}</small>
+        ) : null}
+      </div>
+      {!fullyPaid &&
+      (cost !== 0 ||
+        paid !== 0 ||
+        due !== 0 ||
+        credit !== 0 ||
+        totals.costCorrection ||
+        totals.paidCorrection ||
+        totals.balanceCorrection) ? (
+        <dl className="shared-shop-balances">
+          <div>
+            <dt>{t("পরিশোধ")}</dt>
+            <dd>{money(paid)}</dd>
+            {correction(totals.paidCorrection)}
+            {statement.counts.refund ? (
+              <small>{t("টাকা ফেরত বাদে")}</small>
+            ) : null}
+          </div>
+          <div
+            className={
+              credit > 0 ? "shared-customer-credit" : "shared-shop-due"
+            }
+          >
+            <dt>{t(credit > 0 ? "ক্রেতা পাবেন" : "বাকি")}</dt>
+            <dd>{money(credit > 0 ? credit : due)}</dd>
+            {correction(totals.balanceCorrection)}
+          </div>
+        </dl>
+      ) : null}
+      {due === 0 && credit === 0 ? (
+        <p className="shared-paid-status">
+          <CheckCircleIcon size={16} />
+          {t(fullyPaid ? "পুরো বিল মেটানো" : "বাকি নেই")}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 export function SharedStatementPage() {
   const { t, money, date, formatDigits } = useLanguageContext();
-  const [token, setToken] = useState(() => window.location.hash.slice(1));
-  const [statement, setStatement] = useState<SharedStatement | null>(null);
-  const [filter, setFilter] = useState<SharedKind | "">("");
-  const [busy, setBusy] = useState(true);
+  const pager = useSharedStatement();
+  const { token, statement, query, busy, missing, error, stale } = pager;
   const [exporting, setExporting] = useState(false);
-  const [missing, setMissing] = useState(false);
-  const [error, setError] = useState("");
   const [exportError, setExportError] = useState("");
-  const [contractLimit, setContractLimit] = useState(5);
-  const request = useRef(0);
+  const [contractPage, setContractPage] = useState(0);
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const exportRequest = useRef(0);
+  const exportAbort = useRef<AbortController | null>(null);
   const currentToken = useRef(token);
+  currentToken.current = token;
+  const exportLock = useRef(false);
+  const historyHeading = useRef<HTMLHeadingElement>(null);
+  const navigationFrom = useRef<number | null>(null);
   useEffect(() => {
-    const change = () => {
-      const nextToken = window.location.hash.slice(1);
-      if (nextToken === currentToken.current) return;
-      currentToken.current = nextToken;
-      request.current++;
-      exportRequest.current++;
-      setStatement(null);
-      setFilter("");
-      setMissing(false);
-      setError("");
-      setExportError("");
-      setExporting(false);
-      setBusy(true);
-      setContractLimit(5);
-      setToken(nextToken);
-    };
-    window.addEventListener("hashchange", change);
+    exportRequest.current++;
+    exportAbort.current?.abort();
+    exportLock.current = false;
+    setExporting(false);
+    setExportError("");
+    setContractPage(0);
     return () => {
-      window.removeEventListener("hashchange", change);
       exportRequest.current++;
+      exportAbort.current?.abort();
     };
-  }, []);
-  const load = useCallback(async () => {
-    const id = ++request.current;
-    setBusy(true);
-    setError("");
-    setMissing(false);
-    try {
-      const data = filter
-        ? await readShare(token, 0, undefined, filter)
-        : await readShare(token);
-      if (id !== request.current) return;
-      setStatement(data);
-      setMissing(data === null);
-    } catch {
-      if (id === request.current) {
-        setStatement(null);
-        setError("লিংক খোলা যায়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।");
-      }
-    } finally {
-      if (id === request.current) setBusy(false);
-    }
-  }, [token, filter]);
+  }, [token]);
   useEffect(() => {
-    void load();
-    return () => {
-      request.current++;
-    };
-  }, [load]);
-  async function more() {
-    if (!statement || statement.nextOffset === null || busy) return;
-    const id = ++request.current;
-    setBusy(true);
-    setError("");
-    try {
-      const data = filter
-        ? await readShare(
-            token,
-            statement.nextOffset,
-            statement.revision,
-            filter,
-          )
-        : await readShare(token, statement.nextOffset, statement.revision);
-      if (id !== request.current) return;
-      if (!data) {
-        setStatement(null);
-        setMissing(true);
-        return;
-      }
-      setStatement({ ...data, rows: [...statement.rows, ...data.rows] });
-    } catch (cause) {
-      if (id === request.current)
-        setError(
-          cause instanceof Error && cause.message === "share_changed"
-            ? "নতুন হিসাব এসেছে। হালনাগাদ করে আবার দেখুন।"
-            : "লিংক খোলা যায়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।",
-        );
-    } finally {
-      if (id === request.current) setBusy(false);
+    if (!missing && !stale) return;
+    exportRequest.current++;
+    exportAbort.current?.abort();
+    exportAbort.current = null;
+    exportLock.current = false;
+    setExporting(false);
+    setExportError("");
+  }, [missing, stale]);
+  useEffect(() => {
+    setContractPage(0);
+    setSelectedEntryId(null);
+  }, [token, statement?.revision]);
+  useEffect(() => {
+    if (busy || navigationFrom.current === null) return;
+    const from = navigationFrom.current;
+    navigationFrom.current = null;
+    if (statement && pager.pageStart !== from) {
+      historyHeading.current?.focus({ preventScroll: true });
+      historyHeading.current?.scrollIntoView?.({
+        block: "start",
+        behavior: "instant",
+      });
     }
+  }, [busy, statement, pager.pageStart]);
+  function turnPage(direction: "next" | "previous") {
+    navigationFrom.current = pager.pageStart;
+    void pager[direction]();
+  }
+  function cancelExport() {
+    exportRequest.current++;
+    exportAbort.current?.abort();
+    exportLock.current = false;
+    setExporting(false);
+    setExportError("");
   }
   async function exportCopy() {
-    if (exporting) return;
+    if (exportLock.current || busy || !statement) return;
+    exportLock.current = true;
     const id = ++exportRequest.current;
+    const controller = new AbortController();
+    exportAbort.current = controller;
     const cancelled = () =>
-      id !== exportRequest.current || token !== currentToken.current;
+      id !== exportRequest.current ||
+      token !== currentToken.current ||
+      token !== window.location.hash.slice(1) ||
+      controller.signal.aborted;
     setExporting(true);
     setExportError("");
     try {
@@ -135,6 +323,7 @@ export function SharedStatementPage() {
         token,
         readShare,
         cancelled,
+        { signal: controller.signal },
       );
       if (cancelled()) return;
       downloadSharedCsv(
@@ -143,78 +332,93 @@ export function SharedStatementPage() {
       );
     } catch (cause) {
       if (cancelled()) return;
-      if (cause instanceof Error && cause.message === "share_unavailable") {
-        setStatement(null);
-        setMissing(true);
-      } else
+      const message = cause instanceof Error ? cause.message : "";
+      if (message === "share_unavailable") pager.markUnavailable();
+      else if (message === "share_changed") pager.markStale();
+      else
         setExportError(
-          cause instanceof Error && cause.message === "share_changed"
-            ? "নতুন হিসাব এসেছে। হালনাগাদ করে আবার দেখুন।"
+          message === "share_export_too_large"
+            ? "হিসাবের কপি অনেক বড়। যিনি পাঠিয়েছেন তাঁর কাছ থেকে কপি নিন।"
             : "কপি নামানো যায়নি। সংযোগ দেখে আবার চেষ্টা করুন।",
         );
     } finally {
-      if (!cancelled()) setExporting(false);
+      if (!cancelled()) {
+        exportLock.current = false;
+        exportAbort.current = null;
+        setExporting(false);
+      }
     }
   }
   const isWorker = statement?.account === "labour";
-  const isShop =
-    statement?.person.kind === "shop" || statement?.account === "materials";
+  const isShop = statement?.account === "materials";
   const Icon = isWorker ? HardHatIcon : isShop ? StorefrontIcon : ReceiptIcon;
-  const filters: { kind: SharedKind | ""; label: string }[] = [
-    { kind: "", label: "সব লেনদেন" },
-    { kind: "expense", label: isShop ? "কেনাকাটা" : "বিল" },
-    { kind: "payment", label: "পরিশোধ" },
-    ...(isShop || statement?.counts.expense_credit
-      ? [{ kind: "expense_credit" as const, label: "মাল ফেরত" }]
+  const totals = statement?.totals;
+  const paid = totals?.reconciledNetPaid ?? totals?.paid ?? 0;
+  const cost = totals?.reconciledCost ?? totals?.cost ?? 0;
+  const due = totals?.reconciledPayable ?? totals?.payable ?? 0;
+  const credit = totals?.reconciledAdvance ?? totals?.advance ?? 0;
+  const metrics = [
+    ...((cost !== 0 && (cost !== paid || due > 0 || credit > 0)) ||
+    totals?.costCorrection
+      ? [
+          {
+            label: isShop ? "মালের বিল" : isWorker ? "কাজের বিল" : "খরচের বিল",
+            amount: cost,
+            due: false,
+            correction: totals?.costCorrection ?? 0,
+          },
+        ]
       : []),
-    ...(statement?.counts.refund
-      ? [{ kind: "refund" as const, label: "টাকা ফেরত" }]
-      : []),
-    ...(statement?.counts.adjustment
-      ? [{ kind: "adjustment" as const, label: "সমন্বয়" }]
+    ...(due > 0 || totals?.balanceCorrection
+      ? [
+          {
+            label: "আর পাবেন",
+            amount: due,
+            due: true,
+            correction: totals?.balanceCorrection ?? 0,
+          },
+        ]
       : []),
   ];
-  const metrics = statement
-    ? [
-        ...((statement.totals.reconciledCost ?? statement.totals.cost) !== 0
-          ? [
-              {
-                label: isWorker
-                  ? "কাজের মজুরি"
-                  : isShop
-                    ? "মালের দাম"
-                    : "অন্য খরচ",
-                amount:
-                  statement.totals.reconciledCost ?? statement.totals.cost,
-                due: false,
-              },
-            ]
-          : []),
-        ...((statement.totals.reconciledPayable ?? statement.totals.payable) > 0
-          ? [
-              {
-                label: "আর পাবেন",
-                amount:
-                  statement.totals.reconciledPayable ??
-                  statement.totals.payable,
-                due: true,
-              },
-            ]
-          : []),
-      ]
-    : [];
+  const months = new Map<string, SharedRow[]>();
+  for (const row of statement?.rows ?? []) {
+    const key = row.date?.slice(0, 7) ?? "unknown";
+    const entries = months.get(key) ?? [];
+    entries.push(row);
+    months.set(key, entries);
+  }
+  const contractStart = Math.min(
+    contractPage * 5,
+    Math.max(0, (statement?.contracts.length ?? 0) - 1),
+  );
   return (
     <main className="shared-statement-page">
       <header className="shared-brand">
         <span>
-          <HouseLineIcon size={22} weight="duotone" />
+          <HouseLineIcon size={22} />
           {t("বাড়ির খাতা")}
         </span>
-        <span className="shared-copy-label">{t("হিসাবের কপি")}</span>
+        <span className="shared-copy-label">
+          <ShieldCheckIcon size={15} />
+          {t("শুধু দেখার কপি")}
+        </span>
       </header>
       {!statement ? (
-        <section className="shared-empty panel">
-          {missing ? (
+        <section className="shared-empty panel" aria-busy={busy}>
+          {busy ? (
+            <>
+              <span className="shared-loading-mark" aria-hidden="true">
+                <ReceiptIcon size={28} />
+              </span>
+              <h1>{t("হিসাব আসছে…")}</h1>
+              <p role="status">{t("অল্প অল্প করে লেনদেন দেখানো হবে।")}</p>
+              <div className="shared-loading-lines" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </div>
+            </>
+          ) : missing ? (
             <>
               <LinkBreakIcon size={36} />
               <h1>{t("লিংকটি এখন কাজ করছে না")}</h1>
@@ -222,120 +426,152 @@ export function SharedStatementPage() {
             </>
           ) : (
             <>
-              <h1>{t(busy ? "অপেক্ষা করুন…" : "হিসাবের কপি")}</h1>
-              {error ? <p role="alert">{t(error)}</p> : null}
+              <ReceiptIcon size={34} />
+              <h1>{t(stale ? "নতুন হিসাব এসেছে" : "হিসাবের কপি")}</h1>
+              {error ? <p role="alert">{t(errorLabels[error])}</p> : null}
             </>
           )}
           {!busy ? (
-            <button className="secondary-button" onClick={() => void load()}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => void pager.load()}
+            >
               <ArrowClockwiseIcon size={18} />
-              {t("আবার চেষ্টা করুন")}
+              {t(stale ? "হালনাগাদ দেখি" : "আবার চেষ্টা করুন")}
             </button>
           ) : null}
         </section>
       ) : (
         <>
           <section className="shared-heading">
-            <span className="shared-person-mark">
-              <Icon size={26} weight="duotone" />
+            <span className="shared-person-mark" aria-hidden="true">
+              <Icon size={26} />
             </span>
             <div>
               <p className="eyebrow">{formatDigits(statement.projectName)}</p>
               <h1>{formatDigits(statement.person.name)}</h1>
-              {statement.person.role || statement.workName ? (
-                <p>
-                  {formatDigits(
-                    [statement.person.role, statement.workName]
-                      .filter(Boolean)
-                      .join(" · "),
-                  )}
-                </p>
+              {statement.person.role ? (
+                <p>{formatDigits(statement.person.role)}</p>
               ) : null}
             </div>
             <button
+              type="button"
               className="icon-button"
               disabled={busy}
               aria-label={t("হালনাগাদ দেখি")}
-              onClick={() => void load()}
+              onClick={() => void pager.load()}
             >
               <ArrowClockwiseIcon size={20} />
             </button>
           </section>
-          <section className="shared-overview" aria-label={t("হিসাবের সারাংশ")}>
-            <div className="shared-total-main">
-              <span>{t("মোট পেয়েছেন")}</span>
-              <strong>
-                {money(
-                  statement.totals.reconciledNetPaid ?? statement.totals.paid,
-                )}
-              </strong>
-              {statement.totals.paidCorrection ? (
-                <small>
-                  {t("সমন্বয়")}: {money(statement.totals.paidCorrection)}
-                </small>
-              ) : null}
-              <small>
-                {t(statement.workName ? "এই কাজের হিসাব" : "সব সময়ের হিসাব")}
-              </small>
+          {statement.workName ? (
+            <div className="shared-scope">
+              <ReceiptIcon size={15} aria-hidden="true" />
+              <span>{formatDigits(statement.workName)}</span>
             </div>
-            {metrics.length ? (
-              <dl
-                className="shared-balance-grid"
-                style={{
-                  gridTemplateColumns: `repeat(${metrics.length}, minmax(0, 1fr))`,
-                }}
-              >
-                {metrics.map((metric) => (
-                  <div
-                    key={metric.label}
-                    className={metric.due ? "shared-has-due" : ""}
-                  >
-                    <dt>{t(metric.label)}</dt>
-                    <dd>{money(metric.amount)}</dd>
-                  </div>
-                ))}
-              </dl>
-            ) : null}
-            {(statement.totals.reconciledAdvance ?? statement.totals.advance) >
-            0 ? (
-              <details className="shared-reconciliation">
-                <summary>
-                  {t("আরও হিসাব")}
-                  <CaretDownIcon size={16} />
-                </summary>
-                <dl>
-                  <dt>{t("আমার জমা")}</dt>
-                  <dd>
-                    {money(
-                      statement.totals.reconciledAdvance ??
-                        statement.totals.advance,
-                    )}
-                  </dd>
+          ) : null}
+          {isShop ? (
+            <SharedShopSummary statement={statement} />
+          ) : (
+            <section
+              className={`shared-overview ${metrics.length === 1 ? "shared-overview-pair" : ""}`}
+              aria-label={t("হিসাবের সারাংশ")}
+            >
+              <div className="shared-total-main">
+                <span>{t("মোট পেয়েছেন")}</span>
+                <strong>{money(paid)}</strong>
+                {totals?.paidCorrection ? (
+                  <small>
+                    {t("সমন্বয়সহ")} · {t("সমন্বয়")}:{" "}
+                    {money(totals.paidCorrection)}
+                    {totals.actualNetPaid !== undefined ? (
+                      <span>
+                        {t("আসলে পেয়েছেন {{amount}}", {
+                          amount: money(totals.actualNetPaid),
+                        })}
+                      </span>
+                    ) : null}
+                  </small>
+                ) : statement.counts.refund > 0 ? (
+                  <small>{t("ফেরত দেওয়া টাকা বাদে")}</small>
+                ) : null}
+              </div>
+              {metrics.length ? (
+                <dl className="shared-balance-grid">
+                  {metrics.map((metric) => (
+                    <div
+                      key={metric.label}
+                      className={metric.due ? "shared-has-due" : ""}
+                    >
+                      <dt>{t(metric.label)}</dt>
+                      <dd>
+                        {money(metric.amount)}
+                        {metric.correction !== 0 ? (
+                          <small className="shared-metric-note">
+                            {t("সমন্বয়সহ")} · {t("সমন্বয়")}:{" "}
+                            {metric.correction > 0 ? "+" : ""}
+                            {money(metric.correction)}
+                          </small>
+                        ) : null}
+                      </dd>
+                    </div>
+                  ))}
                 </dl>
-              </details>
-            ) : null}
-          </section>
-          {isWorker && statement.contracts.length ? (
+              ) : credit === 0 ? (
+                <p className="shared-settled">
+                  {t(
+                    cost > 0 &&
+                      cost === paid &&
+                      !totals?.paidCorrection &&
+                      !totals?.costCorrection &&
+                      !totals?.balanceCorrection &&
+                      !totals?.historicalCost
+                      ? "পুরো বিল মেটানো"
+                      : "বাকি নেই",
+                  )}
+                </p>
+              ) : null}
+              {credit > 0 ? (
+                <details className="shared-reconciliation">
+                  <summary>
+                    <span>{t("আপনার কাছে জমা")}</span>
+                    <strong>{money(credit)}</strong>
+                    <CaretDownIcon size={16} />
+                  </summary>
+                  <dl>
+                    <dt>{t("হিসাবের জমা")}</dt>
+                    <dd>{money(credit)}</dd>
+                  </dl>
+                </details>
+              ) : null}
+            </section>
+          )}
+          {isWorker && statement.contracts.length > 0 ? (
             <details className="shared-contracts">
               <summary>
-                {t("চুক্তির হিসাব")}
                 <span>
-                  {statement.contracts.length === 1
-                    ? money(statement.contracts[0].total)
-                    : t("{{count}}টি চুক্তি", {
+                  <HardHatIcon size={19} />
+                  <span>
+                    {t("কাজ ও চুক্তি")}
+                    <small>
+                      {t("{{count}}টি চুক্তি", {
                         count: formatDigits(statement.contracts.length),
                       })}
+                    </small>
+                  </span>
                 </span>
+                <CaretDownIcon size={18} />
               </summary>
-              <div>
+              <div className="shared-contract-list">
                 {statement.contracts
-                  .slice(0, contractLimit)
+                  .slice(contractStart, contractStart + 5)
                   .map((contract, index) => (
-                    <article key={index}>
+                    <article key={contractStart + index}>
                       <h3>
-                        {formatDigits(contract.title || contract.workName)}
+                        {formatDigits(contract.title || t("কাজের চুক্তি"))}
                       </h3>
-                      {contract.title && contract.workName ? (
+                      {contract.workName ? (
                         <p>{formatDigits(contract.workName)}</p>
                       ) : null}
                       <dl>
@@ -344,132 +580,189 @@ export function SharedStatementPage() {
                           <dd>{money(contract.total)}</dd>
                         </div>
                         <div>
-                          <dt>{t("পরিশোধ হয়েছে")}</dt>
+                          <dt>{t("পেয়েছেন")}</dt>
                           <dd>{money(contract.netPaid)}</dd>
                         </div>
                         <div>
-                          <dt>{t("চুক্তির বাকি")}</dt>
+                          <dt>{t("আর পাবেন")}</dt>
                           <dd>{money(contract.remaining)}</dd>
                         </div>
                       </dl>
                     </article>
                   ))}
-                {contractLimit < statement.contracts.length ? (
-                  <button
-                    className="text-button"
-                    onClick={() => setContractLimit((value) => value + 5)}
+                {statement.contracts.length > 5 ? (
+                  <nav
+                    className="shared-contract-pages"
+                    aria-label={t("চুক্তির পাতা")}
                   >
-                    {t("আরও চুক্তি দেখি")}
-                  </button>
+                    <button
+                      type="button"
+                      className="text-button"
+                      disabled={contractPage === 0}
+                      onClick={() => setContractPage((value) => value - 1)}
+                    >
+                      {t("আগের চুক্তি")}
+                    </button>
+                    <span>
+                      {formatDigits(
+                        `${contractStart + 1}–${Math.min(contractStart + 5, statement.contracts.length)}`,
+                      )}{" "}
+                      / {formatDigits(statement.contracts.length)}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-button"
+                      disabled={contractStart + 5 >= statement.contracts.length}
+                      onClick={() => setContractPage((value) => value + 1)}
+                    >
+                      {t("পরের চুক্তি")}
+                    </button>
+                  </nav>
                 ) : null}
               </div>
             </details>
           ) : null}
-          <div className="shared-history-heading">
-            <h2>{t("লেনদেন")}</h2>
-            <button
-              className="shared-export-button"
-              disabled={exporting || busy}
-              onClick={() => void exportCopy()}
-            >
-              <DownloadSimpleIcon size={17} />
-              {t(exporting ? "কপি তৈরি হচ্ছে…" : "কপি নামান")}
-            </button>
-          </div>
-          {exportError ? (
-            <p className="share-error" role="alert">
-              {t(exportError)}
-            </p>
-          ) : null}
-          <div
-            className="shared-filters"
-            role="group"
-            aria-label={t("লেনদেন বেছে দেখুন")}
-          >
-            {filters.map((item) => (
-              <button
-                key={item.kind}
-                type="button"
-                disabled={busy}
-                aria-pressed={filter === item.kind}
-                onClick={() => {
-                  if (filter !== item.kind) {
-                    setFilter(item.kind);
-                    setStatement((current) =>
-                      current
-                        ? { ...current, rows: [], nextOffset: null }
-                        : null,
-                    );
-                  }
-                }}
-              >
-                {t(item.label)}
-              </button>
-            ))}
-          </div>
-          <section
-            className="panel shared-history"
-            aria-label={t("লেনদেনের তালিকা")}
-            aria-busy={busy}
-          >
-            {statement.rows.length ? (
-              statement.rows.map((row) => (
-                <article key={row.key}>
-                  <div>
-                    <strong>
-                      {formatDigits(row.description || t(kinds[row.kind]))}
-                    </strong>
-                    <small>
-                      {date(row.date, {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                      {row.works ? ` · ${formatDigits(row.works)}` : ""}
-                    </small>
-                    {row.historical ? (
-                      <small>{t("পুরোনো খরচ; পরিশোধ জানা নেই")}</small>
-                    ) : null}
-                  </div>
-                  <div className={`shared-row-amount shared-kind-${row.kind}`}>
-                    <strong>
-                      {money(
-                        row.kind === "adjustment"
-                          ? (row.adjustment ?? 0)
-                          : Math.abs(row.charge || row.paid),
-                      )}
-                    </strong>
-                    {row.description || row.kind === "adjustment" ? (
-                      <small>
-                        {row.description ? t(kinds[row.kind]) : ""}
-                        {row.kind === "adjustment" && row.adjustmentBasis
-                          ? `${row.description ? " · " : ""}${t(adjustmentBasisLabels[row.adjustmentBasis])}`
-                          : ""}
-                      </small>
-                    ) : null}
-                  </div>
-                </article>
-              ))
-            ) : (
-              <div className="shared-history-empty">
-                <ReceiptIcon size={25} weight="duotone" />
-                <p>{t(busy ? "অপেক্ষা করুন…" : "এখানে কোনো লেনদেন নেই")}</p>
+          <section className="shared-transactions">
+            <div className="shared-history-heading">
+              <div>
+                <h2 ref={historyHeading} tabIndex={-1}>
+                  {t("লেনদেন")}
+                </h2>
               </div>
-            )}
-            {error ? (
+              <button
+                type="button"
+                className="shared-export-button"
+                disabled={exporting || busy}
+                onClick={() => void exportCopy()}
+              >
+                <DownloadSimpleIcon size={18} />
+                {t(exporting ? "কপি তৈরি হচ্ছে…" : "কপি নামান")}
+              </button>
+            </div>
+            {exporting ? (
+              <div className="shared-export-status" role="status">
+                <span>{t("সব লেনদেনের কপি তৈরি হচ্ছে…")}</span>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={cancelExport}
+                >
+                  <XIcon size={16} />
+                  {t("বন্ধ করুন")}
+                </button>
+              </div>
+            ) : null}
+            {exportError ? (
               <p className="share-error" role="alert">
-                {t(error)}
+                {t(exportError)}
               </p>
             ) : null}
-            {statement.nextOffset !== null ? (
-              <button
-                className="secondary-button shared-more"
-                disabled={busy}
-                onClick={() => void more()}
-              >
-                {t(busy ? "অপেক্ষা করুন…" : "আরও হিসাব দেখি")}
-              </button>
+            <div className="shared-search">
+              <MagnifyingGlassIcon size={19} aria-hidden="true" />
+              <input
+                type="search"
+                value={query}
+                maxLength={200}
+                aria-label={t("লেনদেন খুঁজুন")}
+                placeholder={t("বিবরণ, তারিখ বা টাকা দিয়ে খুঁজুন")}
+                onChange={(event) => pager.setQuery(event.target.value)}
+              />
+              {query ? (
+                <button
+                  type="button"
+                  aria-label={t("খোঁজা মুছুন")}
+                  onClick={() => pager.setQuery("")}
+                >
+                  <XIcon size={17} />
+                </button>
+              ) : null}
+            </div>
+            {busy ? (
+              <p className="shared-loading-status" role="status">
+                {t("লেনদেন আসছে…")}
+              </p>
             ) : null}
+            {error ? (
+              <div className="shared-page-error" role="alert">
+                <p>{t(errorLabels[error])}</p>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => void pager.retry()}
+                >
+                  {t("আবার চেষ্টা করুন")}
+                </button>
+              </div>
+            ) : null}
+            <section
+              className="shared-history"
+              aria-label={t("লেনদেনের তালিকা")}
+              aria-busy={busy}
+            >
+              {statement.rows.length ? (
+                [...months.entries()].map(([month, rows]) => (
+                  <section className="shared-month" key={month}>
+                    <h3>
+                      {date(month === "unknown" ? null : `${month}-01`, {
+                        day: undefined,
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </h3>
+                    <div className="shared-month-entries">
+                      {rows.map((row) => (
+                        <SharedTransactionRow
+                          key={row.key}
+                          row={row}
+                          account={statement.account}
+                          onOpen={() => setSelectedEntryId(row.key)}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                ))
+              ) : busy ? (
+                <div className="shared-loading-lines" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </div>
+              ) : (
+                <div className="shared-history-empty">
+                  <ReceiptIcon size={26} />
+                  <p>
+                    {t(
+                      query
+                        ? "কিছু মেলেনি। অন্যভাবে খুঁজে দেখুন।"
+                        : "এখানে কোনো লেনদেন নেই",
+                    )}
+                  </p>
+                </div>
+              )}
+            </section>
+            <nav className="shared-pagination" aria-label={t("লেনদেনের পাতা")}>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={!pager.canPrevious}
+                onClick={() => turnPage("previous")}
+              >
+                <CaretLeftIcon size={17} />
+                {t("আগের পাতা")}
+              </button>
+              <span>
+                {t("পাতা {{page}}", { page: formatDigits(pager.pageNumber) })}
+              </span>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={!pager.canNext}
+                onClick={() => turnPage("next")}
+              >
+                {t("পরের পাতা")}
+                <CaretRightIcon size={17} />
+              </button>
+            </nav>
           </section>
           <footer className="shared-footer">
             <p>
@@ -479,6 +772,10 @@ export function SharedStatementPage() {
                 month: "short",
                 year: "numeric",
               })}
+            </p>
+            <p>
+              <ShieldCheckIcon size={14} />
+              {t("এই লিংকে কোনো তথ্য বদলানো যায় না।")}
             </p>
             {statement.totals.historicalCost > 0 ? (
               <p>
@@ -490,6 +787,17 @@ export function SharedStatementPage() {
           </footer>
         </>
       )}
+      {statement && selectedEntryId ? (
+        <SharedEntryDetail
+          key={[token, selectedEntryId, statement.revision].join(":")}
+          token={token}
+          entryId={selectedEntryId}
+          revision={statement.revision}
+          onClose={() => setSelectedEntryId(null)}
+          onUnavailable={pager.markUnavailable}
+          onStale={pager.markStale}
+        />
+      ) : null}
     </main>
   );
 }

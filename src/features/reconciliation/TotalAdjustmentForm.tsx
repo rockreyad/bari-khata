@@ -44,9 +44,10 @@ const blank: Draft = {
   expectedBefore: null,
 };
 export type TotalAdjustmentTarget = {
-  target: "person" | "work";
+  target: "person";
   id: string;
-  account: Account | null;
+  account: Account;
+  workId?: string | null;
 };
 
 export function TotalAdjustmentForm({
@@ -62,7 +63,7 @@ export function TotalAdjustmentForm({
   const { t, money } = useLanguageContext();
   const [owner] = useState(() => (mode === "real" ? getActiveOwner() : null));
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode, owner]);
-  const key = `total-adjustment:${target.target}:${target.id}:${target.account ?? "all"}`;
+  const key = `total-adjustment:person:${target.id}:${target.account}${target.workId ? `:work:${target.workId}` : ""}`;
   const [draft, setDraft] = useState<Draft>(blank);
   const [ready, setReady] = useState(false),
     [saving, setSaving] = useState(false),
@@ -150,13 +151,12 @@ export function TotalAdjustmentForm({
     () => ({
       target: target.target,
       basis: draft.basis,
-      personId: target.target === "person" ? target.id : null,
-      account:
-        target.target === "person" ? AccountSchema.parse(target.account) : null,
-      workId: target.target === "work" ? target.id : null,
+      personId: target.id,
+      account: AccountSchema.parse(target.account),
+      workId: target.workId ?? null,
       contractId: null,
     }),
-    [target.target, target.id, target.account, draft.basis],
+    [target.target, target.id, target.account, target.workId, draft.basis],
   );
   const scopeResult = useMemo(() => {
     try {
@@ -192,10 +192,7 @@ export function TotalAdjustmentForm({
       ? after - before
       : null;
   const stale = scope && before !== null && scope.value !== before;
-  const record =
-    target.target === "person"
-      ? ledger.people.find((person) => person.id === target.id)
-      : ledger.works.find((work) => work.id === target.id);
+  const record = ledger.people.find((person) => person.id === target.id);
   const archived = Boolean(record?.archivedAt);
   const changedOwner = mode === "real" && owner !== getActiveOwner();
   const current = () =>
@@ -413,6 +410,11 @@ export function TotalAdjustmentForm({
           />
         </label>
       </fieldset>
+      {!target.workId ? (
+        <p className="helper-text">
+          {t("সব খাতার মোট মিলবে। আলাদা খাতায় ভাগ হবে না।")}
+        </p>
+      ) : null}
       <p className="helper-text">
         {t("পার্থক্যটি আলাদা সমন্বয় হিসেবে লেনদেনে থাকবে।")}
       </p>

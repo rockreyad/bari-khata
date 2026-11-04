@@ -3,7 +3,11 @@ import {
   defaultContactAccount,
   sortContactEntries,
 } from "../../domain/contacts";
-import { entryWorkAmount, personSummary } from "../../domain/ledger";
+import {
+  entryWorkAmount,
+  entryWorkIds,
+  personSummary,
+} from "../../domain/ledger";
 import type { Account, Ledger, Person } from "../../domain/model";
 import { adjustmentBalanceDelta } from "../../domain/balanceAdjustments";
 import { adjustmentBasisLabels } from "../history/adjustmentDisplay";
@@ -43,6 +47,10 @@ export function contactStatement(
     const parts = (entry.lines.length ? entry.lines : entry.allocations).filter(
       (part) => !options.workId || part.workId === options.workId,
     );
+    const workIds = entryWorkIds(entry);
+    const wholeEntryInScope =
+      !options.workId ||
+      (workIds.length === 1 && workIds[0] === options.workId);
     return {
       date: entry.date,
       kind: entry.kind,
@@ -73,7 +81,7 @@ export function contactStatement(
       ]
         .filter(Boolean)
         .join(" · "),
-      note: options.includeNotes ? entry.note : "",
+      note: options.includeNotes && wholeEntryInScope ? entry.note : "",
     };
   });
   const totals = {

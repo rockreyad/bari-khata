@@ -115,26 +115,57 @@
 .transaction-detail-v5 .detail-line-context-v4 button {
   font-size: 12px;
 }
+.entry-paid-status-v5 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.entry-paid-status-copy-v5 {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  min-width: 0;
+  font-size: 13px;
+}
+.entry-paid-status-copy-v5 strong {
+  font-weight: 600;
+}
+.entry-paid-status-copy-v5 small,
+.entry-paid-status-v5 > svg {
+  color: var(--muted);
+}
+.entry-paid-status-v5 > svg {
+  flex: none;
+}
+.entry-paid-status-v5:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
 .entry-payment-fold-v5 {
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface);
+  border-top: 1px solid var(--line);
 }
 .entry-payment-fold-v5 > summary {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 16px 14px;
-  min-height: 60px;
+  padding: 12px 0;
+  min-height: 48px;
   cursor: pointer;
   list-style: none;
 }
 .entry-payment-fold-v5 > summary::-webkit-details-marker {
   display: none;
-}
-.entry-payment-fold-v5 > summary > svg {
-  color: var(--state-paid);
-  flex: none;
 }
 .entry-payment-fold-v5 > summary > span:not(.entry-fold-mark-v5) {
   font-size: 12px;
@@ -160,7 +191,7 @@
   content: "−";
 }
 .entry-payment-events-v5 {
-  padding: 0 14px 5px;
+  padding: 0 0 5px;
 }
 .entry-related-bill-v5 > svg:first-child {
   color: var(--state-expense);

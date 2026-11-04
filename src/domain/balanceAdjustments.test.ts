@@ -1027,6 +1027,108 @@ describe("targeted total correction bases", () => {
       reconciledPayable: 8000,
     });
   });
+  it("keeps an exact-notebook person's increased credit separate from another person's due through void and restore", () => {
+    const original = LedgerSchema.parse({
+      ...fixture([payment("advance", 1000), bill("other-bill", 1000, "other")]),
+      contracts: [],
+    });
+    const before = structuredClone(original);
+    const next = appendTyped(
+      original,
+      {
+        ...person,
+        basis: "paid",
+        workId: "one",
+        expectedBefore: 1000,
+        after: 1500,
+        reason: "এই খাতায় দেওয়া মোট মিলিয়েছি",
+      },
+      at,
+    );
+    const expectBalances = (ledger: Ledger, credit: number) => {
+      expect(workBalances(ledger, "one")).toMatchObject({
+        reconciledNetPaid: credit,
+        reconciledPayable: 1000,
+        reconciledAdvance: credit,
+      });
+      expect(summarize(ledger)).toMatchObject({
+        reconciledPayable: 1000,
+        reconciledAdvance: credit,
+      });
+      expect(readTyped(ledger, { ...person, basis: "balance" })).toMatchObject({
+        value: -credit,
+        reconciledPayable: 0,
+        reconciledAdvance: credit,
+      });
+      expect(personSummary(ledger, "other")).toMatchObject({
+        reconciledPayable: 1000,
+        reconciledAdvance: 0,
+      });
+    };
+    expectBalances(next, 1500);
+    const row = next.entries.at(-1)!;
+    const cancelled = setEntryVoided(next, row.id, true);
+    expectBalances(cancelled, 1000);
+    expectBalances(setEntryVoided(cancelled, row.id, false), 1500);
+    expect(cashSummary(next)).toEqual(cashSummary(original));
+    expect(original).toEqual(before);
+  });
+  it.each([
+    { basis: "paid" as const, before: 1500, after: 2000, credit: 1500 },
+    { basis: "paid" as const, before: 1500, after: 1000, credit: 500 },
+    { basis: "cost" as const, before: 500, after: 0, credit: 1500 },
+    { basis: "cost" as const, before: 500, after: 1000, credit: 500 },
+    { basis: "balance" as const, before: -1000, after: -1500, credit: 1500 },
+    { basis: "balance" as const, before: -1000, after: -500, credit: 500 },
+  ])(
+    "isolates scoped $basis correction $before→$after from other people and notebooks",
+    ({ basis, before, after, credit }) => {
+      const original = LedgerSchema.parse({
+        ...fixture([
+          bill("own-bill", 500),
+          payment("advance", 1500),
+          bill("other-bill", 1000, "other"),
+          bill("other-book", 2500, "other", "materials", "two"),
+        ]),
+        contracts: [],
+      });
+      const next = appendTyped(
+        original,
+        {
+          ...person,
+          workId: "one",
+          basis,
+          expectedBefore: before,
+          after,
+          reason: "নির্দিষ্ট খাতায় এই দোকানের হিসাব মিলিয়েছি",
+        },
+        at,
+      );
+      expect(readTyped(next, { ...person, workId: "one", basis }).value).toBe(
+        after,
+      );
+      expect(workBalances(next, "one")).toMatchObject({
+        reconciledPayable: 1000,
+        reconciledAdvance: credit,
+      });
+      expect(summarize(next)).toMatchObject({
+        reconciledPayable: 3500,
+        reconciledAdvance: credit,
+      });
+      expect(personSummary(next, "shop")).toMatchObject({
+        reconciledPayable: 0,
+        reconciledAdvance: credit,
+      });
+      expect(personSummary(next, "other")).toEqual(
+        personSummary(original, "other"),
+      );
+      expect(workBalances(next, "two")).toEqual(workBalances(original, "two"));
+      expect(cashSummary(next)).toEqual(cashSummary(original));
+      expect(next.entries.slice(0, original.entries.length)).toEqual(
+        original.entries,
+      );
+    },
+  );
   it("rejects an ambiguous debt baseline but still permits exact paid or cost totals", () => {
     const original = fixture([bill("loose-wages", 6000, "worker", "labour")]);
     expect(() => readTyped(original, { ...work, basis: "balance" })).toThrow(

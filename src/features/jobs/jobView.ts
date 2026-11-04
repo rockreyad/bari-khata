@@ -1,5 +1,17 @@
-import type { Contract, ContractStatus, Ledger } from "../../domain/model";
+import type {
+  Contract,
+  ContractStatus,
+  Entry,
+  Ledger,
+} from "../../domain/model";
 import { adjustmentBalanceDelta } from "../../domain/adjustmentMath";
+
+const transactionDay = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Dhaka",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 
 export function jobName(
   job: Pick<Contract, "title">,
@@ -9,7 +21,32 @@ export function jobName(
   return job.title || t("কাজ");
 }
 
-export function recentJobs(jobs: Contract[]) {
+export function recentJobs(jobs: Contract[], entries: Entry[]) {
+  const byId = new Map(jobs.map((job) => [job.id, job]));
+  const transactions = new Map<string, { at: number; addedAt: number }>();
+  for (const entry of entries) {
+    if (entry.voided || !entry.contractId) continue;
+    const job = byId.get(entry.contractId);
+    if (!job || entry.personId !== job.personId) continue;
+    const addedAt = Date.parse(entry.createdAt) || 0;
+    let date = entry.date;
+    if (!date && addedAt) {
+      const parts = transactionDay.formatToParts(new Date(addedAt));
+      date = ["year", "month", "day"]
+        .map((type) => parts.find((part) => part.type === type)!.value)
+        .join("-");
+    }
+    const at = Date.parse(date || "") || 0;
+    const previous = transactions.get(job.id);
+    if (
+      !previous ||
+      at > previous.at ||
+      (at === previous.at && addedAt > previous.addedAt)
+    )
+      transactions.set(job.id, { at, addedAt });
+  }
+  const statusRank = (job: Contract) =>
+    job.status === "ongoing" ? 0 : job.status === "done" ? 2 : 1;
   const stamp = (job: Contract) => {
     let latest = 0;
     for (const events of [job.activity, job.history])
@@ -18,8 +55,22 @@ export function recentJobs(jobs: Contract[]) {
     return latest || Date.parse(job.agreedOn ?? "") || 0;
   };
   return jobs
-    .map((job, index) => ({ job, index, at: stamp(job) }))
-    .sort((a, b) => b.at - a.at || a.index - b.index)
+    .map((job, index) => ({
+      job,
+      index,
+      at: stamp(job),
+      transaction: transactions.get(job.id),
+    }))
+    .sort(
+      (a, b) =>
+        statusRank(a.job) - statusRank(b.job) ||
+        Number(Boolean(b.transaction)) - Number(Boolean(a.transaction)) ||
+        (a.transaction && b.transaction
+          ? b.transaction.at - a.transaction.at ||
+            b.transaction.addedAt - a.transaction.addedAt
+          : b.at - a.at) ||
+        a.index - b.index,
+    )
     .map((row) => row.job);
 }
 

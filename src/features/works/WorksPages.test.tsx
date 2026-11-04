@@ -11,6 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router";
 import { LedgerSchema } from "../../domain/model";
 import { createDemoLedger } from "../../domain/demo";
+import { appendBalanceAdjustment } from "../../domain/balanceAdjustments";
 import { setEntityRemoved } from "../../domain/entityDeletion";
 import { WorkCard, WorkPage, WorksPage } from "./WorksPages";
 const context = vi.hoisted(() => ({
@@ -82,6 +83,51 @@ it("shows one complete remaining total without adding an already included wage b
     container.querySelector(".work-action-buttons")?.querySelectorAll("button"),
   ).toHaveLength(0);
   expect(JSON.stringify(ledger)).toBe(original);
+});
+
+it("keeps an existing person's correction in the notebook totals and history without offering another notebook adjustment", () => {
+  const original = createDemoLedger();
+  const ledger = appendBalanceAdjustment(
+    original,
+    {
+      target: "person",
+      basis: "paid",
+      personId: "tile-worker",
+      account: "labour",
+      workId: "tiles",
+      expectedBefore: 4500000,
+      after: 4600000,
+      reason: "নমুনা মজুরির মোট ঠিক করা",
+      date: "2026-11-04",
+    },
+    "2026-11-04T03:00:00.000Z",
+  );
+  context.ledger = ledger;
+  const before = JSON.stringify(ledger);
+  const { container } = render(
+    <MemoryRouter initialEntries={["/works/tiles?tab=labour"]}>
+      <Routes>
+        <Route path="/works/:workId" element={<WorkPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(screen.queryByRole("button", { name: "মোট হিসাব মেলাই" })).toBeNull();
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(
+    container.querySelector(".work-overview-total strong")?.textContent,
+  ).toBe("৳795000");
+  const labour = screen.getByRole("region", { name: "মজুরির মোট হিসাব" });
+  expect(within(labour).getByText("৳46000")).toBeTruthy();
+  expect(within(labour).getByText(/আসলে দেওয়া টাকা/).textContent).toContain(
+    "৳45000",
+  );
+  const correction = container.querySelector(".history-adjustment")!;
+  expect(within(correction as HTMLElement).getByText("সমন্বয়")).toBeTruthy();
+  expect(within(correction as HTMLElement).getByText("৳1000")).toBeTruthy();
+  expect(ledger.entries.filter((entry) => entry.kind === "payment")).toEqual(
+    original.entries.filter((entry) => entry.kind === "payment"),
+  );
+  expect(JSON.stringify(ledger)).toBe(before);
 });
 
 it("keeps shared obligations separate and opens their exact source even after the job was archived", async () => {

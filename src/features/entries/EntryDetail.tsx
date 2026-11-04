@@ -9,7 +9,6 @@ import {
   PencilSimpleIcon,
   ReceiptIcon,
   UserCircleIcon,
-  WalletIcon,
 } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
@@ -18,6 +17,7 @@ import { Sheet } from "../../components/Sheet";
 import { AppMenu } from "../../components/ui/AppMenu";
 import { PaymentIcon } from "../../components/ui/Icons";
 import { entryTotal, entryWorkIds, setEntryVoided } from "../../domain/ledger";
+import { paidPurchasePayment } from "../../domain/paidPurchaseEdit";
 import { type EntryProvenance } from "../../domain/model";
 import { costNames, methodNames } from "../../lib/display";
 import { createWorkspaceStorage } from "../../data/repository";
@@ -152,6 +152,8 @@ export function EntryDetail({ id }: { id: string }) {
     .filter((row) => row.relatedEntryId === entry.id)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const linkedReturns = linked.some((row) => row.kind === "expense_credit");
+  const linkedRefunds = linked.some((row) => row.kind === "refund");
+  const purchasePayment = paidPurchasePayment(ledger, entry.id);
   const linkedPaid = linked
     .filter((row) => !row.voided && row.kind === "payment")
     .reduce((sum, row) => sum + entryTotal(row), 0);
@@ -666,13 +668,31 @@ export function EntryDetail({ id }: { id: string }) {
               : formatDigits(entry.note)}
           </p>
         ) : null}
-        {linked.length ? (
+        {purchasePayment ? (
+          <button
+            type="button"
+            className="entry-paid-status-v5"
+            aria-label={t("পরিশোধের বিস্তারিত")}
+            aria-description={`${t("দিয়েছি {{amount}}", { amount: money(entryTotal(purchasePayment)) })} · ${balanceText(amount - entryTotal(purchasePayment))}`}
+            onClick={() => detail(purchasePayment.id)}
+          >
+            <span className="entry-paid-status-copy-v5">
+              <span>
+                {t("দিয়েছি")}{" "}
+                <strong>{money(entryTotal(purchasePayment))}</strong>
+              </span>
+              <small>{balanceText(amount - entryTotal(purchasePayment))}</small>
+            </span>
+            <ArrowRightIcon size={16} aria-hidden="true" />
+          </button>
+        ) : linked.length ? (
           <details className="entry-payment-fold-v5">
             <summary>
-              <WalletIcon size={21} weight="duotone" />
               <span>
                 {t(
-                  linkedReturns ? "বিলের লেনদেন" : "এই বিলের সঙ্গে রাখা পরিশোধ",
+                  linkedReturns || linkedRefunds
+                    ? "পরিশোধ ও ফেরত"
+                    : "পরিশোধের ইতিহাস",
                 )}
               </span>
               {!linkedReturns ? (

@@ -20,6 +20,7 @@ export function entryReturn(path: string | null | undefined, base = "") {
     if (base && url.pathname !== base && !url.pathname.startsWith(`${base}/`))
       return `${base}/`;
     const relative = base ? url.pathname.slice(base.length) : url.pathname;
+    if (isEntryPage(url.pathname)) return `${base}/`;
     const jobPage =
       /^\/jobs(?:\/[^/]+)?$/.test(relative) && relative !== "/jobs/new";
     if (
@@ -72,6 +73,25 @@ export function contractUrl(
   return `${base}/jobs/${id ? `${encodeURIComponent(id)}/edit` : "new"}?${params}`;
 }
 
+export function personUrl(
+  base: string,
+  id?: string,
+  workId?: string,
+  personId?: string,
+  back = `${base}/people`,
+) {
+  const params = new URLSearchParams({ back: entryReturn(back, base) });
+  if (workId) params.set("work", workId);
+  if (personId) params.set("person", personId);
+  return `${base}/people/${id ? `${encodeURIComponent(id)}/edit` : "new"}?${params}`;
+}
+
+export function isPersonFormPage(pathname: string) {
+  return /\/people\/(?:new|[^/]+\/edit)\/?$/.test(pathname);
+}
+
 export function isEntryPage(pathname: string) {
-  return /\/(?:entries|contracts|jobs)\/(?:new|[^/]+\/edit)\/?$/.test(pathname);
+  return /\/(?:entries|contracts|jobs|people)\/(?:new|[^/]+\/edit)\/?$/.test(
+    pathname,
+  );
 }

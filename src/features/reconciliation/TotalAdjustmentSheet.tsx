@@ -19,9 +19,12 @@ export function TotalAdjustmentSheet({
   name: string;
   onClose: () => void;
 }) {
-  const { mode } = useNotebook();
+  const { mode, ledger } = useNotebook();
   const { t, formatDigits } = useLanguageContext();
   const owner = mode === "real" ? getActiveOwner() : "demo";
+  const workName = target.workId
+    ? ledger.works.find((work) => work.id === target.workId)?.name
+    : null;
   const beforeClose = useRef<(() => Promise<boolean>) | null>(null);
   async function close() {
     if (!beforeClose.current || (await beforeClose.current())) onClose();
@@ -29,11 +32,17 @@ export function TotalAdjustmentSheet({
   return (
     <Sheet
       title={t("মোট হিসাব মেলাই")}
-      subtitle={`${formatDigits(name)} · ${t(target.account ? accountLabels[target.account] : "সব ধরনের হিসাব")}${target.target === "person" ? ` · ${t("সব খাতা মিলিয়ে")}` : ""}`}
+      subtitle={`${formatDigits(name)} · ${t(accountLabels[target.account])} · ${target.workId ? formatDigits(workName ?? t("খাতা পাওয়া যায়নি")) : t("সব খাতা মিলিয়ে")}`}
       onClose={() => void close()}
     >
       <TotalAdjustmentForm
-        key={`${owner}:${target.target}:${target.id}:${target.account}`}
+        key={JSON.stringify([
+          owner,
+          "person",
+          target.id,
+          target.account,
+          target.workId ?? null,
+        ])}
         target={target}
         onSaved={onClose}
         beforeCloseRef={beforeClose}

@@ -33,7 +33,6 @@ import { useLanguageContext } from "../../context/LanguageProvider";
 import { summarize } from "../../domain/ledger";
 import { contractAppliesToWork } from "../../domain/contracts";
 import { JobPreview } from "../jobs/JobPreview";
-import { TotalAdjustmentSheet } from "../reconciliation/TotalAdjustmentSheet";
 import type { Ledger, Work, WorkSnapshot } from "../../domain/model";
 import { workChanges } from "../../domain/workActivity";
 import {
@@ -369,7 +368,6 @@ export function WorkPage() {
   const { ledger, go, entity, add, detail, base = "" } = useNotebook();
   const { t, money, date, language, formatDigits } = useLanguageContext();
   const [showChart, setShowChart] = useState(false);
-  const [adjustmentOpen, setAdjustmentOpen] = useState(false);
   const [params, setParams] = useSearchParams();
   const raw = params.get("tab") ?? "all";
   const tab: WorkTab = [
@@ -623,24 +621,7 @@ export function WorkPage() {
             {t("এই বাকিগুলোতে একই টাকা থাকতে পারে, তাই যোগ করে দেখানো হয়নি।")}
           </p>
         ) : null}
-        {!removal.archived ? (
-          <div className="work-adjustment-link">
-            <button
-              className="text-button"
-              onClick={() => setAdjustmentOpen(true)}
-            >
-              {t("মোট হিসাব মেলাই")}
-            </button>
-          </div>
-        ) : null}
       </section>
-      {adjustmentOpen ? (
-        <TotalAdjustmentSheet
-          target={{ target: "work", id: work.id, account: null }}
-          name={work.name}
-          onClose={() => setAdjustmentOpen(false)}
-        />
-      ) : null}
       {showChart ? (
         <SpendingChart
           ledger={ledger}

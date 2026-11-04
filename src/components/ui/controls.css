@@ -95,13 +95,13 @@
   user-select: none;
   overflow-wrap: anywhere;
 }
+.app-select-option[data-state="checked"] {
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
 .app-select-option[data-highlighted] {
   background: var(--surface-muted);
-}
-.app-select-option[data-state="checked"] {
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
 }
 .app-select-option[data-disabled] {
   opacity: 0.4;

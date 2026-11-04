@@ -136,6 +136,88 @@ describe("read-only contact statements", () => {
       advance: 0,
     });
   });
+  it.each(["expense", "payment"] as const)(
+    "withholds a mixed-work %s note even after notes are included",
+    (kind) => {
+      const document = ledger();
+      const entry = document.entries.find((row) => row.kind === kind)!;
+      entry.note = "private-other-work-note";
+      if (kind === "expense")
+        entry.lines.push({
+          ...entry.lines[0],
+          id: "other-work-line",
+          workId: "door",
+          label: "private-other-work-item",
+        });
+      const validated = LedgerSchema.parse(document);
+      const scoped = contactStatement(validated, validated.people[0], {
+        workId: "tiles",
+        includeNotes: true,
+      });
+      expect(JSON.stringify(scoped)).not.toContain("private-other-work-note");
+      expect(JSON.stringify(scoped)).not.toContain("private-other-work-item");
+      const complete = contactStatement(validated, validated.people[0], {
+        includeNotes: true,
+      });
+      expect(complete.rows.some((row) => row.note === entry.note)).toBe(true);
+    },
+  );
+  it("includes opted-in notes for a whole selected-work bill and adjustment", () => {
+    const source = ledger();
+    const document = LedgerSchema.parse({
+      ...source,
+      entries: [
+        ...source.entries,
+        {
+          id: "selected-work-adjustment",
+          kind: "adjustment",
+          personId: "worker",
+          account: "labour",
+          note: "selected-work-adjustment-note",
+          adjustment: {
+            target: "person",
+            basis: "balance",
+            account: "labour",
+            before: 500000,
+            after: 499900,
+            delta: -100,
+            workId: "tiles",
+          },
+        },
+        {
+          id: "whole-account-adjustment",
+          kind: "adjustment",
+          personId: "worker",
+          account: "labour",
+          note: "private-whole-account-adjustment-note",
+          adjustment: {
+            target: "person",
+            basis: "balance",
+            account: "labour",
+            before: 299900,
+            after: 299800,
+            delta: -100,
+            workId: null,
+          },
+        },
+      ],
+    });
+    const statement = contactStatement(document, document.people[0], {
+      workId: "tiles",
+      includeNotes: true,
+    });
+    expect(
+      statement.rows.some((row) => row.note === source.entries[0].note),
+    ).toBe(true);
+    expect(
+      statement.rows.some(
+        (row) => row.note === "selected-work-adjustment-note",
+      ),
+    ).toBe(true);
+    expect(JSON.stringify(statement)).not.toContain(
+      "private-whole-account-adjustment-note",
+    );
+  });
   it("escapes untrusted data and never adds scripts, source IDs or private notes by default", () => {
     const document = ledger();
     const statement = contactStatement(document, document.people[0]);

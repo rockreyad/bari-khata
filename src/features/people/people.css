@@ -319,102 +319,140 @@
 .contact-filter-done {
   width: 100%;
 }
-.statement-preview {
+.statement-share {
   display: grid;
-  gap: 18px;
+  gap: 20px;
 }
-.statement-person {
+.statement-recipient {
   display: flex;
   gap: 12px;
   align-items: center;
+  padding-bottom: 2px;
 }
-.statement-person > div {
+.statement-recipient .contact-mark {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+}
+.statement-recipient-copy {
   display: grid;
-  gap: 2px;
+  min-width: 0;
+  gap: 3px;
 }
-.statement-person strong {
-  font-size: 18px;
+.statement-recipient-copy > strong {
+  font-size: 16px;
+  line-height: 1.6;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
-.statement-person span {
+.statement-recipient-copy > span {
   font-size: 12px;
+  line-height: 1.7;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
-.contact-statement-totals {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  padding: 17px;
+.statement-file-options {
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface-muted);
+  border-radius: 16px;
+  background: var(--surface);
 }
-.contact-statement-totals small {
-  font-size: 11px;
+.statement-file-options > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 17px 18px;
+  list-style: none;
+  cursor: pointer;
+}
+.statement-file-options > summary::-webkit-details-marker {
+  display: none;
+}
+.statement-file-options > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 14px;
+}
+.statement-file-symbol {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--surface-muted);
   color: var(--muted);
 }
-.contact-statement-totals strong {
-  display: block;
-  font-size: 20px;
-  font-weight: 650;
-  margin-top: 3px;
+.statement-file-heading {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 3px;
 }
-.contact-statement-totals > div:first-child strong {
-  color: var(--text);
+.statement-file-heading > strong {
+  font-size: 14px;
+  line-height: 1.6;
+  font-weight: 550;
 }
-.contact-statement-totals > div:nth-child(2) strong {
-  color: var(--text);
-}
-.contact-statement-totals > div:last-child strong {
-  color: var(--text);
-}
-.statement-explainer {
+.statement-file-heading > small {
   color: var(--muted);
   font-size: 12px;
-  line-height: 1.9;
+}
+.statement-file-caret {
+  flex: none;
+  color: var(--muted);
+  transition: transform 150ms ease;
+}
+.statement-file-options[open] .statement-file-caret {
+  transform: rotate(180deg);
+}
+.statement-file-content {
+  display: grid;
+  gap: 16px;
+  margin: 0 18px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+.statement-file-content > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.8;
 }
 .statement-notes {
   display: flex;
   align-items: center;
   gap: 9px;
+  min-height: 30px;
   font-size: 12px;
+  cursor: pointer;
 }
 .statement-notes input {
+  flex: none;
   width: 17px;
   min-height: 17px;
   height: 17px;
   accent-color: var(--accent);
 }
-.statement-rows {
-  border-top: 1px solid var(--line);
-}
-.statement-rows > div {
-  display: flex;
-  gap: 15px;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--line);
-  padding: 13px 0;
-}
-.statement-rows > div > span {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-.statement-rows strong {
-  font-size: 13px;
-  font-weight: 550;
-  overflow-wrap: anywhere;
-}
-.statement-rows small {
-  color: var(--muted);
-  font-size: 10px;
-}
 .statement-buttons {
   display: flex;
-  gap: 12px;
+  gap: 10px;
+  width: 100%;
 }
 .statement-buttons > * {
   flex: 1;
+  min-width: 0;
+  min-height: 44px;
+}
+.statement-share-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
 }
 @media (max-width: 760px) {
   .contacts-page {
@@ -559,23 +597,10 @@
   .contact-old-note {
     font-size: 11px;
   }
-  .contact-statement-totals {
-    padding: 12px;
-    gap: 9px;
-  }
-  .contact-statement-totals small {
-    font-size: 10px;
-  }
-  .contact-statement-totals strong {
-    font-size: 17px;
-  }
   .statement-buttons .primary-button,
   .statement-buttons .secondary-button {
     font-size: 13px;
   }
-}
-.statement-buttons {
-  width: 100%;
 }
 .contact-detail-page {
   gap: 16px;
@@ -777,21 +802,9 @@
   }
 }
 
-.contact-bill-progress {
-  padding: 0 29px 23px;
-}
-@media (max-width: 600px) {
-  .contact-bill-progress {
-    padding: 0 21px 21px;
-  }
-}
-
 .contact-summary-card > .spending-chart-card {
   padding: 22px 29px 20px;
   border-top: 1px solid var(--line);
-}
-.contact-summary-card .contact-bill-progress {
-  padding-bottom: 24px;
 }
 .contact-job-totals {
   padding: 0 29px 20px;

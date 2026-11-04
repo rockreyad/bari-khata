@@ -217,6 +217,59 @@ function withPayments() {
 }
 
 describe("compact job previews", () => {
+  it("keeps ongoing jobs ahead of recent completed jobs within four cards and follows their latest transaction", () => {
+    const ledger = LedgerSchema.parse({
+      ...fixture(0),
+      contracts: [
+        ["done-newest", "শেষ রং", "done", "2026-11-04"],
+        ["done-next", "শেষ জানালা", "done", "2026-11-03"],
+        ["done-third", "শেষ ছাদ", "done", "2026-11-02"],
+        ["done-fourth", "শেষ বাথরুম", "done", "2026-11-01"],
+        ["new-agreement", "নতুন চলমান", "ongoing", "2026-11-05"],
+        ["old-agreement", "পুরোনো চলমান", "ongoing", "2020-01-01"],
+      ].map(([id, title, status, agreedOn]) => ({
+        id,
+        title,
+        status,
+        agreedOn,
+        personId: "worker",
+        workId: "door",
+        total: 1000000,
+      })),
+      entries: [
+        ["new-agreement", "2026-11-01"],
+        ["old-agreement", "2026-11-04"],
+      ].map(([contractId, date]) => ({
+        id: `${contractId}-payment`,
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        contractId,
+        date,
+        createdAt: `${date}T12:00:00Z`,
+        allocations: [{ workId: "door", amount: 10000 }],
+        paymentParts: [{ amount: 10000 }],
+      })),
+    });
+    const before = JSON.stringify(ledger);
+    const { container } = mount(
+      ledger,
+      "/people/worker",
+      "bn",
+      <JobPreview
+        ledger={ledger}
+        contracts={ledger.contracts}
+        personId="worker"
+      />,
+    );
+    expect(
+      [...container.querySelectorAll(".job-tile-name")].map(
+        (title) => title.textContent,
+      ),
+    ).toEqual(["পুরোনো চলমান", "নতুন চলমান", "শেষ রং", "শেষ জানালা"]);
+    expect(container.querySelectorAll(".job-snap-card")).toHaveLength(4);
+    expect(JSON.stringify(ledger)).toBe(before);
+  });
   it("shows only four cards and opens the scoped full list and specific job without inline editing or history", () => {
     const ledger = fixture();
     const before = JSON.stringify(ledger);
@@ -290,6 +343,122 @@ describe("compact job previews", () => {
 });
 
 describe("full job list", () => {
+  it("orders ongoing, planned or unknown, and done groups by real transaction recency with stable ties", () => {
+    const ledger = LedgerSchema.parse({
+      ...fixture(0),
+      contracts: [
+        ["done-new", "নতুন শেষ কাজ", "done", "2026-11-04"],
+        ["planned", "শুরু হবে", "planned", "2026-11-04"],
+        [
+          "running-tie-first",
+          "সমান দিনের প্রথম চলমান",
+          "ongoing",
+          "2026-11-04",
+        ],
+        ["unknown", "অবস্থা না লেখা কাজ", null, "2020-01-01"],
+        [
+          "running-recent",
+          "সম্প্রতি টাকা দেওয়া চলমান",
+          "ongoing",
+          "2020-01-01",
+        ],
+        [
+          "running-tie-second",
+          "সমান দিনের দ্বিতীয় চলমান",
+          "ongoing",
+          "2026-11-04",
+        ],
+        ["running-no-payment", "লেনদেন ছাড়া চলমান", "ongoing", "2026-11-05"],
+        ["done-old", "পুরোনো শেষ কাজ", "done", "2020-01-01"],
+      ].map(([id, title, status, agreedOn]) => ({
+        id,
+        title,
+        status,
+        agreedOn,
+        personId: "worker",
+        workId: "door",
+        total: 1000000,
+      })),
+      entries: [
+        ["done-new", "2026-11-06"],
+        ["planned", "2026-11-02"],
+        ["running-tie-first", "2026-11-02"],
+        ["running-recent", "2026-11-03"],
+        ["running-tie-second", "2026-11-02"],
+        ["done-old", "2026-11-01"],
+      ].map(([contractId, date]) => ({
+        id: `${contractId}-payment`,
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        contractId,
+        date,
+        createdAt: `${date}T12:00:00Z`,
+        allocations: [{ workId: "door", amount: 10000 }],
+        paymentParts: [{ amount: 10000 }],
+      })),
+    });
+    ledger.entries.push(
+      EntrySchema.parse({
+        id: "undated",
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        contractId: "unknown",
+        date: null,
+        createdAt: "2026-11-04T12:00:00Z",
+        allocations: [{ workId: "door", amount: 10000 }],
+        paymentParts: [{ amount: 10000 }],
+      }),
+      EntrySchema.parse({
+        id: "void",
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        contractId: "running-no-payment",
+        date: "2026-11-08",
+        voided: true,
+        allocations: [{ workId: "door", amount: 10000 }],
+        paymentParts: [{ amount: 10000 }],
+      }),
+      EntrySchema.parse({
+        id: "unlinked",
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        date: "2026-11-08",
+        allocations: [{ workId: "door", amount: 10000 }],
+        paymentParts: [{ amount: 10000 }],
+      }),
+      EntrySchema.parse({
+        id: "wrong-person",
+        kind: "payment",
+        account: "labour",
+        personId: "other-worker",
+        contractId: "running-no-payment",
+        date: "2026-11-08",
+        allocations: [{ workId: "door", amount: 10000 }],
+        paymentParts: [{ amount: 10000 }],
+      }),
+    );
+    const before = JSON.stringify(ledger);
+    const { container } = mount(ledger, "/jobs");
+    expect(
+      [...container.querySelectorAll(".job-tile-name")].map(
+        (title) => title.textContent,
+      ),
+    ).toEqual([
+      "সম্প্রতি টাকা দেওয়া চলমান",
+      "সমান দিনের প্রথম চলমান",
+      "সমান দিনের দ্বিতীয় চলমান",
+      "লেনদেন ছাড়া চলমান",
+      "অবস্থা না লেখা কাজ",
+      "শুরু হবে",
+      "নতুন শেষ কাজ",
+      "পুরোনো শেষ কাজ",
+    ]);
+    expect(JSON.stringify(ledger)).toBe(before);
+  });
   it("appends twelve jobs at a time and hides load more after the final card", () => {
     const ledger = fixture(16);
     const { container } = mount(ledger, "/jobs");
