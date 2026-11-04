@@ -1,5 +1,4 @@
 import type { Account, Entry, Ledger } from "./model.js";
-import { personKind } from "./contactKind.js";
 
 const isCost = (entry: Entry) =>
   entry.kind === "expense" || entry.kind === "expense_credit";
@@ -8,14 +7,7 @@ export function effectiveAccounts(ledger: Pick<Ledger, "people" | "entries">) {
   const accounts = new Map<string, Account>(
     ledger.entries.map((entry) => [entry.id, entry.account]),
   );
-  const drivers = new Set(
-    ledger.people
-      .filter((person) => personKind(person) === "driver")
-      .map((person) => person.id),
-  );
-  const own = ledger.entries.filter(
-    (entry) => entry.personId && drivers.has(entry.personId),
-  );
+  const own = ledger.entries.filter((entry) => entry.personId);
   // A payment stays a transport payment if its original bill is later cancelled.
   const transportBills = new Set(
     own

@@ -36,8 +36,13 @@ import {
 } from "../domain/entityDeletion.js";
 import { preservesPaymentPurposes } from "../domain/paymentPurposes.js";
 import { preservesPersonWorkLinks } from "../domain/personWorkLinks.js";
+import {
+  ContactTypeSchema,
+  contactPresetFrom,
+  preservesContactTypes,
+} from "../domain/contactTypes.js";
 import { preservesBalanceAdjustments } from "../domain/adjustmentHistory.js";
-import { canAssignContact, personKind } from "../domain/contacts.js";
+import { canAssignContact } from "../domain/contacts.js";
 
 const Id = z.string().trim().min(1).max(160);
 const Text = z.string().max(10000);
@@ -124,6 +129,7 @@ const personFields = {
   role: z.string().max(200).default(""),
   phone: z.string().max(60).default(""),
   kind: z.enum(["worker", "shop", "driver", "other"]),
+  contact_type: ContactTypeSchema.nullable().optional(),
 };
 const workFields = {
   name: Name,
@@ -164,6 +170,7 @@ const personChanges = z
     role: z.string().max(200).optional(),
     phone: z.string().max(60).optional(),
     kind: personFields.kind.optional(),
+    contact_type: personFields.contact_type,
   })
   .strict();
 const workChanges = z
@@ -543,11 +550,9 @@ function checkParty(
   account: Account,
   costTypes: string[],
   cash: boolean,
-  procurement = false,
 ) {
   if (!personId) return;
   const person = active(ledger.people, personId, "person");
-  if (procurement && account === "materials") return;
   if (!canAssignContact(person, account, costTypes, cash))
     fail("validation_error", "person_account_mismatch", {
       person_id: personId,
@@ -742,18 +747,19 @@ function updatedEntry(
         replacement.account,
         parts.map((part) => part.workId),
       );
-      const party = ledger.people.find(
-        (person) => person.id === replacement.personId,
-      );
-      checkParty(
-        ledger,
-        replacement.personId,
-        replacement.account,
-        replacement.lines.map((line) => line.costType),
-        !isCost,
-        replacement.account === "materials" &&
-          Boolean(party && personKind(party) === "worker"),
-      );
+      const sameFinancialIdentity =
+        original.personId === replacement.personId &&
+        original.account === replacement.account &&
+        JSON.stringify(original.lines.map((line) => line.costType)) ===
+          JSON.stringify(replacement.lines.map((line) => line.costType));
+      if (!sameFinancialIdentity)
+        checkParty(
+          ledger,
+          replacement.personId,
+          replacement.account,
+          replacement.lines.map((line) => line.costType),
+          !isCost,
+        );
     } else if (command.type === "attach_receipt") {
       if (
         original.receipts.some((receipt) => receipt.id === command.receipt_id)
@@ -901,7 +907,6 @@ export function applyMcpCommand(
       account,
       lines.map((line) => line.costType),
       false,
-      command.type === "record_procurement" || returning,
     );
     checkContract(
       ledger,
@@ -1004,15 +1009,7 @@ export function applyMcpCommand(
     })) ?? [{ workId: work, amount: command.amount_paisa }];
     if (sum(allocations.map((part) => part.amount)) !== command.amount_paisa)
       fail("validation_error", "allocation_mismatch");
-    checkParty(
-      ledger,
-      command.person_id,
-      command.account,
-      [],
-      true,
-      command.type === "record_reimbursement" ||
-        command.type === "record_cash_refund",
-    );
+    checkParty(ledger, command.person_id, command.account, [], true);
     checkContract(
       ledger,
       command.contract_id ?? null,
@@ -1071,14 +1068,33 @@ export function applyMcpCommand(
     )
       amountPaisa = Math.max(entryTotal(before), entryTotal(after));
   } else if (command.type === "create_person") {
-    const person = PersonSchema.parse({ ...command, id: uuid() });
+    const person = PersonSchema.parse({
+      ...command,
+      id: uuid(),
+      ...(command.contact_type !== undefined
+        ? { contactType: command.contact_type }
+        : {}),
+    });
     ledger.people.push(person);
     affected(person.id);
   } else if (command.type === "update_person") {
     const person = active(ledger.people, command.person_id, "person");
     ledger.people = ledger.people.map((value) =>
       value.id === person.id
-        ? PersonSchema.parse({ ...person, ...command.changes })
+        ? PersonSchema.parse({
+            ...person,
+            ...command.changes,
+            ...(command.changes.contact_type !== undefined
+              ? { contactType: command.changes.contact_type }
+              : command.changes.kind && command.changes.kind !== person.kind
+                ? {
+                    contactType: contactPresetFrom(
+                      command.changes.kind,
+                      command.changes.role ?? person.role,
+                    ).id,
+                  }
+                : {}),
+          })
         : value,
     );
     affected(person.id);
@@ -1137,9 +1153,7 @@ export function applyMcpCommand(
       agreedOn:
         fields.agreed_on !== undefined ? fields.agreed_on : previous?.agreedOn,
     });
-    const person = active(ledger.people, record.personId, "person");
-    if (personKind(person) !== "worker")
-      fail("validation_error", "contract_requires_worker");
+    active(ledger.people, record.personId, "person");
     if (record.workId) active(ledger.works, record.workId, "work");
     ledger = saveContractChange(
       ledger,
@@ -1225,6 +1239,7 @@ export function applyMcpCommand(
     !preservesContractHistory(current, ledger) ||
     !preservesWorkHistory(current, ledger) ||
     !preservesPersonWorkLinks(current, ledger) ||
+    !preservesContactTypes(current, ledger) ||
     !preservesBalanceAdjustments(current, ledger) ||
     !preservesRemovalHistory(current, ledger) ||
     !preservesPaymentPurposes(current, ledger)

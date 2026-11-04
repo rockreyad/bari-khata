@@ -1,6 +1,7 @@
 import { latinDigits } from "../lib/numerals.js";
 import { z } from "zod";
 import { assertSafeReconciliations } from "./adjustmentMath.js";
+import { ContactTypeSchema, contactTypeMatchesKind } from "./contactTypes.js";
 
 export const MoneySchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 export const AccountSchema = z.enum(["materials", "labour", "other"]);
@@ -152,9 +153,21 @@ export const PersonSchema = z
     workIds: z.array(Id).max(10000).optional(),
     phone: z.string().max(60).default("").transform(latinDigits),
     kind: PersonKindSchema.nullable().default(null),
+    contactType: ContactTypeSchema.nullable().optional(),
     quickActions: z.array(ContactActionSchema).max(4).nullable().default(null),
   })
-  .superRefine(validateRemoval);
+  .superRefine((person, ctx) => {
+    validateRemoval(person, ctx);
+    if (
+      person.contactType &&
+      !contactTypeMatchesKind(person.contactType, person.kind)
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Contact type does not match contact kind",
+        path: ["contactType"],
+      });
+  });
 export type Person = z.infer<typeof PersonSchema>;
 
 export const MaterialGroupSchema = z.object({

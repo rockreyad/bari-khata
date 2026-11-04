@@ -114,12 +114,17 @@ beforeEach(() => {
   };
 });
 const ready = () =>
-  waitFor(() =>
+  waitFor(() => {
+    const fields = document.querySelector<HTMLFieldSetElement>(
+      "#quick-entry fieldset",
+    );
     expect(
-      (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(false),
-  );
+      fields
+        ? fields.disabled
+        : (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
+            .disabled,
+    ).toBe(false);
+  });
 
 it("previews adjusted shop due, pays it once and keeps the same balance when reopened", async () => {
   const original = LedgerSchema.parse({
@@ -193,6 +198,13 @@ it("previews adjusted shop due, pays it once and keeps the same balance when reo
     reopened.container.querySelector(".entry-balance-items")?.textContent ?? "",
   ).not.toContain("আগের বাকি");
   await user.type(screen.getByLabelText("কত টাকা"), "100");
+  expect(
+    reopened.container.querySelector(".entry-balance-result")?.textContent,
+  ).toBe("বাকি থাকবে0");
+  expect(
+    screen.getByRole("button", { name: "নতুন বিল ও টাকা", pressed: true }),
+  ).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "অগ্রিম" }));
   expect(
     reopened.container.querySelector(".entry-balance-result")?.textContent,
   ).toBe("অগ্রিম থাকবে100");
@@ -411,7 +423,7 @@ describe("quick entry creation flow", () => {
       "2000",
     );
   });
-  it("selects a worker's labour account after opening payment from a material notebook", async () => {
+  it("keeps an explicitly chosen material payment account after selecting a worker", async () => {
     state.notebook.ledger = LedgerSchema.parse({
       works: [{ id: "doors", name: "দরজার কাজ" }],
       people: [{ id: "worker", name: "শাহ আলম", kind: "worker" }],
@@ -426,7 +438,7 @@ describe("quick entry creation flow", () => {
       target: { value: "worker" },
     });
     expect(
-      screen.getByRole("button", { name: "কাজের টাকা", pressed: true }),
+      screen.getByRole("button", { name: "নতুন বিল ও টাকা", pressed: true }),
     ).toBeTruthy();
     expect(screen.queryByRole("button", { name: "মাল কেনা" })).toBeNull();
     expect(screen.queryByRole("button", { name: "গাড়িভাড়া" })).toBeNull();
@@ -478,8 +490,10 @@ it("opens a full purchase page shaped for its shop and previews paying more than
     screen.getByRole("heading", { level: 1, name: "মাল কিনলাম" }),
   ).toBeTruthy();
   expect(screen.queryByRole("dialog")).toBeNull();
-  expect(container.querySelector(".expense-sections")).toBeNull();
-  expect(screen.queryByRole("button", { name: "মিস্ত্রির টাকা" })).toBeNull();
+  expect(container.querySelector(".expense-sections")).not.toBeNull();
+  expect(
+    screen.getByRole("button", { name: "মাল কেনা", pressed: true }),
+  ).toBeTruthy();
   await user.type(screen.getByLabelText("কত টাকা"), "10000");
   await user.type(screen.getByLabelText("কী কিনলেন"), "দরজা");
   await user.click(screen.getByRole("button", { name: "টাকা লিখি" }));
@@ -511,7 +525,7 @@ it("opens a full purchase page shaped for its shop and previews paying more than
 });
 
 it.each(["দোকান", "ডিলার"])(
-  "keeps existing notebook allocation without quick notebook creation for a %s purchase",
+  "keeps existing notebook allocation with notebook creation available for a %s purchase",
   async (role) => {
     state.notebook.ledger = LedgerSchema.parse({
       works: [{ id: "roof", name: "ছাদের খাতা" }],
@@ -527,11 +541,11 @@ it.each(["দোকান", "ডিলার"])(
     await ready();
     const notebooks = screen.getByRole("combobox", { name: "কাজের খাতা" });
     expect(
-      within(notebooks).queryByRole("option", { name: "+ নতুন খাতা খুলব" }),
-    ).toBeNull();
+      within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
+    ).toBeTruthy();
     expect(
-      screen.queryByRole("button", { name: "নতুন কাজের খাতা খুলব" }),
-    ).toBeNull();
+      screen.getByRole("button", { name: "নতুন কাজের খাতা খুলব" }),
+    ).toBeTruthy();
     await user.selectOptions(notebooks, "roof");
     await user.type(screen.getByLabelText("কী কিনলেন"), "সিমেন্ট");
     await user.type(screen.getByLabelText("কত টাকা"), "1000");
@@ -561,7 +575,7 @@ it.each(["দোকান", "ডিলার"])(
 );
 
 it.each(["payment", "return"] as const)(
-  "keeps existing notebook choices but no create shortcut in a dealer %s flow",
+  "keeps existing notebook choices and a create shortcut in a dealer %s flow",
   async (kind) => {
     state.notebook.ledger = LedgerSchema.parse({
       works: [{ id: "roof", name: "ছাদের খাতা" }],
@@ -577,18 +591,18 @@ it.each(["payment", "return"] as const)(
       within(notebooks).getByRole("option", { name: "ছাদের খাতা" }),
     ).toBeTruthy();
     expect(
-      within(notebooks).queryByRole("option", { name: "+ নতুন খাতা খুলব" }),
-    ).toBeNull();
+      within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
+    ).toBeTruthy();
     expect(
-      screen.queryByRole("button", { name: "নতুন কাজের খাতা খুলব" }),
-    ).toBeNull();
+      screen.getByRole("button", { name: "নতুন কাজের খাতা খুলব" }),
+    ).toBeTruthy();
     await user.selectOptions(notebooks, "roof");
     expect((notebooks as HTMLSelectElement).value).toBe("roof");
     expect(state.notebook.save).not.toHaveBeenCalled();
   },
 );
 
-it("hides notebook creation only while a shop is selected and keeps the unfinished payment when switching to a worker", async () => {
+it("keeps notebook creation available across contact identities and keeps the unfinished payment when switching to a worker", async () => {
   state.notebook.ledger = LedgerSchema.parse({
     works: [{ id: "roof", name: "ছাদের খাতা" }],
     people: [
@@ -606,11 +620,11 @@ it("hides notebook creation only while a shop is selected and keeps the unfinish
   await user.type(screen.getByLabelText("কত টাকা"), "1700");
   await user.selectOptions(screen.getByLabelText("কাকে দিচ্ছেন"), "shop");
   expect(
-    within(notebooks).queryByRole("option", { name: "+ নতুন খাতা খুলব" }),
-  ).toBeNull();
+    within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
+  ).toBeTruthy();
   expect(
-    screen.queryByRole("button", { name: "নতুন কাজের খাতা খুলব" }),
-  ).toBeNull();
+    screen.getByRole("button", { name: "নতুন কাজের খাতা খুলব" }),
+  ).toBeTruthy();
   await user.selectOptions(screen.getByLabelText("কাকে দিচ্ছেন"), "worker");
   expect(
     within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
@@ -757,7 +771,7 @@ it("keeps daily wage inputs and a receipt through back/reopen, then records one 
 });
 
 it.each([undefined, "settle", "advance"] as const)(
-  "uses one shop payment flow for the current amount and older %s intent without extra choices",
+  "uses the confirmed shop balance while preserving an explicit %s intent",
   async (purpose) => {
     state.notebook.ledger = LedgerSchema.parse({
       works: [{ id: "door", name: "দরজা" }],
@@ -789,8 +803,18 @@ it.each([undefined, "settle", "advance"] as const)(
     );
     await ready();
     expect(screen.getByRole("heading", { name: "টাকা দিই" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "বাকি মেটাই" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "অগ্রিম" })).toBeNull();
+    expect(
+      screen.getByRole("button", {
+        name: "বাকি মেটাই",
+        pressed: purpose !== "advance",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", {
+        name: "অগ্রিম",
+        pressed: purpose === "advance",
+      }),
+    ).toBeTruthy();
     expect(screen.queryByLabelText("কী কিনলেন")).toBeNull();
     expect(screen.queryByRole("button", { name: "কাজের টাকা" })).toBeNull();
     await user.type(screen.getByLabelText("কত টাকা"), "10000");
@@ -821,7 +845,7 @@ it.each([undefined, "settle", "advance"] as const)(
   },
 );
 
-it("offers generic categories until a shop or worker is chosen, then uses the selected role's single flow", async () => {
+it("keeps all contacts available and retains an explicitly selected labour bill", async () => {
   state.notebook.ledger = LedgerSchema.parse({
     works: [{ id: "door", name: "দরজা" }],
     people: [
@@ -843,7 +867,7 @@ it("offers generic categories until a shop or worker is chosen, then uses the se
   fireEvent.change(screen.getByLabelText("কোন দোকান"), {
     target: { value: "shop" },
   });
-  expect(container.querySelector(".expense-sections")).toBeNull();
+  expect(container.querySelector(".expense-sections")).not.toBeNull();
   expect((screen.getByLabelText("কী কিনলেন") as HTMLInputElement).value).toBe(
     "দরজা",
   );
@@ -851,20 +875,19 @@ it("offers generic categories until a shop or worker is chosen, then uses the se
     target: { value: "" },
   });
   await user.click(screen.getByRole("button", { name: "মিস্ত্রির টাকা" }));
-  expect(screen.queryByRole("option", { name: "দরজার দোকান" })).toBeNull();
+  expect(screen.getByRole("option", { name: "দরজার দোকান" })).toBeTruthy();
   await user.type(screen.getByLabelText("কত টাকা"), "2000");
   fireEvent.change(screen.getByLabelText("কোন মিস্ত্রি"), {
     target: { value: "worker" },
   });
-  expect(
-    screen.getByRole("button", { name: "কাজের টাকা", pressed: true }),
-  ).toBeTruthy();
-  expect(container.querySelector(".expense-sections")).toBeNull();
+  expect(screen.queryByRole("button", { name: "নতুন বিল ও টাকা" })).toBeNull();
+  expect(container.querySelector(".expense-sections")).not.toBeNull();
   expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
     "2000",
   );
   expect(screen.queryByLabelText("কী কিনলেন")).toBeNull();
-  expect(screen.queryByRole("button", { name: "পুরো দিয়েছি" })).toBeNull();
+  await user.type(screen.getByLabelText("কী কাজের মজুরি"), "নমুনা কাজের বিল");
+  expect(screen.getByRole("button", { name: "পুরো দিয়েছি" })).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
   expect(summarize(state.notebook.ledger as Ledger)).toMatchObject({
@@ -873,7 +896,7 @@ it("offers generic categories until a shop or worker is chosen, then uses the se
   });
 });
 
-it("keeps a driver expense limited to transport and records its amount with its payment", async () => {
+it("records an explicitly selected transport expense and its payment without limiting other categories by identity", async () => {
   state.notebook.ledger = LedgerSchema.parse({
     works: [{ id: "door", name: "দরজা" }],
     people: [{ id: "driver", name: "রনি", kind: "driver" }],
@@ -891,7 +914,7 @@ it("keeps a driver expense limited to transport and records its amount with its 
     />,
   );
   await ready();
-  expect(container.querySelector(".expense-sections")).toBeNull();
+  expect(container.querySelector(".expense-sections")).not.toBeNull();
   expect(screen.queryByRole("button", { name: "মাল নামানোর খরচ" })).toBeNull();
   expect(screen.queryByLabelText("কী কিনলেন")).toBeNull();
   await user.type(screen.getByLabelText("কত টাকা"), "200");
@@ -928,7 +951,7 @@ it("keeps a driver expense limited to transport and records its amount with its 
 });
 
 it.each(["settle", "advance"] as const)(
-  "keeps a worker's %s intent cash-only",
+  "only defaults an explicit %s to cash when that intent is an advance",
   async (purpose) => {
     state.notebook.ledger = LedgerSchema.parse({
       works: [{ id: "door", name: "দরজা" }],
@@ -949,14 +972,26 @@ it.each(["settle", "advance"] as const)(
     await ready();
     expect(screen.getByRole("heading", { name: "টাকা দিই" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "আগের বাকি" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "অগ্রিম" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "দিন হিসাবে" })).toBeNull();
+    expect(
+      screen.getByRole("button", {
+        name: "অগ্রিম",
+        pressed: purpose === "advance",
+      }),
+    ).toBeTruthy();
+    if (purpose === "advance")
+      expect(screen.queryByRole("button", { name: "দিন হিসাবে" })).toBeNull();
+    else
+      expect(
+        screen.getByRole("button", { name: "নতুন বিল ও টাকা", pressed: true }),
+      ).toBeTruthy();
     await user.type(screen.getByLabelText("কত টাকা"), "1500");
     await user.click(screen.getByRole("button", { name: "রাখুন" }));
     await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
     const saved = state.notebook.ledger as Ledger;
-    expect(saved.entries).toHaveLength(1);
-    expect(saved.entries[0]).toMatchObject({
+    expect(saved.entries).toHaveLength(purpose === "advance" ? 1 : 2);
+    expect(
+      saved.entries.find((entry) => entry.kind === "payment"),
+    ).toMatchObject({
       kind: "payment",
       account: "labour",
       personId: "worker",
@@ -1083,6 +1118,7 @@ it("recovers a compatible legacy payment draft into an account-specific page wit
       workId: "door",
       personId: "person",
     }),
+    purpose: "settle" as const,
     amount: "1700",
   };
   state.drafts.set("quick-v2:payment:door:person", { draft, files: [] });
@@ -1187,6 +1223,7 @@ it("waits for an unmount's pending draft write before removing a saved payment d
   );
   await ready();
   await user.type(screen.getByLabelText("কত টাকা"), "1700");
+  await user.click(screen.getByRole("button", { name: "অগ্রিম" }));
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(state.notebook.save).toHaveBeenCalledOnce());
   let releaseWrite!: () => void;
@@ -1374,3 +1411,342 @@ it.each(["job-a", "job-b"])(
     ).toBe(oldCopy);
   },
 );
+
+it("keeps a migrated source draft if another form changes it while this entry is saved", async () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "door", name: "নমুনা দরজা" }],
+    people: [{ id: "person", name: "নমুনা ব্যক্তি", kind: "other" }],
+  });
+  state.notebook.ledger = ledger;
+  const draft = {
+    ...entryContext(ledger, {
+      kind: "payment",
+      account: "materials",
+      workId: "door",
+      personId: "person",
+    }),
+    purpose: "settle" as const,
+    amount: "1700",
+  };
+  const source = "quick-v2:payment:door:person";
+  state.drafts.set(source, { draft, files: [] });
+  const save = state.notebook.save as (
+    change: Ledger | ((current: Ledger) => Ledger),
+  ) => Promise<void>;
+  state.notebook.save = vi.fn(async (change) => {
+    await save(change);
+    state.drafts.set(source, {
+      draft: { ...draft, amount: "2500" },
+      files: [],
+    });
+  });
+  render(
+    <QuickEntrySheet
+      presentation="page"
+      options={{
+        kind: "payment",
+        purpose: "settle",
+        account: "materials",
+        workId: "door",
+        personId: "person",
+      }}
+    />,
+  );
+  await ready();
+  expect(
+    (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  await userEvent.click(screen.getByRole("button", { name: "অগ্রিম" }));
+  await userEvent.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
+  expect(state.drafts.get(source)).toEqual({
+    draft: { ...draft, amount: "2500" },
+    files: [],
+  });
+  expect(state.drafts.has(`${source}:settle:account=materials`)).toBe(false);
+  expect((state.notebook.ledger as Ledger).entries).toHaveLength(1);
+});
+
+describe("balance-aware payment choices", () => {
+  it.each([
+    ["worker", "labour"],
+    ["shop", "materials"],
+    ["driver", "other"],
+    ["other", "other"],
+  ] as const)(
+    "starts a fresh %s payment as a new bill when there is no debt",
+    async (kind, account) => {
+      state.notebook.ledger = LedgerSchema.parse({
+        works: [{ id: "work", name: "নমুনা খাতা" }],
+        people: [{ id: "person", name: "নমুনা নাম", kind }],
+      });
+      render(
+        <QuickEntrySheet
+          presentation="page"
+          options={{
+            kind: "payment",
+            personId: "person",
+            workId: "work",
+            account,
+          }}
+        />,
+      );
+      await ready();
+      expect(screen.queryByRole("button", { name: "বাকি মেটাই" })).toBeNull();
+      expect(
+        screen.getByRole("button", { name: "নতুন বিল ও টাকা", pressed: true }),
+      ).toBeTruthy();
+      await userEvent.type(screen.getByLabelText("কত টাকা"), "100");
+      await userEvent.click(screen.getByRole("button", { name: "রাখুন" }));
+      await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
+      const saved = state.notebook.ledger as Ledger;
+      expect(saved.entries.map((entry) => entry.kind)).toEqual([
+        "expense",
+        "payment",
+      ]);
+      expect(saved.entries[1].relatedEntryId).toBe(saved.entries[0].id);
+      expect(saved.entries[0].lines[0].amount).toBe(10000);
+      expect(saved.people[0].kind).toBe(kind);
+    },
+  );
+
+  it("preserves an unfinished old cash draft and requires an explicit choice when there is no longer any debt", async () => {
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "work", name: "নমুনা খাতা" }],
+      people: [{ id: "person", name: "নমুনা নাম", kind: "other" }],
+    });
+    state.notebook.ledger = ledger;
+    const draft = {
+      ...entryContext(ledger, {
+        kind: "payment",
+        personId: "person",
+        workId: "work",
+        account: "other",
+      }),
+      purpose: "settle" as const,
+      amount: "125",
+      note: "অসমাপ্ত টাকা দেওয়ার লেখা",
+    };
+    state.drafts.set("quick-v2:payment:work:person:account=other", {
+      draft,
+      files: [],
+    });
+    const view = render(
+      <QuickEntrySheet
+        presentation="page"
+        options={{
+          kind: "payment",
+          personId: "person",
+          workId: "work",
+          account: "other",
+        }}
+      />,
+    );
+    await ready();
+    expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
+      "125",
+    );
+    expect(screen.queryByRole("button", { name: "বাকি মেটাই" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "নতুন বিল ও টাকা", pressed: false }),
+    ).toBeTruthy();
+    expect(
+      (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    fireEvent.submit(view.container.querySelector("form")!);
+    expect(state.notebook.save).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "অগ্রিম" }));
+    await userEvent.click(screen.getByRole("button", { name: "রাখুন" }));
+    await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
+    const saved = state.notebook.ledger as Ledger;
+    expect(saved.entries).toHaveLength(1);
+    expect(saved.entries[0]).toMatchObject({
+      id: draft.id,
+      kind: "payment",
+      note: draft.note,
+      allocations: [{ amount: 12500 }],
+    });
+  });
+
+  it("uses the selected job's corrected balance, and never defaults another bill for a settled job", async () => {
+    const original = LedgerSchema.parse({
+      works: [{ id: "work", name: "নমুনা খাতা" }],
+      people: [{ id: "person", name: "নমুনা নাম", kind: "other" }],
+      contracts: [
+        { id: "job", personId: "person", workId: "work", total: 100000 },
+      ],
+      entries: [
+        {
+          id: "paid",
+          kind: "payment",
+          account: "labour",
+          personId: "person",
+          contractId: "job",
+          allocations: [{ workId: "work", amount: 50000 }],
+          paymentParts: [{ amount: 50000 }],
+        },
+      ],
+    });
+    const corrected = appendBalanceAdjustment(original, {
+      target: "person",
+      basis: "paid",
+      personId: "person",
+      account: "labour",
+      contractId: "job",
+      expectedBefore: 50000,
+      after: 100000,
+      reason: "নমুনা কাজের টাকা মেলানো",
+    });
+    state.notebook.ledger = corrected;
+    const view = render(
+      <QuickEntrySheet
+        presentation="page"
+        options={{
+          kind: "payment",
+          personId: "person",
+          workId: "work",
+          account: "labour",
+          contractId: "job",
+        }}
+      />,
+    );
+    await ready();
+    expect(screen.queryByRole("button", { name: "বাকি মেটাই" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "নতুন বিল ও টাকা" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "অগ্রিম", pressed: true }),
+    ).toBeTruthy();
+    await userEvent.type(screen.getByLabelText("কত টাকা"), "150");
+    expect(
+      view.container.querySelector(".entry-balance-result")?.textContent,
+    ).toBe("অগ্রিম থাকবে150");
+    await userEvent.click(screen.getByRole("button", { name: "রাখুন" }));
+    await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
+    const saved = state.notebook.ledger as Ledger;
+    expect(saved.entries.slice(0, 2)).toEqual(corrected.entries);
+    expect(saved.entries).toHaveLength(3);
+    expect(saved.entries.at(-1)).toMatchObject({
+      kind: "payment",
+      contractId: "job",
+      account: "labour",
+    });
+    expect(
+      saved.entries.filter((entry) => entry.kind === "expense"),
+    ).toHaveLength(0);
+  });
+});
+
+it("keeps a typed material bill, partial payment and global reason when choosing a worker as payee", async () => {
+  state.notebook.ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "নমুনা খাতা" }],
+    people: [{ id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" }],
+    contracts: [
+      { id: "worker-job", personId: "worker", workId: "work", total: 100000 },
+    ],
+  });
+  const user = userEvent.setup();
+  render(
+    <QuickEntrySheet
+      presentation="page"
+      options={{
+        kind: "payment",
+        account: "materials",
+        costType: "material",
+        workId: "work",
+      }}
+    />,
+  );
+  await ready();
+  await user.type(screen.getByLabelText("কত টাকা"), "100");
+  await user.selectOptions(screen.getByLabelText("কিসের টাকা"), "__new__");
+  await user.type(
+    screen.getByLabelText("কিসের টাকা লিখুন"),
+    "নমুনা মালের টাকা",
+  );
+  await user.click(screen.getByRole("button", { name: "টাকা লিখি" }));
+  await user.type(screen.getByLabelText("এখন কত দিলেন"), "40");
+  await user.selectOptions(screen.getByLabelText("কাকে দিচ্ছেন"), "worker");
+  expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
+    "100",
+  );
+  expect(
+    (screen.getByLabelText("এখন কত দিলেন") as HTMLInputElement).value,
+  ).toBe("40");
+  expect(
+    (screen.getByLabelText("কিসের টাকা লিখুন") as HTMLInputElement).value,
+  ).toBe("নমুনা মালের টাকা");
+  expect(
+    (screen.getByLabelText("কোন হিসাবের অংশ") as HTMLSelectElement).value,
+  ).toBe("materials");
+  expect(screen.queryByLabelText("কাজ")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
+  const saved = state.notebook.ledger as Ledger;
+  expect(saved.entries).toHaveLength(2);
+  expect(saved.entries[0]).toMatchObject({
+    kind: "expense",
+    account: "materials",
+    personId: "worker",
+    contractId: null,
+    lines: [{ label: "নমুনা মালের টাকা", amount: 10000, costType: "material" }],
+  });
+  expect(saved.entries[1]).toMatchObject({
+    kind: "payment",
+    account: "materials",
+    personId: "worker",
+    contractId: null,
+    paymentParts: [{ amount: 4000 }],
+  });
+  expect(saved.entries[1].relatedEntryId).toBe(saved.entries[0].id);
+  expect(saved.people[0].kind).toBe("worker");
+});
+
+it("uses an explicit labour expense type consistently for the preview and saved bill after a late shop payee is selected", async () => {
+  state.notebook.ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "নমুনা খাতা" }],
+    people: [{ id: "shop", name: "নমুনা দোকান", kind: "shop" }],
+  });
+  const user = userEvent.setup();
+  const view = render(
+    <QuickEntrySheet
+      presentation="page"
+      options={{ kind: "expense", costType: "labour", workId: "work" }}
+    />,
+  );
+  await ready();
+  await user.type(
+    screen.getByLabelText("কী কাজের মজুরি"),
+    "নমুনা মাটি কাটার কাজ",
+  );
+  await user.type(screen.getByLabelText("কত টাকা"), "300");
+  await user.click(screen.getByRole("button", { name: "টাকা লিখি" }));
+  await user.type(screen.getByLabelText("এখন কত দিলেন"), "100");
+  await user.selectOptions(screen.getByLabelText("কোন মিস্ত্রি"), "shop");
+  expect(
+    view.container.querySelector(".entry-balance-result")?.textContent,
+  ).toBe("বাকি থাকবে200");
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
+  const saved = state.notebook.ledger as Ledger;
+  expect(saved.entries).toHaveLength(2);
+  expect(saved.entries[0]).toMatchObject({
+    kind: "expense",
+    account: "labour",
+    personId: "shop",
+    lines: [
+      { amount: 30000, costType: "labour", label: "নমুনা মাটি কাটার কাজ" },
+    ],
+  });
+  expect(saved.entries[1]).toMatchObject({
+    kind: "payment",
+    account: "labour",
+    personId: "shop",
+    paymentParts: [{ amount: 10000 }],
+  });
+  expect(saved.entries[1].relatedEntryId).toBe(saved.entries[0].id);
+  expect(saved.people[0].kind).toBe("shop");
+});

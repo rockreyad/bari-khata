@@ -123,6 +123,179 @@ function usedHouse() {
     ],
   });
 }
+
+it("keeps unknown preset metadata through draft reopen while preventing stale incompatible actions from being enabled or saved", async () => {
+  const ledger = usedHouse();
+  storage.drafts.set("entity:person:new:any", {
+    id: "future-person",
+    contactPresetId: "future-relationship",
+    contactKind: "driver",
+    name: "নমুনা পুরোনো নাম",
+    role: "নমুনা নিজের পরিচয়",
+    phone: "01700000012",
+    personWorkIds: ["door"],
+    quickActions: ["purchase"],
+  });
+  const onSave = vi.fn(async (_next: Ledger) => {});
+  const onClose = vi.fn();
+  const props = {
+    presentation: "page",
+    kind: "person",
+    ledger,
+    mode: "demo",
+    onSave,
+    onClose,
+  } as const;
+  const user = userEvent.setup();
+  let view = mount(<EntitySheet {...props} />);
+  await ready();
+  expect((screen.getByLabelText("নাম") as HTMLInputElement).value).toBe(
+    "নমুনা পুরোনো নাম",
+  );
+  expect(
+    (screen.getByLabelText("পরিচয় / কী কাজ করেন") as HTMLInputElement).value,
+  ).toBe("নমুনা নিজের পরিচয়");
+  await user.click(screen.getByText("পছন্দের বাটন"));
+  const purchase = screen.getByRole("button", {
+    name: "মাল কেনা",
+  }) as HTMLButtonElement;
+  expect(purchase.disabled).toBe(true);
+  expect(purchase.getAttribute("aria-pressed")).toBe("false");
+  await user.click(purchase);
+  expect(purchase.getAttribute("aria-pressed")).toBe("false");
+  await user.click(screen.getByRole("button", { name: "ফিরুন" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  view.unmount();
+  expect(storage.drafts.get("entity:person:new:any")).toMatchObject({
+    contactPresetId: "future-relationship",
+    contactKind: "driver",
+    quickActions: ["purchase"],
+  });
+  view = mount(<EntitySheet {...props} />);
+  await ready();
+  await user.click(screen.getByText("পছন্দের বাটন"));
+  expect(
+    (screen.getByRole("button", { name: "মাল কেনা" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(
+    screen
+      .getByRole("button", { name: "মাল কেনা" })
+      .getAttribute("aria-pressed"),
+  ).toBe("false");
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+  const saved = onSave.mock.calls[0][0];
+  expect(
+    saved.people.find((person) => person.id === "future-person"),
+  ).toMatchObject({
+    name: "নমুনা পুরোনো নাম",
+    kind: "driver",
+    role: "নমুনা নিজের পরিচয়",
+    phone: "01700000012",
+    workIds: ["door"],
+    quickActions: [],
+  });
+  expect(saved.entries).toEqual(ledger.entries);
+  expect(saved.contracts).toEqual(ledger.contracts);
+});
+
+it.each([
+  {
+    initial: "মিস্ত্রি / কারিগর",
+    initialId: "craftsperson",
+    selected: "দোকানদার",
+    presetId: "supplier",
+    kind: "shop",
+  },
+  {
+    initial: "ইঞ্জিনিয়ার / পরামর্শক",
+    initialId: "professional",
+    selected: "গাড়ি / পরিবহন",
+    presetId: "transport",
+    kind: "driver",
+  },
+])(
+  "keeps an explicitly entered agreement visible and saved once after changing from $initial to $selected",
+  async ({ initialId, presetId, kind }) => {
+    const ledger = usedHouse();
+    const onSave = vi.fn(async (_next: Ledger) => {});
+    const onClose = vi.fn();
+    const props = {
+      presentation: "page",
+      kind: "person",
+      ledger,
+      mode: "demo",
+      onSave,
+      onClose,
+    } as const;
+    const user = userEvent.setup();
+    let view = mount(<EntitySheet {...props} />);
+    await ready();
+    await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), initialId);
+    fireEvent.change(screen.getByLabelText("নাম"), {
+      target: { value: "নমুনা দায়িত্বের ব্যক্তি" },
+    });
+    const agreementSummary = screen
+      .getByText("কাজের টাকা", { selector: "summary > span" })
+      .closest("summary")!;
+    await user.click(agreementSummary);
+    await user.selectOptions(screen.getByLabelText("কাজের খাতা"), "door");
+    fireEvent.change(screen.getByLabelText("কাজের টাকা"), {
+      target: { value: "1800" },
+    });
+    await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), presetId);
+    expect(
+      (screen.getByLabelText("কীভাবে যুক্ত") as HTMLSelectElement).value,
+    ).toBe(presetId);
+    expect(
+      (screen.getByLabelText("কাজের টাকা") as HTMLInputElement).value,
+    ).toBe("১৮০০");
+    expect(screen.getByLabelText("কাজের টাকা").closest("details")!.open).toBe(
+      true,
+    );
+    expect(
+      (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value,
+    ).toBe("door");
+    await user.click(screen.getByRole("button", { name: "ফিরুন" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    view.unmount();
+    expect(storage.drafts.get("entity:person:new:any")).toMatchObject({
+      contactPresetId: presetId,
+      personContractAmount: "1800",
+      workId: "door",
+    });
+    view = mount(<EntitySheet {...props} />);
+    await ready();
+    expect(
+      (screen.getByLabelText("কীভাবে যুক্ত") as HTMLSelectElement).value,
+    ).toBe(presetId);
+    expect(
+      (screen.getByLabelText("কাজের টাকা") as HTMLInputElement).value,
+    ).toBe("১৮০০");
+    expect(
+      (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value,
+    ).toBe("door");
+    await user.click(screen.getByRole("button", { name: "রাখুন" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    const saved = onSave.mock.calls[0][0];
+    const person = saved.people.find(
+      (person) => person.name === "নমুনা দায়িত্বের ব্যক্তি",
+    )!;
+    expect(person.kind).toBe(kind);
+    expect(
+      saved.contracts.filter((job) => job.personId === person.id),
+    ).toHaveLength(1);
+    expect(
+      saved.contracts.find((job) => job.personId === person.id),
+    ).toMatchObject({ workId: "door", scope: "work", total: 180000 });
+    expect(saved.entries).toEqual(ledger.entries);
+    expect(saved.contracts.find((job) => job.id === "house")).toEqual(
+      ledger.contracts[0],
+    );
+  },
+);
+
 it("creates a full-page 600000-taka whole-house agreement before any work notebook exists", async () => {
   const ledger = LedgerSchema.parse({
     people: [{ id: "worker", name: "শাহ আলম", kind: "worker" }],
@@ -198,8 +371,9 @@ it("adds a new worker with a whole-house contract before there are work notebook
     />,
   );
   await ready();
-  await userEvent.click(
-    screen.getByRole("button", { name: "মিস্ত্রি", pressed: false }),
+  await userEvent.selectOptions(
+    screen.getByLabelText("কীভাবে যুক্ত"),
+    "craftsperson",
   );
   fireEvent.change(screen.getByLabelText("নাম"), {
     target: { value: "শাহ আলম" },
@@ -843,8 +1017,9 @@ it("adds an optional job to a new worker using only its chosen notebook and amou
     />,
   );
   await ready();
-  await userEvent.click(
-    screen.getByRole("button", { name: "মিস্ত্রি", pressed: false }),
+  await userEvent.selectOptions(
+    screen.getByLabelText("কীভাবে যুক্ত"),
+    "craftsperson",
   );
   fireEvent.change(screen.getByLabelText("নাম"), { target: { value: "করিম" } });
   await userEvent.click(
