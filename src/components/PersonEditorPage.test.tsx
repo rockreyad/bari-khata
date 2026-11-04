@@ -18,6 +18,7 @@ import {
   getScopedRepository,
 } from "../data/repository";
 import { LedgerSchema, type Ledger } from "../domain/model";
+import { defaultContactAccount } from "../domain/contacts";
 import { setEntityRemoved } from "../domain/entityDeletion";
 import { latinDigits } from "../lib/numerals";
 import { savePreferences } from "../lib/preferences";
@@ -231,6 +232,7 @@ it("creates and reopens a shop with optional fields empty and an explicitly empt
   )!;
   expect(shop).toMatchObject({
     kind: "shop",
+    contactType: "supplier",
     phone: "",
     role: "",
     quickActions: [],
@@ -273,6 +275,144 @@ it("creates and reopens a shop with optional fields empty and an explicitly empt
   expect(
     await createWorkspaceStorage().readDraft(`entity:person:${shop.id}:any`),
   ).toBeNull();
+});
+
+it("keeps the explicitly selected type after saving and reopening a freely edited description", async () => {
+  const initial = fixture();
+  const repo = await repository(initial);
+  const user = userEvent.setup();
+  const onClose = vi.fn();
+  const onSave = vi.fn(async (ledger: Ledger) => {
+    await repo.save(ledger);
+  });
+  const first = mount(initial, onSave, onClose, "worker");
+  await ready();
+  await user.selectOptions(
+    screen.getByLabelText("কীভাবে যুক্ত"),
+    "professional",
+  );
+  const description = screen.getByRole("combobox", {
+    name: "পরিচয় / কী কাজ করেন",
+  });
+  await user.clear(description);
+  await user.type(description, "বালু ভরাটের তদারকি");
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  first.unmount();
+  repo.database.close();
+  await repo.database.open();
+  const saved = (await repo.read())!.ledger;
+  expect(saved.people.find((person) => person.id === "worker")).toMatchObject({
+    contactType: "professional",
+    kind: "worker",
+    role: "বালু ভরাটের তদারকি",
+  });
+  expect(saved.entries).toEqual(initial.entries);
+  expect(saved.contracts).toEqual(initial.contracts);
+
+  const second = mount(saved, onSave, onClose, "worker");
+  await ready();
+  expect(
+    (screen.getByLabelText("কীভাবে যুক্ত") as HTMLSelectElement).value,
+  ).toBe("professional");
+  const reopenedDescription = screen.getByRole("combobox", {
+    name: "পরিচয় / কী কাজ করেন",
+  });
+  expect((reopenedDescription as HTMLInputElement).value).toBe(
+    "বালু ভরাটের তদারকি",
+  );
+  await user.clear(reopenedDescription);
+  await user.type(reopenedDescription, "রড ও সিমেন্ট");
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
+  second.unmount();
+  const updated = (await repo.read())!.ledger;
+  expect(updated.people.find((person) => person.id === "worker")).toMatchObject(
+    {
+      contactType: "professional",
+      kind: "worker",
+      role: "রড ও সিমেন্ট",
+    },
+  );
+  expect(updated.entries).toEqual(initial.entries);
+  expect(updated.contracts).toEqual(initial.contracts);
+});
+
+it("uses an explicit unclassified type for shortcuts without rewriting a legacy shop's financial kind or records", async () => {
+  const base = fixture();
+  const initial = LedgerSchema.parse({
+    ...base,
+    people: base.people.map((person) =>
+      person.id === "shop"
+        ? {
+            ...person,
+            contactType: "custom",
+            quickActions: ["payment", "purchase", "return", "transport"],
+          }
+        : person,
+    ),
+    entries: [
+      ...base.entries,
+      {
+        id: "shop-bill",
+        kind: "expense",
+        personId: "shop",
+        account: "materials",
+        lines: [
+          {
+            id: "shop-bill-line",
+            workId: "roof",
+            label: "সিমেন্ট",
+            costType: "material",
+            amount: 30000,
+          },
+        ],
+      },
+      {
+        id: "shop-paid",
+        kind: "payment",
+        personId: "shop",
+        account: "materials",
+        relatedEntryId: "shop-bill",
+        allocations: [{ workId: "roof", amount: 10000 }],
+        paymentParts: [{ method: "cash", amount: 10000 }],
+      },
+    ],
+  });
+  const repo = await repository(initial);
+  const user = userEvent.setup();
+  const onClose = vi.fn();
+  const onSave = vi.fn(async (ledger: Ledger) => {
+    await repo.save(ledger);
+  });
+  mount(initial, onSave, onClose, "shop");
+  await ready();
+  expect(
+    (screen.getByLabelText("কীভাবে যুক্ত") as HTMLSelectElement).value,
+  ).toBe("");
+  const actions = await preferences(user);
+  for (const name of ["মাল কেনা", "মাল ফেরত", "আনার খরচ"]) {
+    const button = actions.getByRole("button", { name }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+    await user.click(button);
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+  }
+  expect(
+    actions.getByRole("button", { name: "টাকা দিলাম", pressed: true }),
+  ).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  const saved = (await repo.read())!.ledger;
+  const person = saved.people.find((person) => person.id === "shop")!;
+  expect(person).toMatchObject({
+    contactType: "custom",
+    kind: "shop",
+    quickActions: ["payment"],
+  });
+  expect(defaultContactAccount(person)).toBe("materials");
+  expect(saved.entries).toEqual(initial.entries);
+  expect(saved.contracts).toEqual(initial.contracts);
 });
 
 it("keeps failed edit values and custom actions in a reopening draft, then saves without changing financial records", async () => {

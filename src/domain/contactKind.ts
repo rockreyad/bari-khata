@@ -1,7 +1,14 @@
 import type { Person, PersonKind } from "./model.js";
 
-export function personKind(person: Person): PersonKind {
+export function personKind(
+  person: Pick<Person, "kind" | "name" | "role" | "contactType">,
+): PersonKind {
   if (person.kind) return person.kind;
+  if (person.contactType) {
+    if (person.contactType === "supplier") return "shop";
+    if (person.contactType === "transport") return "driver";
+    return person.contactType === "custom" ? "other" : "worker";
+  }
   const description = `${person.role} ${person.name}`;
   if (
     /দোকান|স্টোর|হার্ডওয়্যার|ট্রেড|সাপ্লাই|এন্টারপ্রাইজ|shop|store|trading|enterprise|supplier|hardware/i.test(

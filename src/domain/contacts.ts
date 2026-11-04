@@ -8,6 +8,7 @@ import type {
 } from "./model.js";
 import { personSummary } from "./ledger.js";
 import { personKind } from "./contactKind.js";
+import { contactPresetFor } from "./contactTypes.js";
 import { effectiveAccounts } from "./effectiveAccounts.js";
 import { reconciledTotals } from "./adjustmentMath.js";
 export { personKind } from "./contactKind.js";
@@ -28,7 +29,7 @@ export function availableContactActions(kind: PersonKind): ContactAction[] {
   return [...roleActions[kind]];
 }
 export function allowedContactActions(person: Person): ContactAction[] {
-  const available = availableContactActions(personKind(person));
+  const available = availableContactActions(contactPresetFor(person).kind);
   return [
     ...new Set(
       (person.quickActions ?? available).filter((action) =>
