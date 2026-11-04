@@ -332,13 +332,13 @@ export function EntitySheet({
     draft.basis === "fixed" || draft.totalOverridden
       ? amount(draft.total)
       : calculatedTotal;
-  const allowed =
-    kind === "person"
-      ? availableContactActions(draft.contactKind)
-      : Object.keys(workActionNames);
   const personPreset =
     contactPresets.find((preset) => preset.id === draft.contactPresetId) ??
     contactPresets.find((preset) => preset.id === "custom")!;
+  const allowed =
+    kind === "person"
+      ? availableContactActions(personPreset.kind)
+      : Object.keys(workActionNames);
   const hasPersonAgreement =
     personPreset.agreement || Boolean(draft.personContractAmount.trim());
   const selected = (
@@ -349,6 +349,7 @@ export function EntitySheet({
             id: draft.id,
             name: draft.name || "new",
             kind: draft.contactKind,
+            contactType: personPreset.id,
           }),
         )
       : ["expense", "payment"])
@@ -405,6 +406,7 @@ export function EntitySheet({
           role: draft.role.trim(),
           workIds: draft.personWorkIds,
           kind: draft.contactKind,
+          contactType: personPreset.id,
           quickActions:
             draft.quickActions === null
               ? null
