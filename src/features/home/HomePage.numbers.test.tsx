@@ -119,6 +119,60 @@ const labels = {
     materials: "Material payment",
   },
 };
+it("shows only ongoing notebooks on home", () => {
+  const ledger = LedgerSchema.parse({
+    works: [
+      { id: "current", name: "চলতি খাতা", status: "ongoing" },
+      { id: "later", name: "পরের খাতা", status: "planned" },
+      { id: "finished", name: "শেষ খাতা", status: "done" },
+    ],
+  });
+  const view = mount(ledger, "bn");
+  expect(view.container.querySelectorAll(".work-carousel h3")).toHaveLength(1);
+  expect(view.container.querySelector(".work-carousel h3")?.textContent).toBe(
+    "চলতি খাতা",
+  );
+});
+it("shows a corrected paid headline and a separate correction without changing cash category rows", () => {
+  const base = fixture("payment");
+  const ledger = LedgerSchema.parse({
+    ...base,
+    entries: [
+      ...base.entries,
+      {
+        id: "adjust",
+        kind: "adjustment",
+        personId: null,
+        account: "other",
+        note: "মোট মিলিয়েছি",
+        adjustment: {
+          target: "work",
+          basis: "paid",
+          account: null,
+          before: 16300,
+          after: 20000,
+          delta: 3700,
+          workId: "general",
+        },
+      },
+    ],
+  });
+  const before = JSON.stringify(ledger);
+  const { container } = mount(ledger, "en");
+  expect(
+    container.querySelector(".home-total-heading strong")?.textContent,
+  ).toBe("৳\u202f200");
+  expect(container.querySelector(".home-total-heading")?.textContent).toContain(
+    "Adjustment",
+  );
+  expect(container.querySelector(".home-total-heading")?.textContent).toContain(
+    "৳\u202f37",
+  );
+  expect(
+    container.querySelector(".home-total-breakdown")?.textContent,
+  ).toContain("৳\u202f163");
+  expect(JSON.stringify(ledger)).toBe(before);
+});
 describe.each(["bn", "en"] as const)(
   "home numeric ledger in %s",
   (language) => {

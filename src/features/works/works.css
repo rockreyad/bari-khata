@@ -1,9 +1,8 @@
 .work-overview {
   border: 1px solid var(--line);
-  border-radius: 24px;
+  border-radius: 18px;
   background: var(--surface);
   overflow: hidden;
-  box-shadow: 0 8px 30px color-mix(in srgb, var(--accent) 5%, transparent);
 }
 .work-overview-total {
   position: relative;
@@ -11,8 +10,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 25px 24px 22px;
-  background: linear-gradient(125deg, var(--accent-soft), var(--surface) 90%);
+  padding: 22px 24px;
 }
 .work-overview-total > div {
   display: grid;
@@ -24,7 +22,8 @@
   font-size: 13px;
 }
 .work-overview-total strong {
-  font-size: clamp(34px, 6vw, 44px);
+  color: var(--text);
+  font-size: clamp(30px, 6vw, 38px);
   line-height: 1.35;
   font-weight: 650;
   letter-spacing: -0.04em;
@@ -33,7 +32,7 @@
 .work-chart-toggle {
   width: 44px;
   height: 44px;
-  border-radius: 15px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
   color: var(--accent);
@@ -41,8 +40,8 @@
   border: 1px solid var(--line);
 }
 .work-chart-toggle[aria-expanded="true"] {
-  background: var(--accent);
-  color: var(--primary-ink);
+  background: var(--surface-muted);
+  color: var(--text);
 }
 .work-known-due,
 .notebook-card-due {
@@ -62,6 +61,54 @@
   font-size: 19px;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+.work-shared-due {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  list-style: none;
+}
+.work-shared-due::-webkit-details-marker {
+  display: none;
+}
+.work-shared-due > strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.work-shared-dues[open] summary svg {
+  transform: rotate(90deg);
+}
+.work-shared-jobs {
+  padding: 0 24px 16px;
+}
+.work-shared-jobs button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.work-shared-jobs button > span {
+  flex: 1;
+  min-width: 0;
+}
+.work-shared-jobs small {
+  display: block;
+  color: var(--muted);
+}
+.work-shared-jobs strong {
+  color: var(--text);
+}
+.work-due-note {
+  margin: 0;
+  padding: 0 24px 16px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
 }
 .notebook-card-due {
   padding-top: 12px;
@@ -83,6 +130,7 @@
   color: var(--muted);
 }
 .notebook-card-total > strong {
+  color: var(--text);
   font-size: 25px;
   line-height: 1.4;
   font-weight: 650;
@@ -110,17 +158,13 @@
   min-height: 244px;
   padding: 17px;
   border-radius: 21px;
-  border-color: color-mix(in srgb, var(--work-color) 13%, var(--line));
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--work-color) 5%, var(--surface)),
-    var(--surface) 65%
-  );
-  box-shadow: 0 3px 16px color-mix(in srgb, var(--work-color) 4%, transparent);
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: 0 3px 16px color-mix(in srgb, var(--text) 4%, transparent);
   transform: none;
 }
 .notebook-card.notebook-card-v3.work-notebook-card:hover {
-  border-color: color-mix(in srgb, var(--work-color) 35%, var(--line));
+  border-color: color-mix(in srgb, var(--text) 22%, var(--line));
   transform: none;
 }
 .work-notebook-card.notebook-card-v3 .notebook-card-top {
@@ -140,6 +184,19 @@
   font-size: 10px;
   font-weight: 500;
   border-radius: 7px;
+}
+:is(.work-notebook-card, .work-title) .status-tag {
+  color: var(--muted);
+  background: var(--surface-muted);
+}
+:is(.work-notebook-card, .work-title) .status-tag.ongoing > i {
+  background: var(--state-ongoing);
+}
+:is(.work-notebook-card, .work-title) .status-tag.done > i {
+  background: var(--state-done);
+}
+:is(.work-notebook-card, .work-title) .status-tag.planned > i {
+  background: var(--state-planned);
 }
 .work-notebook-card.notebook-card-v3 .notebook-card-heading {
   display: flex;
@@ -165,7 +222,7 @@
   overflow-wrap: anywhere;
 }
 .work-notebook-card .notebook-card-arrow {
-  color: color-mix(in srgb, var(--work-color) 70%, var(--muted));
+  color: var(--muted);
   flex: none;
   margin-top: 4px;
 }
@@ -192,7 +249,7 @@
 }
 .work-notebook-card.notebook-card-v3 .notebook-card-due > strong {
   font-size: 13px;
-  color: var(--warning);
+  color: var(--text);
 }
 .works-directory {
   gap: 20px;
@@ -289,9 +346,9 @@
   white-space: nowrap;
 }
 .works-status-filters > button.selected {
-  color: var(--accent-strong);
+  color: var(--muted);
   border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
-  background: var(--accent-soft);
+  background: var(--surface-muted);
   font-weight: 600;
 }
 .works-status-filters small {
@@ -326,9 +383,8 @@
 .work-tabs-rail {
   position: relative;
   min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 17px;
-  background: var(--surface-muted);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
   isolation: isolate;
 }
 .work-page-v3 .work-tabs-v3.work-tabs-scroll {
@@ -338,7 +394,7 @@
   gap: 4px;
   width: 100%;
   min-width: 0;
-  padding: 5px;
+  padding: 0;
   border: 0;
   border-radius: inherit;
   background: transparent;
@@ -360,8 +416,9 @@
   min-width: max-content;
   min-height: 43px;
   padding: 10px 14px;
-  border: 1px solid transparent;
-  border-radius: 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   font-size: 12px;
   font-weight: 500;
   line-height: 1.5;
@@ -369,19 +426,14 @@
   color: var(--muted);
   transition:
     color 0.18s,
-    background 0.18s,
-    box-shadow 0.18s;
+    background 0.18s;
 }
 .work-page-v3 .work-tabs-v3.work-tabs-scroll > button.selected {
   color: var(--accent);
   font-weight: 650;
-  border-color: color-mix(in srgb, var(--accent) 13%, var(--line));
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--accent) 10%, var(--surface)),
-    var(--surface)
-  );
-  box-shadow: 0 2px 7px color-mix(in srgb, var(--accent) 9%, transparent);
+  border-bottom-color: var(--accent);
+  background: transparent;
+  box-shadow: none;
 }
 .work-page-v3 .work-tabs-v3.work-tabs-scroll > button:focus-visible {
   outline: 2px solid var(--accent);
@@ -401,13 +453,11 @@
 }
 .work-tabs-rail::before {
   left: 1px;
-  border-radius: 16px 0 0 16px;
-  background: linear-gradient(90deg, var(--surface-muted) 45%, transparent);
+  background: linear-gradient(90deg, var(--surface) 45%, transparent);
 }
 .work-tabs-rail::after {
   right: 1px;
-  border-radius: 0 16px 16px 0;
-  background: linear-gradient(270deg, var(--surface-muted) 45%, transparent);
+  background: linear-gradient(270deg, var(--surface) 45%, transparent);
 }
 .work-tabs-rail.can-scroll-left::before,
 .work-tabs-rail.can-scroll-right::after {
@@ -450,4 +500,48 @@
 .work-page-v3 .work-tabs-scroll > button > svg,
 .work-page-v3 .work-tabs-scroll > button > span {
   flex: none;
+}
+.work-action-buttons:empty {
+  display: none;
+}
+.work-page-v3 .work-scope-summary {
+  gap: 8px 14px;
+  align-items: baseline;
+}
+.work-page-v3 .work-scope-summary > strong {
+  font-size: 24px;
+  color: var(--text);
+}
+.work-page-v3 .work-labour-summary {
+  display: block;
+}
+.work-labour-primary {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.work-labour-primary > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.work-labour-primary > strong {
+  color: var(--text);
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: normal;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.work-labour-primary > .text-button {
+  margin-left: auto;
+}
+.work-labour-note {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.work-activity-status {
+  color: var(--muted);
 }

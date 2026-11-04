@@ -34,7 +34,11 @@ const api = vi.hoisted(() => ({
   resolve: vi.fn(),
   download: vi.fn(),
   parse: vi.fn(),
-  storage: { exportBackup: vi.fn(), importBackup: vi.fn() },
+  storage: {
+    exportBackup: vi.fn(),
+    importBackup: vi.fn(),
+    mergeBackup: vi.fn(),
+  },
 }));
 vi.mock("../../app/NotebookProvider", () => ({
   useNotebook: () => ({
@@ -142,6 +146,7 @@ beforeEach(() => {
   api.resolve.mockResolvedValue(undefined);
   api.storage.exportBackup.mockResolvedValue("test-backup");
   api.storage.importBackup.mockResolvedValue(undefined);
+  api.storage.mergeBackup.mockResolvedValue({ changed: true });
   api.parse.mockReturnValue(backup());
   api.save.mockImplementation(async (change: (ledger: Ledger) => Ledger) => {
     api.ledger = change(api.ledger as Ledger);
@@ -199,7 +204,7 @@ describe("organized settings", () => {
     expect((api.ledger as Ledger).entries).toEqual([]);
   });
 
-  it("downloads the scoped backup and requires confirmation before replacing it", async () => {
+  it("downloads the scoped backup and requires confirmation before merging it", async () => {
     const user = userEvent.setup();
     const { container } = mount();
     await openRow(user, "হিসাবের কপি");
@@ -214,29 +219,32 @@ describe("organized settings", () => {
     const file = new File(["{}"], "sample.json", { type: "application/json" });
     fireEvent.change(input, { target: { files: [file] } });
     await screen.findByRole("dialog", {
-      name: "আগের কপি থেকে খাতা ফিরিয়ে আনুন",
+      name: "কপি থেকে হিসাব মেলান",
     });
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     const confirm = screen.getByRole("button", {
-      name: "খাতা ফিরিয়ে আনুন",
+      name: "নতুন ও বাছাই করা তথ্য আনুন",
     }) as HTMLButtonElement;
     expect(confirm.disabled).toBe(true);
-    expect(api.storage.importBackup).not.toHaveBeenCalled();
+    expect(api.storage.mergeBackup).not.toHaveBeenCalled();
     await user.click(
       screen.getByRole("checkbox", {
-        name: "আমি ফাইলটি দেখে এই খাতা ফিরিয়ে আনতে চাই।",
+        name: "তালিকা দেখে নতুন ও বাছাই করা তথ্য আনতে চাই।",
       }),
     );
     await user.click(confirm);
     await waitFor(() =>
-      expect(api.storage.importBackup).toHaveBeenCalledWith("{}", {
-        replace: true,
+      expect(api.storage.mergeBackup).toHaveBeenCalledWith("{}", {
+        confirmed: true,
+        expectedLedger: api.ledger,
+        decisions: {},
+        at: expect.any(String),
       }),
     );
   });
 
   it("keeps a failed restore retryable and leaves the confirmation visible", async () => {
-    api.storage.importBackup.mockRejectedValueOnce(
+    api.storage.mergeBackup.mockRejectedValueOnce(
       new Error("work_history_would_be_lost"),
     );
     const user = userEvent.setup();
@@ -246,25 +254,27 @@ describe("organized settings", () => {
       target: { files: [new File(["{}"], "backup.json")] },
     });
     await screen.findByRole("dialog", {
-      name: "আগের কপি থেকে খাতা ফিরিয়ে আনুন",
+      name: "কপি থেকে হিসাব মেলান",
     });
     await user.click(
       screen.getByRole("checkbox", {
-        name: "আমি ফাইলটি দেখে এই খাতা ফিরিয়ে আনতে চাই।",
+        name: "তালিকা দেখে নতুন ও বাছাই করা তথ্য আনতে চাই।",
       }),
     );
-    await user.click(screen.getByRole("button", { name: "খাতা ফিরিয়ে আনুন" }));
+    await user.click(
+      screen.getByRole("button", { name: "নতুন ও বাছাই করা তথ্য আনুন" }),
+    );
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("ইতিহাস রাখতে নতুন কপি বেছে নিন");
     expect(alert.parentElement?.firstElementChild).toBe(alert);
     expect(document.activeElement).toBe(alert);
     expect(
-      screen.getByRole("dialog", { name: "আগের কপি থেকে খাতা ফিরিয়ে আনুন" }),
+      screen.getByRole("dialog", { name: "কপি থেকে হিসাব মেলান" }),
     ).toBeTruthy();
     expect(
       (
         screen.getByRole("button", {
-          name: "খাতা ফিরিয়ে আনুন",
+          name: "নতুন ও বাছাই করা তথ্য আনুন",
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(false);
@@ -316,12 +326,29 @@ it("opens account settings on a separate page for either real sign-in method", a
   }
 });
 it.each(["real", "demo"] as const)(
-  "opens removed-record recovery in %s mode",
-  async (mode) => {
+  "does not show the unused removed-record option in %s mode",
+  (mode) => {
     api.mode = mode;
-    const user = userEvent.setup();
     mount();
-    await user.click(screen.getByRole("button", { name: "মুছে রাখা তথ্য" }));
-    expect(api.go).toHaveBeenLastCalledWith("/settings/removed");
+    expect(screen.queryByRole("button", { name: "মুছে রাখা তথ্য" })).toBeNull();
+  },
+);
+
+it.each(["real", "demo"] as const)(
+  "keeps record corrections and adjustments in their own context instead of settings in %s mode",
+  (mode) => {
+    api.mode = mode;
+    mount();
+    expect(
+      screen.queryByRole("button", { name: "পুরোনো হিসাব ঠিক করি" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "হিসাব মিলিয়ে নিই" }),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: "হিসাবের কপি" })).toBeTruthy();
+    if (mode === "real")
+      expect(
+        screen.getByRole("button", { name: "সংরক্ষণের অবস্থা" }),
+      ).toBeTruthy();
   },
 );

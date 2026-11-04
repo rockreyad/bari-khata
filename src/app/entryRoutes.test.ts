@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { contractUrl, entryReturn, entryUrl, isEntryPage } from "./entryRoutes";
+import {
+  contractUrl,
+  personUrl,
+  entryReturn,
+  entryUrl,
+  isEntryPage,
+} from "./entryRoutes";
 
 const parsed = (path: string) => new URL(path, "https://bari.invalid");
 
@@ -19,8 +25,13 @@ describe("safe entry return routes", () => {
     "/entries/bill/edit",
     "/contracts/new",
     "/contracts/c/edit",
+    "/people/new",
+    "/people/shop/edit",
+    "/people/shop/edit/",
     "/works/door/../../entries/new",
     "/sample/people/shop",
+    "/reconcile",
+    "/reconcile?person=shop",
   ])("rejects unsafe or circular real-account return %s", (path) => {
     expect(entryReturn(path)).toBe("/");
   });
@@ -31,6 +42,9 @@ describe("safe entry return routes", () => {
     "/sample/works/door/../../login",
     "/sample/entries/new",
     "/sample/contracts/agreement/edit",
+    "/sample/people/new",
+    "/sample/people/shop/edit",
+    "/sample/reconcile?person=shop",
     "//outside.test/sample/people/shop",
   ])("keeps a demo return inside the demo account for %s", (path) => {
     expect(entryReturn(path, "/sample")).toBe("/sample/");
@@ -44,6 +58,7 @@ describe("safe entry return routes", () => {
       "/materials",
       "/review",
       "/settings",
+      "/timeline",
     ]) {
       const params = new URLSearchParams({
         work: "door",
@@ -91,6 +106,31 @@ describe("safe entry return routes", () => {
 });
 
 describe("entry and contract URLs", () => {
+  it.each(["", "/sample"])(
+    "opens person pages with a safe return and the same legacy draft context under %s",
+    (base) => {
+      const back = `${base}/people?kind=shop&q=সিমেন্ট&_entity=person&_edit=old&_work=door`;
+      for (const id of [undefined, "person/one?#"]) {
+        const url = parsed(personUrl(base, id, "door", "legacy-context", back));
+        expect(url.pathname).toBe(
+          `${base}/people/${id ? "person%2Fone%3F%23/edit" : "new"}`,
+        );
+        expect(Object.fromEntries(url.searchParams)).toEqual({
+          back: `${base}/people?kind=shop&q=${encodeURIComponent("সিমেন্ট")}`,
+          work: "door",
+          person: "legacy-context",
+        });
+      }
+      expect(parsed(personUrl(base)).searchParams.get("back")).toBe(
+        `${base}/people`,
+      );
+      expect(
+        parsed(
+          personUrl(base, "shop", undefined, undefined, `${base}/people/new`),
+        ).searchParams.get("back"),
+      ).toBe(`${base}/`);
+    },
+  );
   it("opens a real entry route with selected context and a clean profile return", () => {
     const url = parsed(
       entryUrl(
@@ -184,12 +224,14 @@ it("returns job edits and payments to the same job detail, never to another form
   expect(url.searchParams.get("contract")).toBe("job-one");
   expect(url.searchParams.get("back")).toBe("/sample/jobs/job-one");
 });
-it("treats only job creation and editing as an entry page", () => {
+it("treats entry, job and person creation or editing as a form page", () => {
   for (const path of [
     "/jobs/new",
     "/sample/jobs/one/edit",
     "/contracts/one/edit",
     "/entries/new",
+    "/people/new",
+    "/sample/people/shop/edit",
   ])
     expect(isEntryPage(path)).toBe(true);
   for (const path of [

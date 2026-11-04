@@ -1,7 +1,6 @@
 import { useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import {
-  Archive,
   ArrowDown,
   ArrowUp,
   ArrowUpRight,
@@ -10,6 +9,7 @@ import {
   Check,
   CloudCheck,
   CloudSlash,
+  ClockCounterClockwise,
   DeviceMobile,
   FloppyDisk,
   Globe,
@@ -32,8 +32,8 @@ import {
   parseBackup,
   type LedgerBackup,
 } from "../../data/repository";
+import type { Ledger } from "../../domain/model";
 import { isCloudConfigured, resolveCloudConflict } from "../../data/sync";
-import { summarize } from "../../domain/ledger";
 import { saveFile, todayDhaka } from "../../lib/display";
 import {
   applyPalette,
@@ -45,6 +45,7 @@ import {
 import { themePalettes } from "../../lib/themes";
 import { useAuth } from "../auth/AuthProvider";
 import { SettingsAppearance } from "./SettingsAppearance";
+import { BackupImportReview } from "./BackupImportReview";
 import "./settings.css";
 
 type Panel = "appearance" | "language" | "name" | "backup" | "sync" | "install";
@@ -98,7 +99,7 @@ function SettingsRow({
 
 export function SettingsPage() {
   const { ledger, state, mode, save, notify, go } = useNotebook();
-  const { t, language, setLanguage, number, money, date, formatDigits } =
+  const { t, language, setLanguage, number, date, formatDigits } =
     useLanguageContext();
   const auth = useAuth();
   const navigate = useNavigate();
@@ -114,8 +115,9 @@ export function SettingsPage() {
   const [restore, setRestore] = useState<{
     text: string;
     backup: LedgerBackup;
+    current: Ledger;
+    at: string;
   } | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const accountLabel =
     auth.user?.email?.trim() ||
@@ -146,7 +148,6 @@ export function SettingsPage() {
     setError("");
     if (restore) {
       setRestore(null);
-      setConfirmed(false);
     } else setPanel(null);
   };
   const action = async (callback: () => Promise<void>) => {
@@ -156,18 +157,46 @@ export function SettingsPage() {
     try {
       await callback();
     } catch (error) {
+      const backupErrors: Record<string, string> = {
+        backup_preview_changed:
+          "ফাইল দেখার পর খাতায় পরিবর্তন হয়েছে। ফাইলটি আবার খুলে মিলিয়ে নিন।",
+        backup_sync_conflict:
+          "আগে ফোন ও অনলাইনের আলাদা হিসাব মিলিয়ে নিন। তারপর কপি থেকে তথ্য আনুন।",
+        backup_decisions_required:
+          "দুই কপির আলাদা তথ্য কোনটি রাখবেন, আগে বেছে নিন।",
+        backup_merge_invalid:
+          "বেছে নেওয়া তথ্যের সঙ্গে যুক্ত হিসাব মিলছে না। পছন্দগুলো আবার দেখুন।",
+        backup_history_conflict:
+          "ফাইলের এই তথ্য নিলে আগের পরিবর্তনের ইতিহাস বাদ যাবে। এখনকারটি রাখুন অথবা নতুন কপি নিন।",
+        balance_adjustment_would_be_lost:
+          "এই কপিতে সমন্বয়ের আগের তথ্য নেই। এখনকারটি রাখুন অথবা নতুন কপি নিন।",
+        balance_adjustment_history_invalid:
+          "এই কপির সমন্বয়ের তথ্য মিলছে না। নতুন কপি বেছে নিন।",
+        receipt_content_conflict:
+          "একই ভাউচারের দুই কপিতে আলাদা ফাইল আছে। নতুন কপি নিয়ে আবার চেষ্টা করুন।",
+        account_changed:
+          "অ্যাকাউন্ট বদলে গেছে। নিজের খাতায় ফিরে আবার চেষ্টা করুন।",
+        contract_history_would_be_lost:
+          "ফাইলের এই তথ্য নিলে চুক্তির আগের ইতিহাস বাদ যাবে। এখনকারটি রাখুন অথবা নতুন কপি নিন।",
+        mcp_provenance_would_be_lost:
+          "ফাইলের এই তথ্য নিলে হিসাব কীভাবে এসেছে তার আগের তথ্য বাদ যাবে। এখনকারটি রাখুন অথবা নতুন কপি নিন।",
+        person_work_links_would_be_lost:
+          "ফাইলের এই তথ্য নিলে মানুষ ও দোকানের বেছে রাখা খাতার তথ্য বাদ যাবে। এখনকারটি রাখুন অথবা নতুন কপি নিন।",
+      };
       setError(
         t(
-          error instanceof Error &&
-            error.message === "removal_history_would_be_lost"
-            ? "এই কপিতে সরানো তথ্যের ইতিহাস নেই। নতুন কপি বেছে নিন।"
+          error instanceof Error && backupErrors[error.message]
+            ? backupErrors[error.message]
             : error instanceof Error &&
-                error.message === "payment_purpose_would_be_lost"
-              ? "এই কপিতে টাকার কারণের আগের তথ্য নেই। নতুন কপি বেছে নিন।"
+                error.message === "removal_history_would_be_lost"
+              ? "এই কপিতে সরানো তথ্যের ইতিহাস নেই। নতুন কপি বেছে নিন।"
               : error instanceof Error &&
-                  error.message === "work_history_would_be_lost"
-                ? "এই কপিতে কাজের আগের তথ্য নেই। ইতিহাস রাখতে নতুন কপি বেছে নিন।"
-                : "কাজটি পুরো শেষ হয়নি। আবার চেষ্টা করুন।",
+                  error.message === "payment_purpose_would_be_lost"
+                ? "এই কপিতে টাকার কারণের আগের তথ্য নেই। নতুন কপি বেছে নিন।"
+                : error instanceof Error &&
+                    error.message === "work_history_would_be_lost"
+                  ? "এই কপিতে কাজের আগের তথ্য নেই। ইতিহাস রাখতে নতুন কপি বেছে নিন।"
+                  : "কাজটি পুরো শেষ হয়নি। আবার চেষ্টা করুন।",
         ),
       );
     } finally {
@@ -189,8 +218,12 @@ export function SettingsPage() {
       const backup = parseBackup(text);
       if (backup.ledger.isDemo !== (mode === "demo"))
         throw new Error("workspace_mode_mismatch");
-      setRestore({ text, backup });
-      setConfirmed(false);
+      setRestore({
+        text,
+        backup,
+        current: structuredClone(ledger),
+        at: new Date().toISOString(),
+      });
     });
   };
   const status =
@@ -206,7 +239,7 @@ export function SettingsPage() {
               ? t("হিসাব নিরাপদে সংরক্ষিত")
               : t("ফোনে সংরক্ষিত");
   const panelTitle = restore
-    ? t("আগের কপি থেকে খাতা ফিরিয়ে আনুন")
+    ? t("কপি থেকে হিসাব মেলান")
     : t(
         panel === "appearance"
           ? "নিজের মতো সাজান"
@@ -369,13 +402,6 @@ export function SettingsPage() {
                   onClick={() => openPanel("sync")}
                 />
               )}
-              <SettingsRow
-                title={t("পুরোনো হিসাব ঠিক করি")}
-                description={t("আগের খাতার তথ্য দেখুন")}
-                icon={<PencilSimple size={21} weight="duotone" />}
-                tone="amber"
-                onClick={() => go("/review")}
-              />
             </div>
           </section>
           <section
@@ -391,6 +417,12 @@ export function SettingsPage() {
                 tone="violet"
                 onClick={() => go("/settings/assistants")}
               />
+              <SettingsRow
+                title={t("টাইমলাইন")}
+                description={t("কখন কী করেছি")}
+                icon={<ClockCounterClockwise size={21} />}
+                onClick={() => go("/timeline")}
+              />
               {mode === "real" && (
                 <SettingsRow
                   title={t("অ্যাকাউন্ট")}
@@ -400,13 +432,6 @@ export function SettingsPage() {
                   onClick={() => go("/settings/account")}
                 />
               )}
-              <SettingsRow
-                title={t("মুছে রাখা তথ্য")}
-                description={t("সরানো খাতা ও নাম ফিরিয়ে আনুন")}
-                icon={<Archive size={21} weight="duotone" />}
-                tone="amber"
-                onClick={() => go("/settings/removed")}
-              />
               <SettingsRow
                 title={t("ফোনে অ্যাপ রাখুন")}
                 description={t("এক ট্যাপেই নিজের খাতা খুলুন")}
@@ -430,8 +455,8 @@ export function SettingsPage() {
         </div>
       </div>
       <p className="settings-footer-note">
-        <ShieldCheck size={14} />
-        {t("নিজের হিসাব, নিজের কাছে।")}
+        <ShieldCheck size={14} aria-hidden="true" />
+        <span>{t("নিজের হিসাব, নিজের কাছে।")}</span>
       </p>
       <input
         ref={input}
@@ -453,50 +478,32 @@ export function SettingsPage() {
           <div className="settings-sheet-body">
             <FormError {...errorNotice} className="settings-error" />
             {restore ? (
-              <>
-                <div className="settings-restore-summary">
-                  <strong>{restore.backup.ledger.project.name}</strong>
-                  <p>
-                    {t("{{count}}টি হিসাব", {
-                      count: number(restore.backup.ledger.entries.length),
-                    })}
-                  </p>
-                  <p>
-                    {t("মোট খরচ")}:{" "}
-                    {money(summarize(restore.backup.ledger).cost)}
-                  </p>
-                </div>
-                <p className="settings-sheet-text">
-                  {t(
-                    "এতে বর্তমান খাতার জায়গায় এই কপির হিসাব আসবে। আগের হিসাবের একটি উদ্ধার কপি ফোনে রাখা হবে।",
-                  )}
-                </p>
-                <label className="settings-confirm">
-                  <input
-                    type="checkbox"
-                    checked={confirmed}
-                    onChange={(event) => setConfirmed(event.target.checked)}
-                  />
-                  {t("আমি ফাইলটি দেখে এই খাতা ফিরিয়ে আনতে চাই।")}
-                </label>
-                <button
-                  className="primary-button settings-sheet-primary"
-                  disabled={!confirmed || busy}
-                  onClick={() =>
-                    void action(async () => {
-                      await storage.importBackup(restore.text, {
-                        replace: true,
-                      });
-                      setRestore(null);
-                      setPanel(null);
-                      notify(t("খাতা ফিরিয়ে আনা হয়েছে"));
-                      void state.sync().catch(() => {});
-                    })
-                  }
-                >
-                  {busy ? t("অপেক্ষা করুন…") : t("খাতা ফিরিয়ে আনুন")}
-                </button>
-              </>
+              <BackupImportReview
+                backup={restore.backup}
+                current={restore.current}
+                at={restore.at}
+                busy={busy}
+                onImport={(decisions) =>
+                  void action(async () => {
+                    const result = await storage.mergeBackup(restore.text, {
+                      confirmed: true,
+                      expectedLedger: restore.current,
+                      decisions,
+                      at: restore.at,
+                    });
+                    setRestore(null);
+                    setPanel(null);
+                    notify(
+                      t(
+                        result.changed
+                          ? "কপির নতুন ও বাছাই করা তথ্য আনা হয়েছে"
+                          : "এই কপির সব তথ্য খাতায় আছে।",
+                      ),
+                    );
+                    if (result.changed) void state.sync().catch(() => {});
+                  })
+                }
+              />
             ) : panel === "appearance" ? (
               <SettingsAppearance
                 preferences={preferences}

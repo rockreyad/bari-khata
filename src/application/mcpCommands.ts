@@ -35,6 +35,8 @@ import {
   preservesRemovalHistory,
 } from "../domain/entityDeletion.js";
 import { preservesPaymentPurposes } from "../domain/paymentPurposes.js";
+import { preservesPersonWorkLinks } from "../domain/personWorkLinks.js";
+import { preservesBalanceAdjustments } from "../domain/adjustmentHistory.js";
 import { canAssignContact, personKind } from "../domain/contacts.js";
 
 const Id = z.string().trim().min(1).max(160);
@@ -1222,6 +1224,8 @@ export function applyMcpCommand(
   if (
     !preservesContractHistory(current, ledger) ||
     !preservesWorkHistory(current, ledger) ||
+    !preservesPersonWorkLinks(current, ledger) ||
+    !preservesBalanceAdjustments(current, ledger) ||
     !preservesRemovalHistory(current, ledger) ||
     !preservesPaymentPurposes(current, ledger)
   )

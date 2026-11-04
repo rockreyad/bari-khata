@@ -59,6 +59,62 @@ function fixture() {
   return next;
 }
 describe("MCP ledger queries", () => {
+  it("reads signed noncash adjustments separately from payment and expense totals", () => {
+    const base = fixture();
+    const ledger = LedgerSchema.parse({
+      ...base,
+      entries: [
+        ...base.entries,
+        {
+          id: "adjust",
+          kind: "adjustment",
+          personId: "shop",
+          date: "2026-11-03",
+          note: "আগের অঙ্ক মিলিয়েছি",
+          adjustment: {
+          target: "person", basis: "balance", account: "materials",
+            before: 400000,
+            after: 100000,
+            delta: -300000,
+            workId: "roof",
+          },
+        },
+      ],
+    });
+    const listed = queryMcpLedger(ledger, "list_entries", {
+      kind: "adjustment",
+    });
+    expect(listed.items).toMatchObject([
+      {
+        id: "adjust",
+        kind: "adjustment",
+        noncash: true,
+        amount_paisa: 300000,
+        adjustment: {
+          target: "person", basis: "balance", account: "materials",
+          delta_paisa: -300000,
+          before_paisa: 400000,
+          after_paisa: 100000,
+          work_id: "roof",
+        },
+        lines: [],
+        payment_parts: [],
+        allocations: [],
+      },
+    ]);
+    const summary = queryMcpLedger(ledger, "get_summary", {});
+    expect(summary.current).toMatchObject({
+      cost_paisa: 600000,
+      paid_paisa: 200000,
+      net_paid_paisa: 200000,
+      adjustment_paisa: -300000,
+    });
+    expect(summary.period).toMatchObject({
+      cost_paisa: 600000,
+      paid_paisa: 200000,
+      adjustment_paisa: -300000,
+    });
+  });
   it("separates current balances from a period's cash flow and cost", () => {
     const result = queryMcpLedger(fixture(), "get_summary", {
       from: "2026-11-01",

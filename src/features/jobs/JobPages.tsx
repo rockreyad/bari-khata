@@ -91,7 +91,10 @@ export function JobsPage() {
   const balances = useMemo(() => jobBalances(ledger), [ledger]);
   const scoped = useMemo(
     () =>
-      recentJobs(ledger.contracts.filter((job) => !job.archivedAt)).filter(
+      recentJobs(
+        ledger.contracts.filter((job) => !job.archivedAt),
+        ledger.entries,
+      ).filter(
         (job) =>
           (!personId || job.personId === personId) &&
           (!workId || contractAppliesToWork(job, workId)) &&
@@ -104,7 +107,15 @@ export function JobsPage() {
               .toLocaleLowerCase()
               .includes(normalized)),
       ),
-    [ledger.contracts, personId, workId, normalized, peopleById, t],
+    [
+      ledger.contracts,
+      ledger.entries,
+      personId,
+      workId,
+      normalized,
+      peopleById,
+      t,
+    ],
   );
   const jobs = scoped.filter(
     (job) =>
@@ -236,6 +247,7 @@ export function JobsPage() {
             <button
               key={key}
               type="button"
+              className={`jobs-balance-filter-${key}`}
               aria-pressed={balance === key}
               onClick={() => update("balance", key)}
             >
@@ -248,6 +260,11 @@ export function JobsPage() {
             <span>{t("কাজের অবস্থা")}</span>
             <AppSelect
               aria-label={t("কাজের অবস্থা")}
+              className={
+                status === "all"
+                  ? undefined
+                  : `jobs-status-choice job-status-${status}`
+              }
               value={status}
               onChange={(event) => update("status", event.target.value)}
             >
@@ -568,6 +585,7 @@ export function JobPage() {
               <span>{t("কাজের অবস্থা")}</span>
               <AppSelect
                 aria-label={t("কাজের অবস্থা")}
+                className={`jobs-status-choice job-status-${editor.status ?? "unknown"}`}
                 value={editor.status ?? "unknown"}
                 disabled={savingStatus}
                 onChange={(event) =>

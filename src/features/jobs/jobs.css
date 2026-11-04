@@ -51,11 +51,7 @@
   min-width: 0;
   color: var(--text);
   min-height: 184px;
-  background: linear-gradient(
-    150deg,
-    color-mix(in srgb, var(--accent) 5%, var(--surface)),
-    var(--surface) 70%
-  );
+  background: var(--surface);
   box-shadow: 0 5px 20px color-mix(in srgb, var(--text) 3%, transparent);
   scroll-snap-align: start;
   cursor: pointer;
@@ -83,8 +79,8 @@
   width: 36px;
   height: 36px;
   border-radius: 12px;
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--muted);
+  background: var(--surface-muted);
 }
 .job-tile-arrow {
   color: var(--muted);
@@ -329,17 +325,18 @@
   font-size: 12px;
 }
 .job-insight svg {
-  color: var(--accent);
+  color: var(--muted);
   flex-shrink: 0;
 }
 .job-insight > strong {
+  color: var(--text);
   font-size: 28px;
   font-weight: 650;
   line-height: 1.2;
 }
 .job-insight[aria-pressed="true"] {
   border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
-  background: linear-gradient(135deg, var(--accent-soft), var(--surface));
+  background: var(--surface-muted);
 }
 .jobs-tools {
   display: grid;
@@ -372,9 +369,9 @@
   background: var(--surface);
 }
 .jobs-balance-filters > button[aria-pressed="true"] {
-  color: var(--accent-strong);
+  color: var(--muted);
   border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
-  background: var(--accent-soft);
+  background: var(--surface-muted);
 }
 .jobs-results-heading {
   display: flex;
@@ -392,14 +389,14 @@
   min-height: 32px;
 }
 .job-status {
-  --job-status-color: var(--muted);
+  --job-status-color: var(--state-unknown);
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 5px 8px;
   border-radius: 9px;
-  color: var(--job-status-color);
-  background: color-mix(in srgb, var(--job-status-color) 9%, var(--surface));
+  color: var(--muted);
+  background: var(--surface-muted);
   font-size: 10px;
   line-height: 1.5;
   font-weight: 550;
@@ -409,33 +406,41 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: currentColor;
+  background: var(--job-status-color);
   flex-shrink: 0;
 }
 .job-status-ongoing {
-  --job-status-color: var(--accent);
+  --job-status-color: var(--state-ongoing);
 }
 .job-status-planned {
-  --job-status-color: var(--warning, #a8793c);
+  --job-status-color: var(--state-planned);
 }
 .job-status-done {
-  --job-status-color: var(--green, #238469);
+  --job-status-color: var(--state-done);
+}
+.job-status-unknown {
+  --job-status-color: var(--state-unknown);
+}
+.jobs-status-choice {
+  color: var(--muted);
+  background: var(--surface);
+  border-color: var(--line);
 }
 .job-tile-balance {
   text-align: right;
 }
 .job-tile-balance strong {
-  color: var(--accent-strong);
+  color: var(--text);
 }
 .job-payment-overpaid .job-tile-balance strong {
-  color: var(--warning, #a8793c);
+  color: var(--text);
 }
 .job-tile-amounts > .job-tile-settled {
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 5px;
-  color: var(--green, #238469);
+  color: var(--muted);
   font-size: 12px;
 }
 .job-status-control {
@@ -473,7 +478,7 @@
   padding: 9px 18px;
 }
 .jobs-empty > svg {
-  color: var(--accent);
+  color: var(--muted);
   margin-bottom: 14px;
 }
 @media (max-width: 600px) {

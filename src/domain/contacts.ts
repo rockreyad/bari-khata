@@ -9,6 +9,7 @@ import type {
 import { personSummary } from "./ledger.js";
 import { personKind } from "./contactKind.js";
 import { effectiveAccounts } from "./effectiveAccounts.js";
+import { reconciledTotals } from "./adjustmentMath.js";
 export { personKind } from "./contactKind.js";
 
 export const roleActions: Record<PersonKind, ContactAction[]> = {
@@ -56,6 +57,7 @@ export function contactAccountLedger(
       ...ledger,
       entries: own.filter(
         (entry) =>
+          (entry.kind === "adjustment" && entry.account === "other") ||
           ((entry.kind === "payment" || entry.kind === "refund") &&
             effective.get(entry.id) === "other" &&
             (!entry.relatedEntryId ||
@@ -90,6 +92,11 @@ export function contactAccountSummary(
   const summary = personSummary(scoped, person.id, workId);
   return {
     ...summary,
+    ...reconciledTotals(scoped, {
+      personId: person.id,
+      account,
+      ...(workId ? { workId } : {}),
+    }),
     historicalCount: summary.entries.filter(
       (entry) => entry.balanceImpact === "historical",
     ).length,

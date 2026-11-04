@@ -1,4 +1,17 @@
 export const entryPageEnglish: Record<string, string> = {
+  "যেমন: কাজের জায়গায় খাবার": "For example: meals at the work site",
+  "এই খরচ বাদ দিন": "Remove this expense",
+  "আরেকটি খরচ": "Another expense",
+  "আগের অঙ্ক": "Previous amount",
+  "নতুন অঙ্ক": "Corrected amount",
+  কমছে: "Decrease",
+  বাড়ছে: "Increase",
+  পার্থক্য: "Difference",
+  "সঠিক অঙ্ক লিখুন": "Enter a valid amount",
+  "হিসাব মেলানোর কারণ": "Reason for the correction",
+  "বিলের দাম বদলালেও আগের দেওয়া টাকা বদলাবে না। দেওয়া টাকা ঠিক করতে সেই হিসাবটি খুলুন।":
+    "Changing the bill does not change the money already recorded as paid. Open that payment to correct it.",
+  "দেওয়া টাকার হিসাব ঠিক করি": "Correct the recorded payment",
   "টাকা লিখি": "Enter paid amount",
   "টাকা দিই": "Pay someone",
   "বাকি মেটাই": "Settle a balance",

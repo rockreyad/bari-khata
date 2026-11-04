@@ -2,13 +2,33 @@
   gap: 18px;
 }
 .entry-amount-card-v5 {
+  --entry-state: var(--state-expense);
   display: grid;
   justify-items: center;
   gap: 10px;
   padding: 27px 16px 29px;
   border-radius: 22px;
-  background: var(--hero-gradient);
-  border: 1px solid color-mix(in srgb, var(--accent) 9%, var(--line));
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+}
+.entry-amount-card-v5[data-kind="payment"] {
+  --entry-state: var(--state-paid);
+}
+.entry-amount-card-v5[data-kind="expense_credit"] {
+  --entry-state: var(--state-credit);
+}
+.entry-amount-card-v5[data-kind="refund"] {
+  --entry-state: var(--state-refund);
+}
+.entry-amount-card-v5.is-void {
+  --entry-state: var(--muted);
+}
+.entry-amount-card-v5.is-void > strong {
+  text-decoration: line-through;
+}
+.entry-amount-card-v5 .status-tag.voided {
+  color: var(--state-voided);
+  background: var(--surface);
 }
 .entry-kind-v5 {
   display: inline-flex;
@@ -25,6 +45,9 @@
   letter-spacing: -0.035em;
   overflow-wrap: anywhere;
   text-align: center;
+}
+.entry-kind-v5 > svg {
+  color: var(--entry-state);
 }
 .entry-person-card-v5,
 .entry-related-bill-v5 {
@@ -92,26 +115,57 @@
 .transaction-detail-v5 .detail-line-context-v4 button {
   font-size: 12px;
 }
+.entry-paid-status-v5 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.entry-paid-status-copy-v5 {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  min-width: 0;
+  font-size: 13px;
+}
+.entry-paid-status-copy-v5 strong {
+  font-weight: 600;
+}
+.entry-paid-status-copy-v5 small,
+.entry-paid-status-v5 > svg {
+  color: var(--muted);
+}
+.entry-paid-status-v5 > svg {
+  flex: none;
+}
+.entry-paid-status-v5:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
 .entry-payment-fold-v5 {
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface);
+  border-top: 1px solid var(--line);
 }
 .entry-payment-fold-v5 > summary {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 16px 14px;
-  min-height: 60px;
+  padding: 12px 0;
+  min-height: 48px;
   cursor: pointer;
   list-style: none;
 }
 .entry-payment-fold-v5 > summary::-webkit-details-marker {
   display: none;
-}
-.entry-payment-fold-v5 > summary > svg {
-  color: var(--accent);
-  flex: none;
 }
 .entry-payment-fold-v5 > summary > span:not(.entry-fold-mark-v5) {
   font-size: 12px;
@@ -122,6 +176,7 @@
   font-size: 16px;
   font-weight: 600;
   white-space: nowrap;
+  color: var(--text);
 }
 .entry-fold-mark-v5 {
   color: var(--muted);
@@ -136,16 +191,88 @@
   content: "−";
 }
 .entry-payment-events-v5 {
-  padding: 0 14px 5px;
+  padding: 0 0 5px;
 }
 .entry-related-bill-v5 > svg:first-child {
-  color: var(--accent);
+  color: var(--state-expense);
+}
+.detail-linked-row > strong {
+  color: var(--text);
+}
+.detail-linked-row > span > strong {
+  color: var(--muted);
+}
+.detail-linked-row.is-void > strong,
+.detail-linked-row.is-void > span > strong {
+  text-decoration: line-through;
 }
 .transaction-detail-v5 .entry-note {
   margin: 0;
 }
 .transaction-detail-v5 .detail-fold {
   padding-top: 15px;
+}
+.entry-revision-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.entry-revision {
+  padding: 13px 0;
+  border-top: 1px solid var(--line);
+}
+.entry-revision:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.entry-revision:last-child {
+  padding-bottom: 0;
+}
+.entry-revision > time {
+  font-size: 10px;
+  color: var(--muted);
+}
+.entry-revision-changes {
+  display: grid;
+  gap: 9px;
+  margin: 8px 0 0;
+}
+.entry-revision-change {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 14px;
+  flex-wrap: wrap;
+}
+.entry-revision-change > dt {
+  font-size: 11px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.entry-revision-change > dd {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.entry-revision-change del {
+  color: var(--muted);
+}
+.entry-revision-change ins {
+  color: var(--text);
+  text-decoration: none;
+}
+.entry-revision-change del,
+.entry-revision-change ins {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.entry-revision-change svg {
+  flex: none;
+  color: var(--muted);
 }
 @media (max-width: 600px) {
   .transaction-detail-v5 {
@@ -164,4 +291,7 @@
   .entry-payment-fold-v5 > summary > strong {
     font-size: 14px;
   }
+}
+.entry-amount-card-v5[data-kind="adjustment"] .entry-kind-v5 > svg {
+  color: var(--muted);
 }

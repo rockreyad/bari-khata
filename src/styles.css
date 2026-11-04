@@ -370,7 +370,7 @@ img {
   padding: 6px 0;
 }
 .text-button:hover {
-  color: #315740;
+  color: var(--accent-strong);
 }
 .demo-banner {
   display: flex;

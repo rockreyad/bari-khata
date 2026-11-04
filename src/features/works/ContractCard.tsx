@@ -32,6 +32,7 @@ const fieldNames: Record<keyof ContractSnapshot, string> = {
   basis: "মজুরি ঠিক হয়েছে",
   quantity: "পরিমাণ",
   rate: "দর",
+  calculatedTotal: "পরিমাণ ও দর অনুযায়ী",
   total: "ঠিক করা টাকা",
   agreedOn: "কাজের তারিখ",
   notes: "নোট",
@@ -97,6 +98,10 @@ export function ContractHistory({
         ledger.people.find((person) => person.id === snapshot.personId)?.name ??
           t("লেখা নেই"),
       );
+    if (key === "calculatedTotal")
+      return snapshot.calculatedTotal != null
+        ? money(snapshot.calculatedTotal)
+        : t("লেখা নেই");
     if (key === "total" || key === "rate") return money(snapshot[key]);
     if (key === "basis")
       return t(
@@ -122,6 +127,7 @@ export function ContractHistory({
           "status",
           "basis",
           ...(event.after.basis === "fixed" ? [] : ["quantity", "rate"]),
+          ...(event.after.calculatedTotal != null ? ["calculatedTotal"] : []),
           "agreedOn",
           "notes",
         ] as (keyof ContractSnapshot)[]
@@ -188,13 +194,23 @@ export function ContractHistory({
                       <dd>
                         {event.before ? (
                           <>
-                            <span className="job-before-value">
+                            <span
+                              className={`job-before-value${key === "status" ? ` contract-status-${event.before.status ?? "unknown"}` : ""}`}
+                            >
                               {value(event.before, key)}
                             </span>
                             <ArrowRightIcon size={12} aria-hidden="true" />
                           </>
                         ) : null}
-                        <span>{value(event.after!, key)}</span>
+                        <span
+                          className={
+                            key === "status"
+                              ? `contract-status-${event.after!.status ?? "unknown"}`
+                              : undefined
+                          }
+                        >
+                          {value(event.after!, key)}
+                        </span>
                       </dd>
                     </div>
                   ))}
@@ -282,14 +298,24 @@ export function ContractCard({
       ) : null}
       <div className="job-detail-total">
         <span>{t("মোট টাকা")}</span>
+        {contract.calculatedTotal != null &&
+        contract.calculatedTotal !== contract.total ? (
+          <s aria-label={t("পরিমাণ ও দর অনুযায়ী")}>
+            {money(contract.calculatedTotal)}
+          </s>
+        ) : null}
         <strong>{money(contract.total)}</strong>
       </div>
       <dl className="job-detail-money">
-        <div>
+        <div className="job-detail-paid">
           <dt>{t("দিয়েছি")}</dt>
           <dd>{money(summary.netPaid)}</dd>
         </div>
-        <div>
+        <div
+          className={
+            summary.remaining > 0 ? "job-detail-due" : "job-detail-settled"
+          }
+        >
           <dt>{t("বাকি")}</dt>
           <dd>{money(summary.remaining)}</dd>
         </div>

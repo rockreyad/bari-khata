@@ -11,6 +11,7 @@ import {
 import { effectiveAccounts } from "../domain/effectiveAccounts.js";
 import { latinDigits } from "../lib/numerals.js";
 import { McpCommandError } from "./mcpCommands.js";
+import { reconciledTotals } from "../domain/balanceAdjustments.js";
 
 const Id = z.string().trim().min(1).max(160);
 const DateOnly = z
@@ -49,7 +50,9 @@ const QuerySchema = z
       ])
       .optional(),
     account: z.enum(["materials", "labour", "other"]).optional(),
-    kind: z.enum(["expense", "payment", "expense_credit", "refund"]).optional(),
+    kind: z
+      .enum(["expense", "payment", "expense_credit", "refund", "adjustment"])
+      .optional(),
     cost_type: z
       .enum(["material", "labour", "transport", "unload", "rental", "other"])
       .optional(),
@@ -121,8 +124,22 @@ export function mcpEntryView(entry: Entry) {
     date: entry.date,
     note: entry.note,
     amount_paisa: entryTotal(entry),
+    ...(entry.kind === "adjustment" && entry.adjustment
+      ? {
+          adjustment: {
+            target: entry.adjustment.target,
+            basis: entry.adjustment.basis,
+            account: entry.adjustment.account,
+            delta_paisa: entry.adjustment.delta,
+            before_paisa: entry.adjustment.before,
+            after_paisa: entry.adjustment.after,
+            work_id: entry.adjustment.workId,
+          },
+          noncash: true,
+        }
+      : {}),
     person_id: entry.personId,
-    account: entry.account,
+    account: entry.adjustment ? entry.adjustment.account : entry.account,
     contract_id: entry.contractId,
     related_entry_id: entry.relatedEntryId,
     payment_purpose_id: entry.paymentPurposeId,
@@ -176,7 +193,12 @@ function filteredEntries(ledger: Ledger, args: QueryArgs, dates = true) {
         return false;
       if (args.work_id && !entryWorkIds(entry).includes(args.work_id))
         return false;
-      if (args.account && effective.get(entry.id) !== args.account)
+      if (
+        args.account &&
+        (entry.adjustment
+          ? entry.adjustment.account !== args.account
+          : effective.get(entry.id) !== args.account)
+      )
         return false;
       if (args.kind && entry.kind !== args.kind) return false;
       if (
@@ -205,6 +227,8 @@ function filteredEntries(ledger: Ledger, args: QueryArgs, dates = true) {
         return false;
       return matches(args.query ?? args.q, [
         entry.id,
+        entry.kind,
+        entry.adjustment?.basis,
         entry.note,
         entry.source?.note,
         people.get(entry.personId ?? "")?.name,
@@ -249,6 +273,14 @@ function moneySummary(
     paid_paisa: summary.paid,
     refunds_paisa: summary.refunds,
     net_paid_paisa: summary.netPaid,
+    adjustment_paisa: summary.owedCorrection,
+    cost_correction_paisa: summary.costCorrection,
+    paid_correction_paisa: summary.paidCorrection,
+    balance_correction_paisa: summary.balanceCorrection,
+    reconciled_cost_paisa: summary.reconciledCost,
+    reconciled_net_paid_paisa: summary.reconciledNetPaid,
+    reconciled_payable_paisa: summary.reconciledPayable,
+    reconciled_advance_paisa: summary.reconciledAdvance,
     payable_paisa: summary.payable,
     advance_paisa: summary.advance,
   };
@@ -420,7 +452,7 @@ const definitions = [
   ],
   [
     "list_entries",
-    "Find financial events by person, work, account, type and dates. Payments are separate from bills.",
+    "Find financial events by person, work, account, type and dates. Bills, payments and noncash adjustments are separate.",
   ],
   [
     "get_entry",
@@ -428,7 +460,7 @@ const definitions = [
   ],
   [
     "get_person_statement",
-    "Read a person's bills, payments, returns, refunds and current balances across accounts.",
+    "Read a person's bills, payments, returns, refunds, noncash adjustments and current balances across accounts.",
   ],
   [
     "get_work_statement",
@@ -490,6 +522,7 @@ export function queryMcpLedger(
       rules: [
         "bills_and_payments_are_separate",
         "returns_and_cash_refunds_are_separate",
+        "noncash_adjustments_are_not_costs_or_payments",
         "contracts_are_not_costs",
         "material_advances_do_not_pay_wages",
         "unknown_payment_requires_clarification",
@@ -550,6 +583,7 @@ export function queryMcpLedger(
     if (!ledger.contracts.some((contract) => contract.id === id))
       throw new McpCommandError("not_found", "unknown_contract");
     const summary = contractSummary(ledger, id);
+    const reconciled = reconciledTotals(ledger, { contractId: id });
     return {
       ...envelope,
       contract: summary.contract,
@@ -558,6 +592,13 @@ export function queryMcpLedger(
       paid_paisa: summary.paid,
       refunds_paisa: summary.refunds,
       net_paid_paisa: summary.netPaid,
+      adjustment_paisa: reconciled.owedCorrection,
+      paid_correction_paisa: reconciled.paidCorrection,
+      cost_correction_paisa: reconciled.costCorrection,
+      balance_correction_paisa: reconciled.balanceCorrection,
+      reconciled_cost_paisa: reconciled.reconciledCost,
+      reconciled_net_paid_paisa: reconciled.reconciledNetPaid,
+      reconciled_payable_paisa: reconciled.reconciledPayable,
       remaining_paisa: summary.remaining,
       payable_paisa: summary.payable,
       advance_paisa: summary.advance,
@@ -632,6 +673,10 @@ export function queryMcpLedger(
         paid_paisa: period.paid,
         refunds_paisa: period.refunds,
         net_paid_paisa: period.netPaid,
+        adjustment_paisa: period.owedCorrection,
+        paid_correction_paisa: period.paidCorrection,
+        cost_correction_paisa: period.costCorrection,
+        balance_correction_paisa: period.balanceCorrection,
         by_cost_type: period.byType,
       },
       current: moneySummary(current),

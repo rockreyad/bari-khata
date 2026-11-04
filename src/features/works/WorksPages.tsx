@@ -28,6 +28,7 @@ import {
 } from "@phosphor-icons/react";
 import { useEntityRemoval } from "../../components/EntityRemoval";
 import { useNotebook } from "../../app/NotebookProvider";
+import { jobDetailUrl } from "../../app/jobRoutes";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { summarize } from "../../domain/ledger";
 import { contractAppliesToWork } from "../../domain/contracts";
@@ -49,6 +50,9 @@ import {
 import "./works.css";
 import { SpendingChart } from "../../components/ui/SpendingChart";
 import { AppMenu } from "../../components/ui/AppMenu";
+import { orderedWorks } from "./workOverview";
+import { workBalances, type WorkBalances } from "./workBalances";
+import { workLabourSummary } from "./workLabourSummary";
 const statusNames = {
   planned: "শুরু হয়নি",
   ongoing: "কাজ চলছে",
@@ -64,6 +68,22 @@ const fields: Record<keyof WorkSnapshot, string> = {
   completedOn: "শেষের তারিখ",
   quickActions: "পছন্দের বোতাম",
 };
+function workDueRows(balance: WorkBalances) {
+  if (!balance.valid) return [];
+  if (balance.reconciledPayable !== null)
+    return balance.reconciledPayable > 0
+      ? [
+          {
+            label: balance.sharedOutstanding > 0 ? "এই খাতায় বাকি" : "মোট বাকি",
+            amount: balance.reconciledPayable,
+          },
+        ]
+      : [];
+  return [
+    { label: "বিলের বাকি", amount: balance.billPayable },
+    { label: "চুক্তির বাকি", amount: balance.workCommitmentOutstanding },
+  ].filter((row) => row.amount > 0);
+}
 export function WorkCard({
   work,
   ledger,
@@ -74,7 +94,8 @@ export function WorkCard({
   onOpen: () => void;
 }) {
   const { t, money, formatDigits } = useLanguageContext();
-  const s = summarize(ledger, work.id);
+  const balance = workBalances(ledger, work.id);
+  const dues = workDueRows(balance);
   const color =
     workColorChoices.find((choice) => choice.id === work.color)?.color ??
     "#3b82f6";
@@ -101,18 +122,22 @@ export function WorkCard({
       </div>
       <div className="notebook-card-total">
         <span>{t("মোট টাকা দিয়েছি")}</span>
-        <strong>{money(s.netPaid)}</strong>
+        <strong>
+          {balance.valid
+            ? money(balance.reconciledNetPaid)
+            : t("টাকার অঙ্ক বেশি হয়েছে।")}
+        </strong>
       </div>
       <div
         className="notebook-card-balance"
-        aria-hidden={s.payable > 0 ? undefined : true}
+        aria-hidden={dues.length ? undefined : true}
       >
-        {s.payable > 0 ? (
-          <div className="notebook-card-due">
-            <span>{t("দিতে বাকি")}</span>
-            <strong>{money(s.payable)}</strong>
+        {dues.map((row) => (
+          <div className="notebook-card-due" key={row.label}>
+            <span>{t(row.label)}</span>
+            <strong>{money(row.amount)}</strong>
           </div>
-        ) : null}
+        ))}
       </div>
     </button>
   );
@@ -127,11 +152,9 @@ export function WorksPage() {
     : "all";
   const search = params.get("q") ?? "";
   const query = latinDigits(search).trim().toLocaleLowerCase();
-  const matches = ledger.works
-    .filter((work) => !work.archivedAt)
-    .filter((work) =>
-      latinDigits(work.name).toLocaleLowerCase().includes(query),
-    );
+  const matches = orderedWorks(ledger).filter((work) =>
+    latinDigits(work.name).toLocaleLowerCase().includes(query),
+  );
   const works = matches.filter(
     (work) => status === "all" || work.status === status,
   );
@@ -202,7 +225,7 @@ export function WorksPage() {
                   key={value}
                   aria-label={t(label)}
                   aria-pressed={status === value}
-                  className={status === value ? "selected" : ""}
+                  className={`work-status-filter-${value}${status === value ? " selected" : ""}`}
                   onClick={() => changeFilter("status", value)}
                 >
                   <span>{t(label)}</span>
@@ -342,7 +365,7 @@ function useWorkTabRail(active: string, context: string) {
 
 export function WorkPage() {
   const { workId } = useParams();
-  const { ledger, go, entity, add, detail } = useNotebook();
+  const { ledger, go, entity, add, detail, base = "" } = useNotebook();
   const { t, money, date, language, formatDigits } = useLanguageContext();
   const [showChart, setShowChart] = useState(false);
   const [params, setParams] = useSearchParams();
@@ -368,6 +391,8 @@ export function WorkPage() {
       </div>
     );
   const s = summarize(ledger, work.id);
+  const balance = workBalances(ledger, work.id);
+  const dues = workDueRows(balance);
   const typeMatches = (type: string) =>
     tab === "labour"
       ? type === "labour"
@@ -376,7 +401,8 @@ export function WorkPage() {
         : tab === "other"
           ? ["rental", "other"].includes(type)
           : type === "material";
-  const scoped = workTabEntries(s.entries, work.id, tab);
+  const scoped = workTabEntries(s.entries, work.id, tab, ledger.entries);
+  const labour = tab === "labour" ? workLabourSummary(ledger, work.id) : null;
   const account =
     tab === "labour"
       ? "labour"
@@ -407,7 +433,7 @@ export function WorkPage() {
       (entry) => entry.kind === "expense" || entry.kind === "expense_credit",
     )
     .reduce((sum, entry) => sum + workEntryAmount(entry, work.id, tab), 0);
-  const historyPath = `/ledger?work=${work.id}${tab === "all" ? "" : `&account=${account}`}`;
+  const historyPath = `/ledger?work=${work.id}${tab === "labour" || tab === "material" ? `&account=${account}` : ""}`;
   const actions = removal.archived
     ? []
     : (work.quickActions ?? ["expense", "payment"]);
@@ -417,6 +443,7 @@ export function WorkPage() {
       workId: work.id,
       account: "labour",
       costType: "labour",
+      purpose: "settle",
     });
   const timestamp = (at: string) =>
     formatDigits(
@@ -508,7 +535,11 @@ export function WorkPage() {
         <div className="work-overview-total">
           <div>
             <span>{t("মোট টাকা দিয়েছি")}</span>
-            <strong>{money(s.netPaid)}</strong>
+            <strong>
+              {balance.valid
+                ? money(balance.reconciledNetPaid)
+                : t("টাকার অঙ্ক বেশি হয়েছে।")}
+            </strong>
           </div>
           <button
             className="work-chart-toggle"
@@ -519,11 +550,76 @@ export function WorkPage() {
             <CalendarDotsIcon size={23} weight="regular" />
           </button>
         </div>
-        {s.payable > 0 ? (
-          <div className="work-known-due">
-            <span>{t("দিতে বাকি")}</span>
-            <strong>{money(s.payable)}</strong>
+        {dues.map((row) => (
+          <div className="work-known-due" key={row.label}>
+            <span>{t(row.label)}</span>
+            <strong>{money(row.amount)}</strong>
           </div>
+        ))}
+        {balance.valid && balance.costCorrection !== 0 ? (
+          <div className="work-known-due">
+            <span>
+              {t("মোট খরচ")}
+              {" · "}
+              {t("সমন্বয়সহ")}
+            </span>
+            <strong>{money(balance.reconciledCost)}</strong>
+          </div>
+        ) : null}
+        {balance.valid &&
+        (balance.paidCorrection !== 0 || balance.balanceCorrection !== 0) ? (
+          <p className="work-due-note">{t("সমন্বয়সহ")}</p>
+        ) : null}
+        {balance.valid && balance.sharedOutstanding > 0 ? (
+          <details className="work-shared-dues">
+            <summary className="work-known-due work-shared-due">
+              <span>{t("সব খাতা মিলিয়ে কাজের বাকি")}</span>
+              <strong>
+                {money(balance.sharedOutstanding)}{" "}
+                <CaretRightIcon size={15} aria-hidden="true" />
+              </strong>
+            </summary>
+            <div className="work-shared-jobs">
+              {balance.sharedCommitments.map((commitment) => {
+                const job = ledger.contracts.find(
+                  (candidate) => candidate.id === commitment.id,
+                )!;
+                const person = ledger.people.find(
+                  (candidate) => candidate.id === job.personId,
+                );
+                return (
+                  <button
+                    key={job.id}
+                    onClick={() =>
+                      go(
+                        jobDetailUrl(
+                          job.id,
+                          `${base}/works/${encodeURIComponent(work.id)}?${params}`,
+                          base,
+                        ),
+                      )
+                    }
+                  >
+                    <span>
+                      {formatDigits(job.title || person?.name || t("কাজ"))}
+                      {commitment.archived ? (
+                        <small>{t("সরানো কাজ")}</small>
+                      ) : null}
+                    </span>
+                    <strong>{money(commitment.remaining)}</strong>
+                    <ArrowRightIcon size={15} aria-hidden="true" />
+                  </button>
+                );
+              })}
+            </div>
+          </details>
+        ) : null}
+        {balance.valid &&
+        (balance.scopedOutstanding === null ||
+          (balance.sharedOutstanding > 0 && dues.length > 0)) ? (
+          <p className="work-due-note">
+            {t("এই বাকিগুলোতে একই টাকা থাকতে পারে, তাই যোগ করে দেখানো হয়নি।")}
+          </p>
         ) : null}
       </section>
       {showChart ? (
@@ -655,11 +751,23 @@ export function WorkPage() {
                             <div key={key}>
                               <dt>{t(fields[key])}</dt>
                               <dd>
-                                <span>
+                                <span
+                                  className={
+                                    key === "status"
+                                      ? `work-activity-status ${event.before!.status}`
+                                      : undefined
+                                  }
+                                >
                                   {showValue(key, event.before![key])}
                                 </span>
                                 <ArrowRightIcon size={13} />
-                                <strong>
+                                <strong
+                                  className={
+                                    key === "status"
+                                      ? `work-activity-status ${event.after.status}`
+                                      : undefined
+                                  }
+                                >
                                   {showValue(key, event.after[key])}
                                 </strong>
                               </dd>
@@ -669,7 +777,11 @@ export function WorkPage() {
                       ) : (
                         <p>
                           {formatDigits(event.after.name)} ·{" "}
-                          {t(statusNames[event.after.status])}
+                          <span
+                            className={`work-activity-status ${event.after.status}`}
+                          >
+                            {t(statusNames[event.after.status])}
+                          </span>
                         </p>
                       )}
                     </div>
@@ -681,17 +793,53 @@ export function WorkPage() {
         </>
       ) : (
         <>
-          {tab !== "all" ? (
+          {tab === "labour" && labour ? (
+            <section
+              className="work-scope-summary work-labour-summary"
+              aria-label={t("মজুরির মোট হিসাব")}
+            >
+              <div className="work-labour-primary">
+                <span>{t("মজুরিতে দিয়েছি")}</span>
+                <strong>
+                  {labour.valid
+                    ? money(labour.reconciledNetPaid)
+                    : t("টাকার অঙ্ক বেশি হয়েছে।")}
+                </strong>
+                <button
+                  className="text-button"
+                  onClick={() =>
+                    go(`/reports?mode=cash&account=labour&work=${work.id}`)
+                  }
+                >
+                  {t("বিস্তারিত হিসাব")}
+                  <ArrowRightIcon size={15} />
+                </button>
+              </div>
+              {labour.valid && labour.actualRefunds > 0 ? (
+                <p className="work-labour-note">
+                  {t("ফেরত পাওয়া {{amount}} বাদ দিয়ে").replace(
+                    "{{amount}}",
+                    money(labour.actualRefunds),
+                  )}
+                </p>
+              ) : null}
+              {labour.valid && labour.paidCorrection !== 0 ? (
+                <p className="work-labour-note">
+                  {t("সমন্বয়সহ")}
+                  {" · "}
+                  {t("আসলে দেওয়া টাকা")} {money(labour.actualNetPaid)}
+                </p>
+              ) : null}
+            </section>
+          ) : tab !== "all" ? (
             <section className="work-scope-summary">
               <span>
                 {t(
-                  tab === "labour"
-                    ? "কাজের মজুরি"
-                    : tab === "transport"
-                      ? "আনা-নামানোর খরচ"
-                      : tab === "other"
-                        ? "অন্য খরচ"
-                        : "মালের দাম",
+                  tab === "transport"
+                    ? "আনা-নামানোর খরচ"
+                    : tab === "other"
+                      ? "অন্য খরচ"
+                      : "মালের দাম",
                 )}
               </span>
               <strong>{money(amount)}</strong>
@@ -708,7 +856,7 @@ export function WorkPage() {
           ) : null}
           <div className="work-action-buttons">
             {tab === "labour" && !removal.archived ? (
-              actions.includes("labour") || actions.includes("payment") ? (
+              actions.includes("labour") ? (
                 <button className="primary-button" onClick={addLabourPayment}>
                   {t("টাকা দিই")}
                 </button>
@@ -790,7 +938,11 @@ export function WorkPage() {
                 {t(tab === "all" ? "এই খাতার লেনদেন" : "সাম্প্রতিক হিসাব")}
               </h2>
               <button className="text-button" onClick={() => go(historyPath)}>
-                {t("পুরো হিসাব")}
+                {t(
+                  tab === "transport" || tab === "other"
+                    ? "এই খাতার সব লেনদেন"
+                    : "পুরো হিসাব",
+                )}
                 <ArrowRightIcon size={15} />
               </button>
             </div>

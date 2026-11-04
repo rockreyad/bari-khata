@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { loadEnv } from "vite";
+import { createServer, loadEnv } from "vite";
 import { z } from "zod";
 import { LedgerSchema } from "../src/domain/model";
-import { createAccountDeleteHandler } from "../server/accountDelete";
+import { accountPlugin } from "../server/accountPlugin";
 
 const container = "supabase_db_bari-khata";
 const dockerHost = JSON.parse(
@@ -227,29 +227,42 @@ async function receiptAbsent(path: string, bucket = "bari-receipts") {
     "A receipt lookup failed without confirming absence.",
   );
 }
-const handler = createAccountDeleteHandler({
-  url: endpoint,
-  serviceKey: status.SERVICE_ROLE_KEY,
-  origin: "http://localhost:5180",
-  vercel: false,
-  local: true,
+const server = await createServer({
+  configFile: false,
+  appType: "custom",
+  publicDir: false,
+  optimizeDeps: { noDiscovery: true, include: [] },
+  plugins: [
+    accountPlugin({
+      VITE_SUPABASE_URL: endpoint,
+      BARI_DEV_SUPABASE_SERVICE_ROLE_KEY: status.SERVICE_ROLE_KEY,
+    }),
+  ],
+  server: {
+    host: "127.0.0.1",
+    port: 0,
+    strictPort: true,
+    fs: { deny: ["**"] },
+  },
 });
+await server.listen();
+const address = server.httpServer?.address();
+assert.ok(address && typeof address !== "string");
+const origin = `http://127.0.0.1:${address.port}`;
 function deletion(
   token: string,
   confirmation = "DELETE",
   extra: Record<string, string> = {},
 ) {
-  return handler(
-    new Request("http://localhost:5180/api/account-delete", {
-      method: "POST",
-      headers: {
-        Origin: "http://localhost:5180",
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ confirmation, ...extra }),
-    }),
-  );
+  return fetch(`${origin}/api/account-delete`, {
+    method: "POST",
+    headers: {
+      Origin: origin,
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ confirmation, ...extra }),
+  });
 }
 try {
   const own = await fixture(0),
@@ -372,7 +385,7 @@ try {
       "Checking unrelated guard assistant file",
     );
   console.log(
-    "Local account deletion: verified bearer identity, exact DELETE, scoped nested receipts and assistant staging/chunks, Auth/ledger/share deletion, rejected old token including direct Storage upload, and active guard receipt upload/download verified.",
+    "Local account deletion: Vite HTTP route with the development-only key, verified bearer identity, exact DELETE, scoped nested receipts and assistant staging/chunks, Auth/ledger/share deletion, rejected old token including direct Storage upload, and active guard receipt upload/download verified.",
   );
 } finally {
   let cleanupFailed = false;
@@ -425,6 +438,7 @@ try {
       cleanupFailed = true;
     }
   }
+  await server.close();
   if (cleanupFailed)
     throw new Error(
       "Disposable fixture cleanup did not finish; inspect only the fresh fixtures created by this script.",

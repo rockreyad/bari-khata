@@ -339,6 +339,7 @@ export function LedgerPage() {
                 <option value="payment">{t("টাকা দিয়েছি")}</option>
                 <option value="expense_credit">{t("মাল ফেরত")}</option>
                 <option value="refund">{t("টাকা পেয়েছি")}</option>
+                <option value="adjustment">{t("হিসাবের সমন্বয়")}</option>
               </AppSelect>
             </label>
             <label>

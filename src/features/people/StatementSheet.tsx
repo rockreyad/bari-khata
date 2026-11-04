@@ -1,5 +1,10 @@
-import { useMemo, useState } from "react";
-import { DownloadSimpleIcon, ShareNetworkIcon } from "@phosphor-icons/react";
+import { useEffect, useRef, useState } from "react";
+import {
+  CaretDownIcon,
+  DownloadSimpleIcon,
+  ShareNetworkIcon,
+  ShieldCheckIcon,
+} from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { Sheet } from "../../components/Sheet";
@@ -12,150 +17,161 @@ import {
   statementFilename,
   statementHtml,
 } from "./statement";
-export function StatementSheet({
-  person,
-  account,
-  workId,
-  onClose,
-}: {
+
+type StatementSheetProps = {
   person: Person;
   account: Account;
   workId?: string;
   onClose: () => void;
-}) {
+};
+
+export function StatementSheet(props: StatementSheetProps) {
+  return (
+    <StatementShare
+      key={`${props.person.id}:${props.account}:${props.workId ?? ""}`}
+      {...props}
+    />
+  );
+}
+
+function StatementShare({
+  person,
+  account,
+  workId,
+  onClose,
+}: StatementSheetProps) {
   const { ledger, notify } = useNotebook();
   const { t, money, date, formatDigits, language } = useLanguageContext();
   const [notes, setNotes] = useState(false);
   const [busy, setBusy] = useState(false);
-  const statement = useMemo(
-    () =>
-      contactStatement(ledger, person, {
+  const locked = useRef(false);
+  const mounted = useRef(false);
+  const workName = workId
+    ? ledger.works.find((work) => work.id === workId)?.name
+    : undefined;
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  async function exportFile(share: boolean) {
+    if (locked.current) return;
+    locked.current = true;
+    setBusy(true);
+    try {
+      const statement = contactStatement(ledger, person, {
         account,
         workId,
         includeNotes: notes,
-      }),
-    [ledger, person, account, workId, notes],
-  );
-  const file = () =>
-    new File(
-      [statementHtml(statement, { t, money, date, formatDigits, language })],
-      statementFilename(person.name),
-      { type: "text/html" },
-    );
-  async function share() {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const copy = file();
-      if (navigator.canShare?.({ files: [copy] })) {
+      });
+      const html = statementHtml(statement, {
+        t,
+        money,
+        date,
+        formatDigits,
+        language,
+      });
+      const name = statementFilename(person.name);
+      const copy = new File([html], name, { type: "text/html" });
+      if (
+        share &&
+        typeof navigator.share === "function" &&
+        navigator.canShare?.({ files: [copy] })
+      ) {
         await navigator.share({ title: t("হিসাবের কপি"), files: [copy] });
       } else {
-        saveFile(await copy.text(), copy.name, "text/html;charset=utf-8");
+        saveFile(html, name, "text/html;charset=utf-8");
         notify(t("কপি নামানো হয়েছে। ফাইলটি যাকে দরকার পাঠাতে পারবেন।"));
       }
     } catch (error) {
-      if (!(error instanceof Error && error.name === "AbortError"))
+      const cancelled =
+        typeof error === "object" &&
+        error !== null &&
+        "name" in error &&
+        error.name === "AbortError";
+      if (mounted.current && !cancelled)
         notify(t("কপি পাঠানো যায়নি। নামিয়ে আবার চেষ্টা করুন।"), true);
     } finally {
-      setBusy(false);
+      if (mounted.current) {
+        locked.current = false;
+        setBusy(false);
+      }
     }
   }
+
   return (
-    <Sheet
-      title={t("হিসাবের কপি পাঠাই")}
-      subtitle={formatDigits(person.name)}
-      onClose={onClose}
-      footer={
-        <div className="statement-buttons">
-          <button
-            className="secondary-button"
-            onClick={() => {
-              const copy = file();
-              saveFile(
-                statementHtml(statement, {
-                  t,
-                  money,
-                  date,
-                  formatDigits,
-                  language,
-                }),
-                copy.name,
-                "text/html;charset=utf-8",
-              );
-            }}
-          >
-            <DownloadSimpleIcon size={19} />
-            {t("কপি নামান")}
-          </button>
-          <button
-            className="primary-button"
-            disabled={busy}
-            onClick={() => void share()}
-          >
-            <ShareNetworkIcon size={19} />
-            {t("পাঠাই")}
-          </button>
-        </div>
-      }
-    >
-      <div className="statement-preview">
-        <ShareLinkControls scope={{ personId: person.id, account, workId }} />
-        <div className="statement-person">
+    <Sheet title={t("হিসাবের কপি পাঠাই")} onClose={onClose}>
+      <div className="statement-share">
+        <div className="statement-recipient">
           <PersonMark person={person} />
-          <div>
+          <div className="statement-recipient-copy">
             <strong>{formatDigits(person.name)}</strong>
-            <span>{t(accountLabels[account])}</span>
+            <span>
+              {t(accountLabels[account])}
+              <span aria-hidden="true"> · </span>
+              {workId
+                ? formatDigits(workName || t("এই কাজের হিসাব"))
+                : t("সব কাজ")}
+            </span>
           </div>
         </div>
-        <div className="contact-statement-totals">
-          <div>
-            <small>{t("টাকা দিয়েছি")}</small>
-            <strong>{money(statement.totals.paid)}</strong>
-          </div>
-          <div>
-            <small>{t("দিতে বাকি")}</small>
-            <strong>{money(statement.totals.payable)}</strong>
-          </div>
-          <div>
-            <small>{t("আগাম দিয়েছি")}</small>
-            <strong>{money(statement.totals.advance)}</strong>
-          </div>
-        </div>
-        <p className="statement-explainer">
-          {t(
-            "এখানে শুধু এই নামের হিসাব থাকবে। অন্য কারও হিসাব বা আপনার লগইন থাকবে না।",
-          )}
-        </p>
-        <label className="statement-notes">
-          <input
-            type="checkbox"
-            checked={notes}
-            onChange={(event) => setNotes(event.target.checked)}
-          />
-          <span>{t("আমার লেখা নোটও দিই")}</span>
-        </label>
-        <div className="statement-rows">
-          {statement.rows.slice(0, 10).map((row, index) => (
-            <div key={index}>
-              <span>
-                <strong>
-                  {formatDigits(row.description) ||
-                    t(
-                      row.kind === "payment"
-                        ? "টাকা দিয়েছি"
-                        : row.kind === "expense_credit"
-                          ? "মাল ফেরত"
-                          : "টাকা পেয়েছি",
-                    )}
-                </strong>
-                <small>{formatDigits(row.works)}</small>
-              </span>
-              <strong>{money(Math.abs(row.charge || row.paid))}</strong>
+
+        <ShareLinkControls scope={{ personId: person.id, account, workId }} />
+
+        <details className="statement-file-options">
+          <summary>
+            <span className="statement-file-symbol" aria-hidden="true">
+              <DownloadSimpleIcon size={21} />
+            </span>
+            <span className="statement-file-heading">
+              <strong>{t("ফাইল পাঠাতে চাইলে")}</strong>
+              <small>{t("এখনকার হিসাবের কপি")}</small>
+            </span>
+            <CaretDownIcon
+              className="statement-file-caret"
+              size={17}
+              aria-hidden="true"
+            />
+          </summary>
+          <div className="statement-file-content">
+            <label className="statement-notes">
+              <input
+                type="checkbox"
+                checked={notes}
+                disabled={busy}
+                onChange={(event) => setNotes(event.target.checked)}
+              />
+              <span>{t("ফাইলে আমার নোটও রাখি")}</span>
+            </label>
+            <div className="statement-buttons">
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={busy}
+                onClick={() => void exportFile(false)}
+              >
+                <DownloadSimpleIcon size={18} aria-hidden="true" />
+                {t("কপি নামান")}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={busy}
+                onClick={() => void exportFile(true)}
+              >
+                <ShareNetworkIcon size={18} aria-hidden="true" />
+                {t(busy ? "অপেক্ষা করুন…" : "ফাইল পাঠান")}
+              </button>
             </div>
-          ))}
-        </div>
-        <p className="helper-text">
-          {t("সব হিসাব এই কপিতে থাকবে। পরে নতুন হিসাব লিখলে আবার কপি পাঠান।")}
+            <p>{t("নতুন হিসাব যোগ হলে আবার ফাইল পাঠাতে হবে।")}</p>
+          </div>
+        </details>
+
+        <p className="statement-share-note">
+          <ShieldCheckIcon size={15} aria-hidden="true" />
+          {t("শুধু দেখার কপি")}
         </p>
       </div>
     </Sheet>

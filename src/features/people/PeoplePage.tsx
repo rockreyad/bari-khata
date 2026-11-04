@@ -15,14 +15,31 @@ import { AppMenu } from "../../components/ui/AppMenu";
 import { contactAccountSummary, personKind } from "../../domain/contacts";
 import { matchesContact } from "./people";
 import { PersonMark, kindLabels } from "./ContactIdentity";
+import { PeopleRoleTabs } from "./PeopleRoleTabs";
+import { peopleRoles, roleKey, visibleRoleTabs } from "./peopleRoles";
+import { usePeopleRoleTabs } from "./usePeopleRoleTabs";
 import "./people.css";
 export function PeoplePage() {
-  const { ledger, entity, go } = useNotebook();
+  const { ledger, entity, go, mode } = useNotebook();
   const { t, money, formatDigits } = useLanguageContext();
   const [params, setParams] = useSearchParams();
   const query = params.get("q") ?? "";
-  const kind = params.get("type") ?? "all";
-  const status = params.get("status") ?? "all";
+  const rawRole = (params.get("role") ?? "").slice(0, 4000);
+  const activeRole = roleKey(rawRole);
+  const rawKind = params.get("type") ?? "all";
+  const kind =
+    !activeRole && ["worker", "shop", "driver", "other"].includes(rawKind)
+      ? (rawKind as keyof typeof kindLabels)
+      : "all";
+  const rawStatus = params.get("status") ?? "all";
+  const status = ["due", "advance"].includes(rawStatus) ? rawStatus : "all";
+  const roles = useMemo(() => peopleRoles(ledger.people), [ledger.people]);
+  const preferences = usePeopleRoleTabs(mode);
+  const visibleTabs = visibleRoleTabs(roles, preferences.keys);
+  const hiddenRole =
+    activeRole && !visibleTabs.some((role) => role.key === activeRole)
+      ? (roles.find((role) => role.key === activeRole)?.label ?? rawRole.trim())
+      : "";
   const rows = useMemo(
     () =>
       ledger.people
@@ -38,12 +55,15 @@ export function PeoplePage() {
       ({ person, summary }) =>
         matchesContact(person, query) &&
         (kind === "all" || personKind(person) === kind) &&
+        (!activeRole || roleKey(person.role) === activeRole) &&
         (status === "all" ||
-          (status === "due" ? summary.payable > 0 : summary.advance > 0)),
+          (status === "due"
+            ? summary.reconciledPayable > 0
+            : summary.reconciledAdvance > 0)),
     )
     .sort(
       (a, b) =>
-        b.summary.netPaid - a.summary.netPaid ||
+        b.summary.reconciledNetPaid - a.summary.reconciledNetPaid ||
         a.person.name.localeCompare(b.person.name),
     );
   const filter = (key: string, value: string) =>
@@ -52,6 +72,21 @@ export function PeoplePage() {
         const next = new URLSearchParams(previous);
         if (value && value !== "all") next.set(key, value);
         else next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+  const selectRole = (role: string) =>
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete("type");
+        if (role)
+          next.set(
+            "role",
+            roles.find((item) => item.key === role)?.label ?? role,
+          );
+        else next.delete("role");
         return next;
       },
       { replace: true },
@@ -107,29 +142,42 @@ export function PeoplePage() {
               onSelect: () => filter("status", "due"),
             },
             {
-              label: t("অগ্রিম দিয়েছি"),
+              label: t("আমার জমা"),
               onSelect: () => filter("status", "advance"),
             },
           ]}
         />
       </div>
-      <div className="contacts-tabs" aria-label={t("নামের ধরন")}>
-        {[
-          { id: "all", label: "সবাই" },
-          { id: "worker", label: "মিস্ত্রি" },
-          { id: "shop", label: "দোকান" },
-          { id: "driver", label: "গাড়িচালক" },
-        ].map((tab) => (
+      <PeopleRoleTabs
+        roles={roles}
+        selectedKeys={preferences.keys}
+        activeRole={activeRole}
+        allActive={!activeRole && kind === "all"}
+        ready={preferences.ready}
+        saving={preferences.saving}
+        error={preferences.error}
+        onSelect={selectRole}
+        onSave={preferences.saveKeys}
+        onRetry={preferences.retry}
+      />
+      {kind !== "all" || hiddenRole ? (
+        <div className="people-active-scope">
+          <span>
+            {kind !== "all"
+              ? t("ধরন: {{kind}}", { kind: t(kindLabels[kind]) })
+              : t("পরিচয়: {{role}}", { role: formatDigits(hiddenRole) })}
+          </span>
           <button
-            key={tab.id}
-            className={kind === tab.id ? "active" : ""}
-            aria-pressed={kind === tab.id}
-            onClick={() => filter("type", tab.id)}
+            type="button"
+            aria-label={t(
+              kind !== "all" ? "ধরনের বাছাই মুছুন" : "পরিচয়ের বাছাই মুছুন",
+            )}
+            onClick={() => selectRole("")}
           >
-            {t(tab.label)}
+            <XIcon size={17} aria-hidden="true" />
           </button>
-        ))}
-      </div>
+        </div>
+      ) : null}
       {shown.length ? (
         <section
           className="contacts-list"
@@ -159,13 +207,24 @@ export function PeoplePage() {
                   {summary.historicalCount &&
                   !summary.entries.some(
                     (entry) => entry.balanceImpact !== "historical",
-                  )
-                    ? t("যাচাই বাকি")
-                    : money(summary.netPaid)}
+                  ) ? (
+                    t("যাচাই বাকি")
+                  ) : (
+                    <span className="contact-paid-amount">
+                      {money(summary.reconciledNetPaid)}
+                    </span>
+                  )}
                 </strong>
-                {summary.payable > 0 ? (
+                {summary.paidCorrection !== 0 ? (
+                  <small>
+                    {t("সমন্বয়")}: {money(summary.paidCorrection)}
+                  </small>
+                ) : null}
+                {summary.reconciledPayable > 0 ? (
                   <small className="contact-due">
-                    {t("বাকি {{amount}}", { amount: money(summary.payable) })}
+                    {t("বাকি {{amount}}", {
+                      amount: money(summary.reconciledPayable),
+                    })}
                   </small>
                 ) : null}
               </span>
@@ -179,7 +238,9 @@ export function PeoplePage() {
           <h3>
             {t(
               rows.length
-                ? "এই নামে কাউকে পাওয়া যায়নি"
+                ? query
+                  ? "এই নামে কাউকে পাওয়া যায়নি"
+                  : "এই বাছাইয়ে কাউকে পাওয়া যায়নি"
                 : "নাম যোগ করে শুরু করুন",
             )}
           </h3>

@@ -1174,9 +1174,10 @@ h3 {
   background: var(--surface);
 }
 .choice-chips button.selected {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
-  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-color: var(--line);
+  background: var(--surface-muted);
+  font-weight: 600;
 }
 .quick-line {
   border: 1px solid var(--line);
@@ -1263,10 +1264,11 @@ h3 {
   color: var(--muted);
 }
 .payment-methods > button.selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-  color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--line);
+  box-shadow: none;
+  color: var(--accent-strong);
+  background: var(--surface-muted);
+  font-weight: 600;
 }
 .details-toggle {
   display: flex;

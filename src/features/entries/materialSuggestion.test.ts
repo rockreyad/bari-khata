@@ -108,3 +108,101 @@ it("does not select a brand when digit-equivalent legacy names have genuinely di
     label: "Rod 16 mm",
   });
 });
+
+it("matches normalized names and aliases while preserving the user's entered label", () => {
+  const item = ItemSchema.parse({
+    id: "rod",
+    name: "Rod ১৬ mm",
+    aliases: ["রড ১৬"],
+    materialGroupId: "rod",
+    brand: "BSRM",
+    unit: "kg",
+  });
+  for (const label of ["  ROD   16 MM  ", "রড 16"]) {
+    expect(materialSuggestion([item], label, {})).toMatchObject({
+      label,
+      groupId: "rod",
+      brand: "BSRM",
+      unit: "kg",
+    });
+  }
+});
+
+it("suggests previous materials even when no catalog item or material group was selected", () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "দরজা" }],
+    entries: [
+      {
+        id: "purchase",
+        kind: "expense",
+        lines: [
+          {
+            id: "line",
+            workId: "work",
+            label: "সিমেন্ট",
+            unit: "বস্তা",
+            amount: 55000,
+          },
+          {
+            id: "food",
+            workId: "work",
+            label: "খাবার",
+            costType: "other",
+            amount: 5000,
+          },
+        ],
+      },
+    ],
+  });
+  const before = structuredClone(ledger);
+  const items = materialItems(ledger);
+  expect(items.map((item) => item.name)).toEqual(["সিমেন্ট"]);
+  expect(materialSuggestion(items, "সিমেন্ট", {})).toMatchObject({
+    label: "সিমেন্ট",
+    unit: "বস্তা",
+    groupId: "",
+    brand: "",
+  });
+  expect(ledger).toEqual(before);
+});
+
+it("does not guess metadata when historical materials used different units", () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "দরজা" }],
+    entries: [
+      {
+        id: "purchase",
+        kind: "expense",
+        lines: [
+          { id: "kg", workId: "work", label: "রড", unit: "kg", amount: 10000 },
+          {
+            id: "piece",
+            workId: "work",
+            label: "রড",
+            unit: "টি",
+            amount: 20000,
+          },
+        ],
+      },
+    ],
+  });
+  expect(materialSuggestion(materialItems(ledger), "রড", {})).toEqual({
+    label: "রড",
+  });
+});
+
+it("leaves explicitly entered metadata intact even when the typed material name has one match", () => {
+  const item = ItemSchema.parse({
+    id: "rod",
+    name: "রড",
+    brand: "BSRM",
+    unit: "kg",
+  });
+  expect(
+    materialSuggestion([item], "রড", {
+      autoItemName: "",
+      brand: "AKS",
+      unit: "টি",
+    }),
+  ).toEqual({ label: "রড" });
+});

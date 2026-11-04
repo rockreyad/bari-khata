@@ -2,6 +2,7 @@ import { poishaDecimal } from "../../domain/money";
 import { effectiveAccounts } from "../../domain/effectiveAccounts";
 import type { Entry, Ledger } from "../../domain/model";
 import { entryTotal, entryWorkIds } from "../../domain/ledger";
+import { adjustmentBasisLabels } from "./adjustmentDisplay";
 export type HistoryOrder = "newest" | "oldest";
 export type HistoryFilters = {
   query?: string;
@@ -59,7 +60,12 @@ export function filterHistory(ledger: Ledger, filters: HistoryFilters = {}) {
     if (filters.personId && entry.personId !== filters.personId) return false;
     if (filters.workId && !entryWorkIds(entry).includes(filters.workId))
       return false;
-    if (filters.account && accounts.get(entry.id) !== filters.account)
+    if (
+      filters.account &&
+      (entry.adjustment
+        ? entry.adjustment.account !== filters.account
+        : accounts.get(entry.id) !== filters.account)
+    )
       return false;
     if (filters.kind && entry.kind !== filters.kind) return false;
     if (
@@ -74,6 +80,8 @@ export function filterHistory(ledger: Ledger, filters: HistoryFilters = {}) {
     const haystack = normalize(
       [
         entry.note,
+        entryKindLabels[entry.kind],
+        entry.adjustment ? adjustmentBasisLabels[entry.adjustment.basis] : "",
         entry.source?.note,
         entry.paymentPurposeId ? purposes.get(entry.paymentPurposeId) : "",
         entry.personId ? people.get(entry.personId) : "",
@@ -102,10 +110,17 @@ export const entryKindLabels = {
   expense: "খরচ",
   payment: "টাকা দিয়েছি",
   expense_credit: "মাল ফেরত",
-  refund: "টাকা পেয়েছি",
+  refund: "টাকা ফেরত পেয়েছি",
+  adjustment: "সমন্বয়",
 };
 export function historyTitle(ledger: Ledger, entry: Entry, hidePerson = false) {
   const person = ledger.people.find((p) => p.id === entry.personId);
+  if (entry.kind === "adjustment")
+    return (
+      (!hidePerson && person?.name) ||
+      ledger.works.find((work) => work.id === entry.adjustment?.workId)?.name ||
+      entryKindLabels.adjustment
+    );
   if (entry.kind === "payment" || entry.kind === "refund")
     return (
       (!hidePerson && person?.name) ||
@@ -113,7 +128,7 @@ export function historyTitle(ledger: Ledger, entry: Entry, hidePerson = false) {
         (purpose) => purpose.id === entry.paymentPurposeId,
       )?.name ||
       (entry.kind === "refund"
-        ? "টাকা পেয়েছি"
+        ? "টাকা ফেরত পেয়েছি"
         : entry.account === "labour"
           ? "মজুরি দিয়েছি"
           : "টাকা দিয়েছি")
@@ -130,10 +145,17 @@ export function historySubtitle(
   {
     hidePerson = false,
     hideWork = false,
-  }: { hidePerson?: boolean; hideWork?: boolean } = {},
+    translate = (value: string) => value,
+  }: {
+    hidePerson?: boolean;
+    hideWork?: boolean;
+    translate?: (value: string) => string;
+  } = {},
 ) {
   const parts: string[] = [];
-  if (!hideWork)
+  if (entry.adjustment)
+    parts.push(translate(adjustmentBasisLabels[entry.adjustment.basis]));
+  if (!hideWork && !(entry.kind === "adjustment" && !entry.personId))
     parts.push(
       ...entryWorkIds(entry)
         .map((id) => ledger.works.find((w) => w.id === id)?.name ?? "")

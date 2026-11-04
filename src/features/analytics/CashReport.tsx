@@ -16,6 +16,7 @@ import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { Sheet } from "../../components/Sheet";
 import { validHistoryDate } from "../history/history";
 import { accountNames, saveFile, todayDhaka } from "../../lib/display";
+import { reportAdjustments } from "./reportAdjustments";
 
 export function CashReport({
   ledger,
@@ -53,6 +54,14 @@ export function CashReport({
   const people = new Map(
     ledger.people.map((person) => [person.id, person.name]),
   );
+  const corrections = reportAdjustments(ledger, {
+    workId,
+    personId,
+    account,
+    from,
+    to,
+    query,
+  });
   const works = new Map(ledger.works.map((work) => [work.id, work.name]));
   const groups = byPerson ? result.byPerson : result.byWork;
   const requestedGroups = Number(params.get("groups") ?? "1");
@@ -113,7 +122,7 @@ export function CashReport({
     );
   }
   return (
-    <div className="report-page cash-report-page">
+    <div className="report-page cash-report-page report-basis-paid">
       <header className="page-heading">
         <div>
           <h1>{t("টাকা কোথায় দিলাম")}</h1>
@@ -149,6 +158,12 @@ export function CashReport({
       <section className="report-total" aria-label={t("মোট টাকা দিয়েছি")}>
         <span>{t("মোট টাকা দিয়েছি")}</span>
         <strong>{money(result.netPaid)}</strong>
+        {corrections.paidCorrection !== 0 ? (
+          <p>
+            {t("সমন্বয়")} · {t("মোট দিয়েছি")}:{" "}
+            {money(corrections.paidCorrection)}
+          </p>
+        ) : null}
         <small>
           {formatDigits(
             works.get(workId) ??

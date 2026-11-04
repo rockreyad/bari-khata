@@ -90,7 +90,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 describe("dedicated account settings", () => {
-  it("opens password settings on a separate route and keeps navigation/backups/recovery simple", async () => {
+  it("opens password settings on a separate route and keeps backups available without the unused recovery option", async () => {
     const user = userEvent.setup();
     mount();
     expect(screen.getByRole("heading", { name: "অ্যাকাউন্ট" })).toBeTruthy();
@@ -99,8 +99,9 @@ describe("dedicated account settings", () => {
       screen.getByRole("button", { name: /^পাসওয়ার্ড পরিবর্তন/ }),
     );
     expect(api.go).toHaveBeenLastCalledWith("/settings/account/password");
-    await user.click(screen.getByRole("button", { name: /^মুছে রাখা তথ্য/ }));
-    expect(api.go).toHaveBeenLastCalledWith("/settings/removed");
+    expect(
+      screen.queryByRole("button", { name: /^মুছে রাখা তথ্য/ }),
+    ).toBeNull();
     await user.click(
       screen.getByRole("button", { name: /^হিসাবের কপি নামাই/ }),
     );
@@ -220,8 +221,8 @@ describe("dedicated account settings", () => {
       screen.queryByRole("button", { name: "অ্যাকাউন্ট মুছতে চাই" }),
     ).toBeNull();
     expect(
-      screen.getByRole("button", { name: /^মুছে রাখা তথ্য/ }),
-    ).toBeTruthy();
+      screen.queryByRole("button", { name: /^মুছে রাখা তথ্য/ }),
+    ).toBeNull();
   });
 });
 async function openDelete() {

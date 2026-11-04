@@ -1,0 +1,116 @@
+.person-work-picker {
+  min-width: 0;
+  margin: 0;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.person-work-picker > legend {
+  padding: 0 5px;
+  font-size: 13px;
+  font-weight: 550;
+}
+.person-work-picker > .field-hint {
+  margin: 0 0 12px;
+}
+.person-work-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 8px;
+}
+.entity-form-v3 .person-work-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  overflow-wrap: anywhere;
+}
+.entity-form-v3 .person-work-option > input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.person-notebooks {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-width: 0;
+  color: var(--muted);
+}
+.person-notebook-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+.person-notebook-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.person-notebook-trigger > svg {
+  flex: none;
+}
+.person-notebook-trigger:hover {
+  color: var(--text);
+}
+.person-notebook-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.person-notebook-options {
+  display: grid;
+  gap: 4px;
+  max-height: 60dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px;
+}
+.person-notebook-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+}
+.person-notebook-option > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.person-notebook-option > svg {
+  flex: none;
+  color: var(--accent);
+}
+.person-notebook-option[aria-pressed="true"],
+.person-notebook-option:hover {
+  background: var(--surface-muted);
+}
+.person-notebook-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}

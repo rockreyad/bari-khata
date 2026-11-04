@@ -17,6 +17,15 @@ export type LineDraft = {
   costType: CostType;
 };
 
+export function historicalReviewErrorMessage(cause: unknown): string | null {
+  if (!(cause instanceof Error)) return null;
+  if (cause.message === "mixed_historical_cost_types")
+    return "একই হিসাবে মজুরি ও অন্য খরচ রাখা যায় না। সব লাইনের ধরন মিলিয়ে নিন।";
+  if (cause.message === "historical_review_linked_account")
+    return "এই হিসাবের সঙ্গে বিল, পরিশোধ বা চুক্তি যুক্ত আছে। এখানে হিসাবের খাত বদলানো যাবে না।";
+  return null;
+}
+
 export function reviewDraft(entry: Entry, ledger: Ledger): LineDraft[] {
   return entry.lines.map((line) => {
     const item = ledger.items.find((value) => value.id === line.itemId);
@@ -46,6 +55,32 @@ export function organizeHistoricalEntry(
     (original.kind !== "expense" && original.kind !== "expense_credit")
   )
     throw new Error("historical_entry_required");
+  const types = original.lines.map((line) => {
+    const draft = drafts.find((value) => value.id === line.id);
+    if (!draft) throw new Error("missing_line");
+    return draft.costType;
+  });
+  const labour = types.every((type) => type === "labour");
+  if (!labour && types.includes("labour"))
+    throw new Error("mixed_historical_cost_types");
+  const changedType = types.some(
+    (type, index) => type !== original.lines[index].costType,
+  );
+  const account = !changedType
+    ? original.account
+    : labour
+      ? "labour"
+      : types.every((type) => type === "material")
+        ? "materials"
+        : "other";
+  if (
+    account !== original.account &&
+    (original.contractId ||
+      original.relatedEntryId ||
+      original.paymentPurposeId ||
+      current.entries.some((entry) => entry.relatedEntryId === original.id))
+  )
+    throw new Error("historical_review_linked_account");
   const items = [...current.items];
   const lines = original.lines.map((line) => {
     const draft = drafts.find((value) => value.id === line.id);
@@ -102,6 +137,7 @@ export function organizeHistoricalEntry(
     { ...current, items },
     EntrySchema.parse({
       ...original,
+      account,
       lines,
       reviewStatus: "confirmed",
       balanceImpact: original.balanceImpact,

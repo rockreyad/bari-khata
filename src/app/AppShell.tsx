@@ -5,6 +5,7 @@ import {
   Routes,
   useLocation,
   useSearchParams,
+  useNavigate,
 } from "react-router";
 import {
   BookOpenIcon,
@@ -17,7 +18,13 @@ import {
   ClockCounterClockwiseIcon,
   UsersIcon,
 } from "@phosphor-icons/react";
-import { entryUrl, contractUrl, isEntryPage } from "./entryRoutes";
+import {
+  entryUrl,
+  contractUrl,
+  personUrl,
+  entryReturn,
+  isEntryPage,
+} from "./entryRoutes";
 import { NotebookNavLink, notebookSectionActive } from "./navigation";
 import { useNotebook, type AddOptions } from "./NotebookProvider";
 import { useLanguageContext } from "../context/LanguageProvider";
@@ -65,6 +72,11 @@ const ReviewPage = lazy(() =>
     default: m.ReviewPage,
   })),
 );
+const TimelinePage = lazy(() =>
+  import("../features/history/TimelinePage").then((module) => ({
+    default: module.TimelinePage,
+  })),
+);
 const JobsPage = lazy(() =>
   import("../features/jobs/JobPages").then((m) => ({ default: m.JobsPage })),
 );
@@ -110,7 +122,8 @@ function Reports() {
 function EntryRoute() {
   const { entryId } = useParams();
   const [params] = useSearchParams();
-  const { ledger, mode, close, save } = useNotebook();
+  const { ledger, mode, close, save, base } = useNotebook();
+  const navigate = useNavigate();
   const raw = params.get("kind") ?? "expense";
   const kind: AddOptions["kind"] = [
     "expense",
@@ -141,6 +154,11 @@ function EntryRoute() {
       ledger={ledger}
       mode={mode}
       editEntryId={entryId}
+      onCorrectLinkedPayment={(id) => {
+        navigate(
+          entryUrl(base, { editId: id }, entryReturn(params.get("back"), base)),
+        );
+      }}
       onClose={close}
       onSave={async (next, attachments) =>
         save(
@@ -173,6 +191,25 @@ function ContractRoute() {
       ledger={ledger}
       mode={mode}
       editId={contractId}
+      defaultWorkId={params.get("work") ?? undefined}
+      defaultPersonId={params.get("person") ?? undefined}
+      onClose={close}
+      onSave={save}
+    />
+  );
+}
+function PersonRoute() {
+  const { personId } = useParams();
+  const [params] = useSearchParams();
+  const { ledger, mode, close, save } = useNotebook();
+  return (
+    <EntitySheet
+      presentation="page"
+      key={personId ?? `new:${params.get("work")}:${params.get("person")}`}
+      kind="person"
+      ledger={ledger}
+      mode={mode}
+      editId={personId}
       defaultWorkId={params.get("work") ?? undefined}
       defaultPersonId={params.get("person") ?? undefined}
       onClose={close}
@@ -226,7 +263,7 @@ export function AppShell() {
   };
   return (
     <div
-      className={`app-frame ${entryPage || addKind || entity === "contract" ? "is-entry-page" : ""}`}
+      className={`app-frame ${entryPage || addKind || entity === "contract" || entity === "person" ? "is-entry-page" : ""}`}
     >
       <aside className="app-sidebar">
         <button className="brand-lockup" onClick={() => go("/")}>
@@ -331,7 +368,20 @@ export function AppShell() {
               </div>
             }
           >
-            {addKind && !entryPage ? (
+            {entity === "person" ? (
+              <Navigate
+                replace
+                to={personUrl(
+                  base,
+                  editId,
+                  options.workId,
+                  options.personId,
+                  entryPage
+                    ? (params.get("back") ?? `${base}/people`)
+                    : `${location.pathname}${location.search}`,
+                )}
+              />
+            ) : addKind && !entryPage ? (
               <Navigate
                 replace
                 to={entryUrl(
@@ -368,11 +418,18 @@ export function AppShell() {
                 <Route path="works" element={<WorksPage />} />
                 <Route path="works/:workId" element={<WorkPage />} />
                 <Route path="ledger" element={<LedgerPage />} />
+                <Route path="timeline" element={<TimelinePage />} />
                 <Route path="people" element={<PeoplePage />} />
+                <Route path="people/new" element={<PersonRoute />} />
+                <Route path="people/:personId/edit" element={<PersonRoute />} />
                 <Route path="people/:personId" element={<PersonPage />} />
                 <Route path="reports" element={<Reports />} />
                 <Route path="materials/:groupId" element={<Reports />} />
                 <Route path="review" element={<ReviewPage />} />
+                <Route
+                  path="reconcile"
+                  element={<Navigate replace to={`${base}/people`} />}
+                />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route
                   path="settings/assistants"
@@ -448,9 +505,11 @@ export function AppShell() {
           </button>
         </div>
       ) : null}
-      {params.get("_quick") === "1" ? <QuickActionsSheet /> : null}
+      {entity !== "person" && params.get("_quick") === "1" ? (
+        <QuickActionsSheet />
+      ) : null}
       <Suspense fallback={null}>
-        {entity && entity !== "contract" ? (
+        {entity === "work" ? (
           <EntitySheet
             key={`${entity}:${editId}`}
             kind={entity}
@@ -463,7 +522,7 @@ export function AppShell() {
             onSave={save}
           />
         ) : null}
-        {params.get("_entry") ? (
+        {entity !== "person" && params.get("_entry") ? (
           <EntryDetail key={params.get("_entry")} id={params.get("_entry")!} />
         ) : null}
       </Suspense>

@@ -68,15 +68,29 @@ export function EntryList({
           paired.length && paid !== original
             ? t("দিয়েছি {{amount}}", { amount: money(paid) })
             : "";
+        const context = historySubtitle(ledger, entry, {
+          hidePerson,
+          hideWork,
+          translate: t,
+        });
+        const kindLabel = entryKindLabels[entry.kind];
         const subtitle =
           subtitles?.[entry.id] ??
-          [historySubtitle(ledger, entry, { hidePerson, hideWork }), extra]
+          [
+            context === title || (showKind && context === kindLabel)
+              ? ""
+              : context,
+            extra,
+          ]
             .filter(Boolean)
             .join(" · ");
         const sign =
-          entry.kind === "refund" || entry.kind === "expense_credit" ? -1 : 1;
-        const amount =
-          amounts?.[entry.id] ?? entryWorkAmount(entry, workId) * sign;
+          entry.kind === "refund" ||
+          entry.kind === "expense_credit" ||
+          (entry.kind === "adjustment" && (entry.adjustment?.delta ?? 0) < 0)
+            ? -1
+            : 1;
+        const amount = amounts?.[entry.id] ?? (original ? original * sign : 0);
         return (
           <div className="history-record" key={entry.id}>
             {header ? (
@@ -100,19 +114,27 @@ export function EntryList({
                   {entry.voided ? <i>{t("বাতিল")}</i> : null}
                 </strong>
                 <small className="history-row-meta-v4">
+                  {showKind && title !== kindLabel ? (
+                    <>
+                      <span
+                        className={`history-kind history-kind-${entry.kind}`}
+                      >
+                        {t(entryKindLabels[entry.kind])}
+                      </span>
+                      <span aria-hidden="true">·</span>
+                    </>
+                  ) : null}
                   <time dateTime={entry.date ?? undefined}>
                     {entry.date
                       ? date(entry.date, { year: "numeric" })
                       : t("তারিখ দেওয়া নেই")}
                   </time>
-                  <span aria-hidden="true">·</span>
-                  {showKind && subtitle !== entryKindLabels[entry.kind] ? (
+                  {subtitle ? (
                     <>
-                      <span>{t(entryKindLabels[entry.kind])}</span>
                       <span aria-hidden="true">·</span>
+                      <span className="history-row-context">{t(subtitle)}</span>
                     </>
                   ) : null}
-                  <span>{t(subtitle)}</span>
                 </small>
               </span>
               <strong className="history-row-amount">{money(amount)}</strong>

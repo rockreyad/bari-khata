@@ -1,0 +1,83 @@
+.adjustment-extra {
+  color: var(--muted);
+  font-size: 12px;
+}
+.adjustment-extra summary {
+  cursor: pointer;
+  padding-block: 6px;
+}
+.adjustment-extra label {
+  margin-block: 10px;
+}
+.balance-adjustment-form {
+  display: grid;
+  gap: 20px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+.balance-adjustment-form fieldset {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.balance-adjustment-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.balance-adjustment-form textarea {
+  resize: vertical;
+  min-height: 90px;
+}
+.adjustment-current {
+  display: grid;
+  gap: 7px;
+  padding-block: 14px;
+  border-block: 1px solid var(--line);
+}
+.adjustment-current span,
+.adjustment-preview span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.adjustment-current strong {
+  font-size: 23px;
+  font-weight: 600;
+  color: var(--text);
+}
+.adjustment-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-muted);
+}
+.adjustment-preview > div {
+  display: grid;
+  flex: 1 1 140px;
+  gap: 7px;
+}
+.adjustment-preview strong {
+  color: var(--text);
+  font-size: 18px;
+}
+.adjustment-stale {
+  display: grid;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+@media (max-width: 600px) {
+  .balance-adjustment-form {
+    padding: 18px;
+  }
+}

@@ -2,6 +2,7 @@ import { parseMoneyText } from "./money.js";
 import { effectiveAccounts } from "./effectiveAccounts.js";
 import type { Account, CostType, Entry, Ledger } from "./model.js";
 import { EntryCoreSchema, validateLedger } from "./model.js";
+import { adjustmentBalanceDelta, reconciledTotals } from "./adjustmentMath.js";
 
 export const accounts: Account[] = ["materials", "labour", "other"];
 export const costTypes: CostType[] = [
@@ -14,6 +15,8 @@ export const costTypes: CostType[] = [
 ];
 
 export function entryTotal(entry: Entry): number {
+  if (entry.kind === "adjustment")
+    return Math.abs(entry.adjustment?.delta ?? 0);
   return entry.kind === "expense" || entry.kind === "expense_credit"
     ? entry.lines.reduce((total, line) => total + line.amount, 0)
     : entry.paymentParts.reduce((total, part) => total + part.amount, 0);
@@ -21,6 +24,8 @@ export function entryTotal(entry: Entry): number {
 
 export function entryWorkAmount(entry: Entry, workId?: string): number {
   if (!workId) return entryTotal(entry);
+  if (entry.kind === "adjustment")
+    return entry.adjustment?.workId === workId ? entryTotal(entry) : 0;
   return entry.kind === "expense" || entry.kind === "expense_credit"
     ? entry.lines
         .filter((line) => line.workId === workId)
@@ -31,6 +36,8 @@ export function entryWorkAmount(entry: Entry, workId?: string): number {
 }
 
 export function entryWorkIds(entry: Entry): string[] {
+  if (entry.kind === "adjustment")
+    return entry.adjustment?.workId ? [entry.adjustment.workId] : [];
   return [
     ...new Set(
       (entry.kind === "expense" || entry.kind === "expense_credit"
@@ -50,6 +57,7 @@ export function activeEntries(ledger: Ledger, workId?: string): Entry[] {
 
 type Balance = {
   cost: number;
+  adjustment: number;
   paid: number;
   refunds: number;
   netPaid: number;
@@ -59,6 +67,7 @@ type Balance = {
 };
 const emptyBalance = (): Balance => ({
   cost: 0,
+  adjustment: 0,
   paid: 0,
   refunds: 0,
   netPaid: 0,
@@ -74,7 +83,8 @@ function accountBalances(
 ): Map<string, Balance> {
   const balances = new Map<string, Balance>();
   for (const entry of entries) {
-    if (entry.balanceImpact === "historical") continue;
+    if (entry.balanceImpact === "historical" || entry.kind === "adjustment")
+      continue;
     const isCost = entry.kind === "expense" || entry.kind === "expense_credit";
     const parts = isCost ? entry.lines : entry.allocations;
     for (const part of parts) {
@@ -114,6 +124,7 @@ export function summarize(ledger: Ledger, workId?: string) {
     { id: string; name: string; amount: number; unit: string }
   >();
   let cost = 0;
+  let adjustment = 0;
   let paid = 0;
   let refunds = 0;
   let historicalCost = 0;
@@ -128,7 +139,9 @@ export function summarize(ledger: Ledger, workId?: string) {
       (entry.kind === "expense" || entry.kind === "expense_credit")
     )
       historicalCost += amount * (entry.kind === "expense_credit" ? -1 : 1);
-    if (entry.kind === "payment") {
+    if (entry.kind === "adjustment") {
+      adjustment += adjustmentBalanceDelta(entry);
+    } else if (entry.kind === "payment") {
       if (entry.balanceImpact !== "historical") paid += amount;
     } else if (entry.kind === "refund") {
       if (entry.balanceImpact !== "historical") refunds += amount;
@@ -165,7 +178,9 @@ export function summarize(ledger: Ledger, workId?: string) {
     contractSummary(ledger, contract.id),
   );
   return {
+    ...reconciledTotals(ledger, workId ? { workId } : {}),
     cost,
+    adjustment,
     totalCost: cost,
     historicalCost,
     confirmedCost: cost - historicalCost,
@@ -223,6 +238,7 @@ export function personSummary(
       const confirmed = balances.reduce(
         (sum, b) => ({
           cost: sum.cost + b.cost,
+          adjustment: sum.adjustment + b.adjustment,
           paid: sum.paid + b.paid,
           refunds: sum.refunds + b.refunds,
           netPaid: sum.netPaid + b.netPaid,
@@ -249,6 +265,11 @@ export function personSummary(
       return [
         account,
         {
+          ...reconciledTotals(ledger, {
+            personId,
+            account,
+            ...(workId ? { workId } : {}),
+          }),
           ...confirmed,
           cost: confirmed.cost + historicalCost,
           historicalCost,
@@ -258,11 +279,16 @@ export function personSummary(
     }),
   ) as Record<
     Account,
-    Balance & { historicalCost: number; confirmedCost: number }
+    Balance &
+      ReturnType<typeof reconciledTotals> & {
+        historicalCost: number;
+        confirmedCost: number;
+      }
   >;
   const total = Object.values(accountsResult).reduce(
     (sum, b) => ({
       cost: sum.cost + b.cost,
+      adjustment: sum.adjustment + b.adjustment,
       paid: sum.paid + b.paid,
       refunds: sum.refunds + b.refunds,
       netPaid: sum.netPaid + b.netPaid,
@@ -273,6 +299,7 @@ export function personSummary(
     emptyBalance(),
   );
   return {
+    ...reconciledTotals(ledger, { personId, ...(workId ? { workId } : {}) }),
     ...total,
     historicalCost: Object.values(accountsResult).reduce(
       (sum, account) => sum + account.historicalCost,
@@ -295,15 +322,21 @@ export function partyAccountBalance(
   contractId: string | null = null,
 ) {
   const effective = effectiveAccounts(ledger);
-  const entries = activeEntries(ledger).filter(
+  const entries = ledger.entries.filter(
     (entry) =>
       entry.personId === personId &&
       effective.get(entry.id) === account &&
       entry.contractId === contractId,
   );
-  return [...accountBalances(entries, effective).values()].reduce(
+  const actual = [
+    ...accountBalances(
+      entries.filter((entry) => !entry.voided),
+      effective,
+    ).values(),
+  ].reduce(
     (sum, balance) => ({
       cost: sum.cost + balance.cost,
+      adjustment: sum.adjustment + balance.adjustment,
       paid: sum.paid + balance.paid,
       refunds: sum.refunds + balance.refunds,
       netPaid: sum.netPaid + balance.netPaid,
@@ -313,6 +346,18 @@ export function partyAccountBalance(
     }),
     emptyBalance(),
   );
+  // This running account excludes other jobs and their agreed totals.
+  const reconciled = reconciledTotals(
+    { ...ledger, entries, contracts: [] },
+    { personId, account },
+  );
+  return {
+    ...actual,
+    adjustment: reconciled.owedCorrection,
+    balance: reconciled.reconciledBalance,
+    payable: reconciled.reconciledPayable,
+    advance: reconciled.reconciledAdvance,
+  };
 }
 
 export function contractSummary(ledger: Ledger, contractId: string) {
@@ -324,6 +369,7 @@ export function contractSummary(ledger: Ledger, contractId: string) {
       entry.contractId === contractId && entry.balanceImpact !== "historical",
   );
   let billed = 0;
+  let adjustment = 0;
   let paid = 0;
   let refunds = 0;
   for (const entry of entries) {
@@ -332,18 +378,24 @@ export function contractSummary(ledger: Ledger, contractId: string) {
     if (entry.kind === "expense_credit") billed -= total;
     if (entry.kind === "payment") paid += total;
     if (entry.kind === "refund") refunds += total;
+    if (entry.kind === "adjustment")
+      adjustment += adjustmentBalanceDelta(entry);
   }
   const agreed = contract?.total ?? 0;
   const netPaid = paid - refunds;
+  const balance =
+    BigInt(Math.max(agreed, billed)) + BigInt(adjustment) - BigInt(netPaid);
+  const billedBalance = BigInt(billed) + BigInt(adjustment) - BigInt(netPaid);
   return {
     contract,
     agreed,
+    adjustment,
     billed,
     paid,
     refunds,
     netPaid,
-    remaining: Math.max(agreed - netPaid, 0),
-    payable: Math.max(billed - netPaid, 0),
+    remaining: Number(balance > 0n ? balance : 0n),
+    payable: Number(billedBalance > 0n ? billedBalance : 0n),
     advance: Math.max(netPaid - billed, 0),
     entries,
   };
@@ -385,6 +437,10 @@ export function setEntryVoided(
 export function replaceEntry(ledger: Ledger, replacement: Entry): Ledger {
   const original = ledger.entries.find((entry) => entry.id === replacement.id);
   if (!original) throw new Error("Unknown entry");
+  if (original.kind === "adjustment" || replacement.kind === "adjustment")
+    throw new Error(
+      "Balance adjustments are immutable; cancel and create a new adjustment",
+    );
   const linked = ledger.entries.filter(
     (entry) => entry.relatedEntryId === original.id && !entry.voided,
   );
@@ -417,6 +473,62 @@ export function replaceEntry(ledger: Ledger, replacement: Entry): Ledger {
     entries: ledger.entries.map((entry) =>
       entry.id === updated.id ? updated : entry,
     ),
+  });
+}
+
+export function replaceExpenseAndSettlements(
+  ledger: Ledger,
+  replacement: Entry,
+): Ledger {
+  const original = ledger.entries.find((entry) => entry.id === replacement.id);
+  if (!original) throw new Error("Unknown entry");
+  const linked = ledger.entries.filter(
+    (entry) => entry.relatedEntryId === original.id,
+  );
+  if (original.kind !== "expense" || !linked.length)
+    return replaceEntry(ledger, replacement);
+  const beforeWorks = entryWorkIds(original).sort();
+  const afterWorks = entryWorkIds(replacement).sort();
+  const moved = JSON.stringify(beforeWorks) !== JSON.stringify(afterWorks);
+  if (
+    replacement.kind !== "expense" ||
+    original.account !== replacement.account ||
+    original.contractId !== replacement.contractId ||
+    (original.personId !== replacement.personId &&
+      original.personId !== null) ||
+    (moved && (beforeWorks.length !== 1 || afterWorks.length !== 1))
+  )
+    throw new Error("Linked payment: keep the same person, account and work");
+  if (!moved && original.personId === replacement.personId)
+    return replaceEntry(ledger, replacement);
+  const now = new Date().toISOString();
+  const revise = (entry: Entry, next: Entry): Entry => ({
+    ...next,
+    provenance: next.provenance ?? entry.provenance,
+    updatedAt: now,
+    revisions: [
+      ...entry.revisions,
+      { at: now, before: EntryCoreSchema.parse(entry) },
+    ],
+  });
+  const linkedIds = new Set(linked.map((entry) => entry.id));
+  return validateLedger({
+    ...ledger,
+    entries: ledger.entries.map((entry) => {
+      if (entry.id === original.id) return revise(original, replacement);
+      if (!linkedIds.has(entry.id)) return entry;
+      // Cancelled settlements still share the bill's identity if restored later.
+      return revise(entry, {
+        ...entry,
+        personId: replacement.personId,
+        lines: entry.lines.map((line) =>
+          moved ? { ...line, workId: afterWorks[0] } : line,
+        ),
+        allocations: entry.allocations.map((allocation) =>
+          moved ? { ...allocation, workId: afterWorks[0] } : allocation,
+        ),
+      });
+    }),
   });
 }
 

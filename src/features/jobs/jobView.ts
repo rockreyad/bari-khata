@@ -1,4 +1,17 @@
-import type { Contract, ContractStatus, Ledger } from "../../domain/model";
+import type {
+  Contract,
+  ContractStatus,
+  Entry,
+  Ledger,
+} from "../../domain/model";
+import { adjustmentBalanceDelta } from "../../domain/adjustmentMath";
+
+const transactionDay = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Dhaka",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 
 export function jobName(
   job: Pick<Contract, "title">,
@@ -8,7 +21,32 @@ export function jobName(
   return job.title || t("কাজ");
 }
 
-export function recentJobs(jobs: Contract[]) {
+export function recentJobs(jobs: Contract[], entries: Entry[]) {
+  const byId = new Map(jobs.map((job) => [job.id, job]));
+  const transactions = new Map<string, { at: number; addedAt: number }>();
+  for (const entry of entries) {
+    if (entry.voided || !entry.contractId) continue;
+    const job = byId.get(entry.contractId);
+    if (!job || entry.personId !== job.personId) continue;
+    const addedAt = Date.parse(entry.createdAt) || 0;
+    let date = entry.date;
+    if (!date && addedAt) {
+      const parts = transactionDay.formatToParts(new Date(addedAt));
+      date = ["year", "month", "day"]
+        .map((type) => parts.find((part) => part.type === type)!.value)
+        .join("-");
+    }
+    const at = Date.parse(date || "") || 0;
+    const previous = transactions.get(job.id);
+    if (
+      !previous ||
+      at > previous.at ||
+      (at === previous.at && addedAt > previous.addedAt)
+    )
+      transactions.set(job.id, { at, addedAt });
+  }
+  const statusRank = (job: Contract) =>
+    job.status === "ongoing" ? 0 : job.status === "done" ? 2 : 1;
   const stamp = (job: Contract) => {
     let latest = 0;
     for (const events of [job.activity, job.history])
@@ -17,8 +55,22 @@ export function recentJobs(jobs: Contract[]) {
     return latest || Date.parse(job.agreedOn ?? "") || 0;
   };
   return jobs
-    .map((job, index) => ({ job, index, at: stamp(job) }))
-    .sort((a, b) => b.at - a.at || a.index - b.index)
+    .map((job, index) => ({
+      job,
+      index,
+      at: stamp(job),
+      transaction: transactions.get(job.id),
+    }))
+    .sort(
+      (a, b) =>
+        statusRank(a.job) - statusRank(b.job) ||
+        Number(Boolean(b.transaction)) - Number(Boolean(a.transaction)) ||
+        (a.transaction && b.transaction
+          ? b.transaction.at - a.transaction.at ||
+            b.transaction.addedAt - a.transaction.addedAt
+          : b.at - a.at) ||
+        a.index - b.index,
+    )
     .map((row) => row.job);
 }
 
@@ -47,16 +99,36 @@ export type JobBalance = {
 export function jobBalances(ledger: Ledger): Map<string, JobBalance> {
   const jobs = new Map(ledger.contracts.map((job) => [job.id, job]));
   const paid = new Map<string, bigint>();
+  const billed = new Map<string, bigint>();
+  const adjustments = new Map<string, bigint>();
   for (const entry of ledger.entries) {
     if (
       entry.voided ||
       entry.balanceImpact === "historical" ||
-      !entry.contractId ||
-      (entry.kind !== "payment" && entry.kind !== "refund")
+      !entry.contractId
     )
       continue;
     const job = jobs.get(entry.contractId);
     if (!job || entry.personId !== job.personId) continue;
+    if (entry.kind === "adjustment") {
+      adjustments.set(
+        job.id,
+        (adjustments.get(job.id) ?? 0n) + BigInt(adjustmentBalanceDelta(entry)),
+      );
+      continue;
+    }
+    if (entry.kind === "expense" || entry.kind === "expense_credit") {
+      const amount = entry.lines.reduce(
+        (sum, line) => sum + BigInt(line.amount),
+        0n,
+      );
+      billed.set(
+        job.id,
+        (billed.get(job.id) ?? 0n) +
+          (entry.kind === "expense_credit" ? -amount : amount),
+      );
+      continue;
+    }
     const amount = entry.paymentParts.reduce(
       (sum, part) => sum + BigInt(part.amount),
       0n,
@@ -70,7 +142,10 @@ export function jobBalances(ledger: Ledger): Map<string, JobBalance> {
   return new Map(
     ledger.contracts.map((job) => {
       const net = paid.get(job.id) ?? 0n;
-      const difference = BigInt(job.total) - net;
+      const agreed = BigInt(job.total),
+        cost = billed.get(job.id) ?? 0n;
+      const difference =
+        (agreed > cost ? agreed : cost) + (adjustments.get(job.id) ?? 0n) - net;
       const remaining = difference > 0n ? difference : 0n;
       const extra = difference < 0n ? -difference : 0n;
       return [
@@ -90,4 +165,23 @@ export function jobBalances(ledger: Ledger): Map<string, JobBalance> {
       ];
     }),
   );
+}
+
+export function jobBalanceTotals(ledger: Ledger, contracts: Contract[]) {
+  const balances = jobBalances(ledger);
+  let remaining = 0n,
+    extra = 0n;
+  for (const contract of contracts) {
+    if (contract.archivedAt) continue;
+    const balance = balances.get(contract.id);
+    if (!balance?.valid) return { remaining: 0, extra: 0, valid: false };
+    remaining += BigInt(balance.remaining);
+    extra += BigInt(balance.extra);
+  }
+  const maximum = BigInt(Number.MAX_SAFE_INTEGER);
+  return {
+    remaining: remaining <= maximum ? Number(remaining) : 0,
+    extra: extra <= maximum ? Number(extra) : 0,
+    valid: remaining <= maximum && extra <= maximum,
+  };
 }

@@ -681,6 +681,7 @@
   gap: 8px;
 }
 .small-switch > button {
+  min-height: 44px;
   border: 1px solid var(--line);
   background: var(--surface);
   border-radius: 9px;
@@ -689,9 +690,10 @@
   color: var(--muted);
 }
 .small-switch > button.selected {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
-  background: var(--accent-soft);
-  color: var(--accent);
+  border-color: var(--line);
+  background: var(--surface-muted);
+  color: var(--accent-strong);
+  font-weight: 600;
 }
 .entry-amount-label {
   gap: 8px !important;

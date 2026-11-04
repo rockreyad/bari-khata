@@ -10,12 +10,30 @@
 }
 .entry-page-form .expense-sections {
   background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 18px;
+}
+.entry-page-form .expense-sections > button {
+  min-height: 48px;
+  border: 1px solid transparent;
+}
+.entry-page-form .expense-sections > button[aria-pressed="true"] {
+  background: transparent;
+  color: var(--accent-strong);
+  font-weight: 650;
+  box-shadow: none;
+}
+.entry-page-form .expense-sections > button:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+.entry-page-form .expense-sections > button:hover:not(:disabled) {
+  background: var(--surface-muted);
 }
 .entry-page-form .entry-amount-wrap {
   border-radius: 22px;
   min-height: 102px;
-  background: var(--accent-soft);
+  background: var(--surface-muted);
 }
 .entry-page-form .purchase-line-v3 {
   gap: 18px;
@@ -30,19 +48,19 @@
   gap: 6px;
   padding: 5px;
   border: 1px solid var(--line);
-  background: var(--surface-soft, var(--surface));
+  background: var(--surface-muted);
   border-radius: 16px;
 }
 .entry-intent-options > button {
   flex: 1;
-  min-height: 43px;
+  min-height: 44px;
   padding: 9px 10px;
   border-radius: 11px;
   font-size: 13px;
   color: var(--muted);
 }
 .entry-intent-options > button.selected {
-  background: var(--accent-soft);
+  background: var(--surface);
   color: var(--accent-strong);
   font-weight: 600;
 }
@@ -88,7 +106,7 @@
 .entry-balance-result > strong {
   font-size: 23px;
   font-weight: 650;
-  color: var(--accent-strong);
+  color: var(--text);
   overflow-wrap: anywhere;
 }
 .entry-page-form .cash-purpose-v3 {

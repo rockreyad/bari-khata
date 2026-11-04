@@ -1,4 +1,8 @@
 export const reviewEnglish: Record<string, string> = {
+  "একই হিসাবে মজুরি ও অন্য খরচ রাখা যায় না। সব লাইনের ধরন মিলিয়ে নিন।":
+    "Wages and other costs cannot be mixed in one entry. Check every line's category.",
+  "এই হিসাবের সঙ্গে বিল, পরিশোধ বা চুক্তি যুক্ত আছে। এখানে হিসাবের খাত বদলানো যাবে না।":
+    "This entry has a linked bill, payment or agreement. Its account cannot be changed here.",
   "এখনও পুরোনো হিসাব নেই": "No historical entries yet",
   "পুরোনো হিসাব গুছিয়ে নিই": "Organize past entries",
   "মালের নাম ও খরচের ধরন ঠিক করে রাখুন।":
