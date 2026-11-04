@@ -13,6 +13,7 @@ import { MemoryRouter, useLocation } from "react-router";
 import { LedgerSchema, type Ledger } from "../../domain/model";
 import { readPreferences, savePreferences } from "../../lib/preferences";
 import { SettingsPage } from "./SettingsPage";
+import { APP_VERSION } from "../../lib/appVersion";
 
 const api = vi.hoisted(() => ({
   ledger: null as unknown,
@@ -114,6 +115,11 @@ function mount() {
     </MemoryRouter>,
   );
 }
+
+it("shows the version of the running app in settings", () => {
+  mount();
+  expect(screen.getByText(`সংস্করণ ${APP_VERSION}`)).toBeTruthy();
+});
 async function openRow(
   user: ReturnType<typeof userEvent.setup>,
   label: string,

@@ -12,6 +12,13 @@ export function usePwa(canReload = allowReload) {
   useEffect(() => {
     mounted.current = true;
     let active = true;
+    let checkTimer: ReturnType<typeof setInterval> | undefined;
+    const checkForUpdate = () => {
+      if (active) void registration.current?.update().catch(() => {});
+    };
+    const checkWhenVisible = () => {
+      if (document.visibilityState === "visible") checkForUpdate();
+    };
     const register = async () => {
       try {
         const worker = await navigator.serviceWorker.register("/sw.js", {
@@ -31,15 +38,23 @@ export function usePwa(canReload = allowReload) {
               setNeedRefresh(true);
           });
         });
-        void worker.update().catch(() => {});
+        checkForUpdate();
       } catch {
         /* a failed install keeps the current offline copy */
       }
     };
-    if (import.meta.env.PROD && "serviceWorker" in navigator) void register();
+    if (import.meta.env.PROD && "serviceWorker" in navigator) {
+      window.addEventListener("online", checkForUpdate);
+      document.addEventListener("visibilitychange", checkWhenVisible);
+      checkTimer = setInterval(checkWhenVisible, 60 * 60 * 1000);
+      void register();
+    }
     return () => {
       active = false;
       mounted.current = false;
+      window.removeEventListener("online", checkForUpdate);
+      document.removeEventListener("visibilitychange", checkWhenVisible);
+      clearInterval(checkTimer);
       for (const listener of reloadListeners.current)
         navigator.serviceWorker?.removeEventListener(
           "controllerchange",

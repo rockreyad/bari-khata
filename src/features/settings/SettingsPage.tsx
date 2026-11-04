@@ -35,6 +35,7 @@ import {
 import type { Ledger } from "../../domain/model";
 import { isCloudConfigured, resolveCloudConflict } from "../../data/sync";
 import { saveFile, todayDhaka } from "../../lib/display";
+import { APP_VERSION } from "../../lib/appVersion";
 import {
   applyPalette,
   applyTheme,
@@ -457,6 +458,8 @@ export function SettingsPage() {
       <p className="settings-footer-note">
         <ShieldCheck size={14} aria-hidden="true" />
         <span>{t("নিজের হিসাব, নিজের কাছে।")}</span>
+        <span aria-hidden="true">·</span>
+        <span>{t("সংস্করণ {{version}}", { version: APP_VERSION })}</span>
       </p>
       <input
         ref={input}

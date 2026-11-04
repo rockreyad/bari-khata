@@ -61,7 +61,7 @@ function open(email?: string) {
 it("offers an explicit update for a waiting worker only on an empty sign-in form", async () => {
   const user = userEvent.setup();
   open();
-  const update = screen.getByRole("button", { name: "আপডেট" });
+  const update = screen.getByRole("button", { name: "আপডেট করুন" });
   expect(update.closest("form")).toBeNull();
   expect(api.canReload()).toBe(true);
   expect(api.update).not.toHaveBeenCalled();
@@ -74,7 +74,7 @@ it("offers an explicit update for a waiting worker only on an empty sign-in form
 it("has no login update notice without a waiting worker", () => {
   api.waiting = false;
   open();
-  expect(screen.queryByRole("button", { name: "আপডেট" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "আপডেট করুন" })).toBeNull();
 });
 
 it("hides the action and blocks delayed reload while a phone number or PIN challenge exists", async () => {
@@ -84,7 +84,7 @@ it("hides the action and blocks delayed reload while a phone number or PIN chall
     screen.getByLabelText("ফোন নম্বর", { exact: true }),
     "01712345678",
   );
-  expect(screen.queryByRole("button", { name: "আপডেট" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "আপডেট করুন" })).toBeNull();
   expect(api.canReload()).toBe(false);
   await user.click(screen.getByRole("button", { name: "এগিয়ে যাই" }));
   const pin = await screen.findByLabelText("প্রবেশের কোড", { exact: true });
@@ -92,7 +92,7 @@ it("hides the action and blocks delayed reload while a phone number or PIN chall
   expect(api.canReload()).toBe(false);
   await user.type(pin, "1318");
   expect((pin as HTMLInputElement).value).toBe("1318");
-  expect(screen.queryByRole("button", { name: "আপডেট" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "আপডেট করুন" })).toBeNull();
   expect(api.update).not.toHaveBeenCalled();
 });
 
@@ -103,7 +103,7 @@ it("keeps both email and password safe, including hidden phone input from anothe
   await user.type(phone, "01712345678");
   await user.click(screen.getByRole("button", { name: "ইমেইল" }));
   expect(api.canReload()).toBe(false);
-  expect(screen.queryByRole("button", { name: "আপডেট" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "আপডেট করুন" })).toBeNull();
   await user.click(screen.getByRole("button", { name: "ফোন নম্বর" }));
   await user.clear(screen.getByLabelText("ফোন নম্বর", { exact: true }));
   await user.click(screen.getByRole("button", { name: "ইমেইল" }));
@@ -114,17 +114,17 @@ it("keeps both email and password safe, including hidden phone input from anothe
   await user.clear(email);
   expect(api.canReload()).toBe(false);
   expect((password as HTMLInputElement).value).toBe("not-a-real-password");
-  expect(screen.queryByRole("button", { name: "আপডেট" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "আপডেট করুন" })).toBeNull();
   await user.clear(password);
   expect(api.canReload()).toBe(true);
-  expect(screen.getByRole("button", { name: "আপডেট" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "আপডেট করুন" })).toBeTruthy();
   expect(api.update).not.toHaveBeenCalled();
 });
 
 it("protects a login email supplied from another account route", () => {
   open("owner@example.com");
   expect(api.canReload()).toBe(false);
-  expect(screen.queryByRole("button", { name: "আপডেট" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "আপডেট করুন" })).toBeNull();
   expect(
     (screen.getByLabelText("ইমেইল", { exact: true }) as HTMLInputElement).value,
   ).toBe("owner@example.com");
