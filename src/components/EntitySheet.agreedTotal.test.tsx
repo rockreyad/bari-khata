@@ -130,6 +130,7 @@ it("keeps an edited professional description and its preset draft through Indexe
       name: "নমুনা পরামর্শক",
       role: "নমুনা বিশেষ নকশা পরামর্শ",
       kind: "worker",
+      contactType: "professional",
       quickActions: ["payment"],
     },
   );
@@ -144,7 +145,7 @@ it("keeps an edited professional description and its preset draft through Indexe
   await ready();
   expect(
     (screen.getByLabelText("কীভাবে যুক্ত") as HTMLSelectElement).value,
-  ).toBe("");
+  ).toBe("professional");
   expect(
     (screen.getByLabelText("পরিচয় / কী কাজ করেন") as HTMLInputElement).value,
   ).toBe("নমুনা বিশেষ নকশা পরামর্শ");

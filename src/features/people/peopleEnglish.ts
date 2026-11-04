@@ -1,4 +1,21 @@
 export const peopleEnglish: Record<string, string> = {
+  "ধরন: {{kind}}": "Type: {{kind}}",
+  "পরিচয়: {{role}}": "Description: {{role}}",
+  "ধরনের বাছাই মুছুন": "Clear type filter",
+  "পরিচয়ের বাছাই মুছুন": "Clear description filter",
+  "ধরন অনুযায়ী": "By type",
+  "ধরন অনুযায়ী বাছাই": "Filter by type",
+  "ধরন বাছা হয়নি": "Type not selected",
+  "আগে যোগ করা নামগুলোর ধরন থেকে বেছে নিন।":
+    "Choose from the types of contacts already added.",
+  "সবাই-এর পাশে সর্বোচ্চ {{count}}টি ধরন রাখতে পারবেন।":
+    "Keep up to {{count}} types beside Everyone.",
+  "ধরন খুঁজুন": "Search types",
+  "এই ধরনের কোনো নাম যোগ করা নেই।": "No contacts have this type.",
+  "নাম যোগ করার সময় কীভাবে যুক্ত বেছে নিলে এখানে পাওয়া যাবে।":
+    "Choose a relationship when adding a contact to find its type here.",
+  "অন্য ধরন রাখতে আগে একটি সরিয়ে নিন।":
+    "Remove one type before adding another.",
   "সব হিসাব": "All accounts",
   "পরিচয় বদলালেও আগের বিল ও দেওয়া টাকার হিসাব বদলাবে না।":
     "Changing the contact type keeps existing bills and payments unchanged.",

@@ -36,6 +36,11 @@ import {
 } from "../domain/entityDeletion.js";
 import { preservesPaymentPurposes } from "../domain/paymentPurposes.js";
 import { preservesPersonWorkLinks } from "../domain/personWorkLinks.js";
+import {
+  ContactTypeSchema,
+  contactPresetFrom,
+  preservesContactTypes,
+} from "../domain/contactTypes.js";
 import { preservesBalanceAdjustments } from "../domain/adjustmentHistory.js";
 import { canAssignContact } from "../domain/contacts.js";
 
@@ -124,6 +129,7 @@ const personFields = {
   role: z.string().max(200).default(""),
   phone: z.string().max(60).default(""),
   kind: z.enum(["worker", "shop", "driver", "other"]),
+  contact_type: ContactTypeSchema.nullable().optional(),
 };
 const workFields = {
   name: Name,
@@ -164,6 +170,7 @@ const personChanges = z
     role: z.string().max(200).optional(),
     phone: z.string().max(60).optional(),
     kind: personFields.kind.optional(),
+    contact_type: personFields.contact_type,
   })
   .strict();
 const workChanges = z
@@ -1061,14 +1068,33 @@ export function applyMcpCommand(
     )
       amountPaisa = Math.max(entryTotal(before), entryTotal(after));
   } else if (command.type === "create_person") {
-    const person = PersonSchema.parse({ ...command, id: uuid() });
+    const person = PersonSchema.parse({
+      ...command,
+      id: uuid(),
+      ...(command.contact_type !== undefined
+        ? { contactType: command.contact_type }
+        : {}),
+    });
     ledger.people.push(person);
     affected(person.id);
   } else if (command.type === "update_person") {
     const person = active(ledger.people, command.person_id, "person");
     ledger.people = ledger.people.map((value) =>
       value.id === person.id
-        ? PersonSchema.parse({ ...person, ...command.changes })
+        ? PersonSchema.parse({
+            ...person,
+            ...command.changes,
+            ...(command.changes.contact_type !== undefined
+              ? { contactType: command.changes.contact_type }
+              : command.changes.kind && command.changes.kind !== person.kind
+                ? {
+                    contactType: contactPresetFrom(
+                      command.changes.kind,
+                      command.changes.role ?? person.role,
+                    ).id,
+                  }
+                : {}),
+          })
         : value,
     );
     affected(person.id);
@@ -1213,6 +1239,7 @@ export function applyMcpCommand(
     !preservesContractHistory(current, ledger) ||
     !preservesWorkHistory(current, ledger) ||
     !preservesPersonWorkLinks(current, ledger) ||
+    !preservesContactTypes(current, ledger) ||
     !preservesBalanceAdjustments(current, ledger) ||
     !preservesRemovalHistory(current, ledger) ||
     !preservesPaymentPurposes(current, ledger)
