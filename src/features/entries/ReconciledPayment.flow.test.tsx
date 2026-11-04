@@ -6,7 +6,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LedgerSchema, type Ledger } from "../../domain/model";
 import { appendBalanceAdjustment } from "../../domain/balanceAdjustments";
-import { contactAccountSummary } from "../../domain/contacts";
+import { contactAccountSummary, contactSummary } from "../../domain/contacts";
 import {
   getAccountDatabase,
   setActiveOwner,
@@ -97,6 +97,168 @@ function fixture() {
     ],
   });
 }
+
+it("keeps a professional's reconciled jobs separate from a custom partial labour bill and its later settlement", async () => {
+  const source = fixture();
+  const original = LedgerSchema.parse({
+    ...source,
+    people: [{ ...source.people[0], kind: "other", role: "নমুনা ইঞ্জিনিয়ার" }],
+    contracts: source.contracts.map((job, index) => ({
+      ...job,
+      total: [100000, 150000][index],
+    })),
+    entries: source.entries.map((entry, index) => ({
+      ...entry,
+      allocations: [
+        { ...entry.allocations[0], amount: [110000, 160000][index] },
+      ],
+      paymentParts: [
+        { ...entry.paymentParts[0], amount: [110000, 160000][index] },
+      ],
+    })),
+  });
+  const adjusted = appendBalanceAdjustment(
+    original,
+    {
+      target: "person",
+      basis: "paid",
+      personId: "worker",
+      account: "labour",
+      expectedBefore: 270000,
+      after: 250000,
+      reason: "নমুনা কাজগুলোর দেওয়া মোট মিলিয়েছি",
+    },
+    "2026-11-04T08:00:00.000Z",
+  );
+  const owner = crypto.randomUUID();
+  setActiveOwner(owner);
+  const database = getAccountDatabase(owner);
+  databases.push(database);
+  const repo = new LedgerRepository(database);
+  await repo.ensure("real", adjusted);
+  context.ledger = adjusted;
+  context.close.mockReset();
+  context.notify.mockReset();
+  context.save.mockReset().mockImplementation(async (change) => {
+    await repo.save(change);
+    context.ledger = (await repo.read())!.ledger;
+  });
+  expect(contactSummary(adjusted, adjusted.people[0])).toMatchObject({
+    reconciledPayable: 0,
+    reconciledAdvance: 0,
+  });
+  const user = userEvent.setup();
+  const options = {
+    kind: "payment",
+    personId: "worker",
+    account: "labour",
+  } as const;
+  let view = render(<QuickEntrySheet presentation="page" options={options} />);
+  await ready("রাখুন");
+  await user.click(screen.getByRole("button", { name: "নতুন বিল ও টাকা" }));
+  await user.selectOptions(screen.getByLabelText("কাজের খাতা"), "roof");
+  await user.selectOptions(screen.getByLabelText("কিসের টাকা"), "__new__");
+  await user.type(screen.getByLabelText("কিসের টাকা লিখুন"), "নমুনা নকশা দেখা");
+  await user.selectOptions(screen.getByLabelText("কোন হিসাবের অংশ"), "labour");
+  await user.type(screen.getByLabelText("কত টাকা"), "300");
+  await user.click(screen.getByRole("button", { name: "টাকা লিখি" }));
+  await user.type(screen.getByLabelText("এখন কত দিলেন"), "120");
+  expect(
+    view.container.querySelector(".entry-balance-items")?.textContent,
+  ).not.toContain("আগের বাকি");
+  expect(
+    view.container.querySelector(".entry-balance-result")?.textContent,
+  ).toBe("বাকি থাকবে180");
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(context.close).toHaveBeenCalledOnce());
+  view.unmount();
+  database.close();
+  await database.open();
+  const partial = (await repo.read())!.ledger;
+  expect(partial.entries.slice(0, adjusted.entries.length)).toEqual(
+    adjusted.entries,
+  );
+  expect(partial.contracts).toEqual(original.contracts);
+  expect(partial.people).toEqual(original.people);
+  expect(partial.entries).toHaveLength(5);
+  expect(partial.paymentPurposes).toHaveLength(1);
+  expect(partial.paymentPurposes[0]).toMatchObject({
+    name: "নমুনা নকশা দেখা",
+    account: "labour",
+  });
+  const bill = partial.entries[3];
+  expect(bill).toMatchObject({
+    kind: "expense",
+    account: "labour",
+    contractId: null,
+    paymentPurposeId: null,
+    lines: [
+      {
+        workId: "roof",
+        label: "নমুনা নকশা দেখা",
+        amount: 30000,
+        costType: "labour",
+      },
+    ],
+  });
+  expect(partial.entries[4]).toMatchObject({
+    kind: "payment",
+    relatedEntryId: bill.id,
+    paymentPurposeId: partial.paymentPurposes[0].id,
+    allocations: [{ workId: "roof", amount: 12000 }],
+  });
+  expect(contactSummary(partial, partial.people[0])).toMatchObject({
+    actualCost: 30000,
+    actualPaid: 282000,
+    reconciledNetPaid: 262000,
+    reconciledPayable: 18000,
+    reconciledAdvance: 0,
+  });
+  context.ledger = partial;
+  view = render(
+    <QuickEntrySheet
+      presentation="page"
+      options={{ ...options, purpose: "settle" }}
+    />,
+  );
+  await ready("রাখুন");
+  await user.selectOptions(screen.getByLabelText("কাজের খাতা"), "roof");
+  await user.selectOptions(screen.getByLabelText("কাজ"), "");
+  expect(
+    screen.getByText(
+      "কিছু মজুরির বিল কোন কাজের, তা মেলানো নেই। কাজ বেছে নিয়ে হিসাব দেখুন।",
+    ),
+  ).toBeTruthy();
+  expect(view.container.querySelector(".entry-balance-preview")).toBeNull();
+  await user.type(screen.getByLabelText("কত টাকা"), "180");
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(context.close).toHaveBeenCalledTimes(2));
+  view.unmount();
+  database.close();
+  await database.open();
+  const settled = (await repo.read())!.ledger;
+  expect(settled.entries.slice(0, partial.entries.length)).toEqual(
+    partial.entries,
+  );
+  expect(
+    settled.entries.filter((entry) => entry.kind === "expense"),
+  ).toHaveLength(1);
+  expect(contactSummary(settled, settled.people[0])).toMatchObject({
+    actualCost: 30000,
+    actualPaid: 300000,
+    reconciledNetPaid: 280000,
+    reconciledPayable: 0,
+    reconciledAdvance: 0,
+  });
+  const restoredDatabase = new LedgerDatabase(
+    `patch-013-${crypto.randomUUID()}`,
+  );
+  databases.push(restoredDatabase);
+  const restoredRepo = new LedgerRepository(restoredDatabase);
+  await restoredRepo.ensure("real", LedgerSchema.parse({}));
+  await restoredRepo.importBackup(await repo.exportBackup(), { replace: true });
+  expect((await restoredRepo.read())!.ledger).toEqual(settled);
+});
 
 it.each([
   { purpose: "wage", label: "কাজের টাকা", advance: 0, cost: 10000 },
