@@ -1,8 +1,20 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { Suspense } from "react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, useLocation, useNavigate } from "react-router";
+import {
+  BrowserRouter,
+  MemoryRouter,
+  useLocation,
+  useNavigate,
+} from "react-router";
 import { LedgerSchema, type Ledger } from "../../domain/model";
 import { LedgerPage } from "./LedgerPage";
 
@@ -354,4 +366,76 @@ it("follows URL navigation and clears only the query without losing search focus
   await user.click(screen.getByRole("button", { name: "Forward" }));
   expect(input.value).toBe("বালি");
   expect(container.querySelectorAll(".history-row")).toHaveLength(30);
+});
+
+it("keeps the latest composed text when an older BrowserRouter transition finishes later", async () => {
+  state.ledger = fixture();
+  const originalURL = window.location.href;
+  window.history.replaceState(null, "", "/ledger?work=w&order=oldest");
+  let previousReady = false;
+  let finalReady = false;
+  let resolvePrevious!: () => void;
+  let resolveFinal!: () => void;
+  const previous = new Promise<void>((resolve) => {
+    resolvePrevious = resolve;
+  });
+  const final = new Promise<void>((resolve) => {
+    resolveFinal = resolve;
+  });
+  function SearchGate() {
+    const query = new URLSearchParams(useLocation().search).get("q");
+    if (query === "সি" && !previousReady) throw previous;
+    if (query === "সিমেন্ট" && !finalReady) throw final;
+    return null;
+  }
+  try {
+    render(
+      <BrowserRouter>
+        <Suspense fallback={<p>Loading search</p>}>
+          <LedgerPage />
+          <Location />
+          <SearchGate />
+        </Suspense>
+      </BrowserRouter>,
+    );
+    const input = screen.getByRole("searchbox", {
+      name: "হিসাব খুঁজুন",
+    }) as HTMLInputElement;
+    await userEvent.click(input);
+    fireEvent.change(input, { target: { value: "সি" } });
+    expect(input.value).toBe("সি");
+    expect(
+      new URLSearchParams(screen.getByTestId("location").textContent ?? "").get(
+        "q",
+      ),
+    ).toBeNull();
+    fireEvent.compositionStart(input);
+    fireEvent.change(input, { target: { value: "সিমে" } });
+    fireEvent.compositionEnd(input, {
+      data: "ন্ট",
+      target: { value: "সিমেন্ট" },
+    });
+    expect(input.value).toBe("সিমেন্ট");
+
+    await act(async () => {
+      previousReady = true;
+      resolvePrevious();
+    });
+    expect(input.value).toBe("সিমেন্ট");
+    expect(document.activeElement).toBe(input);
+
+    await act(async () => {
+      finalReady = true;
+      resolveFinal();
+    });
+    expect(input.value).toBe("সিমেন্ট");
+    expect(document.activeElement).toBe(input);
+    expect(
+      new URLSearchParams(screen.getByTestId("location").textContent ?? "").get(
+        "q",
+      ),
+    ).toBe("সিমেন্ট");
+  } finally {
+    window.history.replaceState(null, "", originalURL);
+  }
 });
