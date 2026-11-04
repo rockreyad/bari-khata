@@ -1658,7 +1658,10 @@ h3 {
     top: 0;
     z-index: 40;
     height: 66px;
-    padding: env(safe-area-inset-top, 0) 20px 0;
+    padding: env(safe-area-inset-top, 0px)
+      max(18px, env(safe-area-inset-right, 0px)) 0
+      max(18px, env(safe-area-inset-left, 0px));
+    gap: 12px;
     background: color-mix(in srgb, var(--surface) 92%, transparent);
     backdrop-filter: blur(16px);
   }
@@ -1667,29 +1670,41 @@ h3 {
   }
   .mobile-brand {
     display: flex;
+    flex: none;
     align-items: center;
     gap: 8px;
     font-size: 19px;
     font-weight: 700;
     color: var(--text);
     padding: 0;
+    white-space: nowrap;
   }
   .mobile-brand svg {
     color: var(--accent);
   }
   .topbar-actions {
+    min-width: 0;
     gap: 8px;
   }
   .sync-indicator {
+    min-width: 0;
+    padding: 0;
     font-size: 10px;
     gap: 5px;
+  }
+  .sync-indicator span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .sync-indicator svg {
     width: 17px;
   }
   .settings-link {
-    width: 32px;
-    min-width: 32px;
+    flex: none;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
   }
   .app-content {
     padding: 24px 18px calc(110px + env(safe-area-inset-bottom, 0));
@@ -2150,6 +2165,10 @@ h3 {
   }
 }
 @media (max-width: 370px) {
+  .app-topbar {
+    padding-left: max(14px, env(safe-area-inset-left, 0px));
+    padding-right: max(14px, env(safe-area-inset-right, 0px));
+  }
   .app-content {
     padding-left: 14px;
     padding-right: 14px;
