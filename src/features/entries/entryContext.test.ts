@@ -41,7 +41,7 @@ const base = () =>
     ],
   });
 describe("entry context", () => {
-  it("clears a prior worker agreement when choosing a new or unnamed person", () => {
+  it("clears a prior worker agreement while preserving the globally chosen payment reason", () => {
     const ledger = base();
     const saved = entryContext(ledger, { kind: "payment", personId: "worker" });
     saved.contractId = "old-contract";
@@ -50,7 +50,7 @@ describe("entry context", () => {
       expect(entryContactChange(ledger, saved, id)).toMatchObject({
         personId: id,
         contractId: "",
-        paymentPurposeId: "",
+        paymentPurposeId: "old-purpose",
       });
   });
   it("upgrades only an untouched blank row in an older context draft without discarding draft identity", () => {

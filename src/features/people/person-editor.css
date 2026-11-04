@@ -38,65 +38,13 @@
   font-size: 16px;
 }
 .person-editor-form .entity-fields-v3 {
-  gap: 18px;
-}
-.person-editor-kind {
-  min-width: 0;
-  margin: 0 0 2px;
-  padding: 0;
-  border: 0;
-}
-.person-editor-kind > legend {
-  margin-bottom: 12px;
-  padding: 0;
-  font-size: 13px;
-  font-weight: 550;
-  color: var(--muted);
-}
-.person-editor-kind-options {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 9px;
-}
-.person-editor-kind-options > button {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-width: 0;
-  min-height: 100px;
-  padding: 16px 10px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
-}
-.person-editor-kind-options > button[aria-pressed="true"] {
-  border-color: var(--text);
-  background: var(--text);
-  color: var(--surface);
-}
-.person-editor-kind-options > button > svg {
-  flex: none;
-}
-.person-editor-kind-check {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
+  gap: 12px;
 }
 .person-editor-section {
   display: grid;
-  gap: 20px;
+  gap: 16px;
   min-width: 0;
-  padding: 23px;
+  padding: 18px;
   border: 1px solid var(--line);
   border-radius: 20px;
   background: var(--surface);
@@ -137,7 +85,7 @@
   font-weight: 500;
 }
 .person-editor-form input:not([type="checkbox"]),
-.person-editor-form .app-select-trigger {
+.person-editor-form .app-select {
   min-height: 48px;
   padding: 11px 13px;
   border: 1px solid var(--line);
@@ -304,8 +252,8 @@
   display: flex;
   align-items: center;
   gap: 13px;
-  min-height: 76px;
-  padding: 17px 21px;
+  min-height: 60px;
+  padding: 14px 18px;
   list-style: none;
   cursor: pointer;
 }
@@ -368,7 +316,6 @@
   border-color: color-mix(in srgb, var(--text) 25%, var(--line));
   background: var(--surface-muted);
 }
-.person-editor-kind-options button:focus-visible,
 .person-editor-action-options button:focus-visible,
 .person-editor-disclosure > summary:focus-visible {
   outline: 2px solid var(--accent);
@@ -385,33 +332,10 @@
   .person-editor-page .entry-page-header h1 {
     font-size: 19px;
   }
-  .person-editor-kind-options {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-  .person-editor-kind-options > button {
-    flex-direction: row;
-    justify-content: flex-start;
-    gap: 10px;
-    min-height: 60px;
-    padding: 12px;
-    border-radius: 13px;
-    font-size: 12px;
-  }
-  .person-editor-kind-options > button > svg {
-    width: 21px;
-    height: 21px;
-  }
-  .person-editor-kind-check {
-    top: 6px;
-    right: 6px;
-    width: 12px;
-    height: 12px;
-  }
   .person-editor-section {
-    gap: 19px;
-    padding: 20px 17px;
-    border-radius: 18px;
+    gap: 16px;
+    padding: 18px 16px;
+    border-radius: 16px;
   }
   .person-editor-identity > header {
     align-items: baseline;

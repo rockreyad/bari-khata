@@ -249,14 +249,18 @@ describe("contact identities and financial accounts", () => {
       ),
     ).toBe("other");
   });
-  it("allows only useful chosen shortcuts, including intentionally hiding them all", () => {
+  it("honours explicitly chosen shortcuts independently of identity, including hiding them all", () => {
     const worker = PersonSchema.parse({
       id: "w",
       name: "রহিম",
       kind: "worker",
       quickActions: ["payment", "return", "purchase"],
     });
-    expect(allowedContactActions(worker)).toEqual(["payment"]);
+    expect(allowedContactActions(worker)).toEqual([
+      "payment",
+      "return",
+      "purchase",
+    ]);
     expect(allowedContactActions({ ...worker, quickActions: [] })).toEqual([]);
     expect(
       allowedContactActions(
@@ -271,6 +275,22 @@ describe("contact identities and financial accounts", () => {
     const driver = PersonSchema.parse({ id: "d", name: "রনি", kind: "driver" });
     expect(defaultContactAccount(driver)).toBe("other");
     expect(allowedContactActions(driver)).toEqual(["payment", "transport"]);
+    const other = PersonSchema.parse({
+      id: "o",
+      name: "নমুনা ব্যক্তি",
+      kind: "other",
+    });
+    expect(allowedContactActions(other)).toEqual(["payment"]);
+    expect(defaultContactAccount(other)).toBe("other");
+    for (const kind of ["worker", "shop", "driver", "other"] as const) {
+      expect(
+        allowedContactActions({
+          ...other,
+          kind,
+          quickActions: ["purchase", "transport", "return", "payment"],
+        }),
+      ).toEqual(["purchase", "transport", "return", "payment"]);
+    }
   });
   it("never mixes a worker's old material voucher into the wage balance", () => {
     const ledger = LedgerSchema.parse({

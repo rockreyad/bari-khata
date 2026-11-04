@@ -36,9 +36,14 @@ import { savePersonWithContract } from "../domain/personContract";
 import { saveWorkChange } from "../domain/workActivity";
 import {
   allowedContactActions,
+  contactActionChoices,
   personKind,
-  roleActions,
 } from "../domain/contacts";
+import {
+  contactPresets,
+  contactPresetFor,
+  contactPresetFrom,
+} from "../features/people/contactPresets";
 import { parseAmount } from "../domain/ledger";
 import { Sheet } from "./Sheet";
 import { WorkMark, workIconChoices, workColorChoices } from "./ui/Icons";
@@ -69,7 +74,8 @@ const DraftSchema = z.object({
   status: z.enum(["planned", "ongoing", "done"]).default("planned"),
   startedOn: z.string().nullable().default(null),
   completedOn: z.string().nullable().default(null),
-  contactKind: z.enum(["worker", "shop", "driver", "other"]).default("shop"),
+  contactKind: z.enum(["worker", "shop", "driver", "other"]).default("other"),
+  contactPresetId: z.string().max(100).default("custom"),
   quickActions: z.array(z.string()).nullable().default(null),
   role: z.string().default(""),
   personWorkIds: z.array(z.string()).max(10000).default([]),
@@ -94,16 +100,6 @@ const DraftSchema = z.object({
   personContractAmount: numericDraftText(),
 });
 type Draft = z.infer<typeof DraftSchema>;
-const roleSuggestions = [
-  "সুইপার",
-  "লেবার",
-  "ঠিকাদার",
-  "ডিলার",
-  "ইঞ্জিনিয়ার",
-  "রাজমিস্ত্রি",
-  "ইলেকট্রিক মিস্ত্রি",
-  "প্লাম্বার",
-] as const;
 const workActionNames = {
   expense: "খরচ লিখি",
   payment: "টাকা দিলাম",
@@ -146,6 +142,7 @@ function initial(
         ...d,
         ...person,
         contactKind: personKind(person),
+        contactPresetId: contactPresetFor(person).id,
         personWorkIds: person.workIds ?? [],
       });
   }
@@ -179,18 +176,6 @@ export function EntitySheet({
 }: EntitySheetProps) {
   const { t, money, formatDigits } = useLanguageContext();
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode]);
-  const personRoleChoices = useMemo(
-    () =>
-      kind === "person"
-        ? [
-            ...roleSuggestions.map((role) => ({ value: t(role) })),
-            ...ledger.people
-              .filter((person) => person.role.trim())
-              .map((person) => ({ value: person.role })),
-          ]
-        : [],
-    [kind, ledger.people, t],
-  );
   const originalContract =
     kind === "contract"
       ? ledger.contracts.find((contract) => contract.id === editId)
@@ -283,6 +268,15 @@ export function EntitySheet({
               )
             )
           ) {
+            if (
+              kind === "person" &&
+              typeof value === "object" &&
+              !("contactPresetId" in value)
+            )
+              parsed.data.contactPresetId = contactPresetFrom(
+                parsed.data.contactKind,
+                parsed.data.role,
+              ).id;
             latest.current = parsed.data;
             setDraft(parsed.data);
             setNotice(t("আগের লেখা ফিরিয়ে আনা হয়েছে।"));
@@ -339,9 +333,12 @@ export function EntitySheet({
       ? amount(draft.total)
       : calculatedTotal;
   const allowed =
-    kind === "person"
-      ? roleActions[draft.contactKind]
-      : Object.keys(workActionNames);
+    kind === "person" ? contactActionChoices : Object.keys(workActionNames);
+  const personPreset =
+    contactPresets.find((preset) => preset.id === draft.contactPresetId) ??
+    contactPresets.find((preset) => preset.id === "custom")!;
+  const hasPersonAgreement =
+    personPreset.agreement || Boolean(draft.personContractAmount.trim());
   const selected =
     draft.quickActions ??
     (kind === "person"
@@ -412,7 +409,7 @@ export function EntitySheet({
         });
         if (
           !editId &&
-          draft.contactKind === "worker" &&
+          hasPersonAgreement &&
           draft.personContractAmount.trim() &&
           !amount(draft.personContractAmount)
         )
@@ -428,7 +425,7 @@ export function EntitySheet({
         next = savePersonWithContract(
           next,
           person,
-          !editId && draft.contactKind === "worker"
+          !editId && hasPersonAgreement
             ? {
                 id: draft.personContractId || `contract-${draft.id}`,
                 workId: notebookValue || null,
@@ -467,13 +464,6 @@ export function EntitySheet({
         if (!next.people.some((p) => p.id === personId))
           throw new Error(t("মিস্ত্রির নাম বেছে নিন।"));
         const previous = next.contracts.find((c) => c.id === editId);
-        if (
-          (!previous || previous.personId !== personId) &&
-          !["worker", "other"].includes(
-            personKind(next.people.find((p) => p.id === personId)!),
-          )
-        )
-          throw new Error(t("মজুরির দর রাখতে মিস্ত্রির নাম বেছে নিন।"));
         const contract = ContractSchema.parse({
           id: draft.id,
           ...previous,
@@ -763,7 +753,6 @@ export function EntitySheet({
               value={draft}
               ledger={ledger}
               editing={Boolean(editId)}
-              roleChoices={personRoleChoices}
               allowedActions={allowed as ContactAction[]}
               selectedActions={selected}
               notebookValue={notebookValue}
@@ -771,12 +760,18 @@ export function EntitySheet({
                 setError("");
                 setDraft((current) => ({ ...current, ...patch }));
               }}
-              onKind={(contactKind) => {
+              onPreset={(preset) => {
                 setError("");
                 setDraft((current) =>
-                  current.contactKind === contactKind
+                  current.contactPresetId === preset.id
                     ? current
-                    : { ...current, contactKind, quickActions: null },
+                    : {
+                        ...current,
+                        contactPresetId: preset.id,
+                        contactKind: preset.kind,
+                        role: t(preset.role),
+                        quickActions: [...preset.actions],
+                      },
                 );
               }}
               onNotebook={chooseNotebook}
@@ -877,11 +872,6 @@ export function EntitySheet({
                       (person) =>
                         !person.archivedAt ||
                         (Boolean(editId) && person.id === draft.personId),
-                    )
-                    .filter(
-                      (p) =>
-                        ["worker", "other"].includes(personKind(p)) ||
-                        p.id === draft.personId,
                     )
                     .map((p) => (
                       <option key={p.id} value={p.id}>

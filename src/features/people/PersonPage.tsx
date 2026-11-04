@@ -19,7 +19,6 @@ import { SpendingChart } from "../../components/ui/SpendingChart";
 import { AppMenu } from "../../components/ui/AppMenu";
 import {
   allowedContactActions,
-  contactAccountSummary,
   contactSummary,
   contactPaymentAccount,
   personKind,
@@ -27,11 +26,9 @@ import {
 } from "../../domain/contacts";
 import { contractAppliesToWork } from "../../domain/contracts";
 import { personSummary } from "../../domain/ledger";
-import { AppSelect } from "../../components/ui/AppSelect";
 import { JobPreview } from "../jobs/JobPreview";
 import { jobBalanceTotals } from "../jobs/jobView";
-import type { Account } from "../../domain/model";
-import { PersonMark, kindLabels, accountLabels } from "./ContactIdentity";
+import { PersonMark, kindLabels } from "./ContactIdentity";
 import { StatementSheet } from "./StatementSheet";
 import { phoneLink } from "./people";
 import { PersonNotebooks } from "./PersonNotebooks";
@@ -53,23 +50,13 @@ export function PersonPage() {
   const defaultAccount = person
     ? contactPaymentAccount(ledger, person)
     : "materials";
-  const rawAccount = params.get("account");
-  const account: Account | null =
-    rawAccount && ["materials", "labour", "other"].includes(rawAccount)
-      ? (rawAccount as Account)
-      : null;
   const workId = ledger.works.some((work) => work.id === params.get("work"))
     ? params.get("work")!
     : "";
   const full = params.get("view") === "history";
   const summary = useMemo(
-    () =>
-      person
-        ? account
-          ? contactAccountSummary(ledger, person, account, workId || undefined)
-          : contactSummary(ledger, person, workId || undefined)
-        : null,
-    [ledger, person, account, workId],
+    () => (person ? contactSummary(ledger, person, workId || undefined) : null),
+    [ledger, person, workId],
   );
   const entries = useMemo(
     () => sortContactEntries(summary?.entries ?? [], false),
@@ -101,8 +88,8 @@ export function PersonPage() {
   if (full) {
     const scoped = new URLSearchParams(params);
     scoped.delete("view");
+    scoped.delete("account");
     scoped.set("person", person.id);
-    if (account) scoped.set("account", account);
     if (!scoped.has("order")) scoped.set("order", "oldest");
     return (
       <Navigate replace to={`${base ?? ""}/ledger?${scoped.toString()}`} />
@@ -112,18 +99,16 @@ export function PersonPage() {
     person: person.id,
     order: "oldest",
   });
-  if (account) historyQuery.set("account", account);
   if (workId) historyQuery.set("work", workId);
   const fullHistoryPath = `/ledger?${historyQuery.toString()}`;
   const href = phoneLink(person.phone);
   const actions = removal.archived ? [] : allowedContactActions(person);
-  const accountChoices = ["materials", "labour", "other"] as Account[];
   const addPayment = () =>
     add({
       kind: "payment",
       personId: person.id,
       workId: workId || undefined,
-      account: account ?? defaultAccount,
+      account: defaultAccount,
     });
   const addPurchase = () =>
     add({
@@ -148,14 +133,10 @@ export function PersonPage() {
       workId: workId || undefined,
       account: "materials",
     });
-  const personContracts =
-    !account || account === "labour"
-      ? ledger.contracts.filter(
-          (c) =>
-            c.personId === person.id &&
-            (!workId || contractAppliesToWork(c, workId)),
-        )
-      : [];
+  const personContracts = ledger.contracts.filter(
+    (c) =>
+      c.personId === person.id && (!workId || contractAppliesToWork(c, workId)),
+  );
   const uncontractedAdvance =
     !workId && summary.owedCorrection !== 0 && summary.reconciledAdvance > 0
       ? summary.reconciledAdvance
@@ -171,18 +152,11 @@ export function PersonPage() {
         : summary.reconciledAdvance;
   const jobTotals = jobBalanceTotals(ledger, personContracts);
   const hasJobs = personContracts.some((job) => !job.archivedAt);
-  const isPurchase = account === "materials";
   const costMetric =
     (summary.reconciledCost !== 0 || summary.costCorrection !== 0) &&
     summary.reconciledCost !== summary.reconciledNetPaid
       ? {
-          label: !account
-            ? "মাল ও কাজের খরচ"
-            : isPurchase
-              ? "মালের দাম"
-              : account === "labour"
-                ? "কাজের মজুরি"
-                : "অন্য খরচ",
+          label: "মাল ও কাজের খরচ",
           amount: summary.reconciledCost,
         }
       : null;
@@ -235,19 +209,13 @@ export function PersonPage() {
     },
     {
       label: t("হিসাবের কপি পাঠাই"),
-      onSelect: () => {
-        if (!account) filter("account", defaultAccount);
-        setShareOpen(true);
-      },
+      onSelect: () => setShareOpen(true),
     },
     ...(!removal.archived
       ? [
           {
             label: t("মোট হিসাব মেলাই"),
-            onSelect: () => {
-              if (!account) filter("account", defaultAccount);
-              setAdjustmentOpen(true);
-            },
+            onSelect: () => setAdjustmentOpen(true),
           },
         ]
       : []),
@@ -323,21 +291,6 @@ export function PersonPage() {
             </dl>
           ) : null}
         </div>
-        <label className="contact-account-note">
-          <span>{t("কোন হিসাব দেখব")}</span>
-          <AppSelect
-            aria-label={t("কোন হিসাব দেখব")}
-            value={account ?? ""}
-            onChange={(event) => filter("account", event.target.value)}
-          >
-            <option value="">{t("সব হিসাব")}</option>
-            {accountChoices.map((value) => (
-              <option key={value} value={value}>
-                {t(accountLabels[value])}
-              </option>
-            ))}
-          </AppSelect>
-        </label>
         {showMainActions ? (
           <div
             className={`contact-main-actions ${kind === "shop" ? "contact-shop-actions" : ""}`}
@@ -357,12 +310,23 @@ export function PersonPage() {
                     />
                   </button>
                 ) : null}
-                {actions.includes("payment") || actions.includes("return") ? (
+                {actions.includes("payment") ||
+                actions.includes("transport") ||
+                actions.includes("return") ? (
                   <div className="contact-shop-secondary">
                     {actions.includes("payment") ? (
                       <button className="secondary-button" onClick={addPayment}>
                         <WalletIcon size={18} />
                         {t("টাকা দিই")}
+                      </button>
+                    ) : null}
+                    {actions.includes("transport") ? (
+                      <button
+                        className="secondary-button"
+                        onClick={addTransport}
+                      >
+                        <TruckIcon size={18} />
+                        {t("আনার খরচ লিখি")}
                       </button>
                     ) : null}
                     {actions.includes("return") ? (
@@ -412,6 +376,21 @@ export function PersonPage() {
                   >
                     <TruckIcon size={20} />
                     {t("আনার খরচ লিখি")}
+                  </button>
+                ) : null}
+                {actions.includes("return") ? (
+                  <button
+                    className={
+                      actions.some((action) =>
+                        ["payment", "purchase", "transport"].includes(action),
+                      )
+                        ? "secondary-button"
+                        : "primary-button"
+                    }
+                    onClick={addReturn}
+                  >
+                    <ArrowUUpLeftIcon size={19} />
+                    {t("মাল ফেরত দিই")}
                   </button>
                 ) : null}
               </>
@@ -479,8 +458,7 @@ export function PersonPage() {
           presentation="embedded"
         />
       </div>
-      {(!account || account === "labour") &&
-      (kind === "worker" || kind === "other" || personContracts.length > 0) ? (
+      {kind === "worker" || kind === "other" || personContracts.length > 0 ? (
         <JobPreview
           ledger={ledger}
           contracts={personContracts}
@@ -502,7 +480,7 @@ export function PersonPage() {
         <div className="contact-history-heading">
           <div>
             <h2>{t("শেষ ৫টি লেনদেন")}</h2>
-            <p>{t(account ? accountLabels[account] : "সব হিসাব")}</p>
+            <p>{t("সব হিসাব")}</p>
           </div>
           <button className="text-button" onClick={() => go(fullHistoryPath)}>
             {t("পুরো হিসাব")}
@@ -523,7 +501,6 @@ export function PersonPage() {
       {shareOpen ? (
         <StatementSheet
           person={person}
-          account={account ?? defaultAccount}
           workId={workId || undefined}
           onClose={() => setShareOpen(false)}
         />
@@ -533,7 +510,6 @@ export function PersonPage() {
           target={{
             target: "person",
             id: person.id,
-            account: account ?? defaultAccount,
             workId: workId || null,
           }}
           name={person.name}

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
+import type { SelectHTMLAttributes } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import {
   act,
@@ -22,6 +23,11 @@ import { latinDigits } from "../lib/numerals";
 import { savePreferences } from "../lib/preferences";
 import { EntitySheet } from "./EntitySheet";
 
+vi.mock("./ui/AppSelect", () => ({
+  AppSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => (
+    <select {...props} />
+  ),
+}));
 let owner: string | undefined;
 afterEach(async () => {
   cleanup();
@@ -61,7 +67,10 @@ it("keeps a name typed while a device contact import is pending and saves only t
     });
     mount(initial, onSave, onClose);
     await ready();
-    const name = screen.getByLabelText("দোকানের নাম") as HTMLInputElement;
+    await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "supplier");
+    const name = screen.getByLabelText(
+      "দোকান বা সরবরাহকারীর নাম",
+    ) as HTMLInputElement;
     expect(name.value).toBe("");
     await user.click(screen.getByRole("button", { name: "কন্টাক্ট থেকে নিন" }));
     expect(select).toHaveBeenCalledWith(["name", "tel"], { multiple: false });
@@ -203,13 +212,15 @@ it("creates and reopens a shop with optional fields empty and an explicitly empt
   });
   const first = mount(initial, onSave, onClose);
   await ready();
-  await user.type(screen.getByLabelText("দোকানের নাম"), "নমুনা নতুন দোকান");
+  await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "supplier");
+  await user.type(
+    screen.getByLabelText("দোকান বা সরবরাহকারীর নাম"),
+    "নমুনা নতুন দোকান",
+  );
   const actions = await preferences(user);
   for (const name of ["টাকা দিলাম", "মাল কেনা", "মাল ফেরত"])
     await user.click(actions.getByRole("button", { name, pressed: true }));
-  await user.click(
-    screen.getByRole("button", { name: "দোকান", pressed: true }),
-  );
+  await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "supplier");
   for (const name of ["টাকা দিলাম", "মাল কেনা", "মাল ফেরত"])
     expect(
       actions.getByRole("button", { name }).getAttribute("aria-pressed"),
@@ -235,24 +246,26 @@ it("creates and reopens a shop with optional fields empty and an explicitly empt
 
   const editing = mount(saved, onSave, onClose, shop.id);
   await ready();
-  expect((screen.getByLabelText("দোকানের নাম") as HTMLInputElement).value).toBe(
-    shop.name,
-  );
+  expect(
+    (screen.getByLabelText("দোকান বা সরবরাহকারীর নাম") as HTMLInputElement)
+      .value,
+  ).toBe(shop.name);
   expect((screen.getByLabelText("ফোন নম্বর") as HTMLInputElement).value).toBe(
     "",
   );
   const reopenedActions = await preferences(user);
-  await user.click(
-    screen.getByRole("button", { name: "দোকান", pressed: true }),
-  );
+  await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "supplier");
   for (const name of ["টাকা দিলাম", "মাল কেনা", "মাল ফেরত"])
     expect(
       reopenedActions
         .getByRole("button", { name })
         .getAttribute("aria-pressed"),
     ).toBe("false");
-  await user.clear(screen.getByLabelText("দোকানের নাম"));
-  await user.type(screen.getByLabelText("দোকানের নাম"), "নমুনা দোকান সংশোধিত");
+  await user.clear(screen.getByLabelText("দোকান বা সরবরাহকারীর নাম"));
+  await user.type(
+    screen.getByLabelText("দোকান বা সরবরাহকারীর নাম"),
+    "নমুনা দোকান সংশোধিত",
+  );
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
   editing.unmount();
@@ -284,9 +297,12 @@ it("keeps failed edit values and custom actions in a reopening draft, then saves
   });
   const editing = mount(initial, onSave, onClose, "shop");
   await ready();
-  await user.clear(screen.getByLabelText("দোকানের নাম"));
-  await user.type(screen.getByLabelText("দোকানের নাম"), "নমুনা বদলানো দোকান");
-  const role = screen.getByRole("combobox", { name: "পরিচয় / কী কাজ করেন" });
+  await user.clear(screen.getByLabelText("দোকান বা সরবরাহকারীর নাম"));
+  await user.type(
+    screen.getByLabelText("দোকান বা সরবরাহকারীর নাম"),
+    "নমুনা বদলানো দোকান",
+  );
+  const role = screen.getByRole("combobox", { name: "কী মাল সরবরাহ করেন" });
   await user.clear(role);
   await user.type(role, "সরবরাহকারী");
   const phone = screen.getByLabelText("ফোন নম্বর");
@@ -298,9 +314,7 @@ it("keeps failed edit values and custom actions in a reopening draft, then saves
       .getByRole("button", { name: "মাল কেনা" })
       .getAttribute("aria-pressed"),
   ).toBe("true");
-  await user.click(
-    screen.getByRole("button", { name: "দোকান", pressed: true }),
-  );
+  await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "supplier");
   expect(
     actions
       .getByRole("button", { name: "টাকা দিলাম" })
@@ -314,9 +328,10 @@ it("keeps failed edit values and custom actions in a reopening draft, then saves
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   expect(await screen.findByRole("alert")).toBeTruthy();
   expect(onClose).not.toHaveBeenCalled();
-  expect((screen.getByLabelText("দোকানের নাম") as HTMLInputElement).value).toBe(
-    "নমুনা বদলানো দোকান",
-  );
+  expect(
+    (screen.getByLabelText("দোকান বা সরবরাহকারীর নাম") as HTMLInputElement)
+      .value,
+  ).toBe("নমুনা বদলানো দোকান");
   expect((role as HTMLInputElement).value).toBe("সরবরাহকারী");
   expect(latinDigits((phone as HTMLInputElement).value)).toBe("01700000002");
   expect((await repo.read())!.ledger).toEqual(before);
@@ -333,13 +348,14 @@ it("keeps failed edit values and custom actions in a reopening draft, then saves
   });
   const reopened = mount(initial, onSave, onClose, "shop");
   await ready();
-  expect((screen.getByLabelText("দোকানের নাম") as HTMLInputElement).value).toBe(
-    "নমুনা বদলানো দোকান",
-  );
+  expect(
+    (screen.getByLabelText("দোকান বা সরবরাহকারীর নাম") as HTMLInputElement)
+      .value,
+  ).toBe("নমুনা বদলানো দোকান");
   expect(
     (
       screen.getByRole("combobox", {
-        name: "পরিচয় / কী কাজ করেন",
+        name: "কী মাল সরবরাহ করেন",
       }) as HTMLInputElement
     ).value,
   ).toBe("সরবরাহকারী");
@@ -367,19 +383,27 @@ it("keeps failed edit values and custom actions in a reopening draft, then saves
 });
 
 it.each([
-  { kind: "মিস্ত্রি", actions: ["টাকা দিলাম"] },
-  { kind: "গাড়ির লোক", actions: ["টাকা দিলাম", "আনার খরচ"] },
-  { kind: "অন্য ব্যক্তি", actions: ["টাকা দিলাম", "মাল কেনা", "আনার খরচ"] },
+  {
+    kind: "মিস্ত্রি / কারিগর",
+    presetId: "craftsperson",
+    actions: ["টাকা দিলাম"],
+  },
+  {
+    kind: "গাড়ি / পরিবহন",
+    presetId: "transport",
+    actions: ["টাকা দিলাম", "আনার খরচ"],
+  },
+  { kind: "নিজের মতো", presetId: "", actions: ["টাকা দিলাম"] },
 ])(
   "offers appropriate optional actions for $kind on the page",
-  async ({ kind, actions: allowed }) => {
+  async ({ presetId, actions: allowed }) => {
     const initial = LedgerSchema.parse({});
     await repository(initial);
     const user = userEvent.setup();
     const onSave = vi.fn(async (_value: Ledger) => {});
     mount(initial, onSave, vi.fn());
     await ready();
-    await user.click(screen.getByRole("button", { name: kind }));
+    await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), presetId);
     expect(
       (screen.getByLabelText("নাম", { exact: true }) as HTMLInputElement)
         .required,
@@ -389,11 +413,9 @@ it.each([
     ).toBe(false);
     const actions = await preferences(user);
     for (const name of ["টাকা দিলাম", "মাল কেনা", "মাল ফেরত", "আনার খরচ"])
-      if (allowed.includes(name))
-        expect(
-          actions.getByRole("button", { name, pressed: true }),
-        ).toBeTruthy();
-      else expect(actions.queryByRole("button", { name })).toBeNull();
+      expect(
+        actions.getByRole("button", { name }).getAttribute("aria-pressed"),
+      ).toBe(String(allowed.includes(name)));
     expect(onSave).not.toHaveBeenCalled();
   },
 );

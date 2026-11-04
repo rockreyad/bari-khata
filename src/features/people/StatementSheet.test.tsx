@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { File as NodeFile } from "node:buffer";
-import type { ReactNode } from "react";
+import type { ReactNode, SelectHTMLAttributes } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -43,6 +43,11 @@ vi.mock("../../components/Sheet", () => ({
       {children}
       {footer}
     </section>
+  ),
+}));
+vi.mock("../../components/ui/AppSelect", () => ({
+  AppSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => (
+    <select {...props} />
   ),
 }));
 vi.mock("../../lib/display", async (original) => ({
@@ -331,4 +336,101 @@ it("reports a sharing failure without falling back to an unintended second expor
     ),
   );
   expect(mocked.save).not.toHaveBeenCalled();
+});
+
+it("requires a scope for a multi-account person and resets private notes when changing only the share scope", async () => {
+  mocked.ledger = LedgerSchema.parse({
+    ...mocked.ledger,
+    entries: [
+      ...mocked.ledger!.entries,
+      {
+        id: "material-bill",
+        kind: "expense",
+        personId: "worker",
+        account: "materials",
+        note: "sample-private-material-note",
+        lines: [
+          {
+            id: "material-line",
+            workId: "tiles",
+            label: "নমুনা মাল কেনা",
+            amount: 12000,
+          },
+        ],
+      },
+    ],
+  });
+  const before = JSON.stringify(mocked.ledger);
+  const user = userEvent.setup();
+  render(
+    <StatementSheet
+      person={mocked.ledger.people[0]}
+      workId="tiles"
+      onClose={vi.fn()}
+    />,
+  );
+  expect(
+    (screen.getByLabelText("কোন হিসাবের কপি") as HTMLSelectElement).value,
+  ).toBe("");
+  expect(mocked.link).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: "কপি নামান" })).toBeNull();
+  await user.selectOptions(screen.getByLabelText("কোন হিসাবের কপি"), "labour");
+  expect(mocked.link).toHaveBeenLastCalledWith({
+    personId: "worker",
+    account: "labour",
+    workId: "tiles",
+  });
+  await openFileOptions(user);
+  await user.click(
+    screen.getByRole("checkbox", { name: "ফাইলে আমার নোটও রাখি" }),
+  );
+  await user.selectOptions(
+    screen.getByLabelText("কোন হিসাবের কপি"),
+    "materials",
+  );
+  expect(mocked.link).toHaveBeenLastCalledWith({
+    personId: "worker",
+    account: "materials",
+    workId: "tiles",
+  });
+  await openFileOptions(user);
+  expect(
+    (
+      screen.getByRole("checkbox", {
+        name: "ফাইলে আমার নোটও রাখি",
+      }) as HTMLInputElement
+    ).checked,
+  ).toBe(false);
+  await user.click(screen.getByRole("button", { name: "কপি নামান" }));
+  await waitFor(() => expect(mocked.save).toHaveBeenCalledOnce());
+  expect(mocked.statement).toHaveBeenLastCalledWith(
+    mocked.ledger,
+    mocked.ledger.people[0],
+    { account: "materials", workId: "tiles", includeNotes: false },
+  );
+  const html = mocked.save.mock.calls[0][0];
+  expect(html).toContain("নমুনা মাল কেনা");
+  expect(html).not.toContain("নমুনা মজুরির বিল");
+  expect(html).not.toContain("sample-private-material-note");
+  expect(html).not.toContain("sample-private-wage-note");
+  expect(JSON.stringify(mocked.ledger)).toBe(before);
+});
+
+it("can preselect the only recorded account without using a person's identity as a financial scope", () => {
+  mocked.ledger = LedgerSchema.parse({
+    ...mocked.ledger,
+    people: [
+      { ...mocked.ledger!.people[0], kind: "other" },
+      mocked.ledger!.people[1],
+    ],
+  });
+  render(<StatementSheet person={mocked.ledger.people[0]} onClose={vi.fn()} />);
+  expect(
+    (screen.getByLabelText("কোন হিসাবের কপি") as HTMLSelectElement).value,
+  ).toBe("labour");
+  expect(mocked.link).toHaveBeenLastCalledWith({
+    personId: "worker",
+    account: "labour",
+    workId: undefined,
+  });
 });

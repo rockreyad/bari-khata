@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
-import type { ReactNode } from "react";
+import type { ReactNode, SelectHTMLAttributes } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EntitySheet } from "./EntitySheet";
 import { LedgerSchema, type Ledger } from "../domain/model";
@@ -28,6 +34,11 @@ vi.mock("../data/repository", () => ({
     saveDraft: async () => {},
     removeDraft: async () => {},
   }),
+}));
+vi.mock("./ui/AppSelect", () => ({
+  AppSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => (
+    <select {...props} />
+  ),
 }));
 afterEach(cleanup);
 describe("notebook quick action settings", () => {
@@ -160,8 +171,15 @@ describe("contact import in a person's form", () => {
               .hasAttribute("disabled"),
           ).toBe(false),
         );
+        await user.selectOptions(
+          screen.getByLabelText("কীভাবে যুক্ত"),
+          "supplier",
+        );
         if (existingName)
-          await user.type(screen.getByLabelText("দোকানের নাম"), existingName);
+          await user.type(
+            screen.getByLabelText("দোকান বা সরবরাহকারীর নাম"),
+            existingName,
+          );
         await user.click(
           screen.getByRole("button", { name: "কন্টাক্ট থেকে নিন" }),
         );
@@ -169,17 +187,182 @@ describe("contact import in a person's form", () => {
           (screen.getByLabelText("ফোন নম্বর") as HTMLInputElement).value,
         ).toBe("01700000091");
         expect(
-          (screen.getByLabelText("দোকানের নাম") as HTMLInputElement).value,
+          (
+            screen.getByLabelText(
+              "দোকান বা সরবরাহকারীর নাম",
+            ) as HTMLInputElement
+          ).value,
         ).toBe(existingName || "শাহ আলম");
         await user.click(screen.getByRole("button", { name: "রাখুন" }));
         await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
         expect(onSave.mock.calls[0][0].people[0]).toMatchObject({
           name: existingName || "শাহ আলম",
           phone: "01700000091",
+          kind: "shop",
         });
       } finally {
         Reflect.deleteProperty(navigator, "contacts");
       }
     },
   );
+});
+
+it.each([
+  {
+    preset: "দোকানদার",
+    presetId: "supplier",
+    kind: "shop",
+    role: "নমুনা ইট ও বালু",
+    actions: ["payment", "purchase", "return"],
+    agreement: false,
+  },
+  {
+    preset: "ইঞ্জিনিয়ার / পরামর্শক",
+    presetId: "professional",
+    kind: "worker",
+    role: "নমুনা নকশার পরামর্শক",
+    actions: ["payment"],
+    agreement: true,
+  },
+  {
+    preset: "গাড়ি / পরিবহন",
+    presetId: "transport",
+    kind: "driver",
+    role: "নমুনা পিকআপ সেবা",
+    actions: ["payment", "transport"],
+    agreement: false,
+  },
+  {
+    preset: "অন্যান্য সেবা",
+    presetId: "service",
+    kind: "worker",
+    role: "নমুনা সুইপার",
+    actions: ["payment"],
+    agreement: true,
+  },
+])(
+  "uses the $preset relationship for initial actions and keeps later description edits descriptive",
+  async ({ preset, presetId, kind, role, actions, agreement }) => {
+    const user = userEvent.setup();
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "work", name: "নমুনা কাজ" }],
+      people: [{ id: "existing", name: "আগের নমুনা নাম", kind: "other" }],
+      entries: [
+        {
+          id: "old-bill",
+          kind: "expense",
+          personId: "existing",
+          lines: [{ id: "line", workId: "work", amount: 12000 }],
+        },
+      ],
+    });
+    const onSave = vi.fn(async (_value: Ledger) => {});
+    render(
+      <EntitySheet
+        kind="person"
+        ledger={ledger}
+        onSave={onSave}
+        onClose={() => {}}
+        mode="demo"
+      />,
+    );
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+    expect(
+      (screen.getByLabelText("কীভাবে যুক্ত") as HTMLSelectElement).value,
+    ).toBe("");
+    expect(document.querySelector("form input")).toBe(
+      screen.getByLabelText("নাম"),
+    );
+    expect(screen.queryByRole("button", { name: preset })).toBeNull();
+    await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), presetId);
+    const supplier = kind === "shop";
+    fireEvent.change(
+      screen.getByLabelText(supplier ? "দোকান বা সরবরাহকারীর নাম" : "নাম"),
+      { target: { value: "নমুনা নতুন নাম" } },
+    );
+    fireEvent.change(
+      screen.getByLabelText(
+        supplier ? "কী মাল সরবরাহ করেন" : "পরিচয় / কী কাজ করেন",
+      ),
+      { target: { value: role } },
+    );
+    expect(
+      (screen.getByLabelText("কীভাবে যুক্ত") as HTMLSelectElement).value,
+    ).toBe(presetId);
+    expect(screen.queryByLabelText("কাজের টাকা") !== null).toBe(agreement);
+    await user.click(screen.getByText("পছন্দের বোতাম"));
+    for (const [action, label] of [
+      ["payment", "টাকা দিলাম"],
+      ["purchase", "মাল কেনা"],
+      ["return", "মাল ফেরত"],
+      ["transport", "আনার খরচ"],
+    ]) {
+      expect(
+        screen
+          .getByRole("button", { name: label })
+          .getAttribute("aria-pressed"),
+      ).toBe(String(actions.includes(action)));
+    }
+    await user.click(screen.getByRole("button", { name: "রাখুন" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    const next = onSave.mock.calls[0][0];
+    expect(
+      next.people.find((person) => person.id !== "existing"),
+    ).toMatchObject({
+      name: "নমুনা নতুন নাম",
+      kind,
+      role,
+      quickActions: actions,
+    });
+    expect(next.entries).toEqual(ledger.entries);
+    expect(next.contracts).toEqual(ledger.contracts);
+  },
+);
+
+it("keeps an entered agreement open and focused while clearing and replacing its amount after a relationship change", async () => {
+  const user = userEvent.setup();
+  const onSave = vi.fn(async (_ledger: Ledger) => {});
+  render(
+    <EntitySheet
+      kind="person"
+      ledger={LedgerSchema.parse({})}
+      onSave={onSave}
+      onClose={vi.fn()}
+      mode="demo"
+    />,
+  );
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
+  await user.type(screen.getByLabelText("নাম"), "নমুনা ব্যক্তি");
+  await user.selectOptions(
+    screen.getByLabelText("কীভাবে যুক্ত"),
+    "craftsperson",
+  );
+  let input = screen.getByLabelText("কাজের টাকা") as HTMLInputElement;
+  const disclosure = input.closest("details") as HTMLDetailsElement;
+  await user.click(disclosure.querySelector("summary")!);
+  await waitFor(() => expect(disclosure.open).toBe(true));
+  await user.type(input, "125");
+  await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "supplier");
+  input = screen.getByLabelText("কাজের টাকা") as HTMLInputElement;
+  await user.clear(input);
+  expect(disclosure.open).toBe(true);
+  expect(document.activeElement).toBe(input);
+  expect(screen.getByLabelText("কাজের টাকা")).toBe(input);
+  await user.type(input, "275");
+  expect(input.value).toBe("275");
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+  expect(onSave.mock.calls[0][0].contracts).toEqual([
+    expect.objectContaining({ total: 27500, scope: "house" }),
+  ]);
 });

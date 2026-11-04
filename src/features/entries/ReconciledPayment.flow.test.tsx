@@ -60,7 +60,11 @@ afterEach(async () => {
 const ready = (name: string) =>
   waitFor(() =>
     expect(
-      (screen.getByRole("button", { name }) as HTMLButtonElement).disabled,
+      name === "রাখুন"
+        ? screen
+            .getByLabelText("কত টাকা")
+            .closest<HTMLFieldSetElement>("fieldset")!.disabled
+        : (screen.getByRole("button", { name }) as HTMLButtonElement).disabled,
     ).toBe(false),
   );
 
@@ -98,7 +102,7 @@ function fixture() {
   });
 }
 
-it("keeps a professional's reconciled jobs separate from a custom partial labour bill and its later settlement", async () => {
+it("keeps a professional's reconciled jobs separate from a custom partial labour bill and a later explicitly chosen cash payment", async () => {
   const source = fixture();
   const original = LedgerSchema.parse({
     ...source,
@@ -222,6 +226,10 @@ it("keeps a professional's reconciled jobs separate from a custom partial labour
     />,
   );
   await ready("রাখুন");
+  expect(
+    (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
   await user.selectOptions(screen.getByLabelText("কাজের খাতা"), "roof");
   await user.selectOptions(screen.getByLabelText("কাজ"), "");
   expect(
@@ -230,6 +238,7 @@ it("keeps a professional's reconciled jobs separate from a custom partial labour
     ),
   ).toBeTruthy();
   expect(view.container.querySelector(".entry-balance-preview")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "অগ্রিম" }));
   await user.type(screen.getByLabelText("কত টাকা"), "180");
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(context.close).toHaveBeenCalledTimes(2));
@@ -261,8 +270,8 @@ it("keeps a professional's reconciled jobs separate from a custom partial labour
 });
 
 it.each([
-  { purpose: "wage", label: "কাজের টাকা", advance: 0, cost: 10000 },
-  { purpose: "settle", label: "আগের বাকি", advance: 10000, cost: 0 },
+  { purpose: "charge", label: "নতুন বিল ও টাকা", advance: 0, cost: 10000 },
+  { purpose: "advance", label: "অগ্রিম", advance: 10000, cost: 0 },
 ] as const)(
   "keeps a reconciled all-job total through a new $purpose entry, draft, IndexedDB reopen and backup restore",
   async ({ label, advance, cost }) => {
@@ -314,6 +323,7 @@ it.each([
     await ready("রাখুন");
     await user.selectOptions(screen.getByLabelText("কাজের খাতা"), "roof");
     await user.selectOptions(screen.getByLabelText("কাজ"), "");
+    expect(screen.queryByRole("button", { name: "বাকি মেটাই" })).toBeNull();
     await user.click(screen.getByRole("button", { name: label }));
     await user.type(screen.getByLabelText("কত টাকা"), "100");
     expect(
@@ -371,6 +381,7 @@ it.each([
     await ready("রাখুন");
     await user.selectOptions(screen.getByLabelText("কাজের খাতা"), "roof");
     await user.selectOptions(screen.getByLabelText("কাজ"), "");
+    await user.click(screen.getByRole("button", { name: "অগ্রিম" }));
     await user.type(screen.getByLabelText("কত টাকা"), "50");
     expect(
       view.container.querySelector(".entry-balance-result")?.textContent,
@@ -450,6 +461,11 @@ it("asks to choose a job when unlinked labour bills make the combined balance un
   expect(view.container.querySelector(".entry-contract-progress")).toBeTruthy();
   await user.selectOptions(screen.getByLabelText("কাজ"), "");
   expect(screen.getByText(notice)).toBeTruthy();
+  expect(
+    (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  await user.click(screen.getByRole("button", { name: "অগ্রিম" }));
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(context.close).toHaveBeenCalledOnce());
   const saved = (await repo.read())!.ledger;

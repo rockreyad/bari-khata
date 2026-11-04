@@ -169,4 +169,11 @@ export const peopleEnglish: Record<string, string> = {
     "Old records are included. Unclear payments have not been treated as a payable or advance.",
   "এটি শুধু এই নামের হিসাবের কপি। এখানে কোনো তথ্য বদলানো যায় না।":
     "This is a read-only copy of this contact’s account.",
+  "কোন হিসাবের কপি": "Which account to share",
+  "কোন হিসাব মেলাব": "Which account to reconcile",
+  "হিসাব বেছে নিন": "Choose an account",
+  "যে হিসাবের কপি পাঠাবেন, সেটি বেছে নিন।":
+    "Choose the account you want to share.",
+  "যে হিসাবের মোট মেলাবেন, সেটি বেছে নিন।":
+    "Choose the account total you want to reconcile.",
 };

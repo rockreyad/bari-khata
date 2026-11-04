@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
+import type { SelectHTMLAttributes } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -12,6 +13,11 @@ import {
 import { LedgerSchema, type Ledger } from "../domain/model";
 import { EntitySheet } from "./EntitySheet";
 
+vi.mock("./ui/AppSelect", () => ({
+  AppSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => (
+    <select {...props} />
+  ),
+}));
 let owner: string | undefined;
 afterEach(async () => {
   cleanup();
@@ -58,12 +64,18 @@ it("creates and edits one worker in multiple notebooks, retaining draft choices 
     );
   const first = mount(initial);
   await ready();
-  await user.click(screen.getByRole("button", { name: "মিস্ত্রি" }));
-  await user.type(screen.getByLabelText("নাম", { exact: true }), "মোরশেদ");
-  await user.type(
-    screen.getByRole("combobox", { name: "পরিচয় / কী কাজ করেন" }),
-    "ইঞ্জিনিয়ার",
+  await user.selectOptions(
+    screen.getByLabelText("কীভাবে যুক্ত"),
+    "professional",
   );
+  await user.type(screen.getByLabelText("নাম", { exact: true }), "মোরশেদ");
+  const initialRole = screen.getByRole("combobox", {
+    name: "পরিচয় / কী কাজ করেন",
+  });
+  await user.clear(initialRole);
+  await user.type(initialRole, "ইঞ্জিনিয়ার");
+  expect(screen.getByText("খাতায় রাখি").closest("details")!.open).toBe(false);
+  await user.click(screen.getByText("খাতায় রাখি").closest("summary")!);
   await user.click(screen.getByRole("checkbox", { name: "বাথরুম" }));
   await user.click(screen.getByRole("checkbox", { name: "ইলেকট্রিক" }));
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
@@ -83,6 +95,7 @@ it("creates and edits one worker in multiple notebooks, retaining draft choices 
 
   const editing = mount(saved, saved.people[0].id);
   await ready();
+  await user.click(screen.getByText("খাতায় রাখি").closest("summary")!);
   expect(
     (screen.getByRole("checkbox", { name: "ইলেকট্রিক" }) as HTMLInputElement)
       .checked,
@@ -103,6 +116,7 @@ it("creates and edits one worker in multiple notebooks, retaining draft choices 
   });
   const restored = mount(saved, saved.people[0].id);
   await ready();
+  await user.click(screen.getByText("খাতায় রাখি").closest("summary")!);
   expect(
     (screen.getByRole("checkbox", { name: "ইলেকট্রিক" }) as HTMLInputElement)
       .checked,
