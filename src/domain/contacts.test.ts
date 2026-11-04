@@ -5,6 +5,7 @@ import { appendBalanceAdjustment } from "./balanceAdjustments";
 import { contactStatement } from "../features/people/statement";
 import {
   allowedContactActions,
+  availableContactActions,
   contactAccountSummary,
   contactSummary,
   defaultContactAccount,
@@ -249,7 +250,7 @@ describe("contact identities and financial accounts", () => {
       ),
     ).toBe("other");
   });
-  it("allows only useful chosen shortcuts, including intentionally hiding them all", () => {
+  it("keeps chosen shortcuts within the current relationship, including hiding them all", () => {
     const worker = PersonSchema.parse({
       id: "w",
       name: "রহিম",
@@ -271,7 +272,46 @@ describe("contact identities and financial accounts", () => {
     const driver = PersonSchema.parse({ id: "d", name: "রনি", kind: "driver" });
     expect(defaultContactAccount(driver)).toBe("other");
     expect(allowedContactActions(driver)).toEqual(["payment", "transport"]);
+    const other = PersonSchema.parse({
+      id: "o",
+      name: "নমুনা ব্যক্তি",
+      kind: "other",
+    });
+    expect(allowedContactActions(other)).toEqual(["payment"]);
+    expect(defaultContactAccount(other)).toBe("other");
   });
+  it.each([
+    ["worker", ["payment"], ["payment"]],
+    [
+      "shop",
+      ["payment", "purchase", "return"],
+      ["purchase", "return", "payment"],
+    ],
+    ["driver", ["payment", "transport"], ["transport", "payment"]],
+    ["other", ["payment"], ["payment"]],
+  ] as const)(
+    "filters legacy incompatible %s shortcuts while preserving valid preference order",
+    (kind, defaults, selected) => {
+      const person = PersonSchema.parse({
+        id: "person",
+        name: "নমুনা নাম",
+        kind,
+        quickActions: ["purchase", "transport", "return", "payment"],
+      });
+      const before = JSON.stringify(person);
+      Object.freeze(person.quickActions);
+      Object.freeze(person);
+      expect(availableContactActions(kind)).toEqual(defaults);
+      expect(allowedContactActions({ ...person, quickActions: null })).toEqual(
+        defaults,
+      );
+      expect(allowedContactActions(person)).toEqual(selected);
+      expect(allowedContactActions({ ...person, quickActions: [] })).toEqual(
+        [],
+      );
+      expect(JSON.stringify(person)).toBe(before);
+    },
+  );
   it("never mixes a worker's old material voucher into the wage balance", () => {
     const ledger = LedgerSchema.parse({
       works: [{ id: "work", name: "কাজ" }],

@@ -154,7 +154,7 @@ describe("archived records in quick entry", () => {
         personId: "worker",
         workId: "door",
       }),
-    ).toMatchObject({ workId: "door", contractId: "", purpose: "wage" });
+    ).toMatchObject({ workId: "door", contractId: "", purpose: "charge" });
   });
   it("uses a sole active job rather than an archived job's notebook history", () => {
     const ledger = setEntityRemoved(

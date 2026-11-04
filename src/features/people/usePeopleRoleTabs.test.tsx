@@ -15,10 +15,9 @@ import {
 import * as repository from "../../data/repository";
 import { LedgerSchema } from "../../domain/model";
 import { savePreferences } from "../../lib/preferences";
-import { roleKey } from "./peopleRoles";
 import { usePeopleRoleTabs } from "./usePeopleRoleTabs";
 
-const key = "view:people-role-tabs:v1";
+const key = "view:people-type-tabs:v1";
 const createStorage = repository.createWorkspaceStorage;
 const owners: string[] = [];
 function account() {
@@ -62,7 +61,7 @@ it("keeps absence distinct from [] across IndexedDB reopening without changing a
   await repo.ensure(
     "real",
     LedgerSchema.parse({
-      people: [{ id: "person", name: "নমুনা", role: "ডিলার" }],
+      people: [{ id: "person", name: "নমুনা", role: "supplier" }],
     }),
   );
   const before = await repo.read();
@@ -72,7 +71,7 @@ it("keeps absence distinct from [] across IndexedDB reopening without changing a
   expect(await createStorage().readDraft(key)).toBeNull();
   await act(async () => {
     expect(
-      await hook.result.current.saveKeys(["  ইঞ্জিনিয়ার  ", "ডিলার"]),
+      await hook.result.current.saveKeys(["professional", "supplier"]),
     ).toBe(true);
   });
   hook.unmount();
@@ -80,10 +79,7 @@ it("keeps absence distinct from [] across IndexedDB reopening without changing a
   await repo.database.open();
   hook = mount();
   await waitFor(() => expect(hook.result.current.ready).toBe(true));
-  expect(hook.result.current.keys).toEqual([
-    roleKey("ইঞ্জিনিয়ার"),
-    roleKey("ডিলার"),
-  ]);
+  expect(hook.result.current.keys).toEqual(["professional", "supplier"]);
   await act(async () => {
     expect(await hook.result.current.saveKeys([])).toBe(true);
   });
@@ -105,7 +101,7 @@ it("isolates each account and demo choices when the current scope changes", asyn
   const hook = mount();
   await waitFor(() => expect(hook.result.current.ready).toBe(true));
   await act(async () => {
-    await hook.result.current.saveKeys(["ডিলার"]);
+    await hook.result.current.saveKeys(["supplier"]);
   });
   const second = account();
   hook.rerender({ mode: "real" });
@@ -118,43 +114,47 @@ it("isolates each account and demo choices when the current scope changes", asyn
   await waitFor(() => expect(hook.result.current.ready).toBe(true));
   expect(hook.result.current.keys).toBeNull();
   await act(async () => {
-    await hook.result.current.saveKeys(["প্লাম্বার"]);
+    await hook.result.current.saveKeys(["craftsperson"]);
   });
   setActiveOwner(first);
   hook.rerender({ mode: "real" });
   await waitFor(() => expect(hook.result.current.ready).toBe(true));
-  expect(hook.result.current.keys).toEqual([roleKey("ডিলার")]);
+  expect(hook.result.current.keys).toEqual(["supplier"]);
   setActiveOwner(second);
   hook.rerender({ mode: "real" });
   await waitFor(() => expect(hook.result.current.ready).toBe(true));
   expect(hook.result.current.keys).toEqual([]);
   hook.rerender({ mode: "demo" });
   await waitFor(() => expect(hook.result.current.ready).toBe(true));
-  expect(hook.result.current.keys).toEqual([roleKey("প্লাম্বার")]);
+  expect(hook.result.current.keys).toEqual(["craftsperson"]);
 });
 
-it("preserves full canonical keys when a valid 200-character Bengali role expands during normalization", async () => {
+it("starts type preferences independently without reading or overwriting old role tabs", async () => {
   account();
-  const label = "য়".repeat(200);
-  const normalized = roleKey(label);
-  expect(normalized.length).toBeGreaterThan(200);
+  const legacyKey = "view:people-role-tabs:v1";
+  const legacyValue = { version: 1, keys: ["ইঞ্জিনিয়ার", "ডিলার"] };
+  await createStorage().saveDraft(legacyKey, legacyValue);
   const hook = mount();
   await waitFor(() => expect(hook.result.current.ready).toBe(true));
+  expect(hook.result.current.keys).toBeNull();
+  expect(hook.result.current.error).toBe("");
+  expect(await createStorage().readDraft(key)).toBeNull();
   await act(async () => {
-    expect(await hook.result.current.saveKeys([normalized])).toBe(true);
+    expect(await hook.result.current.saveKeys(["professional"])).toBe(true);
   });
-  expect(hook.result.current.keys).toEqual([normalized]);
-  hook.unmount();
-  const reopened = mount();
-  await waitFor(() => expect(reopened.result.current.ready).toBe(true));
-  expect(reopened.result.current.keys).toEqual([normalized]);
+  expect(await createStorage().readDraft(key)).toEqual({
+    version: 1,
+    keys: ["professional"],
+  });
+  expect(await createStorage().readDraft(legacyKey)).toEqual(legacyValue);
 });
 
 it.each([
-  { version: 2, keys: ["ডিলার"] },
+  { version: 2, keys: ["supplier"] },
   { version: 1, keys: [" "] },
-  { version: 1, keys: ["Dealer", "dealer"] },
-  { version: 1, keys: ["1", "2", "3", "4", "5", "6", "7"] },
+  { version: 1, keys: ["supplier", "supplier"] },
+  { version: 1, keys: ["ইঞ্জিনিয়ার"] },
+  { version: 1, keys: Array(9).fill("supplier") },
   { version: 1, keys: ["x".repeat(4001)] },
   { version: 1, keys: [3] },
 ])(
@@ -179,18 +179,18 @@ it("recovers an unreadable preference only after explicitly applying a valid rep
   await waitFor(() => expect(hook.result.current.ready).toBe(true));
   expect(hook.result.current.error).not.toBe("");
   await act(async () => {
-    expect(await hook.result.current.saveKeys(["ডিলার"])).toBe(true);
+    expect(await hook.result.current.saveKeys(["supplier"])).toBe(true);
   });
   expect(hook.result.current.error).toBe("");
   expect(await createStorage().readDraft(key)).toEqual({
     version: 1,
-    keys: [roleKey("ডিলার")],
+    keys: ["supplier"],
   });
 });
 
 it("retries a failed read without writing defaults", async () => {
   account();
-  await createStorage().saveDraft(key, { version: 1, keys: ["ডিলার"] });
+  await createStorage().saveDraft(key, { version: 1, keys: ["supplier"] });
   let fail = true;
   vi.spyOn(repository, "createWorkspaceStorage").mockImplementation((mode) => {
     const storage = createStorage(mode);
@@ -207,19 +207,19 @@ it("retries a failed read without writing defaults", async () => {
   expect(hook.result.current.error).not.toBe("");
   expect(await createStorage().readDraft(key)).toEqual({
     version: 1,
-    keys: ["ডিলার"],
+    keys: ["supplier"],
   });
   fail = false;
   act(() => hook.result.current.retry());
   await waitFor(() =>
     expect(hook.result.current.ready && !hook.result.current.error).toBe(true),
   );
-  expect(hook.result.current.keys).toEqual(["ডিলার"]);
+  expect(hook.result.current.keys).toEqual(["supplier"]);
 });
 
 it("keeps the old selection on write failure and rejects invalid explicit choices without a write", async () => {
   account();
-  await createStorage().saveDraft(key, { version: 1, keys: ["ডিলার"] });
+  await createStorage().saveDraft(key, { version: 1, keys: ["supplier"] });
   let fail = true;
   const writes = vi.fn();
   vi.spyOn(repository, "createWorkspaceStorage").mockImplementation((mode) => {
@@ -237,21 +237,21 @@ it("keeps the old selection on write failure and rejects invalid explicit choice
   const hook = mount();
   await waitFor(() => expect(hook.result.current.ready).toBe(true));
   await act(async () => {
-    expect(await hook.result.current.saveKeys(["ইঞ্জিনিয়ার"])).toBe(false);
+    expect(await hook.result.current.saveKeys(["professional"])).toBe(false);
   });
-  expect(hook.result.current.keys).toEqual(["ডিলার"]);
+  expect(hook.result.current.keys).toEqual(["supplier"]);
   expect(hook.result.current.error).not.toBe("");
   expect(await createStorage().readDraft(key)).toEqual({
     version: 1,
-    keys: ["ডিলার"],
+    keys: ["supplier"],
   });
   await act(async () => {
-    expect(await hook.result.current.saveKeys(["Dealer", "dealer"])).toBe(
+    expect(await hook.result.current.saveKeys(["supplier", "supplier"])).toBe(
       false,
     );
   });
   expect(writes).toHaveBeenCalledOnce();
-  expect(hook.result.current.keys).toEqual(["ডিলার"]);
+  expect(hook.result.current.keys).toEqual(["supplier"]);
   fail = false;
   await act(async () => {
     expect(await hook.result.current.saveKeys([])).toBe(true);
@@ -262,7 +262,7 @@ it("keeps the old selection on write failure and rejects invalid explicit choice
 
 it("hides old account choices immediately and ignores late reads and callbacks from the old scope", async () => {
   const first = account();
-  await createStorage().saveDraft(key, { version: 1, keys: ["ডিলার"] });
+  await createStorage().saveDraft(key, { version: 1, keys: ["supplier"] });
   const second = account();
   await createStorage().saveDraft(key, { version: 1, keys: [] });
   setActiveOwner(first);
@@ -314,7 +314,7 @@ it("hides old account choices immediately and ignores late reads and callbacks f
 
 it("keeps an in-flight write in its captured account and never publishes it after a scope change or unmount", async () => {
   const first = account();
-  await createStorage().saveDraft(key, { version: 1, keys: ["ডিলার"] });
+  await createStorage().saveDraft(key, { version: 1, keys: ["supplier"] });
   const second = account();
   await createStorage().saveDraft(key, { version: 1, keys: [] });
   setActiveOwner(first);
@@ -337,7 +337,7 @@ it("keeps an in-flight write in its captured account and never publishes it afte
   const oldSave = hook.result.current.saveKeys;
   let pending!: Promise<boolean>;
   act(() => {
-    pending = oldSave(["ইঞ্জিনিয়ার"]);
+    pending = oldSave(["professional"]);
   });
   expect(hook.result.current.saving).toBe(true);
   setActiveOwner(second);
@@ -356,7 +356,7 @@ it("keeps an in-flight write in its captured account and never publishes it afte
   setActiveOwner(first);
   expect(await createStorage().readDraft(key)).toEqual({
     version: 1,
-    keys: [roleKey("ইঞ্জিনিয়ার")],
+    keys: ["professional"],
   });
   hook.unmount();
   expect(await oldSave(["after-unmount"])).toBe(false);
@@ -381,7 +381,7 @@ it("returns no successful apply after unmount even when the captured write finis
   const apply = hook.result.current.saveKeys;
   let pending!: Promise<boolean>;
   act(() => {
-    pending = apply(["ডিলার"]);
+    pending = apply(["supplier"]);
   });
   hook.unmount();
   await act(async () => {
@@ -391,6 +391,6 @@ it("returns no successful apply after unmount even when the captured write finis
   expect(await apply([])).toBe(false);
   expect(await createStorage().readDraft(key)).toEqual({
     version: 1,
-    keys: ["ডিলার"],
+    keys: ["supplier"],
   });
 });

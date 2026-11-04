@@ -8,6 +8,7 @@ import type {
 } from "./model.js";
 import { personSummary } from "./ledger.js";
 import { personKind } from "./contactKind.js";
+import { contactPresetFor } from "./contactTypes.js";
 import { effectiveAccounts } from "./effectiveAccounts.js";
 import { reconciledTotals } from "./adjustmentMath.js";
 export { personKind } from "./contactKind.js";
@@ -16,14 +17,23 @@ export const roleActions: Record<PersonKind, ContactAction[]> = {
   worker: ["payment"],
   shop: ["payment", "purchase", "return"],
   driver: ["payment", "transport"],
-  other: ["payment", "purchase", "transport"],
+  other: ["payment"],
 };
+export const contactActionChoices: ContactAction[] = [
+  "payment",
+  "purchase",
+  "return",
+  "transport",
+];
+export function availableContactActions(kind: PersonKind): ContactAction[] {
+  return [...roleActions[kind]];
+}
 export function allowedContactActions(person: Person): ContactAction[] {
-  const allowed = roleActions[personKind(person)];
+  const available = availableContactActions(contactPresetFor(person).kind);
   return [
     ...new Set(
-      (person.quickActions ?? allowed).filter((action) =>
-        allowed.includes(action),
+      (person.quickActions ?? available).filter((action) =>
+        available.includes(action),
       ),
     ),
   ];
@@ -33,7 +43,9 @@ export function defaultContactAccount(person: Person): Account {
     ? "labour"
     : personKind(person) === "driver"
       ? "other"
-      : "materials";
+      : personKind(person) === "shop"
+        ? "materials"
+        : "other";
 }
 export function contactAccountLedger(
   ledger: Ledger,
@@ -81,28 +93,12 @@ export function contactAccountSummary(
 }
 
 export function canAssignContact(
-  person: Person,
-  account: Account,
-  costTypes: string[],
-  cash: boolean,
+  _person: Person,
+  _account: Account,
+  _costTypes: string[],
+  _cash: boolean,
 ): boolean {
-  if (cash) return true;
-  const kind = personKind(person);
-  if (kind === "worker")
-    return (
-      account === "labour" &&
-      (cash || costTypes.every((type) => type === "labour"))
-    );
-  if (kind === "shop")
-    return (
-      account === "materials" &&
-      (cash || costTypes.every((type) => type === "material"))
-    );
-  if (kind === "driver")
-    return (
-      account === "other" &&
-      (cash || costTypes.every((type) => type === "transport"))
-    );
+  // A description or shortcut preference cannot invalidate an explicit bill.
   return true;
 }
 

@@ -127,7 +127,7 @@ async function repository(ledger: Ledger) {
 const ready = () =>
   waitFor(() =>
     expect(
-      (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
+      screen.getByLabelText("কত টাকা").closest<HTMLFieldSetElement>("fieldset")!
         .disabled,
     ).toBe(false),
   );
@@ -351,11 +351,18 @@ it("does not reopen a consumed legacy payment with empty financial IDs through e
     personId: "helper",
     workId: "work",
   } as const;
-  const legacy = entryContext(ledger, options);
+  const legacy = entryContext(ledger, { ...options, account: "materials" });
   await createWorkspaceStorage("real").saveDraft(
     "quick-v2:payment:work:helper",
     {
-      draft: { ...legacy, id: "", paymentId: "", refundId: "", amount: "125" },
+      draft: {
+        ...legacy,
+        purpose: "settle",
+        id: "",
+        paymentId: "",
+        refundId: "",
+        amount: "125",
+      },
       files: [],
     },
   );
@@ -364,6 +371,13 @@ it("does not reopen a consumed legacy payment with empty financial IDs through e
   expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
     "125",
   );
+  expect(screen.queryByRole("button", { name: "বাকি মেটাই" })).toBeNull();
+  expect(
+    (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect((await repo.read())!.ledger.entries).toHaveLength(0);
+  await user.click(screen.getByRole("button", { name: "অগ্রিম" }));
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(context.close).toHaveBeenCalledOnce());
   view.unmount();

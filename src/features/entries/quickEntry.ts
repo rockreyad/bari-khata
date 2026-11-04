@@ -18,7 +18,7 @@ import {
   PaymentPurposeSchema,
   type Ledger,
 } from "../../domain/model";
-import { canAssignContact, personKind } from "../../domain/contacts";
+import { canAssignContact } from "../../domain/contacts";
 import { saveWorkChange } from "../../domain/workActivity";
 import { parseAmount } from "../../domain/ledger";
 
@@ -250,12 +250,6 @@ export function buildQuickEntry(
     )
   )
     throw new Error("person_kind");
-  if (
-    draft.kind === "return" &&
-    person &&
-    !["shop", "other"].includes(personKind(person))
-  )
-    throw new Error("person_kind");
   const contractId =
     account === "labour" && draft.contractId ? draft.contractId : null;
   if (
@@ -268,7 +262,7 @@ export function buildQuickEntry(
     )
   )
     throw new Error("contract");
-  let paymentPurposeId = isCash || charge ? draft.paymentPurposeId : "";
+  let paymentPurposeId = isCash || charge || wage ? draft.paymentPurposeId : "";
   if (paymentPurposeId === "__new__") {
     const name = draft.paymentPurposeName.trim();
     if (!name || !draft.paymentPurposeNewId) throw new Error("payment_purpose");
@@ -350,13 +344,11 @@ export function buildQuickEntry(
             {
               id: `line-${draft.id}`,
               label: [
-                charge
-                  ? next.paymentPurposes.find(
-                      (purpose) => purpose.id === paymentPurposeId,
-                    )?.name ||
-                    draft.note.trim() ||
-                    chargeLabel
-                  : draft.note.trim() || "মজুরি",
+                next.paymentPurposes.find(
+                  (purpose) => purpose.id === paymentPurposeId,
+                )?.name ||
+                  draft.note.trim() ||
+                  (charge ? chargeLabel : "মজুরি"),
                 dailyDescription,
               ]
                 .filter(Boolean)

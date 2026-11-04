@@ -353,7 +353,7 @@ describe("earned daily wages and entry intent", () => {
       });
     },
   );
-  it("defaults noncontract worker payments to earned work while preserving an explicit advance intent", () => {
+  it("defaults noncontract zero-due payments to a new bill while preserving an explicit advance intent", () => {
     const ledger = fixture();
     const draft = entryContext(ledger, {
       kind: "payment",
@@ -361,7 +361,7 @@ describe("earned daily wages and entry intent", () => {
       workId: "door",
     });
     expect(draft).toMatchObject({
-      purpose: "wage",
+      purpose: "charge",
       contractId: "",
       payment: "full",
     });
@@ -390,7 +390,11 @@ describe("earned daily wages and entry intent", () => {
       }),
     ).toMatchObject({ purpose: "settle", contractId: "house" });
     expect(
-      entryWorkChange(house, { ...draft, contractId: "house" }, "roof"),
+      entryWorkChange(
+        house,
+        { ...draft, purpose: "settle", contractId: "house" },
+        "roof",
+      ),
     ).toMatchObject({ workId: "roof", contractId: "house", purpose: "settle" });
     expect(
       entryContactChange(ledger, { ...draft, purpose: "advance" }, "shah"),
@@ -402,8 +406,7 @@ describe("earned daily wages and entry intent", () => {
     );
     expect(material).toMatchObject({
       kind: "expense",
-      purpose: "settle",
-      personId: "",
+      personId: "shah",
       contractId: "",
       account: "materials",
       rows: [{ amount: "2000" }],
@@ -411,13 +414,13 @@ describe("earned daily wages and entry intent", () => {
   });
 });
 
-it("starts the same earned-worker flow from generic expenses and the worker profile while keeping entered money", () => {
+it("keeps an explicitly chosen labour bill when selecting a worker and preserves the entered money", () => {
   const ledger = fixture();
   expect(
     entryContext(ledger, { kind: "expense", personId: "shah", workId: "door" }),
   ).toMatchObject({
-    kind: "payment",
-    purpose: "wage",
+    kind: "expense",
+    purpose: "settle",
     account: "labour",
     payment: "full",
   });
@@ -427,10 +430,11 @@ it("starts the same earned-worker flow from generic expenses and the worker prof
     workId: "door",
   });
   generic.rows[0].amount = "2000";
+  generic.rows[0].label = "নমুনা কাজের মজুরি";
   const patch = entryContactChange(ledger, generic, "shah");
   expect(patch).toMatchObject({
-    kind: "payment",
-    purpose: "wage",
+    kind: "expense",
+    purpose: "settle",
     payment: "full",
     amount: "2000",
     personId: "shah",
@@ -443,6 +447,18 @@ it("starts the same earned-worker flow from generic expenses and the worker prof
     payable: 0,
   });
   expect(saved.entries).toHaveLength(2);
+  expect(saved.entries[0]).toMatchObject({
+    kind: "expense",
+    account: "labour",
+    personId: "shah",
+    lines: [{ amount: 200000, costType: "labour", label: "নমুনা কাজের মজুরি" }],
+  });
+  expect(saved.entries[1]).toMatchObject({
+    kind: "payment",
+    account: "labour",
+    personId: "shah",
+  });
+  expect(saved.entries[1].relatedEntryId).toBe(saved.entries[0].id);
 });
 
 it("requires the first audit event added to an old contract to start from its real existing terms", () => {

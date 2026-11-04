@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
+import type { SelectHTMLAttributes } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
@@ -10,7 +11,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { LedgerSchema, type Ledger } from "../../domain/model";
 import { PeoplePage, PersonPage } from "./PeoplePages";
 import { contactAccountSummary } from "../../domain/contacts";
@@ -41,6 +42,11 @@ vi.mock("../../context/LanguageProvider", () => ({
     number: String,
     date: (value: string | null) => value ?? "—",
   }),
+}));
+vi.mock("../../components/ui/AppSelect", () => ({
+  AppSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => (
+    <select {...props} />
+  ),
 }));
 afterEach(() => {
   cleanup();
@@ -176,7 +182,21 @@ it.each([
       const sheet = await screen.findByRole("dialog", {
         name: "মোট হিসাব মেলাই",
       });
+      expect(within(sheet).queryByLabelText("সঠিক অঙ্ক")).toBeNull();
+      await user.selectOptions(
+        within(sheet).getByLabelText("কোন হিসাব মেলাব"),
+        "labour",
+      );
       expect(within(sheet).getByLabelText("সঠিক অঙ্ক")).toBeTruthy();
+      await waitFor(() =>
+        expect(
+          (
+            within(sheet).getByRole("button", {
+              name: "সমন্বয় রাখুন",
+            }) as HTMLButtonElement
+          ).disabled,
+        ).toBe(false),
+      );
       expect(sheet.textContent).toContain("রহিম");
       expect(sheet.textContent).toContain(scopeLabel);
       expect(state.go).not.toHaveBeenCalled();
@@ -586,7 +606,7 @@ describe("minimal people pages", () => {
     expect(container.textContent).toContain("৳710");
     expect(container.textContent).not.toContain("৳800");
   });
-  it("settles a worker's historical material account without creating a wage entry", async () => {
+  it("ignores a legacy material filter when opening a payment from the all-account profile", async () => {
     state.ledger = fixture();
     renderPage("/people/worker?account=materials");
     await userEvent.click(screen.getByRole("button", { name: "টাকা দিই" }));
@@ -594,7 +614,7 @@ describe("minimal people pages", () => {
       kind: "payment",
       personId: "worker",
       workId: undefined,
-      account: "materials",
+      account: "labour",
     });
   });
 });
@@ -747,3 +767,309 @@ it.each([
     expect(JSON.stringify(ledger)).toBe(before);
   },
 );
+
+function twoAccountLedger() {
+  return LedgerSchema.parse({
+    works: [{ id: "sample", name: "নমুনা খাতা" }],
+    people: [{ id: "sample-person", name: "নমুনা ব্যক্তি", kind: "other" }],
+    entries: [
+      {
+        id: "sample-material",
+        kind: "expense",
+        personId: "sample-person",
+        account: "materials",
+        lines: [
+          { id: "m", workId: "sample", label: "নমুনা মাল", amount: 10000 },
+        ],
+      },
+      {
+        id: "sample-material-paid",
+        kind: "payment",
+        personId: "sample-person",
+        account: "materials",
+        allocations: [{ workId: "sample", amount: 3000 }],
+        paymentParts: [{ amount: 3000 }],
+      },
+      {
+        id: "sample-labour",
+        kind: "expense",
+        personId: "sample-person",
+        account: "labour",
+        lines: [
+          {
+            id: "l",
+            workId: "sample",
+            label: "নমুনা মজুরি",
+            costType: "labour",
+            amount: 20000,
+          },
+        ],
+      },
+      {
+        id: "sample-labour-paid",
+        kind: "payment",
+        personId: "sample-person",
+        account: "labour",
+        allocations: [{ workId: "sample", amount: 25000 }],
+        paymentParts: [{ amount: 25000 }],
+      },
+    ],
+  });
+}
+
+it.each(["materials", "labour", "other"])(
+  "always shows every account and keeps debt and credit separate despite the legacy %s URL",
+  async (account) => {
+    const ledger = twoAccountLedger();
+    state.ledger = ledger;
+    const user = userEvent.setup();
+    const { container } = renderPage(
+      `/people/sample-person?account=${account}&work=sample`,
+    );
+    expect(screen.queryByLabelText("কোন হিসাব দেখব")).toBeNull();
+    expect(container.querySelector(".contact-summary-hero")?.textContent).toBe(
+      "মোট টাকা দিয়েছি৳280",
+    );
+    expect(
+      container.querySelector(".contact-summary-metrics")?.textContent,
+    ).toBe("দিতে বাকি৳70");
+    expect(
+      container.querySelector(".contact-reconciliation")?.textContent,
+    ).toContain("অগ্রিম দিয়েছি৳50");
+    const history = container.querySelector(".contact-history")!;
+    expect(history.textContent).toContain("নমুনা মাল");
+    expect(history.textContent).toContain("নমুনা মজুরি");
+    expect(history.textContent).toContain("সব হিসাব");
+    await user.click(screen.getByRole("button", { name: "পুরো হিসাব" }));
+    expect(state.go).toHaveBeenCalledWith(
+      "/ledger?person=sample-person&order=oldest&work=sample",
+    );
+    expect(state.ledger).toEqual(ledger);
+  },
+);
+
+function HistoryDestination() {
+  return <p data-testid="history-destination">{useLocation().search}</p>;
+}
+
+it("removes a legacy account restriction when redirecting to the person's full history", async () => {
+  state.ledger = twoAccountLedger();
+  render(
+    <MemoryRouter
+      initialEntries={[
+        "/people/sample-person?view=history&account=materials&work=sample&order=newest",
+      ]}
+    >
+      <Routes>
+        <Route path="/people/:personId" element={<PersonPage />} />
+        <Route path="/ledger" element={<HistoryDestination />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  const destination = await screen.findByTestId("history-destination");
+  const query = new URLSearchParams(destination.textContent!);
+  expect(Object.fromEntries(query)).toEqual({
+    person: "sample-person",
+    work: "sample",
+    order: "newest",
+  });
+});
+
+it("chooses share and reconciliation scopes without narrowing the profile behind either dialog", async () => {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+  const ledger = twoAccountLedger();
+  state.ledger = ledger;
+  const storage = repository.createWorkspaceStorage("demo");
+  const draftKey =
+    "total-adjustment:person:sample-person:materials:work:sample";
+  await storage.removeDraft(draftKey);
+  const user = userEvent.setup();
+  const { container } = renderPage(
+    "/people/sample-person?account=materials&work=sample",
+  );
+  const summary = () =>
+    container.querySelector(".contact-summary-card")!.textContent;
+  const history = () =>
+    container.querySelector(".contact-history")!.textContent;
+  const beforeSummary = summary();
+  const beforeHistory = history();
+  try {
+    await user.click(screen.getByRole("button", { name: "আরও" }));
+    await user.click(
+      screen.getByRole("menuitem", { name: "হিসাবের কপি পাঠাই" }),
+    );
+    let sheet = await screen.findByRole("dialog", {
+      name: "হিসাবের কপি পাঠাই",
+    });
+    expect(
+      (within(sheet).getByLabelText("কোন হিসাবের কপি") as HTMLSelectElement)
+        .value,
+    ).toBe("");
+    await user.selectOptions(
+      within(sheet).getByLabelText("কোন হিসাবের কপি"),
+      "labour",
+    );
+    expect(
+      sheet.querySelector(".statement-recipient-copy > span")?.textContent,
+    ).toBe("মজুরির হিসাব · নমুনা খাতা");
+    await user.click(within(sheet).getByRole("button", { name: "বন্ধ করুন" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(summary()).toBe(beforeSummary);
+    expect(history()).toBe(beforeHistory);
+    await user.click(screen.getByRole("button", { name: "আরও" }));
+    await user.click(screen.getByRole("menuitem", { name: "মোট হিসাব মেলাই" }));
+    sheet = await screen.findByRole("dialog", { name: "মোট হিসাব মেলাই" });
+    expect(
+      (within(sheet).getByLabelText("কোন হিসাব মেলাব") as HTMLSelectElement)
+        .value,
+    ).toBe("");
+    await user.selectOptions(
+      within(sheet).getByLabelText("কোন হিসাব মেলাব"),
+      "materials",
+    );
+    await within(sheet).findByText("৳30");
+    await waitFor(() =>
+      expect(
+        (
+          within(sheet).getByRole("button", {
+            name: "সমন্বয় রাখুন",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    );
+    await user.click(within(sheet).getByRole("button", { name: "বন্ধ করুন" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(summary()).toBe(beforeSummary);
+    expect(history()).toBe(beforeHistory);
+    expect(state.ledger).toEqual(ledger);
+    expect(state.go).not.toHaveBeenCalled();
+  } finally {
+    cleanup();
+    await storage.removeDraft(draftKey);
+    vi.unstubAllGlobals();
+  }
+});
+
+it.each([
+  {
+    kind: "shop" as const,
+    action: "return" as const,
+    label: "মাল ফেরত দিই",
+    expected: { kind: "return", account: "materials" },
+  },
+  {
+    kind: "driver" as const,
+    action: "transport" as const,
+    label: "আনার খরচ লিখি",
+    expected: { kind: "expense", account: "other", costType: "transport" },
+  },
+])(
+  "honours an eligible explicitly chosen $action shortcut for a $kind profile",
+  async ({ kind, action, label, expected }) => {
+    state.ledger = LedgerSchema.parse({
+      works: [{ id: "sample", name: "নমুনা খাতা" }],
+      people: [
+        {
+          id: "sample-person",
+          name: "নমুনা ব্যক্তি",
+          kind,
+          quickActions: [action],
+        },
+      ],
+    });
+    renderPage("/people/sample-person");
+    const group = screen.getByRole("group", { name: "হিসাব লেখার বোতাম" });
+    expect(within(group).getAllByRole("button")).toHaveLength(1);
+    await userEvent.click(within(group).getByRole("button", { name: label }));
+    expect(state.add).toHaveBeenCalledWith({
+      ...expected,
+      personId: "sample-person",
+      workId: undefined,
+    });
+  },
+);
+
+it.each([
+  {
+    kind: "worker" as const,
+    action: "return" as const,
+    label: "মাল ফেরত দিই",
+    account: "labour",
+  },
+  {
+    kind: "shop" as const,
+    action: "transport" as const,
+    label: "আনার খরচ লিখি",
+    account: "materials",
+  },
+  {
+    kind: "driver" as const,
+    action: "purchase" as const,
+    label: "মাল কিনলাম",
+    account: "other",
+  },
+  {
+    kind: "other" as const,
+    action: "purchase" as const,
+    label: "মাল কিনলাম",
+    account: "other",
+  },
+])(
+  "blocks a legacy incompatible $action shortcut for a $kind while keeping its selected payment action",
+  async ({ kind, action, label, account }) => {
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "sample", name: "নমুনা খাতা" }],
+      people: [
+        {
+          id: "sample-person",
+          name: "নমুনা ব্যক্তি",
+          kind,
+          quickActions: [action, "payment"],
+        },
+      ],
+    });
+    state.ledger = ledger;
+    const before = structuredClone(ledger);
+    renderPage("/people/sample-person");
+    const group = screen.getByRole("group", { name: "হিসাব লেখার বোতাম" });
+    expect(within(group).getAllByRole("button")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: label })).toBeNull();
+    expect(state.add).not.toHaveBeenCalled();
+    await userEvent.click(
+      within(group).getByRole("button", { name: "টাকা দিই" }),
+    );
+    expect(state.add).toHaveBeenCalledExactlyOnceWith({
+      kind: "payment",
+      personId: "sample-person",
+      workId: undefined,
+      account,
+    });
+    expect(ledger).toEqual(before);
+  },
+);
+
+it("does not fall back to another shortcut when every saved preference is incompatible", () => {
+  const ledger = LedgerSchema.parse({
+    people: [
+      {
+        id: "sample-person",
+        name: "নমুনা ব্যক্তি",
+        kind: "worker",
+        quickActions: ["purchase", "return", "transport"],
+      },
+    ],
+  });
+  state.ledger = ledger;
+  const before = structuredClone(ledger);
+  renderPage("/people/sample-person");
+  expect(screen.queryByRole("group", { name: "হিসাব লেখার বোতাম" })).toBeNull();
+  expect(state.add).not.toHaveBeenCalled();
+  expect(ledger).toEqual(before);
+});

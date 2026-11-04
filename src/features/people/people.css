@@ -234,20 +234,6 @@
   font-size: 22px;
   font-weight: 650;
 }
-.contact-account-note {
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  margin-top: 19px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-  font-size: 11px;
-  color: var(--muted);
-}
-.contact-account-note button {
-  color: var(--accent);
-  font-size: 11px;
-}
 .contact-old-note {
   font-size: 12px;
   color: var(--muted);
@@ -322,6 +308,18 @@
 .statement-share {
   display: grid;
   gap: 20px;
+}
+.statement-account-select {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.statement-scope-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
 }
 .statement-recipient {
   display: flex;
@@ -557,11 +555,6 @@
   .contact-balance-pair strong {
     font-size: 23px;
   }
-  .contact-account-note {
-    font-size: 10px;
-    margin-top: 15px;
-    padding-top: 10px;
-  }
   .contact-main-actions {
     gap: 10px;
   }
@@ -737,10 +730,6 @@
   color: var(--text);
   overflow-wrap: anywhere;
 }
-.contact-detail-page .contact-account-note {
-  margin: 0;
-  padding: 12px 29px;
-}
 .contact-detail-page .contact-main-actions > button {
   min-height: 48px;
   border-radius: 13px;
@@ -790,9 +779,6 @@
   }
   .contact-summary-metrics dd {
     font-size: clamp(19px, 5.2vw, 24px);
-  }
-  .contact-detail-page .contact-account-note {
-    padding: 11px 21px;
   }
   .contact-reconciliation > summary {
     padding: 13px 21px;
@@ -857,16 +843,6 @@
   margin-left: auto;
 }
 
-.contact-detail-page .contact-account-note {
-  align-items: center;
-  gap: 12px;
-  font-size: 12px;
-}
-.contact-account-note > .app-select {
-  width: auto;
-  min-width: 140px;
-  max-width: 220px;
-}
 .person-editor-kind > p {
   color: var(--muted);
   font-size: 12px;

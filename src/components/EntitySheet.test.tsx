@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
-import type { ReactNode } from "react";
+import type { ReactNode, SelectHTMLAttributes } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EntitySheet } from "./EntitySheet";
 import { LedgerSchema, type Ledger } from "../domain/model";
@@ -28,6 +34,11 @@ vi.mock("../data/repository", () => ({
     saveDraft: async () => {},
     removeDraft: async () => {},
   }),
+}));
+vi.mock("./ui/AppSelect", () => ({
+  AppSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => (
+    <select {...props} />
+  ),
 }));
 afterEach(cleanup);
 describe("notebook quick action settings", () => {
@@ -160,6 +171,10 @@ describe("contact import in a person's form", () => {
               .hasAttribute("disabled"),
           ).toBe(false),
         );
+        await user.selectOptions(
+          screen.getByLabelText("কীভাবে যুক্ত"),
+          "supplier",
+        );
         if (existingName)
           await user.type(screen.getByLabelText("দোকানের নাম"), existingName);
         await user.click(
@@ -176,10 +191,229 @@ describe("contact import in a person's form", () => {
         expect(onSave.mock.calls[0][0].people[0]).toMatchObject({
           name: existingName || "শাহ আলম",
           phone: "01700000091",
+          kind: "shop",
         });
       } finally {
         Reflect.deleteProperty(navigator, "contacts");
       }
     },
   );
+});
+
+it.each([
+  {
+    preset: "দোকানদার",
+    presetId: "supplier",
+    kind: "shop",
+    role: "নমুনা ইট ও বালু",
+    actions: ["payment", "purchase", "return"],
+    agreement: false,
+  },
+  {
+    preset: "ইঞ্জিনিয়ার / পরামর্শক",
+    presetId: "professional",
+    kind: "worker",
+    role: "নমুনা নকশার পরামর্শক",
+    actions: ["payment"],
+    agreement: true,
+  },
+  {
+    preset: "গাড়ি / পরিবহন",
+    presetId: "transport",
+    kind: "driver",
+    role: "নমুনা পিকআপ সেবা",
+    actions: ["payment", "transport"],
+    agreement: false,
+  },
+  {
+    preset: "অন্যান্য সেবা",
+    presetId: "service",
+    kind: "worker",
+    role: "নমুনা সুইপার",
+    actions: ["payment"],
+    agreement: true,
+  },
+])(
+  "uses the $preset relationship for initial actions and keeps later description edits descriptive",
+  async ({ preset, presetId, kind, role, actions, agreement }) => {
+    const user = userEvent.setup();
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "work", name: "নমুনা কাজ" }],
+      people: [{ id: "existing", name: "আগের নমুনা নাম", kind: "other" }],
+      entries: [
+        {
+          id: "old-bill",
+          kind: "expense",
+          personId: "existing",
+          lines: [{ id: "line", workId: "work", amount: 12000 }],
+        },
+      ],
+    });
+    const onSave = vi.fn(async (_value: Ledger) => {});
+    render(
+      <EntitySheet
+        kind="person"
+        ledger={ledger}
+        onSave={onSave}
+        onClose={() => {}}
+        mode="demo"
+      />,
+    );
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+    expect(
+      (screen.getByLabelText("কীভাবে যুক্ত") as HTMLSelectElement).value,
+    ).toBe("");
+    expect(document.querySelector("form input")).toBe(
+      screen.getByLabelText("নাম"),
+    );
+    expect(screen.queryByRole("button", { name: preset })).toBeNull();
+    await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), presetId);
+    const supplier = kind === "shop";
+    fireEvent.change(screen.getByLabelText(supplier ? "দোকানের নাম" : "নাম"), {
+      target: { value: "নমুনা নতুন নাম" },
+    });
+    fireEvent.change(
+      screen.getByLabelText(
+        supplier ? "কী বিক্রি করেন" : "পরিচয় / কী কাজ করেন",
+      ),
+      { target: { value: role } },
+    );
+    expect(
+      (screen.getByLabelText("কীভাবে যুক্ত") as HTMLSelectElement).value,
+    ).toBe(presetId);
+    expect(screen.queryByLabelText("কাজের টাকা") !== null).toBe(agreement);
+    await user.click(screen.getByText("পছন্দের বোতাম"));
+    for (const [action, label] of [
+      ["payment", "টাকা দিলাম"],
+      ["purchase", "মাল কেনা"],
+      ["return", "মাল ফেরত"],
+      ["transport", "আনার খরচ"],
+    ]) {
+      const button = screen.getByRole("button", {
+        name: label,
+      }) as HTMLButtonElement;
+      expect(button.disabled).toBe(!actions.includes(action));
+      expect(button.getAttribute("aria-pressed")).toBe(
+        String(actions.includes(action)),
+      );
+      if (!actions.includes(action)) {
+        await user.click(button);
+        expect(button.getAttribute("aria-pressed")).toBe("false");
+      }
+    }
+    await user.click(screen.getByRole("button", { name: "রাখুন" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    const next = onSave.mock.calls[0][0];
+    expect(
+      next.people.find((person) => person.id !== "existing"),
+    ).toMatchObject({
+      name: "নমুনা নতুন নাম",
+      kind,
+      role,
+      quickActions: actions,
+    });
+    expect(next.entries).toEqual(ledger.entries);
+    expect(next.contracts).toEqual(ledger.contracts);
+  },
+);
+
+it("changes available buttons with the selected relationship without treating free text as a relationship", async () => {
+  const user = userEvent.setup();
+  const onSave = vi.fn(async (_value: Ledger) => {});
+  render(
+    <EntitySheet
+      kind="person"
+      ledger={LedgerSchema.parse({})}
+      onSave={onSave}
+      onClose={() => {}}
+      mode="demo"
+    />,
+  );
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
+  await user.type(screen.getByLabelText("নাম"), "নমুনা সম্পর্ক বদল");
+  await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "supplier");
+  await user.click(screen.getByText("পছন্দের বোতাম"));
+  const purchase = screen.getByRole("button", {
+    name: "মাল কেনা",
+  }) as HTMLButtonElement;
+  const transport = screen.getByRole("button", {
+    name: "আনার খরচ",
+  }) as HTMLButtonElement;
+  expect(purchase.disabled).toBe(false);
+  expect(transport.disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("কী বিক্রি করেন"), {
+    target: { value: "সুইপার" },
+  });
+  expect(purchase.disabled).toBe(false);
+  expect(transport.disabled).toBe(true);
+  await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "transport");
+  expect(purchase.disabled).toBe(true);
+  expect(purchase.getAttribute("aria-pressed")).toBe("false");
+  expect(transport.disabled).toBe(false);
+  expect(transport.getAttribute("aria-pressed")).toBe("true");
+  await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "service");
+  expect(purchase.disabled).toBe(true);
+  expect(transport.disabled).toBe(true);
+  expect(transport.getAttribute("aria-pressed")).toBe("false");
+  await user.click(purchase);
+  await user.click(transport);
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+  expect(onSave.mock.calls[0][0].people[0]).toMatchObject({
+    kind: "worker",
+    quickActions: ["payment"],
+  });
+});
+
+it("keeps an entered agreement open and focused while clearing and replacing its amount after a relationship change", async () => {
+  const user = userEvent.setup();
+  const onSave = vi.fn(async (_ledger: Ledger) => {});
+  render(
+    <EntitySheet
+      kind="person"
+      ledger={LedgerSchema.parse({})}
+      onSave={onSave}
+      onClose={vi.fn()}
+      mode="demo"
+    />,
+  );
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
+  await user.type(screen.getByLabelText("নাম"), "নমুনা ব্যক্তি");
+  await user.selectOptions(
+    screen.getByLabelText("কীভাবে যুক্ত"),
+    "craftsperson",
+  );
+  let input = screen.getByLabelText("কাজের টাকা") as HTMLInputElement;
+  const disclosure = input.closest("details") as HTMLDetailsElement;
+  await user.click(disclosure.querySelector("summary")!);
+  await waitFor(() => expect(disclosure.open).toBe(true));
+  await user.type(input, "125");
+  await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "supplier");
+  input = screen.getByLabelText("কাজের টাকা") as HTMLInputElement;
+  await user.clear(input);
+  expect(disclosure.open).toBe(true);
+  expect(document.activeElement).toBe(input);
+  expect(screen.getByLabelText("কাজের টাকা")).toBe(input);
+  await user.type(input, "275");
+  expect(input.value).toBe("275");
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+  expect(onSave.mock.calls[0][0].contracts).toEqual([
+    expect.objectContaining({ total: 27500, scope: "house" }),
+  ]);
 });
