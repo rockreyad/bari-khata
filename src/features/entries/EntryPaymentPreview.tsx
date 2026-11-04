@@ -5,10 +5,12 @@ export function EntryPaymentPreview({
   previousBalance,
   currentCost,
   payment,
+  acrossJobs = false,
 }: {
   previousBalance: number;
   currentCost: number;
   payment: number;
+  acrossJobs?: boolean;
 }) {
   const { t, money } = useLanguageContext();
   const total = BigInt(Math.max(previousBalance, 0)) + BigInt(currentCost);
@@ -24,6 +26,7 @@ export function EntryPaymentPreview({
   const remaining = Number(net);
   return (
     <section className="entry-balance-preview" aria-label={t("টাকার হিসাব")}>
+      {acrossJobs ? <h3>{t("সব কাজ মিলিয়ে")}</h3> : null}
       <dl className="entry-balance-items">
         {previousBalance !== 0 ? (
           <div>
