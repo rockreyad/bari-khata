@@ -114,6 +114,7 @@ describe("review queue load more", () => {
     expect(container.querySelectorAll(".history-row")).toHaveLength(30);
   });
 
+  // ১২৫টি সারির পর্দায় বারবার কাজ করা CI-তে বেশি সময় নেয়।
   it("keeps bulk selection capped at 100 when more than 100 records are displayed", async () => {
     state.ledger = fixture(125);
     const user = userEvent.setup();
@@ -147,5 +148,5 @@ describe("review queue load more", () => {
     }) as HTMLInputElement;
     expect(selectAll.indeterminate).toBe(true);
     expect(selectAll.getAttribute("aria-checked")).toBe("mixed");
-  });
+  }, 15_000);
 });

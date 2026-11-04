@@ -67,7 +67,9 @@ GitHub repository settings-এ `main`-এর জন্য নিচের নি
 npm run setup:hooks
 ```
 
-এতে শুধু এই repository-তে `core.hooksPath=.githooks` হয়। আগে অন্য `core.hooksPath` থাকলে কমান্ড থামে; আগের hook মুছে বা নীরবে বদলে দেয় না। CI বা dependency install-এর সময় এটি নিজে থেকে চলে না। নতুন clone-এ কমান্ডটি আবার চালাতে হবে।
+এতে `.githooks/pre-push`-এর কপি `git rev-parse --git-common-dir`-এর ভেতর `bari-khata-hooks/pre-push`-এ থাকে। `core.hooksPath` এই স্থায়ী directory-র পূর্ণ path হয়। তাই পুরোনো `main` বা যে branch-এ `.githooks` নেই, সেটিতে গেলেও সুরক্ষা থাকে। একই repository-র worktree-গুলোও একই স্থায়ী hook পায়।
+
+আগের সংস্করণে `core.hooksPath=.githooks` বসানো থাকলে এই branch থেকে `npm run setup:hooks` আবার চালান। সেটি স্থায়ী কপিতে বদলে যাবে। আগে অন্য `core.hooksPath`, default Git hooks বা আলাদা `pre-push` থাকলে কমান্ড থামে; আগের hook মুছে বা নীরবে বদলে দেয় না। CI বা dependency install-এর সময় এটি নিজে থেকে চলে না। নতুন clone-এ কমান্ডটি আবার চালাতে হবে।
 
 `.githooks/pre-push` destination হিসেবে `refs/heads/main` পেলে নতুন push, force push ও delete আটকায়—অন্য branch থেকে `main`-এ push করলেও। আগের `v*` tag সরানো বা মুছতেও দেয় না; নতুন tag ও feature branch push করা যায়। এরপর pull request দিয়ে কাজ করুন।
 
