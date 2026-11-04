@@ -26,15 +26,12 @@ import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { MoneyInput } from "../../components/ui/MoneyInput";
 import { FormError, useFormError } from "../../components/ui/FormError";
-import {
-  personKind,
-  defaultContactAccount,
-  contactAccountLedger,
-} from "../../domain/contacts";
+import { personKind, defaultContactAccount } from "../../domain/contacts";
 import { Sheet } from "../../components/Sheet";
 import { EntryFrame } from "../../components/EntryFrame";
 import { BalanceProgress } from "../../components/ui/BalanceProgress";
 import { EntryPaymentPreview } from "./EntryPaymentPreview";
+import { entryPaymentBalance } from "./entryPaymentBalance";
 import { moneyInputValue } from "../../lib/numericFields";
 import "./entry-page.css";
 import { PaymentIcon } from "../../components/ui/Icons";
@@ -55,7 +52,6 @@ import {
   changeEntryType,
   restoreEntryContext,
   applicableQuickContracts,
-  partyAccountBalance,
 } from "./entryContext";
 import { defaultTaxonomy } from "../../domain/importWallet";
 import { parseAmount, contractSummary } from "../../domain/ledger";
@@ -455,9 +451,9 @@ export function QuickEntrySheet({
           })()
         : 0;
   const prior = selectedPerson
-    ? partyAccountBalance(
-        contactAccountLedger(ledger, selectedPerson, draft.account),
-        selectedPerson.id,
+    ? entryPaymentBalance(
+        ledger,
+        selectedPerson,
         draft.account,
         draft.contractId || null,
       )
@@ -1237,9 +1233,16 @@ export function QuickEntrySheet({
                   paid={agreement.netPaid + paidNow}
                 />
               </section>
+            ) : prior?.balance === null ? (
+              <p className="form-hint" role="status">
+                {t(
+                  "কিছু মজুরির বিল কোন কাজের, তা মেলানো নেই। কাজ বেছে নিয়ে হিসাব দেখুন।",
+                )}
+              </p>
             ) : prior && (prior.balance !== 0 || total > 0 || paidNow > 0) ? (
               <EntryPaymentPreview
                 previousBalance={prior.balance}
+                acrossJobs={prior.acrossJobs}
                 currentCost={cash ? 0 : total}
                 payment={paidNow}
               />

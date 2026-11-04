@@ -19,6 +19,9 @@ export const entryPageEnglish: Record<string, string> = {
   "মিস্ত্রির টাকা": "Labour payment",
   "কাজের টাকা": "Work payment",
   "আগের বাকি": "Previous balance",
+  "সব কাজ মিলিয়ে": "Across all jobs",
+  "কিছু মজুরির বিল কোন কাজের, তা মেলানো নেই। কাজ বেছে নিয়ে হিসাব দেখুন।":
+    "Some wage bills have not been linked to a job. Choose a job to see its balance.",
   "গাড়িভাড়া দিই": "Pay for transport",
   "কাকে দিচ্ছেন": "Who are you paying?",
   "চুক্তি ছাড়া": "Without an agreement",
