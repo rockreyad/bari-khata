@@ -258,6 +258,95 @@ function fixture() {
   });
 }
 
+it.each([
+  { kind: "worker", contactType: "craftsperson", eligible: true },
+  { kind: "worker", contactType: "professional", eligible: true },
+  { kind: "other", contactType: "service", eligible: true },
+  { kind: "other", contactType: "custom", eligible: true },
+  { kind: "shop", contactType: "supplier", eligible: false },
+  { kind: "driver", contactType: "transport", eligible: false },
+  { kind: "shop", contactType: "custom", eligible: false },
+  { kind: "driver", contactType: "custom", eligible: false },
+])(
+  "offers new work consistently for $contactType with coarse kind $kind",
+  async ({ kind, contactType, eligible }) => {
+    const ledger = LedgerSchema.parse({
+      people: [
+        {
+          id: "person",
+          name: "নমুনা নাম",
+          role: "নিজের মতো পরিচয়",
+          kind,
+          contactType,
+        },
+      ],
+    });
+    const original = structuredClone(ledger);
+    state.ledger = ledger;
+    renderPage("/people/person");
+    const addJob = screen.queryByRole("button", { name: "কাজ যোগ করি" });
+    if (eligible) {
+      expect(addJob).toBeTruthy();
+      await userEvent.click(addJob!);
+      expect(state.entity).toHaveBeenCalledWith(
+        "contract",
+        undefined,
+        undefined,
+        "person",
+      );
+    } else {
+      expect(addJob).toBeNull();
+      expect(state.entity).not.toHaveBeenCalled();
+    }
+    expect(ledger).toEqual(original);
+  },
+);
+
+it.each([
+  { kind: "shop", contactType: "supplier" },
+  { kind: "driver", contactType: "transport" },
+])(
+  "keeps a $kind's historic job and payments visible without offering another job",
+  async ({ kind, contactType }) => {
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "work", name: "নমুনা খাতা" }],
+      people: [{ id: "person", name: "নমুনা নাম", kind, contactType }],
+      contracts: [
+        {
+          id: "old-job",
+          personId: "person",
+          workId: "work",
+          title: "পুরোনো কাজ",
+          total: 100000,
+        },
+      ],
+      entries: [
+        {
+          id: "old-paid",
+          personId: "person",
+          kind: "payment",
+          account: "labour",
+          contractId: "old-job",
+          allocations: [{ workId: "work", amount: 40000 }],
+          paymentParts: [{ amount: 40000 }],
+        },
+      ],
+    });
+    const original = structuredClone(ledger);
+    state.ledger = ledger;
+    renderPage("/people/person");
+    expect(screen.queryByRole("button", { name: "কাজ যোগ করি" })).toBeNull();
+    const job = screen.getByRole("button", { name: /পুরোনো কাজ/ });
+    expect(job.textContent).toContain("৳600");
+    await userEvent.click(job);
+    expect(state.go).toHaveBeenCalledWith(
+      expect.stringContaining("/jobs/old-job"),
+    );
+    expect(state.entity).not.toHaveBeenCalled();
+    expect(ledger).toEqual(original);
+  },
+);
+
 it("puts payment before the chart and shows a matching job balance only once", () => {
   state.ledger = LedgerSchema.parse({
     works: [{ id: "work", name: "নমুনা কাজ" }],

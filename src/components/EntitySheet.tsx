@@ -14,6 +14,7 @@ import { latinDigits } from "../lib/numerals";
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -37,6 +38,7 @@ import { saveWorkChange } from "../domain/workActivity";
 import {
   allowedContactActions,
   availableContactActions,
+  canCreateContactJob,
   personKind,
 } from "../domain/contacts";
 import {
@@ -195,6 +197,16 @@ export function EntitySheet({
       draft.workId !== (originalContract.workId ?? "")),
   );
   const notebookValue = draft.scope === "work" ? draft.workId : "";
+  const contractPersonRuleId = useId();
+  const selectedContractPerson = ledger.people.find(
+    (person) => person.id === draft.personId,
+  );
+  const ineligibleContractPerson = Boolean(
+    kind === "contract" &&
+    selectedContractPerson &&
+    !canCreateContactJob(selectedContractPerson) &&
+    selectedContractPerson.id !== originalContract?.personId,
+  );
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [, setError, errorNotice] = useFormError();
@@ -371,9 +383,7 @@ export function EntitySheet({
     setError("");
     try {
       if (identityMismatch)
-        throw new Error(
-          t("এই কাজে হিসাব আছে। মিস্ত্রি ও খাতা বদলানো যাবে না।"),
-        );
+        throw new Error(t("এই কাজে হিসাব আছে। নাম ও খাতা বদলানো যাবে না।"));
       let next = structuredClone(ledger);
       if (kind !== "contract" && !draft.name.trim())
         throw new Error(t("নাম লিখুন।"));
@@ -446,15 +456,15 @@ export function EntitySheet({
         if (!total) throw new Error(t("কাজের সঠিক টাকা লিখুন।"));
         let personId = draft.personId;
         if (personId === "__new__") {
-          if (!draft.newPersonName.trim())
-            throw new Error(t("মিস্ত্রির নাম লিখুন।"));
+          if (!draft.newPersonName.trim()) throw new Error(t("নাম লিখুন।"));
           personId = draft.newPersonId;
           next.people.push(
             PersonSchema.parse({
               id: personId,
               name: draft.newPersonName.trim(),
-              kind: "worker",
-              role: t("মিস্ত্রি"),
+              kind: "other",
+              contactType: "custom",
+              role: "",
             }),
           );
         }
@@ -468,9 +478,13 @@ export function EntitySheet({
             ))
         )
           throw new Error(t("মুছে রাখা নাম, খাতা বা কাজ আগে ফিরিয়ে আনুন।"));
-        if (!next.people.some((p) => p.id === personId))
-          throw new Error(t("মিস্ত্রির নাম বেছে নিন।"));
+        const person = next.people.find((p) => p.id === personId);
+        if (!person) throw new Error(t("কাজের জন্য নাম বেছে নিন।"));
         const previous = next.contracts.find((c) => c.id === editId);
+        if (!canCreateContactJob(person) && previous?.personId !== person.id)
+          throw new Error(
+            t("এই ধরনের নামে নতুন কাজ রাখা যায় না। অন্য নাম বেছে নিন।"),
+          );
         const contract = ContractSchema.parse({
           id: draft.id,
           ...previous,
@@ -796,20 +810,18 @@ export function EntitySheet({
             <>
               {identityMismatch ? (
                 <div className="entity-notice" role="alert">
-                  <p>
-                    {t("এই কাজে হিসাব আছে। মিস্ত্রি ও খাতা বদলানো যাবে না।")}
-                  </p>
+                  <p>{t("এই কাজে হিসাব আছে। নাম ও খাতা বদলানো যাবে না।")}</p>
                   <button
                     type="button"
                     className="secondary-button"
                     onClick={restoreIdentity}
                   >
-                    {t("আগের মিস্ত্রি ও খাতা রাখি")}
+                    {t("আগের নাম ও খাতা রাখি")}
                   </button>
                 </div>
               ) : identityLocked ? (
                 <p className="field-hint">
-                  {t("এই কাজে হিসাব আছে। মিস্ত্রি ও খাতা বদলানো যাবে না।")}
+                  {t("এই কাজে হিসাব আছে। নাম ও খাতা বদলানো যাবে না।")}
                 </p>
               ) : null}
               <label>
@@ -864,8 +876,13 @@ export function EntitySheet({
                 </AppSelect>
               </label>
               <label>
-                {t("মিস্ত্রি")}
+                {t("কার কাজ")}
                 <AppSelect
+                  aria-label={t("কার কাজ")}
+                  aria-invalid={ineligibleContractPerson || undefined}
+                  aria-describedby={
+                    ineligibleContractPerson ? contractPersonRuleId : undefined
+                  }
                   value={draft.personId}
                   onChange={(e) => {
                     if (!identityLocked) field("personId", e.target.value);
@@ -877,8 +894,8 @@ export function EntitySheet({
                   {ledger.people
                     .filter(
                       (person) =>
-                        !person.archivedAt ||
-                        (Boolean(editId) && person.id === draft.personId),
+                        canCreateContactJob(person) ||
+                        person.id === originalContract?.personId,
                     )
                     .map((p) => (
                       <option key={p.id} value={p.id}>
@@ -888,9 +905,18 @@ export function EntitySheet({
                   <option value="__new__">{t("+ নাম লিখব")}</option>
                 </AppSelect>
               </label>
+              {ineligibleContractPerson ? (
+                <p
+                  id={contractPersonRuleId}
+                  className="field-hint"
+                  role="status"
+                >
+                  {t("এই ধরনের নামে নতুন কাজ রাখা যায় না। অন্য নাম বেছে নিন।")}
+                </p>
+              ) : null}
               {draft.personId === "__new__" ? (
                 <label>
-                  {t("মিস্ত্রির নাম")}
+                  {t("নাম")}
                   <input
                     value={draft.newPersonName}
                     onChange={(e) => field("newPersonName", e.target.value)}

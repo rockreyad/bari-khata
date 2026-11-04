@@ -38,6 +38,14 @@ export function allowedContactActions(person: Person): ContactAction[] {
     ),
   ];
 }
+export function canCreateContactJob(person: Person): boolean {
+  const kind = personKind(person);
+  return (
+    !person.archivedAt &&
+    (kind === "worker" || kind === "other") &&
+    contactPresetFor(person).agreement
+  );
+}
 export function defaultContactAccount(person: Person): Account {
   return personKind(person) === "worker"
     ? "labour"

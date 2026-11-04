@@ -19,6 +19,7 @@ import { SpendingChart } from "../../components/ui/SpendingChart";
 import { AppMenu } from "../../components/ui/AppMenu";
 import {
   allowedContactActions,
+  canCreateContactJob,
   contactSummary,
   contactPaymentAccount,
   personKind,
@@ -458,14 +459,12 @@ export function PersonPage() {
           presentation="embedded"
         />
       </div>
-      {kind === "worker" || kind === "other" || personContracts.length > 0 ? (
+      {canCreateContactJob(person) || personContracts.length > 0 ? (
         <JobPreview
           ledger={ledger}
           contracts={personContracts}
           personId={person.id}
-          allowCreate={
-            !removal.archived && (kind === "worker" || kind === "other")
-          }
+          allowCreate={canCreateContactJob(person)}
           workId={workId || undefined}
         />
       ) : null}

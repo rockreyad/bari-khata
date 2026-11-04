@@ -6,6 +6,7 @@ import { contactStatement } from "../features/people/statement";
 import {
   allowedContactActions,
   availableContactActions,
+  canCreateContactJob,
   contactAccountSummary,
   contactSummary,
   defaultContactAccount,
@@ -13,6 +14,47 @@ import {
 } from "./contacts";
 
 describe("contact identities and financial accounts", () => {
+  it.each([
+    { contactType: "supplier", kind: "shop", expected: false },
+    { contactType: "transport", kind: "driver", expected: false },
+    { contactType: "craftsperson", kind: "worker", expected: true },
+    { contactType: "labour", kind: "worker", expected: true },
+    { contactType: "contractor", kind: "worker", expected: true },
+    { contactType: "professional", kind: "worker", expected: true },
+    { contactType: "professional", kind: "other", expected: true },
+    { contactType: "service", kind: "other", expected: true },
+    { contactType: "custom", kind: "other", expected: true },
+    { contactType: "custom", kind: "worker", expected: true },
+    { contactType: "custom", kind: "shop", expected: false },
+    { contactType: "custom", kind: "driver", expected: false },
+    { contactType: "professional", kind: null, expected: true },
+    { contactType: "supplier", kind: null, expected: false },
+    { contactType: "transport", kind: null, expected: false },
+  ])(
+    "allows a new job for $contactType with coarse kind $kind only when eligible",
+    ({ contactType, kind, expected }) => {
+      const person = PersonSchema.parse({
+        id: "person",
+        name: "নমুনা নাম",
+        role: "নিজের মতো পরিচয়",
+        kind,
+        contactType,
+      });
+      const original = structuredClone(person);
+      expect(canCreateContactJob(person)).toBe(expected);
+      expect(
+        canCreateContactJob({ ...person, role: "মাল বিক্রির পরিচয়" }),
+      ).toBe(expected);
+      expect(
+        canCreateContactJob({
+          ...person,
+          archivedAt: "2026-11-05T00:00:00Z",
+        }),
+      ).toBe(false);
+      expect(person).toEqual(original);
+    },
+  );
+
   it("adds each account's reconciled balance without offsetting different accounts or reviving settled job debt", () => {
     const original = LedgerSchema.parse({
       works: [{ id: "work", name: "নমুনা কাজ" }],

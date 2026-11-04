@@ -1090,7 +1090,7 @@ it.each(["house", "work"] as const)(
       (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).disabled,
     ).toBe(true);
     expect(
-      (screen.getByLabelText("মিস্ত্রি") as HTMLSelectElement).disabled,
+      (screen.getByLabelText("কার কাজ") as HTMLSelectElement).disabled,
     ).toBe(true);
     expect(
       (screen.getByLabelText("কাজের টাকা") as HTMLInputElement).value,
@@ -1189,7 +1189,7 @@ it("blocks a stale used-job identity and recovers it explicitly without losing p
       onClose={vi.fn()}
     />,
   );
-  await screen.findByRole("button", { name: "আগের মিস্ত্রি ও খাতা রাখি" });
+  await screen.findByRole("button", { name: "আগের নাম ও খাতা রাখি" });
   expect(
     (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
       .disabled,
@@ -1197,15 +1197,15 @@ it("blocks a stale used-job identity and recovers it explicitly without losing p
   expect(
     (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).disabled,
   ).toBe(true);
-  expect(
-    (screen.getByLabelText("মিস্ত্রি") as HTMLSelectElement).disabled,
-  ).toBe(true);
+  expect((screen.getByLabelText("কার কাজ") as HTMLSelectElement).disabled).toBe(
+    true,
+  );
   expect((screen.getByLabelText("কাজের টাকা") as HTMLInputElement).value).toBe(
     "৬৫০০০০",
   );
   expect(onSave).not.toHaveBeenCalled();
   await userEvent.click(
-    screen.getByRole("button", { name: "আগের মিস্ত্রি ও খাতা রাখি" }),
+    screen.getByRole("button", { name: "আগের নাম ও খাতা রাখি" }),
   );
   await ready();
   expect((screen.getByLabelText("কাজের টাকা") as HTMLInputElement).value).toBe(
@@ -1220,7 +1220,7 @@ it("blocks a stale used-job identity and recovers it explicitly without losing p
   expect((screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value).toBe(
     "",
   );
-  expect((screen.getByLabelText("মিস্ত্রি") as HTMLSelectElement).value).toBe(
+  expect((screen.getByLabelText("কার কাজ") as HTMLSelectElement).value).toBe(
     "worker",
   );
   await userEvent.click(screen.getByRole("button", { name: "রাখুন" }));
