@@ -1,3 +1,41 @@
+:root {
+  --work-blue: #2e62a2;
+  --work-sage: #246e54;
+  --work-amber: #8a5c13;
+  --work-rose: #a74371;
+  --work-lavender: #7650a2;
+  --work-coral: #a54d34;
+  --work-slate: #4d667f;
+  --work-wood: #825b32;
+  --work-plum: #854985;
+  --work-teal: #226d72;
+}
+:root[data-theme="dark"] {
+  --work-blue: #8bb9f2;
+  --work-sage: #8dccb2;
+  --work-amber: #e3bc74;
+  --work-rose: #e5a2c1;
+  --work-lavender: #bda7df;
+  --work-coral: #ecab96;
+  --work-slate: #abc0d5;
+  --work-wood: #d5b490;
+  --work-plum: #d6aad6;
+  --work-teal: #89cdcf;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --work-blue: #8bb9f2;
+    --work-sage: #8dccb2;
+    --work-amber: #e3bc74;
+    --work-rose: #e5a2c1;
+    --work-lavender: #bda7df;
+    --work-coral: #ecab96;
+    --work-slate: #abc0d5;
+    --work-wood: #d5b490;
+    --work-plum: #d6aad6;
+    --work-teal: #89cdcf;
+  }
+}
 body {
   background: var(--bg);
   color: var(--text);
@@ -702,25 +740,25 @@ h3 {
   width: 47px;
   height: 49px;
   border-radius: 14px;
-  color: #3478dd;
-  background: color-mix(in srgb, #3478dd 11%, var(--surface));
+  color: var(--work-blue);
+  background: color-mix(in srgb, var(--work-blue) 11%, var(--surface));
   flex: none;
 }
 .tone-sage {
-  color: #2c9a7a;
-  background: color-mix(in srgb, #2c9a7a 12%, var(--surface));
+  color: var(--work-sage);
+  background: color-mix(in srgb, var(--work-sage) 12%, var(--surface));
 }
 .tone-amber {
-  color: #cc8a27;
-  background: color-mix(in srgb, #cc8a27 13%, var(--surface));
+  color: var(--work-amber);
+  background: color-mix(in srgb, var(--work-amber) 13%, var(--surface));
 }
 .tone-rose {
-  color: #d75991;
-  background: color-mix(in srgb, #d75991 12%, var(--surface));
+  color: var(--work-rose);
+  background: color-mix(in srgb, var(--work-rose) 12%, var(--surface));
 }
 .tone-lavender {
-  color: #9662db;
-  background: color-mix(in srgb, #9662db 12%, var(--surface));
+  color: var(--work-lavender);
+  background: color-mix(in srgb, var(--work-lavender) 12%, var(--surface));
 }
 .status-tag {
   display: inline-flex;
@@ -2269,18 +2307,18 @@ h3 {
   font-size: 14px;
 }
 .tone-coral {
-  color: #d36e52;
-  background: color-mix(in srgb, #d36e52 12%, var(--surface));
+  color: var(--work-coral);
+  background: color-mix(in srgb, var(--work-coral) 12%, var(--surface));
 }
 .tone-slate {
-  color: #68829c;
-  background: color-mix(in srgb, #68829c 12%, var(--surface));
+  color: var(--work-slate);
+  background: color-mix(in srgb, var(--work-slate) 12%, var(--surface));
 }
 .tone-wood {
-  color: #a77843;
-  background: color-mix(in srgb, #a77843 12%, var(--surface));
+  color: var(--work-wood);
+  background: color-mix(in srgb, var(--work-wood) 12%, var(--surface));
 }
 .tone-plum {
-  color: #aa63af;
-  background: color-mix(in srgb, #aa63af 12%, var(--surface));
+  color: var(--work-plum);
+  background: color-mix(in srgb, var(--work-plum) 12%, var(--surface));
 }

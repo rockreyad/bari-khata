@@ -38,8 +38,8 @@
   height: 70px;
 }
 .tone-teal {
-  color: #15999f;
-  background: color-mix(in srgb, #15999f 12%, var(--surface));
+  color: var(--work-teal);
+  background: color-mix(in srgb, var(--work-teal) 12%, var(--surface));
 }
 .home-heading-v3 h1 {
   font-size: 27px;

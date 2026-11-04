@@ -176,23 +176,26 @@ describe("organized settings", () => {
     expect(screen.queryByRole("button", { name: "লগআউট" })).toBeNull();
   });
 
-  it("changes appearance inside a sheet and preserves the stored language", async () => {
-    savePreferences({ language: "en" });
+  it("opens the dedicated appearance page without changing saved preferences or ledger records", async () => {
+    savePreferences({ language: "en", theme: "dark", palette: "winter" });
     const user = userEvent.setup();
     mount();
     await openRow(user, "রং ও সাজ");
-    expect(
-      screen.getByRole("dialog", { name: "নিজের মতো সাজান" }),
-    ).toBeTruthy();
-    await user.click(screen.getByText("অপরাজিতা", { exact: true }));
-    await user.click(screen.getByText("গভীর রাত", { exact: true }));
+    expect(api.go).toHaveBeenCalledWith("/settings/appearance");
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(readPreferences()).toEqual({
       language: "en",
       theme: "dark",
-      palette: "violet",
+      palette: "winter",
     });
-    await user.click(screen.getByRole("button", { name: "বন্ধ করুন" }));
+    expect(api.save).not.toHaveBeenCalled();
+  });
+
+  it("keeps language selection in its own settings sheet", async () => {
+    const user = userEvent.setup();
+    mount();
     await openRow(user, "ভাষা");
+    expect(screen.getByRole("dialog", { name: "ভাষা" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "English" }));
     expect(api.setLanguage).toHaveBeenCalledWith("en");
   });

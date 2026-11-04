@@ -32,6 +32,10 @@ describe("notebook navigation", () => {
     ["/jobs-other", "", "/people", false],
     ["/materials/cement", "", "/reports", true],
     ["/sample/review", "/sample", "/ledger", true],
+    ["/settings/appearance", "", "/settings", true],
+    ["/sample/settings/appearance", "/sample", "/settings", true],
+    ["/sample/settings/appearance", "/sample", "/", false],
+    ["/settings-appearance", "", "/settings", false],
     ["/people-other", "", "/people", false],
     ["/works", "", "/", false],
   ])("matches %s under %s to %s", (path, base, section, expected) => {

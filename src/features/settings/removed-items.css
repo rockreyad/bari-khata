@@ -61,7 +61,7 @@
   margin-top: 15px;
 }
 .removed-items-error {
-  color: #cf4149;
+  color: var(--danger);
   font-size: 13px;
 }
 @media (max-width: 360px) {

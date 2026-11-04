@@ -287,8 +287,9 @@ img {
   flex-shrink: 0;
   color: #73806e;
 }
-.icon-button:hover {
-  background: #e9ede1;
+.icon-button:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 .topbar .icon-button {
   background: #fff;

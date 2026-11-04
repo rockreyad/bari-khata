@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { paletteIds } from "./themes";
 
 const PreferencesSchema = z.object({
   language: z.enum(["bn", "en"]).default("bn"),
   theme: z.enum(["light", "dark", "system"]).default("light"),
-  palette: z.enum(["ocean", "forest", "violet", "sunset"]).default("ocean"),
+  palette: z.enum(paletteIds).default("ocean"),
 });
 export type Preferences = z.infer<typeof PreferencesSchema>;
 const key = "bari-khata-preferences";
