@@ -42,30 +42,6 @@ export function contactAccountLedger(
 ): Ledger {
   const own = ledger.entries.filter((entry) => entry.personId === person.id);
   const effective = effectiveAccounts(ledger);
-  if (personKind(person) === "driver" && account === "other") {
-    const transportBills = new Set(
-      own
-        .filter(
-          (entry) =>
-            (entry.kind === "expense" || entry.kind === "expense_credit") &&
-            entry.lines.length > 0 &&
-            entry.lines.every((line) => line.costType === "transport"),
-        )
-        .map((entry) => entry.id),
-    );
-    return {
-      ...ledger,
-      entries: own.filter(
-        (entry) =>
-          (entry.kind === "adjustment" && entry.account === "other") ||
-          ((entry.kind === "payment" || entry.kind === "refund") &&
-            effective.get(entry.id) === "other" &&
-            (!entry.relatedEntryId ||
-              transportBills.has(entry.relatedEntryId))) ||
-          transportBills.has(entry.id),
-      ),
-    };
-  }
   return {
     ...ledger,
     entries: own.filter((entry) => effective.get(entry.id) === account),
@@ -110,6 +86,7 @@ export function canAssignContact(
   costTypes: string[],
   cash: boolean,
 ): boolean {
+  if (cash) return true;
   const kind = personKind(person);
   if (kind === "worker")
     return (
@@ -127,4 +104,48 @@ export function canAssignContact(
       (cash || costTypes.every((type) => type === "transport"))
     );
   return true;
+}
+
+export function contactSummary(
+  ledger: Ledger,
+  person: Person,
+  workId?: string,
+) {
+  const summary = personSummary(ledger, person.id, workId);
+  const accounts = (["materials", "labour", "other"] as const).map((account) =>
+    reconciledTotals(ledger, {
+      personId: person.id,
+      account,
+      ...(workId ? { workId } : {}),
+    }),
+  );
+  const payable = accounts.reduce(
+    (sum, account) => sum + account.reconciledPayable,
+    0,
+  );
+  const advance = accounts.reduce(
+    (sum, account) => sum + account.reconciledAdvance,
+    0,
+  );
+  return {
+    ...summary,
+    reconciledPayable: payable,
+    reconciledAdvance: advance,
+    reconciledBalance: payable,
+    historicalCount: summary.entries.filter(
+      (entry) => entry.balanceImpact === "historical",
+    ).length,
+  };
+}
+
+export function contactPaymentAccount(ledger: Ledger, person: Person): Account {
+  const accounts = effectiveAccounts(ledger);
+  const used = new Set<Account>(
+    ledger.entries
+      .filter((entry) => entry.personId === person.id && !entry.voided)
+      .map((entry) => accounts.get(entry.id) ?? entry.account),
+  );
+  if (ledger.contracts.some((job) => job.personId === person.id))
+    used.add("labour");
+  return used.size === 1 ? [...used][0] : defaultContactAccount(person);
 }

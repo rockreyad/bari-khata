@@ -1,4 +1,5 @@
 export const entryPageEnglish: Record<string, string> = {
+  "নতুন বিল ও টাকা": "New bill and payment",
   "যেমন: কাজের জায়গায় খাবার": "For example: meals at the work site",
   "এই খরচ বাদ দিন": "Remove this expense",
   "আরেকটি খরচ": "Another expense",

@@ -163,17 +163,49 @@ describe("a driver's effective transport account", () => {
       true,
     );
   });
-  it("does not reinterpret shops, workers or unrelated material and wage accounts", () => {
+  it("keeps transport accounts and financial totals unchanged when the contact kind changes", () => {
+    const original = fixture();
+    const originalEntries = JSON.stringify(original.entries);
+    const originalSummary = summarize(original);
     for (const kind of ["shop", "worker", "other"] as const) {
-      const ledger = fixture();
+      const ledger = structuredClone(original);
       ledger.people[0].kind = kind;
-      expect(effectiveAccounts(ledger).get("trip")).toBe("materials");
-      expect(summarize(ledger)).toMatchObject({
+      expect(effectiveAccounts(ledger).get("trip")).toBe("other");
+      expect(effectiveAccounts(ledger).get("paid")).toBe("other");
+      expect(summarize(ledger)).toEqual(originalSummary);
+      expect(
+        contactAccountSummary(ledger, ledger.people[0], "other"),
+      ).toMatchObject({
         cost: 100000,
         netPaid: 100000,
-        payable: 100000,
-        advance: 100000,
+        payable: 0,
+        advance: 0,
       });
+      expect(
+        contactAccountLedger(ledger, ledger.people[0], "materials").entries,
+      ).toEqual([]);
+      expect(JSON.stringify(ledger.entries)).toBe(originalEntries);
+    }
+  });
+  it("does not move historical money when a legacy inferred identity is renamed", () => {
+    const original = fixture({ legacyCash: true });
+    original.people[0].kind = null;
+    original.people[0].name = "নমুনা ভ্যানচালক";
+    const entries = JSON.stringify(original.entries);
+    const totals = summarize(original);
+    const classified = [...effectiveAccounts(original)];
+    for (const identity of [
+      { name: "নমুনা দোকান", role: "সিমেন্ট বিক্রেতা" },
+      { name: "নমুনা ব্যক্তি", role: "রাজমিস্ত্রি" },
+      { name: "নমুনা ব্যক্তি", role: "ইঞ্জিনিয়ার" },
+    ]) {
+      const ledger = LedgerSchema.parse({
+        ...original,
+        people: [{ ...original.people[0], ...identity }],
+      });
+      expect([...effectiveAccounts(ledger)]).toEqual(classified);
+      expect(summarize(ledger)).toEqual(totals);
+      expect(JSON.stringify(ledger.entries)).toBe(entries);
     }
   });
   it("does not let another driver's material purchase make this driver's payment ambiguous", () => {

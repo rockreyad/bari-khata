@@ -1,4 +1,7 @@
 export const peopleEnglish: Record<string, string> = {
+  "সব হিসাব": "All accounts",
+  "পরিচয় বদলালেও আগের বিল ও দেওয়া টাকার হিসাব বদলাবে না।":
+    "Changing the contact type keeps existing bills and payments unchanged.",
   "পরিচয় / কী কাজ করেন": "Role / occupation",
   "যেমন: সুইপার, লেবার, ঠিকাদার, ডিলার বা ইঞ্জিনিয়ার":
     "For example: cleaner, labourer, contractor, dealer or engineer",

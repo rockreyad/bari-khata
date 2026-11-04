@@ -864,7 +864,7 @@ it("offers generic categories until a shop or worker is chosen, then uses the se
     "2000",
   );
   expect(screen.queryByLabelText("কী কিনলেন")).toBeNull();
-  expect(screen.queryByRole("button", { name: "পুরো দিয়েছি" })).toBeNull();
+  expect(screen.getByRole("button", { name: "পুরো দিয়েছি" })).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
   expect(summarize(state.notebook.ledger as Ledger)).toMatchObject({
@@ -1374,3 +1374,53 @@ it.each(["job-a", "job-b"])(
     ).toBe(oldCopy);
   },
 );
+
+it("keeps a migrated source draft if another form changes it while this entry is saved", async () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "door", name: "নমুনা দরজা" }],
+    people: [{ id: "person", name: "নমুনা ব্যক্তি", kind: "other" }],
+  });
+  state.notebook.ledger = ledger;
+  const draft = {
+    ...entryContext(ledger, {
+      kind: "payment",
+      account: "materials",
+      workId: "door",
+      personId: "person",
+    }),
+    amount: "1700",
+  };
+  const source = "quick-v2:payment:door:person";
+  state.drafts.set(source, { draft, files: [] });
+  const save = state.notebook.save as (
+    change: Ledger | ((current: Ledger) => Ledger),
+  ) => Promise<void>;
+  state.notebook.save = vi.fn(async (change) => {
+    await save(change);
+    state.drafts.set(source, {
+      draft: { ...draft, amount: "2500" },
+      files: [],
+    });
+  });
+  render(
+    <QuickEntrySheet
+      presentation="page"
+      options={{
+        kind: "payment",
+        purpose: "settle",
+        account: "materials",
+        workId: "door",
+        personId: "person",
+      }}
+    />,
+  );
+  await ready();
+  await userEvent.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
+  expect(state.drafts.get(source)).toEqual({
+    draft: { ...draft, amount: "2500" },
+    files: [],
+  });
+  expect(state.drafts.has(`${source}:settle:account=materials`)).toBe(false);
+  expect((state.notebook.ledger as Ledger).entries).toHaveLength(1);
+});

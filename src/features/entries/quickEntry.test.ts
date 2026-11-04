@@ -471,20 +471,13 @@ describe("quick homeowner entries", () => {
 });
 
 describe("role-specific quick entries", () => {
-  it("rejects material purchase, material return and material settlement for a worker profile", () => {
+  it("rejects a mismatched new material purchase or return for a worker profile", () => {
     const initial = fixture();
     const before = JSON.stringify(initial);
     for (const change of [
       { kind: "expense", personId: "worker", costType: "material" },
       { kind: "expense", personId: "worker", costType: "transport" },
       { kind: "return", personId: "worker", costType: "material" },
-      {
-        kind: "payment",
-        personId: "worker",
-        account: "materials",
-        amount: "1500",
-      },
-      { kind: "payment", personId: "worker", account: "other", amount: "1500" },
     ])
       expect(() => buildQuickEntry(initial, draft(change))).toThrow(
         "person_kind",
@@ -507,13 +500,12 @@ describe("role-specific quick entries", () => {
     expect(personSummary(next, "worker").payable).toBe(150000);
   });
 
-  it("never opens a wage account through a shop purchase or payment", () => {
+  it("does not infer wage bills from a shop purchase or wage entry", () => {
     const initial = fixture();
     for (const change of [
       { kind: "expense", personId: "shop", costType: "labour" },
       { kind: "wage", personId: "shop", amount: "500" },
       { kind: "payment", purpose: "wage", personId: "shop", amount: "500" },
-      { kind: "payment", personId: "shop", account: "labour", amount: "500" },
     ])
       expect(() => buildQuickEntry(initial, draft(change))).toThrow(
         "person_kind",
@@ -557,13 +549,6 @@ describe("role-specific quick entries", () => {
       { kind: "expense", personId: "driver", costType: "unload" },
       { kind: "expense", personId: "driver", costType: "rental" },
       { kind: "return", personId: "driver", costType: "transport" },
-      {
-        kind: "payment",
-        personId: "driver",
-        account: "materials",
-        amount: "500",
-      },
-      { kind: "payment", personId: "driver", account: "labour", amount: "500" },
     ])
       expect(
         () => buildQuickEntry(next, draft(change)),
@@ -1006,3 +991,30 @@ it("still requires a notebook for unrelated cash and a notebook-specific job", (
     ).toThrow("work");
   expect(JSON.stringify(ledger)).toBe(before);
 });
+
+it.each(["worker", "shop", "driver"] as const)(
+  "keeps an explicit cash settlement in its selected account after identity becomes %s",
+  (kind) => {
+    const original = fixture();
+    original.people[0].kind = kind;
+    for (const account of ["materials", "labour", "other"] as const) {
+      const next = buildQuickEntry(
+        original,
+        draft({
+          kind: "payment",
+          personId: original.people[0].id,
+          account,
+          amount: "100",
+        }),
+      );
+      expect(next.entries).toHaveLength(1);
+      expect(next.entries[0]).toMatchObject({
+        kind: "payment",
+        account,
+        personId: original.people[0].id,
+      });
+      expect(next.entries[0].lines).toEqual([]);
+      expect(next.people).toEqual(original.people);
+    }
+  },
+);

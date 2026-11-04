@@ -89,6 +89,9 @@ export function PersonEditorFields({
     <>
       <fieldset className="person-editor-kind">
         <legend>{t("নামের ধরন")}</legend>
+        {editing ? (
+          <p>{t("পরিচয় বদলালেও আগের বিল ও দেওয়া টাকার হিসাব বদলাবে না।")}</p>
+        ) : null}
         <div className="person-editor-kind-options">
           {personKinds.map(({ id, label, Icon }) => (
             <button
