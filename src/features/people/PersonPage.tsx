@@ -20,12 +20,14 @@ import { AppMenu } from "../../components/ui/AppMenu";
 import {
   allowedContactActions,
   contactAccountSummary,
-  defaultContactAccount,
+  contactSummary,
+  contactPaymentAccount,
   personKind,
   sortContactEntries,
 } from "../../domain/contacts";
 import { contractAppliesToWork } from "../../domain/contracts";
 import { personSummary } from "../../domain/ledger";
+import { AppSelect } from "../../components/ui/AppSelect";
 import { JobPreview } from "../jobs/JobPreview";
 import { jobBalanceTotals } from "../jobs/jobView";
 import type { Account } from "../../domain/model";
@@ -48,12 +50,14 @@ export function PersonPage() {
   const person = ledger.people.find((record) => record.id === (id ?? personId));
   const removal = useEntityRemoval("person", id ?? personId);
   const kind = person ? personKind(person) : "other";
-  const defaultAccount = person ? defaultContactAccount(person) : "materials";
+  const defaultAccount = person
+    ? contactPaymentAccount(ledger, person)
+    : "materials";
   const rawAccount = params.get("account");
-  const account: Account =
+  const account: Account | null =
     rawAccount && ["materials", "labour", "other"].includes(rawAccount)
       ? (rawAccount as Account)
-      : defaultAccount;
+      : null;
   const workId = ledger.works.some((work) => work.id === params.get("work"))
     ? params.get("work")!
     : "";
@@ -61,7 +65,9 @@ export function PersonPage() {
   const summary = useMemo(
     () =>
       person
-        ? contactAccountSummary(ledger, person, account, workId || undefined)
+        ? account
+          ? contactAccountSummary(ledger, person, account, workId || undefined)
+          : contactSummary(ledger, person, workId || undefined)
         : null,
     [ledger, person, account, workId],
   );
@@ -96,7 +102,7 @@ export function PersonPage() {
     const scoped = new URLSearchParams(params);
     scoped.delete("view");
     scoped.set("person", person.id);
-    scoped.set("account", account);
+    if (account) scoped.set("account", account);
     if (!scoped.has("order")) scoped.set("order", "oldest");
     return (
       <Navigate replace to={`${base ?? ""}/ledger?${scoped.toString()}`} />
@@ -104,26 +110,20 @@ export function PersonPage() {
   }
   const historyQuery = new URLSearchParams({
     person: person.id,
-    account,
     order: "oldest",
   });
+  if (account) historyQuery.set("account", account);
   if (workId) historyQuery.set("work", workId);
   const fullHistoryPath = `/ledger?${historyQuery.toString()}`;
   const href = phoneLink(person.phone);
   const actions = removal.archived ? [] : allowedContactActions(person);
-  const otherAccounts = (["materials", "labour", "other"] as Account[]).filter(
-    (value) =>
-      value !== account &&
-      ledger.entries.some(
-        (entry) => entry.personId === person.id && entry.account === value,
-      ),
-  );
+  const accountChoices = ["materials", "labour", "other"] as Account[];
   const addPayment = () =>
     add({
       kind: "payment",
       personId: person.id,
       workId: workId || undefined,
-      account: defaultAccount,
+      account: account ?? defaultAccount,
     });
   const addPurchase = () =>
     add({
@@ -149,7 +149,7 @@ export function PersonPage() {
       account: "materials",
     });
   const personContracts =
-    account === "labour"
+    !account || account === "labour"
       ? ledger.contracts.filter(
           (c) =>
             c.personId === person.id &&
@@ -176,11 +176,13 @@ export function PersonPage() {
     (summary.reconciledCost !== 0 || summary.costCorrection !== 0) &&
     summary.reconciledCost !== summary.reconciledNetPaid
       ? {
-          label: isPurchase
-            ? "মালের দাম"
-            : account === "labour"
-              ? "কাজের মজুরি"
-              : "অন্য খরচ",
+          label: !account
+            ? "মাল ও কাজের খরচ"
+            : isPurchase
+              ? "মালের দাম"
+              : account === "labour"
+                ? "কাজের মজুরি"
+                : "অন্য খরচ",
           amount: summary.reconciledCost,
         }
       : null;
@@ -222,31 +224,33 @@ export function PersonPage() {
         (metrics.find((metric) => metric.tone === "contact-due")?.amount ?? 0));
   const showAdvanceDetails =
     uncontractedAdvance > 0 && (kind !== "shop" || summary.confirmedCost <= 0);
-  const showMainActions =
-    account === defaultAccount &&
-    actions.some((action) =>
-      ["payment", "purchase", "transport", "return"].includes(action),
-    );
+  const showMainActions = actions.some((action) =>
+    ["payment", "purchase", "transport", "return"].includes(action),
+  );
   const menu = [
     {
       label: t("তথ্য ও বোতাম বদলাই"),
       onSelect: () => entity("person", person.id),
       disabled: removal.archived,
     },
-    { label: t("হিসাবের কপি পাঠাই"), onSelect: () => setShareOpen(true) },
+    {
+      label: t("হিসাবের কপি পাঠাই"),
+      onSelect: () => {
+        if (!account) filter("account", defaultAccount);
+        setShareOpen(true);
+      },
+    },
     ...(!removal.archived
       ? [
           {
             label: t("মোট হিসাব মেলাই"),
-            onSelect: () => setAdjustmentOpen(true),
+            onSelect: () => {
+              if (!account) filter("account", defaultAccount);
+              setAdjustmentOpen(true);
+            },
           },
         ]
       : []),
-    ...otherAccounts.map((value) => ({
-      label: t(accountLabels[value]),
-      onSelect: () => filter("account", value),
-      separatorBefore: true,
-    })),
     removal.menuItem,
   ];
   return (
@@ -319,14 +323,21 @@ export function PersonPage() {
             </dl>
           ) : null}
         </div>
-        {account !== defaultAccount ? (
-          <div className="contact-account-note">
-            <span>{t(accountLabels[account])}</span>
-            <button onClick={() => filter("account", "")}>
-              {t("মূল হিসাবে ফিরি")}
-            </button>
-          </div>
-        ) : null}
+        <label className="contact-account-note">
+          <span>{t("কোন হিসাব দেখব")}</span>
+          <AppSelect
+            aria-label={t("কোন হিসাব দেখব")}
+            value={account ?? ""}
+            onChange={(event) => filter("account", event.target.value)}
+          >
+            <option value="">{t("সব হিসাব")}</option>
+            {accountChoices.map((value) => (
+              <option key={value} value={value}>
+                {t(accountLabels[value])}
+              </option>
+            ))}
+          </AppSelect>
+        </label>
         {showMainActions ? (
           <div
             className={`contact-main-actions ${kind === "shop" ? "contact-shop-actions" : ""}`}
@@ -468,12 +479,15 @@ export function PersonPage() {
           presentation="embedded"
         />
       </div>
-      {kind === "worker" && account === "labour" ? (
+      {(!account || account === "labour") &&
+      (kind === "worker" || kind === "other" || personContracts.length > 0) ? (
         <JobPreview
           ledger={ledger}
           contracts={personContracts}
           personId={person.id}
-          allowCreate={!removal.archived}
+          allowCreate={
+            !removal.archived && (kind === "worker" || kind === "other")
+          }
           workId={workId || undefined}
         />
       ) : null}
@@ -488,7 +502,7 @@ export function PersonPage() {
         <div className="contact-history-heading">
           <div>
             <h2>{t("শেষ ৫টি লেনদেন")}</h2>
-            <p>{t(accountLabels[account])}</p>
+            <p>{t(account ? accountLabels[account] : "সব হিসাব")}</p>
           </div>
           <button className="text-button" onClick={() => go(fullHistoryPath)}>
             {t("পুরো হিসাব")}
@@ -509,7 +523,7 @@ export function PersonPage() {
       {shareOpen ? (
         <StatementSheet
           person={person}
-          account={account}
+          account={account ?? defaultAccount}
           workId={workId || undefined}
           onClose={() => setShareOpen(false)}
         />
@@ -519,7 +533,7 @@ export function PersonPage() {
           target={{
             target: "person",
             id: person.id,
-            account,
+            account: account ?? defaultAccount,
             workId: workId || null,
           }}
           name={person.name}

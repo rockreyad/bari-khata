@@ -530,3 +530,100 @@ describe("MCP financial commands", () => {
     });
   });
 });
+
+it("keeps a historical labour bill editable after only the contact identity changes", () => {
+  const original = LedgerSchema.parse({
+    ...fixture(),
+    entries: [
+      {
+        id: "old-labour",
+        personId: "worker",
+        account: "labour",
+        kind: "expense",
+        updatedAt: context.now,
+        createdAt: context.now,
+        lines: [
+          {
+            id: "line",
+            workId: "roof",
+            costType: "labour",
+            amount: 10000,
+            label: "নমুনা কাজ",
+          },
+        ],
+      },
+    ],
+  });
+  const changed = applyMcpCommand(
+    original,
+    {
+      type: "update_person",
+      person_id: "worker",
+      reason: "পরিচয় ঠিক করেছি",
+      changes: { kind: "shop", role: "নমুনা পরিচয়" },
+    },
+    context,
+  ).ledger;
+  expect(changed.entries).toEqual(original.entries);
+  const edited = applyMcpCommand(
+    changed,
+    {
+      type: "update_entry",
+      entry_id: "old-labour",
+      expected_updated_at: context.now,
+      reason: "নোট ঠিক করেছি",
+      changes: { note: "নতুন নমুনা নোট" },
+    },
+    { ...context, now: "2026-11-02T11:00:00.000Z" },
+  ).ledger;
+  expect(edited.entries[0]).toMatchObject({
+    personId: "worker",
+    account: "labour",
+    note: "নতুন নমুনা নোট",
+    lines: original.entries[0].lines,
+  });
+  expect(edited.entries[0].revisions.at(-1)?.before).toMatchObject({
+    account: "labour",
+    lines: original.entries[0].lines,
+  });
+});
+
+it("keeps an other-kind professional's agreed job available after an identity edit", () => {
+  const original = fixture();
+  original.people[1].kind = "other";
+  original.people[1].role = "নমুনা ইঞ্জিনিয়ার";
+  const first = applyMcpCommand(
+    original,
+    {
+      type: "create_contract",
+      person_id: "worker",
+      work_id: "roof",
+      scope: "work",
+      title: "নমুনা নকশার কাজ",
+      total_paisa: 50000,
+    },
+    context,
+  ).ledger;
+  const changed = applyMcpCommand(
+    first,
+    {
+      type: "update_person",
+      person_id: "worker",
+      reason: "পরিচয় ঠিক করেছি",
+      changes: { kind: "shop" },
+    },
+    context,
+  ).ledger;
+  const next = applyMcpCommand(
+    changed,
+    {
+      type: "update_contract",
+      contract_id: first.contracts[0].id,
+      reason: "দর ঠিক করেছি",
+      changes: { total_paisa: 60000 },
+    },
+    context,
+  ).ledger;
+  expect(next.contracts[0]).toMatchObject({ personId: "worker", total: 60000 });
+  expect(next.entries).toEqual([]);
+});

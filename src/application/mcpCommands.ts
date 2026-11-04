@@ -745,15 +745,21 @@ function updatedEntry(
       const party = ledger.people.find(
         (person) => person.id === replacement.personId,
       );
-      checkParty(
-        ledger,
-        replacement.personId,
-        replacement.account,
-        replacement.lines.map((line) => line.costType),
-        !isCost,
-        replacement.account === "materials" &&
-          Boolean(party && personKind(party) === "worker"),
-      );
+      const sameFinancialIdentity =
+        original.personId === replacement.personId &&
+        original.account === replacement.account &&
+        JSON.stringify(original.lines.map((line) => line.costType)) ===
+          JSON.stringify(replacement.lines.map((line) => line.costType));
+      if (!sameFinancialIdentity)
+        checkParty(
+          ledger,
+          replacement.personId,
+          replacement.account,
+          replacement.lines.map((line) => line.costType),
+          !isCost,
+          replacement.account === "materials" &&
+            Boolean(party && personKind(party) === "worker"),
+        );
     } else if (command.type === "attach_receipt") {
       if (
         original.receipts.some((receipt) => receipt.id === command.receipt_id)
@@ -1138,7 +1144,10 @@ export function applyMcpCommand(
         fields.agreed_on !== undefined ? fields.agreed_on : previous?.agreedOn,
     });
     const person = active(ledger.people, record.personId, "person");
-    if (personKind(person) !== "worker")
+    if (
+      !["worker", "other"].includes(personKind(person)) &&
+      previous?.personId !== record.personId
+    )
       fail("validation_error", "contract_requires_worker");
     if (record.workId) active(ledger.works, record.workId, "work");
     ledger = saveContractChange(

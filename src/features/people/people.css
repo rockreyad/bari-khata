@@ -856,3 +856,19 @@
 .people-jobs-link > svg:last-child {
   margin-left: auto;
 }
+
+.contact-detail-page .contact-account-note {
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+.contact-account-note > .app-select {
+  width: auto;
+  min-width: 140px;
+  max-width: 220px;
+}
+.person-editor-kind > p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}

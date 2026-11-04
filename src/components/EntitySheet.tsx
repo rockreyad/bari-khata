@@ -469,7 +469,9 @@ export function EntitySheet({
         const previous = next.contracts.find((c) => c.id === editId);
         if (
           (!previous || previous.personId !== personId) &&
-          personKind(next.people.find((p) => p.id === personId)!) !== "worker"
+          !["worker", "other"].includes(
+            personKind(next.people.find((p) => p.id === personId)!),
+          )
         )
           throw new Error(t("মজুরির দর রাখতে মিস্ত্রির নাম বেছে নিন।"));
         const contract = ContractSchema.parse({
@@ -878,7 +880,8 @@ export function EntitySheet({
                     )
                     .filter(
                       (p) =>
-                        personKind(p) === "worker" || p.id === draft.personId,
+                        ["worker", "other"].includes(personKind(p)) ||
+                        p.id === draft.personId,
                     )
                     .map((p) => (
                       <option key={p.id} value={p.id}>

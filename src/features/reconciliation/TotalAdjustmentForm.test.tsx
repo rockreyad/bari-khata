@@ -201,7 +201,7 @@ async function enter(
     });
 }
 
-it("edits a driver's transport balance without using hidden unload bills and reopens at the saved total", async () => {
+it("includes all recorded other-account bills when reconciling a driver and reopens the saved total", async () => {
   const original = LedgerSchema.parse({
     works: [{ id: "work", name: "দরজা" }],
     people: [{ id: "driver", name: "রনি", kind: "driver" }],
@@ -254,9 +254,9 @@ it("edits a driver's transport balance without using hidden unload bills and reo
   fireEvent.change(screen.getByLabelText("যে মোট মিলাব"), {
     target: { value: "balance" },
   });
-  await screen.findByText("দিতে বাকি ৳1000");
-  expect(screen.queryByText("দিতে বাকি ৳3000")).toBeNull();
-  await enter("700", "গাড়িভাড়া মিলিয়েছি");
+  await screen.findByText("দিতে বাকি ৳3000");
+  expect(screen.queryByText("দিতে বাকি ৳1000")).toBeNull();
+  await enter("2700", "গাড়িভাড়া মিলিয়েছি");
   expect(
     view.container.querySelector(".adjustment-preview")?.textContent,
   ).toContain("কমছে৳300");
@@ -265,8 +265,8 @@ it("edits a driver's transport balance without using hidden unload bills and reo
   const saved = context.ledger as Ledger;
   expect(saved.entries.slice(0, 2)).toEqual(original.entries);
   expect(saved.entries.at(-1)?.adjustment).toMatchObject({
-    before: 100000,
-    after: 70000,
+    before: 300000,
+    after: 270000,
     delta: -30000,
   });
   view.unmount();
@@ -276,7 +276,7 @@ it("edits a driver's transport balance without using hidden unload bills and reo
   fireEvent.change(screen.getByLabelText("যে মোট মিলাব"), {
     target: { value: "balance" },
   });
-  await screen.findByText("দিতে বাকি ৳700");
+  await screen.findByText("দিতে বাকি ৳2700");
 });
 
 it("corrects the person's paid total with one separate adjustment and preserves the actual payment and bill", async () => {

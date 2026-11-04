@@ -12,7 +12,7 @@ import {
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { AppMenu } from "../../components/ui/AppMenu";
-import { contactAccountSummary, personKind } from "../../domain/contacts";
+import { contactSummary, personKind } from "../../domain/contacts";
 import { matchesContact } from "./people";
 import { PersonMark, kindLabels } from "./ContactIdentity";
 import { PeopleRoleTabs } from "./PeopleRoleTabs";
@@ -46,7 +46,7 @@ export function PeoplePage() {
         .filter((person) => !person.archivedAt)
         .map((person) => ({
           person,
-          summary: contactAccountSummary(ledger, person),
+          summary: contactSummary(ledger, person),
         })),
     [ledger],
   );

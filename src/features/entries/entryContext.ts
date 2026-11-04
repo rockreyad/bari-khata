@@ -1,6 +1,6 @@
 import type { AddOptions } from "../../app/NotebookProvider";
 import type { CostType, Ledger } from "../../domain/model";
-import { defaultContactAccount, personKind } from "../../domain/contacts";
+import { contactPaymentAccount, personKind } from "../../domain/contacts";
 import { QuickDraftSchema, quickWageAmount } from "./quickEntry";
 import { applicableContracts } from "../../domain/contracts";
 import { moneyInputValue } from "../../lib/numericFields";
@@ -35,7 +35,7 @@ export function entryContext(ledger: Ledger, options: AddOptions) {
     kind === "wage"
       ? "labour"
       : (options.account ??
-        (person ? defaultContactAccount(person) : "materials"));
+        (person ? contactPaymentAccount(ledger, person) : "materials"));
   const costType =
     (kind === "wage" ? "labour" : options.costType) ??
     (account === "labour"
@@ -63,6 +63,7 @@ export function entryContext(ledger: Ledger, options: AddOptions) {
         (!requestedJob || c.id === requestedJob.id),
     );
     const works = new Set([
+      ...(person.workIds ?? []),
       ...contracts.flatMap((c) =>
         c.scope === "work" && c.workId ? [c.workId] : [],
       ),
@@ -153,6 +154,7 @@ export function entryContext(ledger: Ledger, options: AddOptions) {
       (kind === "payment" &&
       person &&
       personKind(person) === "worker" &&
+      account === "labour" &&
       !contracts.length
         ? "wage"
         : "settle"),
@@ -262,9 +264,15 @@ export function entryWorkChange(
   const person = ledger.people.find((record) => record.id === draft.personId);
   return {
     workId,
-    contractId: draft.account === "labour" ? (chosen?.id ?? "") : "",
+    contractId:
+      draft.account === "labour" && draft.purpose !== "charge"
+        ? (chosen?.id ?? "")
+        : "",
     purpose:
-      draft.kind === "payment" && person && personKind(person) === "worker"
+      draft.kind === "payment" &&
+      draft.account === "labour" &&
+      person &&
+      personKind(person) === "worker"
         ? draft.purpose === "advance"
           ? "advance"
           : chosen

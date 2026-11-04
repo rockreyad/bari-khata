@@ -497,9 +497,7 @@ describe("minimal people pages", () => {
     expect(screen.queryByRole("button", { name: "মাল কিনলাম" })).toBeNull();
     expect(screen.queryByRole("button", { name: "মাল ফেরত লিখি" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "পুরো হিসাব" }));
-    expect(state.go).toHaveBeenCalledWith(
-      "/ledger?person=worker&account=labour&order=oldest",
-    );
+    expect(state.go).toHaveBeenCalledWith("/ledger?person=worker&order=oldest");
     const rows = [...container.querySelectorAll(".history-row")];
     expect(rows).toHaveLength(5);
     expect(rows[0].textContent).toContain("বিল 7");
@@ -583,20 +581,21 @@ describe("minimal people pages", () => {
     const { container } = renderPage();
     expect(container.querySelectorAll(".history-row")).toHaveLength(5);
     await user.click(screen.getByRole("button", { name: "পুরো হিসাব" }));
-    expect(state.go).toHaveBeenCalledWith(
-      "/ledger?person=worker&account=labour&order=oldest",
-    );
+    expect(state.go).toHaveBeenCalledWith("/ledger?person=worker&order=oldest");
     expect(container.querySelectorAll(".history-row")).toHaveLength(5);
-    expect(container.textContent).toContain("৳700");
+    expect(container.textContent).toContain("৳710");
     expect(container.textContent).not.toContain("৳800");
   });
-  it("makes a worker's old material account read-only instead of offering a misleading wage payment there", () => {
+  it("settles a worker's historical material account without creating a wage entry", async () => {
     state.ledger = fixture();
     renderPage("/people/worker?account=materials");
-    expect(screen.queryByRole("button", { name: "টাকা দিই" })).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "মূল হিসাবে ফিরি" }),
-    ).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "টাকা দিই" }));
+    expect(state.add).toHaveBeenCalledWith({
+      kind: "payment",
+      personId: "worker",
+      workId: undefined,
+      account: "materials",
+    });
   });
 });
 
@@ -632,7 +631,7 @@ it("puts cash paid first for a shop and its monthly chart while preserving mater
   expect(hero.textContent).toContain("৳30000");
   expect(
     container.querySelector(".contact-detail-metrics")?.textContent,
-  ).toContain("মালের দাম৳93000");
+  ).toContain("মাল ও কাজের খরচ৳93000");
   expect(
     container.querySelector(".contact-summary-metrics")?.textContent,
   ).toContain("৳63000");
