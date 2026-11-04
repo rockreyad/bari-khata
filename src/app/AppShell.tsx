@@ -57,6 +57,11 @@ const AnalyticsPage = lazy(() =>
     default: m.AnalyticsPage,
   })),
 );
+const PayablesPage = lazy(() =>
+  import("../features/home/PayablesPage").then((m) => ({
+    default: m.PayablesPage,
+  })),
+);
 const PeoplePage = lazy(() =>
   import("../features/people/PeoplePages").then((m) => ({
     default: m.PeoplePage,
@@ -417,6 +422,7 @@ export function AppShell() {
                   element={<ContractRoute />}
                 />
                 <Route index element={<HomePage />} />
+                <Route path="dues" element={<PayablesPage />} />
                 <Route path="works" element={<WorksPage />} />
                 <Route path="works/:workId" element={<WorkPage />} />
                 <Route path="ledger" element={<LedgerPage />} />
@@ -486,7 +492,6 @@ export function AppShell() {
               />
             </svg>
           </span>
-          <span>{t("লিখি")}</span>
         </button>
         {[nav[2], nav[3]].map((item) => (
           <NotebookNavLink

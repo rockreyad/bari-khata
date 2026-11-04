@@ -33,7 +33,7 @@ type Bucket = {
   adjustment: bigint;
 };
 
-export function reconciledTotals(ledger: Ledger, scope: FinancialScope = {}) {
+function computeReconciliation(ledger: Ledger, scope: FinancialScope = {}) {
   const accounts = effectiveAccounts(ledger);
   const buckets = new Map<string, Bucket>();
   const key = (party: string, account: Account, contractId: string | null) =>
@@ -161,6 +161,7 @@ export function reconciledTotals(ledger: Ledger, scope: FinancialScope = {}) {
     payable = 0n,
     advance = 0n;
   const people = new Map<string, { payable: bigint; advance: bigint }>();
+  const payableGroups = new Map<string, bigint>();
   for (const row of buckets.values()) {
     const job = row.contractId ? jobs.get(row.contractId) : null;
     const agreed = BigInt(job?.total ?? 0);
@@ -181,15 +182,18 @@ export function reconciledTotals(ledger: Ledger, scope: FinancialScope = {}) {
         aggregate.payable - aggregate.advance + personPools.get(group)!;
       payable += positive(corrected);
       advance += positive(-corrected);
+      payableGroups.set(group, positive(corrected));
     } else {
       payable += aggregate.payable;
       advance += aggregate.advance;
+      payableGroups.set(group, aggregate.payable);
     }
     personPools.delete(group);
   }
-  for (const owed of personPools.values()) {
+  for (const [group, owed] of personPools) {
     payable += positive(owed);
     advance += positive(-owed);
+    payableGroups.set(group, positive(owed));
   }
   const corrected = payable + pool;
   const signedPersonScope = Boolean(scope.personId && scope.account);
@@ -218,10 +222,29 @@ export function reconciledTotals(ledger: Ledger, scope: FinancialScope = {}) {
     unallocatedWorkOwedCorrection,
   };
   return {
-    ...(Object.fromEntries(
-      Object.entries(result).map(([name, value]) => [name, exact(value)]),
-    ) as { [K in keyof typeof result]: number }),
-    balanceAmbiguous,
+    totals: {
+      ...(Object.fromEntries(
+        Object.entries(result).map(([name, value]) => [name, exact(value)]),
+      ) as { [K in keyof typeof result]: number }),
+      balanceAmbiguous,
+    },
+    payableGroups,
+  };
+}
+
+export function reconciledTotals(ledger: Ledger, scope: FinancialScope = {}) {
+  return computeReconciliation(ledger, scope).totals;
+}
+
+export function reconciledPayableGroups(ledger: Ledger) {
+  const { totals, payableGroups } = computeReconciliation(ledger);
+  return {
+    total: totals.reconciledPayable,
+    groups: [...payableGroups].flatMap(([key, amount]) => {
+      if (amount <= 0n) return [];
+      const [party, account] = JSON.parse(key) as [string, Account];
+      return [{ party, account, amount: exact(amount) }];
+    }),
   };
 }
 
