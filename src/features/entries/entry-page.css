@@ -133,17 +133,60 @@
   }
 }
 
+.entry-cash-reason {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
 .entry-cash-reason > summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 44px;
-  padding-block: 10px;
-  color: var(--muted);
-  font-size: 12px;
+  min-height: 52px;
+  padding: 14px 16px;
+  border-radius: 17px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   list-style: none;
+}
+.entry-cash-reason > summary:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 3px;
+}
+.entry-cash-reason[open] > summary {
+  border-bottom: 1px solid var(--line);
+  border-radius: 17px 17px 0 0;
+}
+.entry-cash-reason-body {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  padding: 16px;
+}
+.payment-purpose-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-muted);
+}
+.payment-purpose-create > .account-label,
+.payment-purpose-create > .field-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.payment-purpose-create > .account-label {
+  padding: 0;
 }
 .entry-cash-reason > summary::-webkit-details-marker {
   display: none;
@@ -151,10 +194,6 @@
 .entry-cash-reason[open] > summary > svg {
   transform: rotate(180deg);
 }
-.entry-cash-reason > label {
-  margin-top: 8px;
-}
-
 .entry-contract-progress > .balance-progress {
   padding: 0;
   border: 0;

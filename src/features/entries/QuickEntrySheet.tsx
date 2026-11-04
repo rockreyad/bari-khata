@@ -1075,116 +1075,123 @@ export function QuickEntrySheet({
               >
                 <summary>
                   {t("কারণ লিখি")}
-                  <CaretDownIcon size={16} />
+                  <CaretDownIcon size={16} aria-hidden="true" />
                 </summary>
-                <label>
-                  {t("কিসের টাকা")}
-                  <AppSelect
-                    value={draft.paymentPurposeId || draft.account}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      const custom = ledger.paymentPurposes.find(
-                        (p) => p.id === value,
-                      );
-                      setDraft((d) => ({
-                        ...d,
-                        paymentPurposeId: custom
-                          ? custom.id
-                          : value === "__new__"
-                            ? value
-                            : "",
-                        paymentPurposeName: "",
-                        account:
-                          custom?.account ??
-                          (["materials", "labour", "other"].includes(value)
-                            ? (value as QuickDraft["account"])
-                            : d.account),
-                        contractId:
-                          custom && custom.account !== "labour"
-                            ? ""
-                            : d.contractId,
-                      }));
-                    }}
-                  >
-                    {!selectedKind ||
-                    selectedKind === "other" ||
-                    selectedKind === "shop" ? (
-                      <option value="materials">{t("মালের টাকা")}</option>
-                    ) : null}
-                    {!selectedKind ||
-                    selectedKind === "other" ||
-                    selectedKind === "worker" ? (
-                      <option value="labour">{t("মজুরি")}</option>
-                    ) : null}
-                    {!selectedKind ||
-                    selectedKind === "other" ||
-                    selectedKind === "driver" ? (
-                      <option value="other">{t("গাড়িভাড়া / অন্য খরচ")}</option>
-                    ) : null}
-                    {ledger.paymentPurposes
-                      .filter(
-                        (p) =>
-                          !selectedKind ||
-                          selectedKind === "other" ||
-                          p.account === defaultContactAccount(selectedPerson!),
-                      )
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
+                <div className="entry-cash-reason-body">
+                  <label>
+                    {t("কিসের টাকা")}
+                    <AppSelect
+                      value={draft.paymentPurposeId || draft.account}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        const custom = ledger.paymentPurposes.find(
+                          (p) => p.id === value,
+                        );
+                        setDraft((d) => ({
+                          ...d,
+                          paymentPurposeId: custom
+                            ? custom.id
+                            : value === "__new__"
+                              ? value
+                              : "",
+                          paymentPurposeName: "",
+                          account:
+                            custom?.account ??
+                            (["materials", "labour", "other"].includes(value)
+                              ? (value as QuickDraft["account"])
+                              : d.account),
+                          contractId:
+                            custom && custom.account !== "labour"
+                              ? ""
+                              : d.contractId,
+                        }));
+                      }}
+                    >
+                      {!selectedKind ||
+                      selectedKind === "other" ||
+                      selectedKind === "shop" ? (
+                        <option value="materials">{t("মালের টাকা")}</option>
+                      ) : null}
+                      {!selectedKind ||
+                      selectedKind === "other" ||
+                      selectedKind === "worker" ? (
+                        <option value="labour">{t("মজুরি")}</option>
+                      ) : null}
+                      {!selectedKind ||
+                      selectedKind === "other" ||
+                      selectedKind === "driver" ? (
+                        <option value="other">
+                          {t("গাড়িভাড়া / অন্য খরচ")}
                         </option>
-                      ))}
-                    <option value="__new__">{t("+ নতুন কারণ লিখি")}</option>
-                  </AppSelect>
-                </label>
-                {draft.paymentPurposeId === "__new__" ? (
-                  <div className="field-grid payment-purpose-create">
-                    <label>
-                      {t("কিসের টাকা লিখুন")}
-                      <input
-                        value={draft.paymentPurposeName}
-                        maxLength={200}
-                        placeholder={t("যেমন: মাল নামানোর টাকা")}
-                        onChange={(e) =>
-                          field("paymentPurposeName", e.target.value)
-                        }
-                      />
-                    </label>
-                    {!selectedKind || selectedKind === "other" ? (
+                      ) : null}
+                      {ledger.paymentPurposes
+                        .filter(
+                          (p) =>
+                            !selectedKind ||
+                            selectedKind === "other" ||
+                            p.account ===
+                              defaultContactAccount(selectedPerson!),
+                        )
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      <option value="__new__">{t("+ নতুন কারণ লিখি")}</option>
+                    </AppSelect>
+                  </label>
+                  {draft.paymentPurposeId === "__new__" ? (
+                    <div className="payment-purpose-create">
                       <label>
-                        {t("কোন হিসাবের অংশ")}
-                        <AppSelect
-                          value={draft.account}
+                        {t("কিসের টাকা লিখুন")}
+                        <input
+                          value={draft.paymentPurposeName}
+                          maxLength={200}
+                          aria-describedby={`${formId}-purpose-hint`}
+                          placeholder={t("যেমন: মাল নামানোর টাকা")}
                           onChange={(e) =>
-                            setDraft((d) => ({
-                              ...d,
-                              account: e.target.value as QuickDraft["account"],
-                              contractId: "",
-                            }))
+                            field("paymentPurposeName", e.target.value)
                           }
-                        >
-                          <option value="materials">{t("মালের টাকা")}</option>
-                          <option value="labour">{t("মজুরি")}</option>
-                          <option value="other">{t("অন্য খরচ")}</option>
-                        </AppSelect>
+                        />
                       </label>
-                    ) : (
-                      <p className="account-label">
+                      {!selectedKind || selectedKind === "other" ? (
+                        <label>
+                          {t("কোন হিসাবের অংশ")}
+                          <AppSelect
+                            value={draft.account}
+                            onChange={(e) =>
+                              setDraft((d) => ({
+                                ...d,
+                                account: e.target
+                                  .value as QuickDraft["account"],
+                                contractId: "",
+                              }))
+                            }
+                          >
+                            <option value="materials">{t("মালের টাকা")}</option>
+                            <option value="labour">{t("মজুরি")}</option>
+                            <option value="other">{t("অন্য খরচ")}</option>
+                          </AppSelect>
+                        </label>
+                      ) : (
+                        <p className="account-label">
+                          {t(
+                            selectedKind === "worker"
+                              ? "এটি মজুরির টাকা"
+                              : selectedKind === "shop"
+                                ? "এটি মালের টাকা"
+                                : "এটি আনার খরচের টাকা",
+                          )}
+                        </p>
+                      )}
+                      <p className="field-hint" id={`${formId}-purpose-hint`}>
                         {t(
-                          selectedKind === "worker"
-                            ? "এটি মজুরির টাকা"
-                            : selectedKind === "shop"
-                              ? "এটি মালের টাকা"
-                              : "এটি আনার খরচের টাকা",
+                          "টাকা রাখার সঙ্গে এই কারণও রাখা হবে। পরের বার তালিকায় পাবেন।",
                         )}
                       </p>
-                    )}
-                    <p className="field-hint">
-                      {t(
-                        "টাকা রাখার সঙ্গে এই কারণও রাখা হবে। পরের বার তালিকায় পাবেন।",
-                      )}
-                    </p>
-                  </div>
-                ) : null}
+                    </div>
+                  ) : null}
+                </div>
               </details>
             </section>
           ) : !cash &&
