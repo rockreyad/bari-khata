@@ -1,4 +1,59 @@
 export const integrationsEnglish: Record<string, string> = {
+  টার্মিনাল: "Terminal",
+  "Codex সেটআপ কমান্ড": "Codex setup command",
+  "AI agent · MCP": "AI agent · MCP",
+  "Codex, Claude বা নিজের agent-কে খাতার সঙ্গে যুক্ত করুন।":
+    "Connect Codex, Claude or your own agent to your notebook.",
+  "MCP সংযোগ": "MCP connection",
+  "একটি ঠিকানা। আপনার পছন্দের agent।": "One endpoint. Your choice of agent.",
+  "সংযোগের ধরন": "Connection protocol",
+  "Streamable HTTP": "Streamable HTTP",
+  "OAuth 2.1": "OAuth 2.1",
+  "স্থানীয় ঠিকানা": "Local endpoint",
+  "প্রকাশিত ঠিকানা": "Public endpoint",
+  "টার্মিনালে চালান। ব্রাউজার খুললে লগইন করে অনুমতি দিন।":
+    "Run in your terminal. When the browser opens, sign in and choose permissions.",
+  "এই কমান্ডেই লগইন শুরু হয়। সঙ্গে আলাদা login কমান্ড চালানোর প্রয়োজন নেই।":
+    "This command starts sign-in automatically. You do not need to run a separate login command.",
+  "যাচাই ও আবার লগইন": "Verify or sign in again",
+  "সংযোগের ঠিকানা ও অবস্থা দেখতে": "To inspect the endpoint and configuration",
+  "আগের সংযোগে আবার লগইন দরকার হলে":
+    "To sign in again to an existing connection",
+  "Agent-কে get_capabilities চালাতে বলুন। এতে অনুমতি যাচাই হবে, খাতার হিসাব বদলাবে না।":
+    "Ask your agent to call get_capabilities. It checks permissions without changing your notebook.",
+  "শেষে “Authentication complete” দেখালে লগইন শেষ। ওই পাতাটি agent নিজে দেখায়; বন্ধ করে এখানে ফিরতে পারেন।":
+    "Sign-in is complete when you see “Authentication complete”. That page belongs to your agent; close it and return here.",
+  "{{count}}টি সংযোগ · সময় বাংলাদেশের":
+    "{{count}} connections · Bangladesh time",
+  "তথ্য হালনাগাদ করুন": "Refresh details",
+  "প্রতিটি অনুমতি আলাদা সংযোগ। একই নাম থাকলে পরিচয় ও অনুমতির সময় মিলিয়ে দেখুন।":
+    "Each authorization is a separate connection. Compare IDs and grant times when names match.",
+  "অনুমতি দেওয়ার সময়": "Access granted",
+  "সর্বশেষ ব্যবহার": "Last used",
+  "মেয়াদ শেষ হবে": "Access expires",
+  "অনুমতি বন্ধের সময়": "Access revoked",
+  "অনুমতি চালু": "Access active",
+  "অনুমতি বন্ধ": "Access revoked",
+  "মেয়াদ শেষ": "Expired",
+  "তারিখ পাওয়া যায়নি": "Date unavailable",
+  "ব্যবহারের সময় এখনও রেকর্ড হয়নি": "No usage time recorded yet",
+  "সংযোগের পরিচয়": "Connection ID",
+  "বন্ধ করা সংযোগ ({{count}})": "Revoked connections ({{count}})",
+  "আপনার খাতা, আপনার অনুমতি": "Your notebook, your permissions",
+  "অনুমতির সিদ্ধান্ত রাখা হয়েছে": "Your access decision is saved",
+  "অনুমতি দেওয়া হয়েছে": "Access granted",
+  "অনুমতি দেওয়া হয়নি": "Access denied",
+  "{{name}}-এ ফিরে যাচ্ছেন। সংযোগ শেষ হওয়ার বার্তা দেখালে সেই পাতা বন্ধ করতে পারবেন।":
+    "Returning to {{name}}. You can close its page once it confirms the connection is complete.",
+  "এই অনুরোধে আর অনুমতি দিতে হবে না।":
+    "You do not need to approve this request again.",
+  "সহকারীতে ফিরে যান": "Return to assistant",
+  "অনুমতির সিদ্ধান্ত রাখা হয়েছে। সহকারীতে ফিরতে নিচের বোতাম চাপুন।":
+    "Your access decision is saved. Use the button below to return to your assistant.",
+  "শেষ ধাপে সহকারীর নিজস্ব পাতায় সংযোগের ফল দেখাবে।":
+    "The assistant will show the connection result on its own page at the final step.",
+  "কোন অনুমতি দিচ্ছেন তা দেখে নিন। চাইলে এখনই ফিরে যেতে পারেন।":
+    "Review the permissions you are granting. You can go back at any time.",
   "আপনার AI সহকারী": "Your AI assistant",
   "সহকারী দিয়ে হিসাব রাখুন ও খুঁজুন":
     "Let your assistant record and find entries",

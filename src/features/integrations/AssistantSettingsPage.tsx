@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ArrowLeftIcon,
+  ArrowsClockwiseIcon,
+  CodeIcon,
   CopyIcon,
   KeyIcon,
   RobotIcon,
@@ -15,6 +17,7 @@ import { getActiveOwner } from "../../data/database";
 import { parseMoneyText } from "../../domain/money";
 import { useAuth } from "../auth/AuthProvider";
 import { AssistantPermissions } from "./AssistantPermissions";
+import { AssistantConnectionCard } from "./AssistantConnectionCard";
 import { AssistantProposalDetails } from "./AssistantProposalDetails";
 import {
   approveAssistantProposal,
@@ -28,7 +31,6 @@ import {
   loadAssistantConnections,
   loadAssistantProposals,
   revokeAssistantConnection,
-  scopeLabels,
   type AssistantConnection,
   type AssistantProposal,
   type AssistantScope,
@@ -38,7 +40,7 @@ import "./integrations.css";
 export function AssistantSettingsPage() {
   const { mode, go, ledger } = useNotebook();
   const auth = useAuth();
-  const { t, date, money, formatDigits } = useLanguageContext();
+  const { t, number } = useLanguageContext();
   const owner = auth.user?.id ?? null;
   const [loaded, setLoaded] = useState<{
     owner: string;
@@ -197,9 +199,9 @@ export function AssistantSettingsPage() {
       endpointUrl.hostname === "[::1]"),
   );
   const connections =
-    data?.connections.filter(
-      (connection) => !connection.revokedAt && !connection.revoked_at,
-    ) ?? [];
+    data?.connections.filter((connection) => !connection.revokedAt) ?? [];
+  const revokedConnections =
+    data?.connections.filter((connection) => connection.revokedAt) ?? [];
   const proposals =
     data?.proposals.filter((proposal) =>
       ["pending", "awaiting_approval", "prepared", "approved"].includes(
@@ -216,10 +218,11 @@ export function AssistantSettingsPage() {
         <ArrowLeftIcon size={19} />
         {t("সেটিংসে ফিরুন")}
       </button>
-      <header className="page-heading">
+      <header className="page-heading assistant-page-heading">
         <div>
+          <span className="assistant-eyebrow">{t("AI agent · MCP")}</span>
           <h1>{t("আপনার AI সহকারী")}</h1>
-          <p>{t("নিজের সহকারীকে বলেই খাতার কাজ করুন।")}</p>
+          <p>{t("Codex, Claude বা নিজের agent-কে খাতার সঙ্গে যুক্ত করুন।")}</p>
         </div>
         <RobotIcon
           className="assistant-heading-icon"
@@ -277,7 +280,28 @@ export function AssistantSettingsPage() {
       {enabled && data?.available && endpoint ? (
         <>
           <section className="assistant-card assistant-setup">
-            <h2>{t("সহজে সংযোগ দিন")}</h2>
+            <div className="assistant-section-heading">
+              <div>
+                <h2>{t("MCP সংযোগ")}</h2>
+                <p className="assistant-muted">
+                  {t("একটি ঠিকানা। আপনার পছন্দের agent।")}
+                </p>
+              </div>
+              <span className="assistant-setup-symbol" aria-hidden="true">
+                <CodeIcon size={27} />
+              </span>
+            </div>
+            <div className="assistant-protocols" aria-label={t("সংযোগের ধরন")}>
+              <span>{t("Streamable HTTP")}</span>
+              <span>{t("OAuth 2.1")}</span>
+              <span>
+                {t(
+                  claudeNeedsPublishedAddress
+                    ? "স্থানীয় ঠিকানা"
+                    : "প্রকাশিত ঠিকানা",
+                )}
+              </span>
+            </div>
             <label className="assistant-field">
               <span>{t("সংযোগের ঠিকানা")}</span>
               <span className="assistant-copy-field">
@@ -295,20 +319,64 @@ export function AssistantSettingsPage() {
                   aria-label={t("ঠিকানা কপি করুন")}
                 >
                   <CopyIcon size={18} />
-                  {t("কপি করুন")}
+                  <span className="assistant-copy-label">{t("কপি করুন")}</span>
                 </button>
               </span>
             </label>
-            <details className="assistant-details assistant-client-help">
+            <details
+              className="assistant-details assistant-client-help assistant-codex-help"
+              open
+            >
               <summary>{t("Codex-এ যোগ করুন")}</summary>
-              <pre>{assistantInstallCommand(endpoint)}</pre>
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => void copy(assistantInstallCommand(endpoint))}
-              >
-                {t("কমান্ড কপি করুন")}
-              </button>
+              <p className="assistant-muted">
+                {t("টার্মিনালে চালান। ব্রাউজার খুললে লগইন করে অনুমতি দিন।")}
+              </p>
+              <div className="assistant-command">
+                <div className="assistant-command-heading">
+                  <span>{t("টার্মিনাল")}</span>
+                  <button
+                    className="assistant-command-copy"
+                    type="button"
+                    onClick={() => void copy(assistantInstallCommand(endpoint))}
+                  >
+                    <CopyIcon size={16} aria-hidden="true" />
+                    {t("কমান্ড কপি করুন")}
+                  </button>
+                </div>
+                <pre tabIndex={0} aria-label={t("Codex সেটআপ কমান্ড")}>
+                  <code>{assistantInstallCommand(endpoint)}</code>
+                </pre>
+              </div>
+              <p className="assistant-muted">
+                {t(
+                  "এই কমান্ডেই লগইন শুরু হয়। সঙ্গে আলাদা login কমান্ড চালানোর প্রয়োজন নেই।",
+                )}
+              </p>
+              <details className="assistant-troubleshooting">
+                <summary>{t("যাচাই ও আবার লগইন")}</summary>
+                <p className="assistant-muted">
+                  {t("সংযোগের ঠিকানা ও অবস্থা দেখতে")}
+                </p>
+                <pre>
+                  <code>{"codex mcp get bari-khata"}</code>
+                </pre>
+                <p className="assistant-muted">
+                  {t("আগের সংযোগে আবার লগইন দরকার হলে")}
+                </p>
+                <pre>
+                  <code>{"codex mcp login bari-khata"}</code>
+                </pre>
+                <p className="assistant-muted">
+                  {t(
+                    "Agent-কে get_capabilities চালাতে বলুন। এতে অনুমতি যাচাই হবে, খাতার হিসাব বদলাবে না।",
+                  )}
+                </p>
+                <p className="assistant-muted">
+                  {t(
+                    "শেষে “Authentication complete” দেখালে লগইন শেষ। ওই পাতাটি agent নিজে দেখায়; বন্ধ করে এখানে ফিরতে পারেন।",
+                  )}
+                </p>
+              </details>
             </details>
             <details className="assistant-details assistant-client-help">
               <summary>{t("Claude-এ যোগ করুন")}</summary>
@@ -456,64 +524,63 @@ export function AssistantSettingsPage() {
             </section>
           ) : null}
           <section className="assistant-card">
-            <h2>{t("সংযুক্ত সহকারী")}</h2>
+            <div className="assistant-section-heading">
+              <div>
+                <h2>{t("সংযুক্ত সহকারী")}</h2>
+                <p className="assistant-muted">
+                  {t("{{count}}টি সংযোগ · সময় বাংলাদেশের", {
+                    count: number(connections.length),
+                  })}
+                </p>
+              </div>
+              <button
+                className="secondary-button assistant-refresh"
+                type="button"
+                aria-label={t("তথ্য হালনাগাদ করুন")}
+                disabled={loading || busy}
+                onClick={() => setReload((value) => value + 1)}
+              >
+                <ArrowsClockwiseIcon size={17} aria-hidden="true" />
+                <span>{t("তথ্য হালনাগাদ করুন")}</span>
+              </button>
+            </div>
+            <p className="assistant-muted">
+              {t(
+                "প্রতিটি অনুমতি আলাদা সংযোগ। একই নাম থাকলে পরিচয় ও অনুমতির সময় মিলিয়ে দেখুন।",
+              )}
+            </p>
             {connections.length ? (
               <ul className="assistant-connections">
                 {connections.map((connection) => (
-                  <li key={connection.id}>
-                    <div>
-                      <strong>{formatDigits(connection.name)}</strong>
-                      <small>
-                        {connection.policy.confirmationRequired
-                          ? t("প্রতিবার আপনার অনুমোদন লাগে")
-                          : t("অনুমতি দেওয়া কাজ সরাসরি করতে পারে")}
-                        {connection.policy.maxAmountPaisa
-                          ? ` · ${t("একবারে {{amount}} পর্যন্ত", { amount: money(connection.policy.maxAmountPaisa) })}`
-                          : ""}
-                      </small>
-                      <details className="assistant-connection-details">
-                        <summary>{t("অনুমতি ও বিস্তারিত")}</summary>
-                        <p>
-                          {connection.scopes
-                            .map((scope) =>
-                              t(scopeLabels[scope as AssistantScope] ?? scope),
-                            )
-                            .join(" · ")}
-                        </p>
-                        {connection.lastUsedAt || connection.last_used_at ? (
-                          <small>
-                            {t("শেষ কাজ: {{date}}", {
-                              date: date(
-                                connection.lastUsedAt ??
-                                  connection.last_used_at ??
-                                  null,
-                              ),
-                            })}
-                          </small>
-                        ) : null}
-                        {connection.expiresAt ? (
-                          <small>
-                            {t("সংযোগের মেয়াদ শেষ: {{date}}", {
-                              date: date(connection.expiresAt),
-                            })}
-                          </small>
-                        ) : null}
-                      </details>
-                    </div>
-                    <button
-                      type="button"
-                      className="assistant-revoke"
-                      disabled={busy}
-                      onClick={() => setRevoking(connection)}
-                    >
-                      {t("অনুমতি বন্ধ করুন")}
-                    </button>
-                  </li>
+                  <AssistantConnectionCard
+                    key={connection.id}
+                    connection={connection}
+                    busy={busy}
+                    onRevoke={() => setRevoking(connection)}
+                  />
                 ))}
               </ul>
             ) : (
               <p>{t("এখনও কোনো সহকারী যুক্ত নেই।")}</p>
             )}
+            {revokedConnections.length ? (
+              <details className="assistant-details">
+                <summary>
+                  {t("বন্ধ করা সংযোগ ({{count}})", {
+                    count: number(revokedConnections.length),
+                  })}
+                </summary>
+                <ul className="assistant-connections">
+                  {revokedConnections.map((connection) => (
+                    <AssistantConnectionCard
+                      key={connection.id}
+                      connection={connection}
+                      busy={false}
+                    />
+                  ))}
+                </ul>
+              </details>
+            ) : null}
           </section>
           {creating ? (
             <section className="assistant-card">

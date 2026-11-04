@@ -238,6 +238,19 @@ class MemoryStore implements McpStore {
     if (action === "get_client")
       return this.clients.get(String(data.clientId)) ?? null;
     if (action === "begin_authorization") {
+      const previous = [...this.authorizations.values()].find((request) =>
+        ["clientId", "redirectUri", "codeChallenge", "resource", "state"].every(
+          (key) => request[key] === data[key],
+        ),
+      );
+      if (previous) {
+        if (
+          [...previous.scopes].sort().join(" ") !==
+          [...(data.scopes as string[])].sort().join(" ")
+        )
+          throw new McpError("mcp_invalid_scope");
+        return { requestId: previous.requestId };
+      }
       this.authorizations.set(String(data.requestId), data as Authorization);
       return { requestId: data.requestId };
     }
@@ -547,7 +560,7 @@ async function form(
   );
   return { response, body: (await response.json()) as Record<string, any> };
 }
-async function authorize(
+async function beginAuthorization(
   h: ReturnType<typeof harness>,
   method: "none" | "client_secret_basic" = "none",
   omitRegistrationScope = false,
@@ -591,7 +604,20 @@ async function authorize(
   const requestId = new URL(
     authorization.headers.get("location")!,
   ).searchParams.get("request")!;
-  const consent = await h.app(
+  return {
+    ...client,
+    verifier,
+    authorizationUrl: url.href,
+    requestId,
+    redirectUri: "https://assistant.example/callback",
+  };
+}
+async function approveAuthorization(
+  h: ReturnType<typeof harness>,
+  requestId: string,
+  input: Record<string, unknown> = {},
+) {
+  return h.app(
     new Request(`${origin}/api/mcp-admin`, {
       method: "POST",
       headers: {
@@ -603,16 +629,25 @@ async function authorize(
         action: "approve_authorization",
         requestId,
         approve: true,
+        ...input,
       }),
     }),
   );
+}
+async function authorize(
+  h: ReturnType<typeof harness>,
+  method: "none" | "client_secret_basic" = "none",
+  omitRegistrationScope = false,
+) {
+  const pending = await beginAuthorization(h, method, omitRegistrationScope);
+  const { requestId } = pending;
+  const consent = await approveAuthorization(h, requestId);
   expect(consent.status).toBe(200);
   const approved = (await consent.json()) as { redirectUrl: string };
   const redirect = new URL(approved.redirectUrl);
   expect(redirect.searchParams.get("state")).toBe("client-state-1");
   return {
-    ...client,
-    verifier,
+    ...pending,
     code: redirect.searchParams.get("code")!,
     redirectUri: "https://assistant.example/callback",
   };
@@ -1084,6 +1119,88 @@ describe("MCP receipt HTTP security", () => {
 });
 
 describe("MCP OAuth HTTP lifecycle", () => {
+  it("reuses one consent request for concurrent visits to the same OAuth flow and approves it once", async () => {
+    const h = harness();
+    const pending = await beginAuthorization(h);
+    const visits = await Promise.all(
+      Array.from({ length: 3 }, () =>
+        h.app(new Request(pending.authorizationUrl)),
+      ),
+    );
+    const location = `${origin}/mcp/consent?request=${pending.requestId}`;
+    expect(visits.map((response) => response.headers.get("location"))).toEqual([
+      location,
+      location,
+      location,
+    ]);
+    expect(h.store.authorizations.size).toBe(1);
+
+    const approvals = await Promise.all([
+      approveAuthorization(h, pending.requestId, { scopes: ["ledger:read"] }),
+      approveAuthorization(h, pending.requestId, { scopes: ["ledger:read"] }),
+    ]);
+    expect(approvals.map((response) => response.status).sort()).toEqual([
+      200, 400,
+    ]);
+    expect(h.store.connections.size).toBe(2);
+    expect(h.store.codes.size).toBe(1);
+    const approved = await approvals.find((response) => response.ok)!.json();
+    const code = new URL(approved.redirectUrl).searchParams.get("code")!;
+    const input = {
+      grant_type: "authorization_code",
+      client_id: pending.client_id,
+      code,
+      redirect_uri: pending.redirectUri,
+      code_verifier: pending.verifier,
+      resource,
+    };
+    const exchanged = await form(h.app, "token", input);
+    expect(exchanged.body.scope).toBe("ledger:read");
+
+    expect(
+      (await h.app(new Request(pending.authorizationUrl))).headers.get(
+        "location",
+      ),
+    ).toBe(location);
+    expect(
+      (
+        await approveAuthorization(h, pending.requestId, {
+          scopes: ["ledger:read", "entries:create"],
+        })
+      ).ok,
+    ).toBe(false);
+    expect((await form(h.app, "token", input)).body).toMatchObject({
+      error: "invalid_grant",
+    });
+    expect(h.store.authorizations.size).toBe(1);
+    expect(h.store.connections.size).toBe(2);
+    expect(h.store.codes.size).toBe(1);
+    expect(
+      [...h.store.connections.values()].find(
+        (connection) => connection.clientId === pending.client_id,
+      )!.scopes,
+    ).toEqual(["ledger:read"]);
+  });
+  it("does not widen an existing OAuth flow's scopes or combine separate grants by client name", async () => {
+    const h = harness();
+    const first = await beginAuthorization(h, "none", true);
+    const altered = new URL(first.authorizationUrl);
+    altered.searchParams.set(
+      "scope",
+      "ledger:read entries:create entities:write",
+    );
+    const rejected = await h.app(new Request(altered));
+    expect(await rejected.json()).toMatchObject({ error: "invalid_scope" });
+    expect(h.store.authorizations.size).toBe(1);
+
+    const second = await beginAuthorization(h, "none", true);
+    expect(second.client_id).not.toBe(first.client_id);
+    expect(second.requestId).not.toBe(first.requestId);
+    expect(h.store.authorizations.size).toBe(2);
+    expect((await approveAuthorization(h, first.requestId)).ok).toBe(true);
+    expect((await approveAuthorization(h, second.requestId)).ok).toBe(true);
+    expect(h.store.connections.size).toBe(3);
+  });
   it("permits a default registered client to request write access, while granting only the owner's approved scopes", async () => {
     const h = harness();
     const authorized = await authorize(h, "none", true);

@@ -42,21 +42,56 @@ const PolicySchema = z
   })
   .passthrough();
 export type AssistantPolicy = z.infer<typeof PolicySchema>;
+const ConnectionTimestampSchema = z.iso
+  .datetime({ offset: true })
+  .nullable()
+  .optional();
+const connectionTimestampAliases = [
+  ["createdAt", "created_at"],
+  ["revokedAt", "revoked_at"],
+  ["lastUsedAt", "last_used_at"],
+  ["expiresAt", "expires_at"],
+] as const;
 const ConnectionSchema = z
   .object({
     id: z.string().min(1),
     name: z.string().min(1),
     scopes: z.array(z.string()),
     policy: PolicySchema.default({}),
-    createdAt: z.string().nullable().optional(),
-    created_at: z.string().nullable().optional(),
-    revokedAt: z.string().nullable().optional(),
-    revoked_at: z.string().nullable().optional(),
-    lastUsedAt: z.string().nullable().optional(),
-    last_used_at: z.string().nullable().optional(),
-    expiresAt: z.string().nullable().optional(),
+    createdAt: ConnectionTimestampSchema,
+    created_at: ConnectionTimestampSchema,
+    revokedAt: ConnectionTimestampSchema,
+    revoked_at: ConnectionTimestampSchema,
+    lastUsedAt: ConnectionTimestampSchema,
+    last_used_at: ConnectionTimestampSchema,
+    expiresAt: ConnectionTimestampSchema,
+    expires_at: ConnectionTimestampSchema,
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((connection, context) => {
+    for (const [field, alias] of connectionTimestampAliases) {
+      const value = connection[field];
+      const alternate = connection[alias];
+      if (value === undefined || alternate === undefined) continue;
+      const agrees =
+        value === null || alternate === null
+          ? value === alternate
+          : Date.parse(value) === Date.parse(alternate);
+      if (!agrees)
+        context.addIssue({
+          code: "custom",
+          path: [field],
+          message: "Conflicting connection timestamps",
+        });
+    }
+  })
+  .transform((connection) => {
+    for (const [field, alias] of connectionTimestampAliases) {
+      if (connection[field] === undefined && connection[alias] !== undefined)
+        connection[field] = connection[alias];
+    }
+    return connection;
+  });
 export type AssistantConnection = z.infer<typeof ConnectionSchema>;
 const EndpointSchema = z
   .string()
@@ -259,7 +294,7 @@ export function assistantConfiguration(endpoint: string, token: string) {
 
 export function assistantInstallCommand(endpoint: string) {
   const safeUrl = EndpointSchema.parse(endpoint).replaceAll("'", "'\\''");
-  return `codex mcp add bari-khata --url '${safeUrl}'\ncodex mcp login bari-khata`;
+  return `codex mcp add bari-khata --url '${safeUrl}'`;
 }
 
 export const assistantErrors: Record<string, string> = {
