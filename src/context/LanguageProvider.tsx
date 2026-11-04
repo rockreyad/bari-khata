@@ -46,6 +46,7 @@ import { v2English } from "./v2English";
 import { authEnglish } from "../features/auth/authEnglish";
 import { settingsEnglish } from "../features/settings/settingsEnglish";
 import { peopleEnglish } from "../features/people/peopleEnglish";
+import { contactPresetsEnglish } from "../features/people/contactPresetsEnglish";
 import { reviewEnglish } from "../features/import/reviewEnglish";
 import { analyticsEnglish } from "../features/analytics/analyticsEnglish";
 import { formEnglish } from "./formEnglish";
@@ -91,6 +92,7 @@ const english: Record<string, string> = {
   ...phoneAuthEnglish,
   ...settingsEnglish,
   ...peopleEnglish,
+  ...contactPresetsEnglish,
   ...v2English,
   ...formEnglish,
   ...appEnglish,

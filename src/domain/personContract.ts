@@ -6,7 +6,6 @@ import {
   type Person,
 } from "./model";
 import { parseAmount } from "./ledger";
-import { personKind } from "./contacts";
 import { saveContractChange } from "./contracts";
 export function savePersonWithContract(
   ledger: Ledger,
@@ -25,10 +24,13 @@ export function savePersonWithContract(
   if (contract?.amount.trim()) {
     const total = parseAmount(contract.amount);
     if (
-      personKind(parsed) !== "worker" ||
+      parsed.archivedAt ||
+      ledger.people.some(
+        (value) => value.id === parsed.id && value.archivedAt,
+      ) ||
       !total ||
       ((contract.scope ?? "work") === "work" &&
-        !next.works.some((w) => w.id === contract.workId))
+        !next.works.some((w) => w.id === contract.workId && !w.archivedAt))
     )
       throw new Error("contract");
     if (next.contracts.some((c) => c.id === contract.id))

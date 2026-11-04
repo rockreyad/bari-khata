@@ -18,7 +18,7 @@ import {
   PaymentPurposeSchema,
   type Ledger,
 } from "../../domain/model";
-import { canAssignContact, personKind } from "../../domain/contacts";
+import { canAssignContact } from "../../domain/contacts";
 import { saveWorkChange } from "../../domain/workActivity";
 import { parseAmount } from "../../domain/ledger";
 
@@ -35,7 +35,7 @@ export const QuickDraftSchema = z.object({
   kind: z
     .enum(["expense", "payment", "refund", "return", "wage"])
     .default("expense"),
-  purpose: z.enum(["settle", "advance", "wage"]).default("settle"),
+  purpose: z.enum(["settle", "advance", "wage", "charge"]).default("settle"),
   date: text(10),
   note: text(10000),
   amount: numericDraftText(),
@@ -143,6 +143,7 @@ export function buildQuickEntry(
   input: QuickDraft,
   receipts: unknown[] = [],
   generalName = "সাধারণ খরচ",
+  chargeLabel = "কাজের বিল",
 ): Ledger {
   const draft = QuickDraftSchema.parse(input);
   if (!validQuickDate(draft.date)) throw new Error("date");
@@ -211,7 +212,9 @@ export function buildQuickEntry(
   const wage =
     draft.kind === "wage" ||
     (draft.kind === "payment" && draft.purpose === "wage");
-  const isCash = draft.kind === "refund" || (draft.kind === "payment" && !wage);
+  const charge = draft.kind === "payment" && draft.purpose === "charge";
+  const isCash =
+    draft.kind === "refund" || (draft.kind === "payment" && !wage && !charge);
   const unlinkedJobPayment =
     draft.kind === "payment" &&
     isCash &&
@@ -223,14 +226,19 @@ export function buildQuickEntry(
         contract.personId === personId,
     );
   if (isCash && !draft.workId && !unlinkedJobPayment) throw new Error("work");
-  const labour = wage || (!isCash && draft.costType === "labour");
-  const account = labour
-    ? "labour"
-    : !isCash
-      ? draft.costType === "material"
-        ? "materials"
-        : "other"
-      : draft.account;
+  const labour =
+    wage ||
+    (!isCash &&
+      (charge ? draft.account === "labour" : draft.costType === "labour"));
+  const account = charge
+    ? draft.account
+    : labour
+      ? "labour"
+      : !isCash
+        ? draft.costType === "material"
+          ? "materials"
+          : "other"
+        : draft.account;
   const person = next.people.find((p) => p.id === personId);
   if (
     person &&
@@ -240,12 +248,6 @@ export function buildQuickEntry(
       [labour ? "labour" : draft.costType],
       isCash,
     )
-  )
-    throw new Error("person_kind");
-  if (
-    draft.kind === "return" &&
-    person &&
-    !["shop", "other"].includes(personKind(person))
   )
     throw new Error("person_kind");
   const contractId =
@@ -260,7 +262,7 @@ export function buildQuickEntry(
     )
   )
     throw new Error("contract");
-  let paymentPurposeId = isCash ? draft.paymentPurposeId : "";
+  let paymentPurposeId = isCash || charge || wage ? draft.paymentPurposeId : "";
   if (paymentPurposeId === "__new__") {
     const name = draft.paymentPurposeName.trim();
     if (!name || !draft.paymentPurposeNewId) throw new Error("payment_purpose");
@@ -325,30 +327,42 @@ export function buildQuickEntry(
       draft.kind === "refund" ? "refund" : "payment",
     );
   } else {
-    const wageAmount = wage ? quickWageAmount(draft) : 0;
-    if (wage && !wageAmount) throw new Error("amount");
+    const wageAmount = wage
+      ? quickWageAmount(draft)
+      : charge
+        ? positiveAmount(draft.amount)
+        : 0;
+    if ((wage || charge) && !wageAmount) throw new Error("amount");
     const daily = wage && draft.wageBasis === "day";
     const dailyQuantity = daily ? contractQuantity(draft.wageDays)! : "";
     const dailyDescription = daily
       ? `${dailyQuantity} দিন × ${moneyInputValue(parseAmount(draft.wageRate))} টাকা`
       : "";
-    const rows = wage
-      ? [
-          {
-            id: `line-${draft.id}`,
-            label: [draft.note.trim() || "মজুরি", dailyDescription]
-              .filter(Boolean)
-              .join(" · "),
-            amount: moneyInputValue(wageAmount),
-            groupId: "",
-            groupName: "",
-            brand: "",
-            usage: "",
-            quantity: dailyQuantity,
-            unit: daily ? "দিন" : "",
-          },
-        ]
-      : draft.rows;
+    const rows =
+      wage || charge
+        ? [
+            {
+              id: `line-${draft.id}`,
+              label: [
+                next.paymentPurposes.find(
+                  (purpose) => purpose.id === paymentPurposeId,
+                )?.name ||
+                  draft.note.trim() ||
+                  (charge ? chargeLabel : "মজুরি"),
+                dailyDescription,
+              ]
+                .filter(Boolean)
+                .join(" · "),
+              amount: moneyInputValue(wageAmount),
+              groupId: "",
+              groupName: "",
+              brand: "",
+              usage: "",
+              quantity: dailyQuantity,
+              unit: daily ? "দিন" : "",
+            },
+          ]
+        : draft.rows;
     if (!rows.length) throw new Error("label");
     const lines = rows.map((row) => {
       if (!row.label.trim()) throw new Error("label");
@@ -402,7 +416,15 @@ export function buildQuickEntry(
         usage: row.usage.trim(),
         label: row.label.trim(),
         amount,
-        costType: labour ? "labour" : draft.costType,
+        costType: labour
+          ? "labour"
+          : charge
+            ? account === "materials"
+              ? "material"
+              : draft.costType === "transport"
+                ? "transport"
+                : "other"
+            : draft.costType,
         quantity: row.quantity.trim(),
         unit: row.unit.trim(),
       });
@@ -416,9 +438,11 @@ export function buildQuickEntry(
       throw new Error("person");
     const cost = EntrySchema.parse({
       ...base,
+      paymentPurposeId: null,
       reviewStatus:
         !draft.workId ||
         (!wage &&
+          !charge &&
           draft.costType === "material" &&
           draft.rows.some((row) => !row.groupId))
           ? "needs_review"

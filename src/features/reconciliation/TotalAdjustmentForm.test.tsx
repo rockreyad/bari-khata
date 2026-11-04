@@ -64,7 +64,7 @@ vi.mock("../../data/repository", () => ({
   createWorkspaceStorage: () => ({
     readDraft: async (key: string) => context.drafts.get(key) ?? null,
     saveDraft: async (key: string, value: unknown) => {
-      context.draftSave(key, value);
+      await context.draftSave(key, value);
       context.drafts.set(key, structuredClone(value));
     },
     removeDraft: async (key: string) => {
@@ -201,7 +201,7 @@ async function enter(
     });
 }
 
-it("edits a driver's transport balance without using hidden unload bills and reopens at the saved total", async () => {
+it("includes all recorded other-account bills when reconciling a driver and reopens the saved total", async () => {
   const original = LedgerSchema.parse({
     works: [{ id: "work", name: "দরজা" }],
     people: [{ id: "driver", name: "রনি", kind: "driver" }],
@@ -254,9 +254,9 @@ it("edits a driver's transport balance without using hidden unload bills and reo
   fireEvent.change(screen.getByLabelText("যে মোট মিলাব"), {
     target: { value: "balance" },
   });
-  await screen.findByText("দিতে বাকি ৳1000");
-  expect(screen.queryByText("দিতে বাকি ৳3000")).toBeNull();
-  await enter("700", "গাড়িভাড়া মিলিয়েছি");
+  await screen.findByText("দিতে বাকি ৳3000");
+  expect(screen.queryByText("দিতে বাকি ৳1000")).toBeNull();
+  await enter("2700", "গাড়িভাড়া মিলিয়েছি");
   expect(
     view.container.querySelector(".adjustment-preview")?.textContent,
   ).toContain("কমছে৳300");
@@ -265,8 +265,8 @@ it("edits a driver's transport balance without using hidden unload bills and reo
   const saved = context.ledger as Ledger;
   expect(saved.entries.slice(0, 2)).toEqual(original.entries);
   expect(saved.entries.at(-1)?.adjustment).toMatchObject({
-    before: 100000,
-    after: 70000,
+    before: 300000,
+    after: 270000,
     delta: -30000,
   });
   view.unmount();
@@ -276,7 +276,132 @@ it("edits a driver's transport balance without using hidden unload bills and reo
   fireEvent.change(screen.getByLabelText("যে মোট মিলাব"), {
     target: { value: "balance" },
   });
-  await screen.findByText("দিতে বাকি ৳700");
+  await screen.findByText("দিতে বাকি ৳2700");
+});
+
+it("chooses reconciliation scope inside the sheet and preserves each account's unfinished draft while switching", async () => {
+  const original = LedgerSchema.parse({
+    ...fixture(),
+    entries: [
+      ...fixture().entries,
+      {
+        id: "labour-bill",
+        kind: "expense",
+        personId: "shop",
+        account: "labour",
+        lines: [
+          {
+            id: "labour-line",
+            workId: "work",
+            label: "নমুনা মজুরি",
+            amount: 100000,
+            costType: "labour",
+          },
+        ],
+      },
+      {
+        id: "labour-paid",
+        kind: "payment",
+        personId: "shop",
+        account: "labour",
+        allocations: [{ workId: "work", amount: 40000 }],
+        paymentParts: [{ amount: 40000 }],
+      },
+    ],
+  });
+  context.ledger = original;
+  const user = userEvent.setup();
+  render(
+    <TotalAdjustmentSheet
+      target={{ target: "person", id: "shop" }}
+      name="নমুনা দোকান"
+      onClose={context.saved}
+    />,
+  );
+  expect(
+    (screen.getByLabelText("কোন হিসাব মেলাব") as HTMLSelectElement).value,
+  ).toBe("");
+  expect(screen.queryByLabelText("সঠিক অঙ্ক")).toBeNull();
+  expect(context.save).not.toHaveBeenCalled();
+  await user.selectOptions(
+    screen.getByLabelText("কোন হিসাব মেলাব"),
+    "materials",
+  );
+  await screen.findByText("৳30000");
+  await enter("29000", "মালের অসমাপ্ত নমুনা লেখা");
+  let finishWrite!: () => void;
+  context.draftSave.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        finishWrite = resolve;
+      }),
+  );
+  await user.selectOptions(screen.getByLabelText("কোন হিসাব মেলাব"), "labour");
+  await waitFor(() =>
+    expect(
+      (screen.getByLabelText("কোন হিসাব মেলাব") as HTMLSelectElement).disabled,
+    ).toBe(true),
+  );
+  expect(
+    screen
+      .getByLabelText("সঠিক অঙ্ক")
+      .closest("form")!
+      .parentElement!.hasAttribute("inert"),
+  ).toBe(true);
+  finishWrite();
+  await screen.findByText("৳400");
+  expect(
+    context.drafts.get("total-adjustment:person:shop:materials"),
+  ).toMatchObject({ amount: "29000", reason: "মালের অসমাপ্ত নমুনা লেখা" });
+  expect((screen.getByLabelText("সঠিক অঙ্ক") as HTMLInputElement).value).toBe(
+    "",
+  );
+  await enter("350", "মজুরির অসমাপ্ত নমুনা লেখা");
+  await user.selectOptions(
+    screen.getByLabelText("কোন হিসাব মেলাব"),
+    "materials",
+  );
+  await screen.findByText("৳30000");
+  expect((screen.getByLabelText("সঠিক অঙ্ক") as HTMLInputElement).value).toBe(
+    "29000",
+  );
+  expect((screen.getByLabelText("কারণ") as HTMLTextAreaElement).value).toBe(
+    "মালের অসমাপ্ত নমুনা লেখা",
+  );
+  await user.selectOptions(screen.getByLabelText("কোন হিসাব মেলাব"), "labour");
+  await screen.findByText("৳400");
+  expect((screen.getByLabelText("সঠিক অঙ্ক") as HTMLInputElement).value).toBe(
+    "350",
+  );
+  await user.click(screen.getByRole("button", { name: "সমন্বয় রাখুন" }));
+  await waitFor(() => expect(context.saved).toHaveBeenCalledOnce());
+  const saved = context.ledger as Ledger;
+  expect(saved.entries.slice(0, original.entries.length)).toEqual(
+    original.entries,
+  );
+  expect(saved.entries.at(-1)).toMatchObject({
+    account: "labour",
+    adjustment: { basis: "paid", before: 40000, after: 35000, delta: -5000 },
+  });
+  expect(
+    readBalanceAdjustmentScope(saved, {
+      target: "person",
+      personId: "shop",
+      account: "materials",
+      basis: "paid",
+    }).value,
+  ).toBe(3000000);
+  expect(
+    readBalanceAdjustmentScope(saved, {
+      target: "person",
+      personId: "shop",
+      basis: "paid",
+      account: "labour",
+    }).value,
+  ).toBe(35000);
+  expect(
+    context.drafts.get("total-adjustment:person:shop:materials"),
+  ).toMatchObject({ amount: "29000" });
 });
 
 it("corrects the person's paid total with one separate adjustment and preserves the actual payment and bill", async () => {

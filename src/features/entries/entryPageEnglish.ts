@@ -1,4 +1,13 @@
 export const entryPageEnglish: Record<string, string> = {
+  "নতুন বিল নাকি শুধু টাকা দেওয়া, বেছে নিন।":
+    "Choose a new bill or a payment without another bill.",
+  "বাকি নিশ্চিত নয়। কাজ বেছে নিন, বা নতুন বিল কিংবা অগ্রিম বেছে নিন।":
+    "The balance is uncertain. Choose a job, a new bill, or an advance.",
+  "এই কাজের বিল আবার লিখতে হবে না। টাকা দেওয়ার ধরন বেছে নিন।":
+    "This job does not need another bill. Choose the payment type.",
+  "এখন বাকি নেই। নতুন বিল নাকি অগ্রিম, বেছে নিন।":
+    "There is no balance due now. Choose a new bill or an advance.",
+  "নতুন বিল ও টাকা": "New bill and payment",
   "যেমন: কাজের জায়গায় খাবার": "For example: meals at the work site",
   "এই খরচ বাদ দিন": "Remove this expense",
   "আরেকটি খরচ": "Another expense",

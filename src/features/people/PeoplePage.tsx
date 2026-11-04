@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import { useSearchParams } from "react-router";
 import {
   ArrowRightIcon,
@@ -12,20 +12,23 @@ import {
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { AppMenu } from "../../components/ui/AppMenu";
-import { contactAccountSummary, personKind } from "../../domain/contacts";
+import { contactSummary, personKind } from "../../domain/contacts";
 import { matchesContact } from "./people";
 import { PersonMark, kindLabels } from "./ContactIdentity";
 import { PeopleRoleTabs } from "./PeopleRoleTabs";
 import { peopleRoles, roleKey, visibleRoleTabs } from "./peopleRoles";
 import { usePeopleRoleTabs } from "./usePeopleRoleTabs";
+import { contactPresetFor, contactPresets } from "./contactPresets";
 import "./people.css";
 export function PeoplePage() {
   const { ledger, entity, go, mode } = useNotebook();
   const { t, money, formatDigits } = useLanguageContext();
+  const scopeId = useId();
   const [params, setParams] = useSearchParams();
   const query = params.get("q") ?? "";
   const rawRole = (params.get("role") ?? "").slice(0, 4000);
   const activeRole = roleKey(rawRole);
+  const activeType = (params.get("contactType") ?? "").slice(0, 100);
   const rawKind = params.get("type") ?? "all";
   const kind =
     !activeRole && ["worker", "shop", "driver", "other"].includes(rawKind)
@@ -36,9 +39,11 @@ export function PeoplePage() {
   const roles = useMemo(() => peopleRoles(ledger.people), [ledger.people]);
   const preferences = usePeopleRoleTabs(mode);
   const visibleTabs = visibleRoleTabs(roles, preferences.keys);
-  const hiddenRole =
-    activeRole && !visibleTabs.some((role) => role.key === activeRole)
-      ? (roles.find((role) => role.key === activeRole)?.label ?? rawRole.trim())
+  const hiddenType =
+    activeType && !visibleTabs.some((type) => type.key === activeType)
+      ? (roles.find((type) => type.key === activeType)?.label ??
+        contactPresets.find((type) => type.id === activeType)?.label ??
+        activeType)
       : "";
   const rows = useMemo(
     () =>
@@ -46,7 +51,7 @@ export function PeoplePage() {
         .filter((person) => !person.archivedAt)
         .map((person) => ({
           person,
-          summary: contactAccountSummary(ledger, person),
+          summary: contactSummary(ledger, person),
         })),
     [ledger],
   );
@@ -55,6 +60,7 @@ export function PeoplePage() {
       ({ person, summary }) =>
         matchesContact(person, query) &&
         (kind === "all" || personKind(person) === kind) &&
+        (!activeType || contactPresetFor(person).id === activeType) &&
         (!activeRole || roleKey(person.role) === activeRole) &&
         (status === "all" ||
           (status === "due"
@@ -76,21 +82,49 @@ export function PeoplePage() {
       },
       { replace: true },
     );
-  const selectRole = (role: string) =>
+  const selectType = (type: string) =>
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
         next.delete("type");
-        if (role)
-          next.set(
-            "role",
-            roles.find((item) => item.key === role)?.label ?? role,
-          );
-        else next.delete("role");
+        next.delete("role");
+        if (type) next.set("contactType", type);
+        else next.delete("contactType");
         return next;
       },
       { replace: true },
     );
+  const scopes = [
+    ...(kind !== "all"
+      ? [
+          {
+            key: "type",
+            label: t("ধরন: {{kind}}", { kind: t(kindLabels[kind]) }),
+            clear: t("ধরনের বাছাই মুছুন"),
+          },
+        ]
+      : []),
+    ...(activeRole
+      ? [
+          {
+            key: "role",
+            label: t("পরিচয়: {{role}}", { role: formatDigits(rawRole.trim()) }),
+            clear: t("পরিচয়ের বাছাই মুছুন"),
+          },
+        ]
+      : []),
+    ...(hiddenType
+      ? [
+          {
+            key: "contactType",
+            label: t("ধরন: {{kind}}", {
+              kind: t(activeType === "custom" ? "ধরন বাছা হয়নি" : hiddenType),
+            }),
+            clear: t("ধরনের বাছাই মুছুন"),
+          },
+        ]
+      : []),
+  ];
   return (
     <div className="contacts-page">
       <header className="page-heading">
@@ -151,33 +185,28 @@ export function PeoplePage() {
       <PeopleRoleTabs
         roles={roles}
         selectedKeys={preferences.keys}
-        activeRole={activeRole}
-        allActive={!activeRole && kind === "all"}
+        activeRole={activeType}
+        allActive={!activeRole && !activeType && kind === "all"}
         ready={preferences.ready}
         saving={preferences.saving}
         error={preferences.error}
-        onSelect={selectRole}
+        onSelect={selectType}
         onSave={preferences.saveKeys}
         onRetry={preferences.retry}
       />
-      {kind !== "all" || hiddenRole ? (
-        <div className="people-active-scope">
-          <span>
-            {kind !== "all"
-              ? t("ধরন: {{kind}}", { kind: t(kindLabels[kind]) })
-              : t("পরিচয়: {{role}}", { role: formatDigits(hiddenRole) })}
-          </span>
+      {scopes.map((scope) => (
+        <div className="people-active-scope" key={scope.key}>
+          <span id={`${scopeId}-${scope.key}`}>{scope.label}</span>
           <button
             type="button"
-            aria-label={t(
-              kind !== "all" ? "ধরনের বাছাই মুছুন" : "পরিচয়ের বাছাই মুছুন",
-            )}
-            onClick={() => selectRole("")}
+            aria-label={scope.clear}
+            aria-describedby={`${scopeId}-${scope.key}`}
+            onClick={() => filter(scope.key, "")}
           >
             <XIcon size={17} aria-hidden="true" />
           </button>
         </div>
-      ) : null}
+      ))}
       {shown.length ? (
         <section
           className="contacts-list"

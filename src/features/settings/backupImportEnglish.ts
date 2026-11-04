@@ -1,4 +1,6 @@
 export const backupImportEnglish: Record<string, string> = {
+  "ফাইলের এই তথ্য নিলে মানুষ ও দোকানের বেছে রাখা ধরন বাদ যাবে। এখনকারটি রাখুন অথবা নতুন কপি নিন।":
+    "This file version would remove the selected contact types. Keep the current version or use a newer copy.",
   "কপি থেকে হিসাব মেলান": "Review and import a copy",
   "ফাইলের এই তথ্য নিলে মানুষ ও দোকানের বেছে রাখা খাতার তথ্য বাদ যাবে। এখনকারটি রাখুন অথবা নতুন কপি নিন।":
     "This file version would remove the notebooks selected for people and shops. Keep the current version or use a newer copy.",

@@ -153,7 +153,7 @@ function EntryRoute() {
     costType: CostTypeSchema.safeParse(params.get("type")).data,
     contractId: params.get("contract") ?? undefined,
     purpose:
-      purpose && ["settle", "advance", "wage"].includes(purpose)
+      purpose && ["settle", "advance", "wage", "charge"].includes(purpose)
         ? (purpose as AddOptions["purpose"])
         : undefined,
   };
@@ -267,7 +267,7 @@ export function AppShell() {
     personId: params.get("_person") ?? undefined,
     account: AccountSchema.safeParse(params.get("_account")).data,
     costType: CostTypeSchema.safeParse(params.get("_type")).data,
-    purpose: ["settle", "advance", "wage"].includes(
+    purpose: ["settle", "advance", "wage", "charge"].includes(
       params.get("_purpose") ?? "",
     )
       ? (params.get("_purpose") as AddOptions["purpose"])

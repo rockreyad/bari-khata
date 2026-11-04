@@ -126,12 +126,23 @@ describe("quick homeowner entries", () => {
     });
     expect(summarize(restored).byType.labour).toBe(0);
     expect(snapshot).toEqual(JSON.parse(JSON.stringify(old)));
-    expect(() =>
-      buildQuickEntry(
-        restored,
-        draft({ personId: "worker", payment: "worker" }),
-      ),
-    ).toThrow("person_kind");
+    const procured = buildQuickEntry(
+      restored,
+      draft({ personId: "worker", payment: "worker" }),
+    );
+    expect(procured.entries.slice(0, 2)).toEqual(restored.entries);
+    expect(procured.entries).toHaveLength(3);
+    expect(procured.entries[2]).toMatchObject({
+      kind: "expense",
+      account: "materials",
+      personId: "worker",
+    });
+    expect(summarize(procured)).toMatchObject({
+      cost: 300000,
+      paid: 170000,
+      payable: 130000,
+    });
+    expect(summarize(procured).byType.labour).toBe(0);
     expect(restored.entries).toHaveLength(2);
   });
 
@@ -470,25 +481,28 @@ describe("quick homeowner entries", () => {
   });
 });
 
-describe("role-specific quick entries", () => {
-  it("rejects material purchase, material return and material settlement for a worker profile", () => {
+describe("explicit financial events independent of contact identity", () => {
+  it("keeps a worker's material purchase, transport and returns in the explicitly selected financial category", () => {
     const initial = fixture();
     const before = JSON.stringify(initial);
     for (const change of [
       { kind: "expense", personId: "worker", costType: "material" },
       { kind: "expense", personId: "worker", costType: "transport" },
       { kind: "return", personId: "worker", costType: "material" },
-      {
-        kind: "payment",
+    ]) {
+      const next = buildQuickEntry(initial, draft(change));
+      expect(next.entries[0]).toMatchObject({
+        kind: change.kind === "return" ? "expense_credit" : "expense",
+        account: change.costType === "transport" ? "other" : "materials",
         personId: "worker",
-        account: "materials",
-        amount: "1500",
-      },
-      { kind: "payment", personId: "worker", account: "other", amount: "1500" },
-    ])
-      expect(() => buildQuickEntry(initial, draft(change))).toThrow(
-        "person_kind",
-      );
+        lines: [{ amount: 150000, costType: change.costType }],
+      });
+      expect(
+        next.entries.filter((entry) => entry.kind === "payment"),
+      ).toHaveLength(change.kind === "return" ? 0 : 1);
+      expect(next.people).toEqual(initial.people);
+      expect(summarize(next).byType.labour).toBe(0);
+    }
     expect(JSON.stringify(initial)).toBe(before);
     const next = buildQuickEntry(
       initial,
@@ -507,17 +521,28 @@ describe("role-specific quick entries", () => {
     expect(personSummary(next, "worker").payable).toBe(150000);
   });
 
-  it("never opens a wage account through a shop purchase or payment", () => {
+  it("records a labour bill only when explicitly requested for a shop identity", () => {
     const initial = fixture();
     for (const change of [
       { kind: "expense", personId: "shop", costType: "labour" },
       { kind: "wage", personId: "shop", amount: "500" },
       { kind: "payment", purpose: "wage", personId: "shop", amount: "500" },
-      { kind: "payment", personId: "shop", account: "labour", amount: "500" },
-    ])
-      expect(() => buildQuickEntry(initial, draft(change))).toThrow(
-        "person_kind",
-      );
+    ]) {
+      const next = buildQuickEntry(initial, draft(change));
+      const amount = change.kind === "expense" ? 150000 : 50000;
+      expect(next.entries[0]).toMatchObject({
+        kind: "expense",
+        account: "labour",
+        lines: [{ costType: "labour", amount }],
+      });
+      expect(summarize(next)).toMatchObject({
+        cost: amount,
+        paid: amount,
+        payable: 0,
+        advance: 0,
+      });
+      expect(next.people).toEqual(initial.people);
+    }
     expect(initial.entries).toHaveLength(0);
   });
 
@@ -557,18 +582,24 @@ describe("role-specific quick entries", () => {
       { kind: "expense", personId: "driver", costType: "unload" },
       { kind: "expense", personId: "driver", costType: "rental" },
       { kind: "return", personId: "driver", costType: "transport" },
-      {
-        kind: "payment",
+    ]) {
+      const explicit = buildQuickEntry(next, draft(change));
+      expect(explicit.entries.slice(0, next.entries.length)).toEqual(
+        next.entries,
+      );
+      expect(explicit.entries[next.entries.length]).toMatchObject({
+        kind: change.kind === "return" ? "expense_credit" : "expense",
+        account:
+          change.costType === "material"
+            ? "materials"
+            : change.costType === "labour"
+              ? "labour"
+              : "other",
         personId: "driver",
-        account: "materials",
-        amount: "500",
-      },
-      { kind: "payment", personId: "driver", account: "labour", amount: "500" },
-    ])
-      expect(
-        () => buildQuickEntry(next, draft(change)),
-        JSON.stringify(change),
-      ).toThrow("person_kind");
+        lines: [{ amount: 150000, costType: change.costType }],
+      });
+      expect(explicit.people).toEqual(next.people);
+    }
   });
 
   it("records a paid van fee under its work without requiring a driver contact", () => {
@@ -1006,3 +1037,95 @@ it("still requires a notebook for unrelated cash and a notebook-specific job", (
     ).toThrow("work");
   expect(JSON.stringify(ledger)).toBe(before);
 });
+
+it.each(["worker", "shop", "driver"] as const)(
+  "keeps an explicit cash settlement in its selected account after identity becomes %s",
+  (kind) => {
+    const original = fixture();
+    original.people[0].kind = kind;
+    for (const account of ["materials", "labour", "other"] as const) {
+      const next = buildQuickEntry(
+        original,
+        draft({
+          kind: "payment",
+          personId: original.people[0].id,
+          account,
+          amount: "100",
+        }),
+      );
+      expect(next.entries).toHaveLength(1);
+      expect(next.entries[0]).toMatchObject({
+        kind: "payment",
+        account,
+        personId: original.people[0].id,
+      });
+      expect(next.entries[0].lines).toEqual([]);
+      expect(next.people).toEqual(original.people);
+    }
+  },
+);
+
+it.each(["existing", "new"] as const)(
+  "keeps a %s custom reason on a daily labour bill and its separate partial payment",
+  (selection) => {
+    const original = fixture();
+    const purposeId = "sample-supervision";
+    if (selection === "existing")
+      original.paymentPurposes.push({
+        id: purposeId,
+        name: "নমুনা তদারকি",
+        account: "labour",
+      });
+    const before = JSON.stringify(original);
+    const next = buildQuickEntry(
+      original,
+      draft({
+        kind: "payment",
+        purpose: "wage",
+        personId: "shop",
+        account: "labour",
+        costType: "labour",
+        wageBasis: "day",
+        wageDays: "2.5",
+        wageRate: "300",
+        payment: "partial",
+        paid: "500",
+        paymentPurposeId: selection === "existing" ? purposeId : "__new__",
+        paymentPurposeNewId: purposeId,
+        paymentPurposeName: selection === "existing" ? "" : "নমুনা তদারকি",
+      }),
+    );
+    expect(next.paymentPurposes).toHaveLength(1);
+    expect(next.entries).toHaveLength(2);
+    expect(next.entries[0]).toMatchObject({
+      kind: "expense",
+      account: "labour",
+      personId: "shop",
+      paymentPurposeId: null,
+      lines: [
+        {
+          amount: 75000,
+          costType: "labour",
+          label: "নমুনা তদারকি · 2.5 দিন × 300 টাকা",
+          quantity: "2.5",
+          unit: "দিন",
+        },
+      ],
+    });
+    expect(next.entries[1]).toMatchObject({
+      kind: "payment",
+      account: "labour",
+      personId: "shop",
+      relatedEntryId: next.entries[0].id,
+      paymentPurposeId: purposeId,
+      paymentParts: [{ amount: 50000 }],
+    });
+    expect(summarize(next)).toMatchObject({
+      cost: 75000,
+      paid: 50000,
+      payable: 25000,
+      advance: 0,
+    });
+    expect(JSON.stringify(original)).toBe(before);
+  },
+);

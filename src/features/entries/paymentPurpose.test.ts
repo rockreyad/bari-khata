@@ -21,6 +21,7 @@ describe("custom payment purposes", () => {
         personId: "person",
         workId: "work",
         account: "other",
+        purpose: "advance",
       });
     Object.assign(draft, {
       amount: "1500",
@@ -45,12 +46,23 @@ describe("custom payment purposes", () => {
       personId: "person",
       workId: "work",
       account: "other",
+      purpose: "advance",
     });
     Object.assign(again, {
       amount: "500",
       paymentPurposeId: draft.paymentPurposeNewId,
     });
-    expect(buildQuickEntry(next, again).paymentPurposes).toHaveLength(1);
+    const second = buildQuickEntry(next, again);
+    expect(second.paymentPurposes).toHaveLength(1);
+    expect(second.entries).toHaveLength(2);
+    expect(second.entries.every((entry) => entry.kind === "payment")).toBe(
+      true,
+    );
+    expect(second.entries[1]).toMatchObject({
+      account: "other",
+      paymentPurposeId: draft.paymentPurposeNewId,
+    });
+    expect(summarize(second)).toMatchObject({ cost: 0, paid: 200000 });
     expect(
       filterHistory(next, { query: "মাল নামানোর" }).map((entry) => entry.id),
     ).toEqual([draft.id]);

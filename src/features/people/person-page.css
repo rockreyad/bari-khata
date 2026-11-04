@@ -169,7 +169,7 @@
 .contact-shop-secondary > .secondary-button > svg {
   flex: none;
 }
-.contact-shop-secondary > .secondary-button:only-child {
+.contact-shop-secondary > .secondary-button:last-child:nth-child(odd) {
   grid-column: 1 / -1;
 }
 .contact-trend-card {

@@ -38,6 +38,204 @@ function purchase(extra: Record<string, unknown> = {}) {
   };
 }
 describe("MCP financial commands", () => {
+  it.each(["worker", "shop", "driver", "other"] as const)(
+    "keeps explicitly requested purchases, labour, transport and material returns separate for %s",
+    (kind) => {
+      const original = fixture();
+      original.people[1] = { ...original.people[1], kind, role: "নমুনা পরিচয়" };
+      const before = JSON.stringify(original);
+      let ledger = applyMcpCommand(
+        original,
+        purchase({
+          person_id: "worker",
+          lines: [
+            { label: "নমুনা মাল", cost_type: "material", amount_paisa: 20000 },
+          ],
+          payment_state: "paid",
+          payment: { amount_paisa: 20000, method: "cash" },
+        }),
+        context,
+      ).ledger;
+      const material = ledger.entries[0];
+      ledger = applyMcpCommand(
+        ledger,
+        {
+          type: "record_wage",
+          date: "2026-11-02",
+          person_id: "worker",
+          work_id: "roof",
+          basis: "total",
+          amount_paisa: 30000,
+          payment_state: "partial",
+          payment: { amount_paisa: 10000, method: "cash" },
+        },
+        context,
+      ).ledger;
+      ledger = applyMcpCommand(
+        ledger,
+        {
+          type: "create_cost",
+          date: "2026-11-02",
+          person_id: "worker",
+          work_id: "roof",
+          lines: [
+            {
+              label: "নমুনা আনার খরচ",
+              cost_type: "transport",
+              amount_paisa: 4000,
+            },
+          ],
+          payment_state: "paid",
+          payment: { amount_paisa: 4000, method: "cash" },
+        },
+        context,
+      ).ledger;
+      ledger = applyMcpCommand(
+        ledger,
+        {
+          type: "record_material_return",
+          date: "2026-11-02",
+          person_id: "worker",
+          work_id: "roof",
+          related_entry_id: material.id,
+          lines: [
+            {
+              label: "নমুনা মাল ফেরত",
+              cost_type: "material",
+              amount_paisa: 5000,
+            },
+          ],
+          refund: { amount_paisa: 5000, method: "cash" },
+        },
+        context,
+      ).ledger;
+      expect(summarize(ledger)).toMatchObject({
+        cost: 49000,
+        paid: 34000,
+        refunds: 5000,
+        payable: 20000,
+        advance: 0,
+      });
+      expect(personSummary(ledger, "worker").accounts).toMatchObject({
+        materials: { cost: 15000, netPaid: 15000 },
+        labour: { cost: 30000, netPaid: 10000 },
+        other: { cost: 4000, netPaid: 4000 },
+      });
+      expect(ledger.entries).toHaveLength(8);
+      const unchanged = structuredClone(ledger.entries);
+      const changed = applyMcpCommand(
+        ledger,
+        {
+          type: "update_person",
+          person_id: "worker",
+          reason: "নমুনা পরিচয় বদলেছি",
+          changes: {
+            kind: kind === "other" ? "shop" : "other",
+            role: "নমুনা নতুন পরিচয়",
+          },
+        },
+        context,
+      ).ledger;
+      expect(changed.entries).toEqual(unchanged);
+      expect(summarize(changed)).toEqual(summarize(ledger));
+      expect(JSON.stringify(original)).toBe(before);
+    },
+  );
+
+  it.each(["worker", "shop", "driver", "other"] as const)(
+    "allows an explicit agreement for %s and retains its payment and person/work boundaries",
+    (kind) => {
+      const original = fixture();
+      original.people[1].kind = kind;
+      let ledger = applyMcpCommand(
+        original,
+        {
+          type: "create_contract",
+          person_id: "worker",
+          work_id: "roof",
+          scope: "work",
+          title: "নমুনা দায়িত্ব",
+          total_paisa: 90000,
+        },
+        context,
+      ).ledger;
+      const agreement = ledger.contracts[0];
+      expect(ledger.entries).toEqual([]);
+      ledger = applyMcpCommand(
+        ledger,
+        {
+          type: "record_payment",
+          date: "2026-11-02",
+          person_id: "worker",
+          account: "labour",
+          contract_id: agreement.id,
+          work_id: "roof",
+          amount_paisa: 25000,
+          method: "cash",
+        },
+        context,
+      ).ledger;
+      const historicalPayment = structuredClone(ledger.entries[0]);
+      ledger = applyMcpCommand(
+        ledger,
+        {
+          type: "update_person",
+          person_id: "worker",
+          reason: "নমুনা পরিচয় বদলেছি",
+          changes: { kind: "driver", role: "নমুনা পরিবহন" },
+        },
+        context,
+      ).ledger;
+      ledger = applyMcpCommand(
+        ledger,
+        {
+          type: "update_contract",
+          contract_id: agreement.id,
+          reason: "নমুনা দর বদলেছি",
+          changes: { total_paisa: 100000 },
+        },
+        context,
+      ).ledger;
+      expect(ledger.entries).toEqual([historicalPayment]);
+      expect(contractSummary(ledger, agreement.id)).toMatchObject({
+        agreed: 100000,
+        paid: 25000,
+        remaining: 75000,
+      });
+      expect(summarize(ledger)).toMatchObject({ cost: 0, paid: 25000 });
+      for (const change of [{ person_id: "shop" }, { work_id: "tiles" }]) {
+        expect(() =>
+          applyMcpCommand(
+            ledger,
+            {
+              type: "update_contract",
+              contract_id: agreement.id,
+              reason: "নমুনা ভুল পরিবর্তন",
+              changes: change,
+            },
+            context,
+          ),
+        ).toThrow("এই চুক্তিতে লেনদেন আছে");
+      }
+      expect(() =>
+        applyMcpCommand(
+          ledger,
+          {
+            type: "record_payment",
+            date: "2026-11-02",
+            person_id: "shop",
+            account: "labour",
+            contract_id: agreement.id,
+            work_id: "roof",
+            amount_paisa: 1000,
+            method: "cash",
+          },
+          context,
+        ),
+      ).toThrow("contract_mismatch");
+    },
+  );
+
   it("records a bill and its partial payment atomically, and a later settlement does not book another expense", () => {
     const first = applyMcpCommand(fixture(), purchase(), context);
     expect(first.ledger.entries).toHaveLength(2);
@@ -529,4 +727,101 @@ describe("MCP financial commands", () => {
       paid: 150000,
     });
   });
+});
+
+it("keeps a historical labour bill editable after only the contact identity changes", () => {
+  const original = LedgerSchema.parse({
+    ...fixture(),
+    entries: [
+      {
+        id: "old-labour",
+        personId: "worker",
+        account: "labour",
+        kind: "expense",
+        updatedAt: context.now,
+        createdAt: context.now,
+        lines: [
+          {
+            id: "line",
+            workId: "roof",
+            costType: "labour",
+            amount: 10000,
+            label: "নমুনা কাজ",
+          },
+        ],
+      },
+    ],
+  });
+  const changed = applyMcpCommand(
+    original,
+    {
+      type: "update_person",
+      person_id: "worker",
+      reason: "পরিচয় ঠিক করেছি",
+      changes: { kind: "shop", role: "নমুনা পরিচয়" },
+    },
+    context,
+  ).ledger;
+  expect(changed.entries).toEqual(original.entries);
+  const edited = applyMcpCommand(
+    changed,
+    {
+      type: "update_entry",
+      entry_id: "old-labour",
+      expected_updated_at: context.now,
+      reason: "নোট ঠিক করেছি",
+      changes: { note: "নতুন নমুনা নোট" },
+    },
+    { ...context, now: "2026-11-02T11:00:00.000Z" },
+  ).ledger;
+  expect(edited.entries[0]).toMatchObject({
+    personId: "worker",
+    account: "labour",
+    note: "নতুন নমুনা নোট",
+    lines: original.entries[0].lines,
+  });
+  expect(edited.entries[0].revisions.at(-1)?.before).toMatchObject({
+    account: "labour",
+    lines: original.entries[0].lines,
+  });
+});
+
+it("keeps an other-kind professional's agreed job available after an identity edit", () => {
+  const original = fixture();
+  original.people[1].kind = "other";
+  original.people[1].role = "নমুনা ইঞ্জিনিয়ার";
+  const first = applyMcpCommand(
+    original,
+    {
+      type: "create_contract",
+      person_id: "worker",
+      work_id: "roof",
+      scope: "work",
+      title: "নমুনা নকশার কাজ",
+      total_paisa: 50000,
+    },
+    context,
+  ).ledger;
+  const changed = applyMcpCommand(
+    first,
+    {
+      type: "update_person",
+      person_id: "worker",
+      reason: "পরিচয় ঠিক করেছি",
+      changes: { kind: "shop" },
+    },
+    context,
+  ).ledger;
+  const next = applyMcpCommand(
+    changed,
+    {
+      type: "update_contract",
+      contract_id: first.contracts[0].id,
+      reason: "দর ঠিক করেছি",
+      changes: { total_paisa: 60000 },
+    },
+    context,
+  ).ledger;
+  expect(next.contracts[0]).toMatchObject({ personId: "worker", total: 60000 });
+  expect(next.entries).toEqual([]);
 });

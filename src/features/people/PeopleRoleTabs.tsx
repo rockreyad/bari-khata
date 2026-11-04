@@ -68,7 +68,9 @@ export function PeopleRoleTabs({
     [roles],
   );
   const chosen = draft.filter((key) => available.has(key));
-  const shown = roles.filter((role) => role.key.includes(roleKey(query)));
+  const shown = roles.filter((role) =>
+    roleKey(t(role.label)).includes(roleKey(query)),
+  );
   const close = () => {
     if (!saving) {
       restoreFocus.current = true;
@@ -78,10 +80,10 @@ export function PeopleRoleTabs({
   return (
     <section
       className="people-role-filters"
-      aria-label={t("পরিচয় অনুযায়ী বাছাই")}
+      aria-label={t("ধরন অনুযায়ী বাছাই")}
     >
       <div className="people-role-heading">
-        <span>{t("পরিচয় অনুযায়ী")}</span>
+        <span>{t("ধরন অনুযায়ী")}</span>
         <button
           ref={trigger}
           type="button"
@@ -102,7 +104,7 @@ export function PeopleRoleTabs({
       <div
         className="contacts-tabs people-role-tabs"
         role="group"
-        aria-label={t("পরিচয় অনুযায়ী")}
+        aria-label={t("ধরন অনুযায়ী")}
       >
         <button
           type="button"
@@ -119,9 +121,9 @@ export function PeopleRoleTabs({
             aria-pressed={activeRole === role.key}
             className={activeRole === role.key ? "active" : ""}
             onClick={() => onSelect(role.key)}
-            title={formatDigits(role.label)}
+            title={formatDigits(t(role.label))}
           >
-            {formatDigits(role.label)}
+            {formatDigits(t(role.label))}
           </button>
         ))}
       </div>
@@ -136,7 +138,7 @@ export function PeopleRoleTabs({
       {editing ? (
         <Sheet
           title={t("ট্যাব সাজাই")}
-          subtitle={t("আগে যোগ করা নামগুলোর পরিচয় থেকে বেছে নিন।")}
+          subtitle={t("আগে যোগ করা নামগুলোর ধরন থেকে বেছে নিন।")}
           onClose={close}
           footer={
             <div className="people-role-picker-footer">
@@ -173,7 +175,7 @@ export function PeopleRoleTabs({
           >
             <div className="people-role-picker-caption">
               <p>
-                {t("সবাই-এর পাশে সর্বোচ্চ {{count}}টি পরিচয় রাখতে পারবেন।", {
+                {t("সবাই-এর পাশে সর্বোচ্চ {{count}}টি ধরন রাখতে পারবেন।", {
                   count: number(MAX_PEOPLE_ROLE_TABS),
                 })}
               </p>
@@ -200,8 +202,8 @@ export function PeopleRoleTabs({
                     type="search"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder={t("পরিচয় খুঁজুন")}
-                    aria-label={t("পরিচয় খুঁজুন")}
+                    placeholder={t("ধরন খুঁজুন")}
+                    aria-label={t("ধরন খুঁজুন")}
                   />
                 </div>
               ) : null}
@@ -234,7 +236,7 @@ export function PeopleRoleTabs({
                           });
                         }}
                       />
-                      <span>{formatDigits(role.label)}</span>
+                      <span>{formatDigits(t(role.label))}</span>
                       <small aria-hidden="true">
                         {t("{{count}} জন", { count: number(role.count) })}
                       </small>
@@ -252,14 +254,14 @@ export function PeopleRoleTabs({
               <p className="people-role-picker-empty">
                 {t(
                   roles.length
-                    ? "এই পরিচয়ে কোনো নাম যোগ করা নেই।"
-                    : "নাম যোগ বা তথ্য বদলানোর সময় পরিচয় লিখলে এখানে পাওয়া যাবে।",
+                    ? "এই ধরনের কোনো নাম যোগ করা নেই।"
+                    : "নাম যোগ করার সময় কীভাবে যুক্ত বেছে নিলে এখানে পাওয়া যাবে।",
                 )}
               </p>
             ) : null}
             {chosen.length === MAX_PEOPLE_ROLE_TABS ? (
               <p className="people-role-limit" role="status">
-                {t("অন্য পরিচয় রাখতে আগে একটি সরিয়ে নিন।")}
+                {t("অন্য ধরন রাখতে আগে একটি সরিয়ে নিন।")}
               </p>
             ) : null}
           </div>
