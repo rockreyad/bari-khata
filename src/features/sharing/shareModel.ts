@@ -207,6 +207,39 @@ const SharedPaymentSchema = z
         message: "Payment parts must match scoped amount",
       });
   });
+export const SharedPaymentsPageSchema = z.object({
+  key: z.string().min(1).max(160),
+  revision: z.number().int().positive(),
+  total: z.number().int().nonnegative().max(100000),
+  nextOffset: z.number().int().nonnegative().max(100000).nullable(),
+  payments: z.array(SharedPaymentSchema).max(SHARED_PAGE_SIZE),
+});
+export type SharedPaymentsPage = z.infer<typeof SharedPaymentsPageSchema>;
+
+export function validateSharedPaymentsPage(
+  page: SharedPaymentsPage,
+  entryId: string,
+  revision: number,
+  offset: number,
+) {
+  if (page.revision !== revision) throw new Error("share_changed");
+  const end = offset + page.payments.length;
+  if (
+    page.key !== entryId ||
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    offset > 100000 ||
+    page.payments.length > SHARED_PAGE_SIZE ||
+    new Set(page.payments.map((payment) => payment.key)).size !==
+      page.payments.length ||
+    end > page.total ||
+    (end < page.total
+      ? !page.payments.length || page.nextOffset !== end
+      : page.nextOffset !== null)
+  )
+    throw new Error("share_invalid_page");
+  return page;
+}
 export const SharedEntrySchema = SharedStatementSchema.shape.rows.element
   .safeExtend({
     key: z.string().min(1).max(160),
@@ -215,7 +248,15 @@ export const SharedEntrySchema = SharedStatementSchema.shape.rows.element
     paymentParts: z.array(SharedPaymentPartSchema).max(100),
     paymentMethods: z.array(SharedMethodSchema).max(4),
     lines: z.array(SharedLineSchema).max(1000),
-    payments: z.array(SharedPaymentSchema).max(100000).optional(),
+    payments: z.array(SharedPaymentSchema).max(SHARED_PAGE_SIZE).optional(),
+    paymentsTotal: z.number().int().nonnegative().max(100000).optional(),
+    paymentsNextOffset: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(100000)
+      .nullable()
+      .optional(),
     relatedBill: z
       .object({
         key: z.string().min(1).max(160),
@@ -240,6 +281,28 @@ export const SharedEntrySchema = SharedStatementSchema.shape.rows.element
       .max(30),
   })
   .superRefine((entry, ctx) => {
+    const paged =
+      entry.paymentsTotal !== undefined ||
+      entry.paymentsNextOffset !== undefined;
+    if (
+      paged &&
+      (entry.paymentsTotal === undefined ||
+        entry.paymentsNextOffset === undefined ||
+        !entry.payments ||
+        !entry.settlement ||
+        entry.payments.length > SHARED_PAGE_SIZE ||
+        entry.paymentsTotal !== entry.settlement.paymentCount ||
+        entry.payments.length > entry.paymentsTotal ||
+        (entry.payments.length < entry.paymentsTotal
+          ? !entry.payments.length ||
+            entry.paymentsNextOffset !== entry.payments.length
+          : entry.paymentsNextOffset !== null))
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["payments"],
+        message: "Invalid bill payment page",
+      });
     if (Boolean(entry.settlement) !== (entry.payments !== undefined))
       ctx.addIssue({
         code: "custom",
@@ -294,11 +357,18 @@ export const SharedEntrySchema = SharedStatementSchema.shape.rows.element
           0n,
         ) > BigInt(Number.MAX_SAFE_INTEGER) ||
         (entry.settlement &&
-          (entry.payments.length !== entry.settlement.paymentCount ||
+          ((!paged &&
+            entry.payments.length !== entry.settlement.paymentCount) ||
+            (paged && entry.paymentsTotal !== entry.settlement.paymentCount) ||
             entry.payments.reduce(
               (sum, payment) => sum + BigInt(payment.paid),
               0n,
-            ) !== BigInt(entry.settlement.paid))))
+            ) > BigInt(entry.settlement.paid) ||
+            ((!paged || entry.paymentsNextOffset === null) &&
+              entry.payments.reduce(
+                (sum, payment) => sum + BigInt(payment.paid),
+                0n,
+              ) !== BigInt(entry.settlement.paid)))))
     )
       ctx.addIssue({
         code: "custom",
@@ -307,6 +377,29 @@ export const SharedEntrySchema = SharedStatementSchema.shape.rows.element
       });
   });
 export type SharedEntry = z.infer<typeof SharedEntrySchema>;
+
+export function appendSharedPayments(
+  entry: SharedEntry,
+  page: SharedPaymentsPage,
+): SharedEntry {
+  const offset = entry.paymentsNextOffset;
+  if (!entry.settlement || offset == null || offset !== entry.payments?.length)
+    throw new Error("share_invalid_page");
+  validateSharedPaymentsPage(page, entry.key, entry.revision, offset);
+  const payments = [...entry.payments, ...page.payments];
+  const paid = payments.reduce(
+    (sum, payment) => sum + BigInt(payment.paid),
+    0n,
+  );
+  if (
+    page.total !== entry.paymentsTotal ||
+    new Set(payments.map((payment) => payment.key)).size !== payments.length ||
+    paid > BigInt(entry.settlement.paid) ||
+    (page.nextOffset === null && paid !== BigInt(entry.settlement.paid))
+  )
+    throw new Error("share_invalid_page");
+  return { ...entry, payments, paymentsNextOffset: page.nextOffset };
+}
 
 export function validateSharedPage(
   page: SharedStatement,

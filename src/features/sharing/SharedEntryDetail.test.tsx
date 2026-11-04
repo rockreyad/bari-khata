@@ -10,12 +10,14 @@ import {
 const mocked = vi.hoisted(() => ({
   detail: vi.fn(),
   receipt: vi.fn(),
+  payments: vi.fn(),
   create: vi.fn(),
   revoke: vi.fn(),
 }));
 vi.mock("./shareClient", () => ({
   readSharedEntry: mocked.detail,
   readSharedReceipt: mocked.receipt,
+  readSharedPayments: mocked.payments,
 }));
 vi.mock("../../context/LanguageProvider", () => ({
   useLanguageContext: () => ({
@@ -91,6 +93,151 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
+const billPayments = (offset: number, count: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    key: `payment-${offset + index}`,
+    date: "2026-11-04",
+    paid: 100,
+    description: `কিস্তি ${offset + index}`,
+    paymentParts: [{ method: "cash", amount: 100 }],
+    paymentMethods: ["cash"],
+  }));
+function pagedBill(total = 21) {
+  return SharedEntrySchema.parse({
+    ...fixture(),
+    kind: "expense",
+    charge: total * 100,
+    paid: 0,
+    note: "বিলের নোট",
+    description: "নমুনা মাল",
+    lines: [
+      { label: "নমুনা মাল", amount: total * 100, workName: "নমুনা খাতা" },
+    ],
+    paymentParts: [],
+    paymentMethods: [],
+    receipts: [],
+    settlement: {
+      paid: total * 100,
+      returned: 0,
+      refunded: 0,
+      balance: 0,
+      paymentCount: total,
+    },
+    payments: billPayments(0, 20),
+    paymentsTotal: total,
+    paymentsNextOffset: 20,
+  });
+}
+it("loads payment history only on request, prevents duplicate taps and removes the button after the last page", async () => {
+  mocked.detail.mockResolvedValue(pagedBill());
+  let finish!: (value: unknown) => void;
+  const pending = new Promise((resolve) => {
+    finish = resolve;
+  });
+  mocked.payments.mockReturnValueOnce(pending);
+  render(<SharedEntryDetail {...props()} />);
+  await screen.findByText("বিলের নোট");
+  expect(screen.getAllByRole("button", { name: /^পরিশোধ ·/ })).toHaveLength(20);
+  expect(mocked.payments).not.toHaveBeenCalled();
+  const button = screen.getByRole("button", { name: "আরও দেখুন" });
+  await userEvent.click(button);
+  await userEvent.click(button);
+  expect(mocked.payments).toHaveBeenCalledExactlyOnceWith(
+    token,
+    "sample-entry",
+    7,
+    20,
+    { signal: expect.any(AbortSignal) },
+  );
+  await act(async () => {
+    finish({
+      key: "sample-entry",
+      revision: 7,
+      total: 21,
+      nextOffset: null,
+      payments: billPayments(20, 1),
+    });
+    await pending;
+  });
+  expect(screen.getAllByRole("button", { name: /^পরিশোধ ·/ })).toHaveLength(21);
+  expect(screen.queryByRole("button", { name: "আরও দেখুন" })).toBeNull();
+});
+it("keeps the current page and retries the same offset after a temporary payment request failure", async () => {
+  mocked.detail.mockResolvedValue(pagedBill());
+  mocked.payments
+    .mockRejectedValueOnce(new Error("share_request_failed"))
+    .mockResolvedValueOnce({
+      key: "sample-entry",
+      revision: 7,
+      total: 21,
+      nextOffset: null,
+      payments: billPayments(20, 1),
+    });
+  render(<SharedEntryDetail {...props()} />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "আরও দেখুন" }),
+  );
+  await screen.findByRole("alert");
+  expect(screen.getAllByRole("button", { name: /^পরিশোধ ·/ })).toHaveLength(20);
+  await userEvent.click(
+    screen.getByRole("button", { name: "আবার চেষ্টা করুন" }),
+  );
+  await screen.findByText("কিস্তি 20");
+  expect(mocked.payments.mock.calls.map((call) => call[3])).toEqual([20, 20]);
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+it.each(["missing", "stale"])(
+  "clears detail when a later payment page is %s",
+  async (state) => {
+    const callbacks = props();
+    mocked.detail.mockResolvedValue(pagedBill());
+    if (state === "missing") mocked.payments.mockResolvedValueOnce(null);
+    else mocked.payments.mockRejectedValueOnce(new Error("share_changed"));
+    render(<SharedEntryDetail {...callbacks} />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "আরও দেখুন" }),
+    );
+    await screen.findByRole("alert");
+    expect(screen.queryByText("বিলের নোট")).toBeNull();
+    expect(
+      state === "missing" ? callbacks.onUnavailable : callbacks.onStale,
+    ).toHaveBeenCalledOnce();
+  },
+);
+it.each(["unmount", "hash"])(
+  "aborts a payment page on %s and ignores its late response",
+  async (reason) => {
+    mocked.detail.mockResolvedValue(pagedBill());
+    let finish!: (value: unknown) => void;
+    const pending = new Promise((resolve) => {
+      finish = resolve;
+    });
+    mocked.payments.mockReturnValueOnce(pending);
+    const view = render(<SharedEntryDetail {...props()} />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "আরও দেখুন" }),
+    );
+    const signal = mocked.payments.mock.calls[0][4].signal as AbortSignal;
+    if (reason === "unmount") view.unmount();
+    else
+      await act(async () => {
+        window.history.replaceState(null, "", `#${"b".repeat(64)}`);
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+      });
+    await act(async () => {
+      finish({
+        key: "sample-entry",
+        revision: 7,
+        total: 21,
+        nextOffset: null,
+        payments: billPayments(20, 1),
+      });
+      await pending;
+    });
+    expect(signal.aborted).toBe(true);
+    expect(screen.queryByText("কিস্তি 20")).toBeNull();
+  },
+);
 it("opens an accessible read-only detail with notes and exact methods without fetching vouchers", async () => {
   const source = fixture();
   const before = JSON.stringify(source);

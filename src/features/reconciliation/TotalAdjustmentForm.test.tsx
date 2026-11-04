@@ -201,6 +201,84 @@ async function enter(
     });
 }
 
+it("edits a driver's transport balance without using hidden unload bills and reopens at the saved total", async () => {
+  const original = LedgerSchema.parse({
+    works: [{ id: "work", name: "দরজা" }],
+    people: [{ id: "driver", name: "রনি", kind: "driver" }],
+    entries: [
+      {
+        id: "trip",
+        kind: "expense",
+        personId: "driver",
+        account: "other",
+        lines: [
+          {
+            id: "trip-line",
+            workId: "work",
+            costType: "transport",
+            amount: 100000,
+          },
+        ],
+      },
+      {
+        id: "unload",
+        kind: "expense",
+        personId: "driver",
+        account: "other",
+        lines: [
+          {
+            id: "unload-line",
+            workId: "work",
+            costType: "unload",
+            amount: 200000,
+          },
+        ],
+      },
+    ],
+  });
+  context.ledger = original;
+  const driver = {
+    target: "person",
+    id: "driver",
+    account: "other",
+    workId: "work",
+  } as const;
+  const showDriver = () =>
+    render(
+      <MemoryRouter>
+        <TotalAdjustmentForm target={driver} onSaved={context.saved} />
+      </MemoryRouter>,
+    );
+  const view = showDriver();
+  await screen.findByText("৳0");
+  fireEvent.change(screen.getByLabelText("যে মোট মিলাব"), {
+    target: { value: "balance" },
+  });
+  await screen.findByText("দিতে বাকি ৳1000");
+  expect(screen.queryByText("দিতে বাকি ৳3000")).toBeNull();
+  await enter("700", "গাড়িভাড়া মিলিয়েছি");
+  expect(
+    view.container.querySelector(".adjustment-preview")?.textContent,
+  ).toContain("কমছে৳300");
+  await userEvent.click(screen.getByRole("button", { name: "সমন্বয় রাখুন" }));
+  await waitFor(() => expect(context.saved).toHaveBeenCalledOnce());
+  const saved = context.ledger as Ledger;
+  expect(saved.entries.slice(0, 2)).toEqual(original.entries);
+  expect(saved.entries.at(-1)?.adjustment).toMatchObject({
+    before: 100000,
+    after: 70000,
+    delta: -30000,
+  });
+  view.unmount();
+  context.ledger = LedgerSchema.parse(JSON.parse(JSON.stringify(saved)));
+  showDriver();
+  await screen.findByText("৳0");
+  fireEvent.change(screen.getByLabelText("যে মোট মিলাব"), {
+    target: { value: "balance" },
+  });
+  await screen.findByText("দিতে বাকি ৳700");
+});
+
 it("corrects the person's paid total with one separate adjustment and preserves the actual payment and bill", async () => {
   show();
   await screen.findByText("৳30000");

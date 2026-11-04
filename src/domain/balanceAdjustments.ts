@@ -8,6 +8,7 @@ import {
   type Ledger,
 } from "./model.js";
 import { reconciledTotals, type AdjustmentBasis } from "./adjustmentMath.js";
+import { contactAccountLedger } from "./contacts.js";
 export { adjustmentBalanceDelta, reconciledTotals } from "./adjustmentMath.js";
 export type BalanceAdjustmentScope = {
   target: "person" | "work";
@@ -88,7 +89,13 @@ export function readBalanceAdjustmentScope(
   input: BalanceAdjustmentScope,
 ) {
   const scope = normalizeScope(ledger, input);
-  const totals = reconciledTotals(ledger, {
+  const person = scope.personId
+    ? ledger.people.find((person) => person.id === scope.personId)
+    : null;
+  const scoped = person
+    ? contactAccountLedger(ledger, person, scope.account!)
+    : ledger;
+  const totals = reconciledTotals(scoped, {
     ...(scope.personId ? { personId: scope.personId } : {}),
     account: scope.account,
     ...(scope.workId ? { workId: scope.workId } : {}),

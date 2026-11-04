@@ -230,6 +230,74 @@ function detail() {
   };
 }
 describe("capability entry details and receipts", () => {
+  it("requests one bounded anonymous payment page with exact bill, revision and offset", async () => {
+    const value = {
+      key: "bill-0",
+      revision: 7,
+      total: 21,
+      nextOffset: null,
+      payments: [
+        {
+          key: "payment-20",
+          date: "2026-11-04",
+          paid: 100,
+          description: "",
+          paymentParts: [{ method: "cash", amount: 100 }],
+          paymentMethods: ["cash"],
+        },
+      ],
+    };
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(value)));
+    const { readSharedPayments } = await import("./shareClient");
+    expect(await readSharedPayments(token, "bill-0", 7, 20)).toEqual(value);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(new URL(String(url)).pathname).toBe(
+      "/rest/v1/rpc/read_contact_share_payments",
+    );
+    expect(init).toMatchObject({ cache: "no-store", credentials: "omit" });
+    expect(JSON.parse(String(init?.body))).toEqual({
+      p_token: token,
+      p_entry_id: "bill-0",
+      p_revision: 7,
+      p_offset: 20,
+      p_limit: 20,
+    });
+    expect(owner.session).not.toHaveBeenCalled();
+  });
+  it("rejects invalid payment pagination before requesting and binds every response to its revision and bill", async () => {
+    const { readSharedPayments } = await import("./shareClient");
+    for (const offset of [-1, 1.5, 100001])
+      await expect(
+        readSharedPayments(token, "bill-0", 7, offset),
+      ).rejects.toThrow("share_invalid_page");
+    expect(fetchMock).not.toHaveBeenCalled();
+    for (const change of [
+      { revision: 8 },
+      { key: "other-bill" },
+      { total: 21, nextOffset: null },
+    ]) {
+      fetchMock.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            key: "bill-0",
+            revision: 7,
+            total: 20,
+            nextOffset: null,
+            payments: [],
+            ...change,
+          }),
+        ),
+      );
+      await expect(
+        readSharedPayments(token, "bill-0", 7, 20),
+      ).rejects.toThrow();
+    }
+    const abort = new AbortController();
+    abort.abort();
+    await expect(
+      readSharedPayments(token, "bill-0", 7, 20, { signal: abort.signal }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+  });
   it("validates exact entry and revision and only exposes public detail fields", async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(

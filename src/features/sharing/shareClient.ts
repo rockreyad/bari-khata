@@ -9,6 +9,8 @@ import {
   SHARED_PAGE_SIZE,
   validateSharedPage,
   SharedEntrySchema,
+  SharedPaymentsPageSchema,
+  validateSharedPaymentsPage,
   SHARED_QUERY_MAX_LENGTH,
   SHARED_RECEIPT_MAX_BYTES,
   SHARED_RECEIPT_MIMES,
@@ -205,6 +207,49 @@ export async function readSharedEntry(
   if (entry.revision !== revision) throw new Error("share_changed");
   if (entry.key !== entryId) throw new Error("share_invalid_page");
   return entry;
+}
+
+export async function readSharedPayments(
+  token: string,
+  entryId: string,
+  revision: number,
+  offset: number,
+  options?: { signal?: AbortSignal },
+) {
+  if (!validShareToken(token)) return null;
+  options?.signal?.throwIfAborted();
+  if (
+    !validEntryRequest(entryId, revision) ||
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    offset > 100000
+  )
+    throw new Error("share_invalid_page");
+  const request = anonymousClient().rpc("read_contact_share_payments", {
+    p_token: token,
+    p_entry_id: entryId,
+    p_revision: revision,
+    p_offset: offset,
+    p_limit: SHARED_PAGE_SIZE,
+  });
+  const result = await (options?.signal
+    ? request.abortSignal(options.signal)
+    : request);
+  options?.signal?.throwIfAborted();
+  if (result.error)
+    throw new Error(
+      result.error.message.includes("share_changed")
+        ? "share_changed"
+        : "share_request_failed",
+    );
+  return result.data === null
+    ? null
+    : validateSharedPaymentsPage(
+        SharedPaymentsPageSchema.parse(result.data),
+        entryId,
+        revision,
+        offset,
+      );
 }
 
 export async function readSharedReceipt(

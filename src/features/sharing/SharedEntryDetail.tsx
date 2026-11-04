@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { appendSharedPayments } from "./shareModel";
 import { Sheet } from "../../components/Sheet";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import {
   readSharedEntry,
+  readSharedPayments,
   readSharedReceipt,
   type SharedEntry,
 } from "./shareClient";
@@ -87,11 +89,15 @@ function Detail({
   const [error, setError] = useState("");
   const [receiptError, setReceiptError] = useState("");
   const [receiptBusy, setReceiptBusy] = useState<string | null>(null);
+  const [paymentsBusy, setPaymentsBusy] = useState(false);
+  const [paymentsError, setPaymentsError] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const alive = useRef(false);
   const detailAbort = useRef<AbortController | null>(null);
   const receiptAbort = useRef<AbortController | null>(null);
+  const paymentsAbort = useRef<AbortController | null>(null);
   const receiptLock = useRef(false);
+  const paymentsLock = useRef(false);
   const url = useRef<string | null>(null);
   const callbacks = useRef({ onClose, onUnavailable, onStale });
   callbacks.current = { onClose, onUnavailable, onStale };
@@ -103,6 +109,7 @@ function Detail({
     alive.current = false;
     detailAbort.current?.abort();
     receiptAbort.current?.abort();
+    paymentsAbort.current?.abort();
     revoke();
   }
   function current() {
@@ -174,6 +181,46 @@ function Detail({
       window.removeEventListener("hashchange", hash);
     };
   }, [token, entryId, revision]);
+  async function morePayments() {
+    const offset = entry?.paymentsNextOffset;
+    if (
+      !current() ||
+      paymentsLock.current ||
+      !entry?.settlement ||
+      offset == null
+    )
+      return;
+    paymentsLock.current = true;
+    setPaymentsBusy(true);
+    setPaymentsError("");
+    const controller = new AbortController();
+    paymentsAbort.current = controller;
+    try {
+      const page = await readSharedPayments(token, entryId, revision, offset, {
+        signal: controller.signal,
+      });
+      if (!current() || controller.signal.aborted) return;
+      if (!page) {
+        unavailable(false);
+        return;
+      }
+      if (page.revision !== revision) {
+        unavailable(true);
+        return;
+      }
+      setEntry(appendSharedPayments(entry, page));
+    } catch (cause) {
+      if (!current() || controller.signal.aborted) return;
+      if (cause instanceof Error && cause.message === "share_changed")
+        unavailable(true);
+      else if (cause instanceof Error && cause.message === "share_unavailable")
+        unavailable(false);
+      else setPaymentsError(t("হিসাব খোলা যায়নি। বন্ধ করে আবার চেষ্টা করুন।"));
+    } finally {
+      paymentsLock.current = false;
+      if (current()) setPaymentsBusy(false);
+    }
+  }
   async function openReceipt(receipt: SharedEntry["receipts"][number]) {
     if (!current() || receiptLock.current || !entry) return;
     receiptLock.current = true;
@@ -396,6 +443,23 @@ function Detail({
                     </div>
                   ))}
                 </dl>
+                {paymentsError ? <p role="alert">{paymentsError}</p> : null}
+                {entry.paymentsNextOffset != null ? (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={paymentsBusy}
+                    onClick={() => void morePayments()}
+                  >
+                    {t(
+                      paymentsBusy
+                        ? "অপেক্ষা করুন…"
+                        : paymentsError
+                          ? "আবার চেষ্টা করুন"
+                          : "আরও দেখুন",
+                    )}
+                  </button>
+                ) : null}
               </section>
             ) : null}
             {entry.receipts.length ? (

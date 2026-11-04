@@ -19,6 +19,7 @@ import { LedgerSchema, type Ledger } from "../../domain/model";
 import { QuickEntrySheet } from "./QuickEntrySheet";
 import { entryContext } from "./entryContext";
 import { summarize, personSummary } from "../../domain/ledger";
+import { appendBalanceAdjustment } from "../../domain/balanceAdjustments";
 const state = vi.hoisted(() => ({
   notebook: {} as Record<string, unknown>,
   drafts: new Map<string, unknown>(),
@@ -119,6 +120,83 @@ const ready = () =>
         .disabled,
     ).toBe(false),
   );
+
+it("previews adjusted shop due, pays it once and keeps the same balance when reopened", async () => {
+  const original = LedgerSchema.parse({
+    works: [{ id: "door", name: "দরজা" }],
+    people: [{ id: "shop", name: "দোকান", kind: "shop" }],
+    entries: [
+      {
+        id: "bill",
+        kind: "expense",
+        personId: "shop",
+        lines: [{ id: "line", workId: "door", amount: 100000 }],
+      },
+      {
+        id: "paid",
+        kind: "payment",
+        personId: "shop",
+        allocations: [{ workId: "door", amount: 40000 }],
+        paymentParts: [{ amount: 40000 }],
+      },
+    ],
+  });
+  state.notebook.ledger = appendBalanceAdjustment(
+    original,
+    {
+      target: "person",
+      basis: "balance",
+      personId: "shop",
+      account: "materials",
+      expectedBefore: 60000,
+      after: 30000,
+      reason: "বাকি মিলিয়েছি",
+    },
+    "2026-11-04T08:00:00.000Z",
+  );
+  const options = {
+    kind: "payment",
+    workId: "door",
+    personId: "shop",
+    account: "materials",
+  } as const;
+  const user = userEvent.setup();
+  const view = render(
+    <QuickEntrySheet presentation="page" options={options} />,
+  );
+  await ready();
+  expect(
+    view.container.querySelector(".entry-balance-items")?.textContent,
+  ).toContain("আগের বাকি300");
+  await user.type(screen.getByLabelText("কত টাকা"), "300");
+  expect(
+    view.container.querySelector(".entry-balance-result")?.textContent,
+  ).toBe("বাকি থাকবে0");
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
+  const saved = state.notebook.ledger as Ledger;
+  expect(saved.entries.slice(0, 2)).toEqual(original.entries);
+  expect(saved.entries).toHaveLength(4);
+  expect(personSummary(saved, "shop")).toMatchObject({
+    cost: 100000,
+    paid: 70000,
+    reconciledPayable: 0,
+    reconciledAdvance: 0,
+  });
+  view.unmount();
+  state.notebook.ledger = LedgerSchema.parse(JSON.parse(JSON.stringify(saved)));
+  const reopened = render(
+    <QuickEntrySheet presentation="page" options={options} />,
+  );
+  await ready();
+  expect(
+    reopened.container.querySelector(".entry-balance-items")?.textContent ?? "",
+  ).not.toContain("আগের বাকি");
+  await user.type(screen.getByLabelText("কত টাকা"), "100");
+  expect(
+    reopened.container.querySelector(".entry-balance-result")?.textContent,
+  ).toBe("অগ্রিম থাকবে100");
+});
 describe("quick entry creation flow", () => {
   it("keeps the page title aligned with material, labour and transport choices without changing the amount", async () => {
     state.notebook.ledger = LedgerSchema.parse({

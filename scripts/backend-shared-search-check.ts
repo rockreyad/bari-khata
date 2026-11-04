@@ -513,6 +513,8 @@ try {
         "receipts",
         "settlement",
         "payments",
+        "paymentsTotal",
+        "paymentsNextOffset",
       ]
         .sort()
         .join(","),
@@ -761,12 +763,14 @@ try {
     "search_contact_share",
     "read_contact_share_activity",
     "read_contact_share_entry",
+    "read_contact_share_payments",
     "contact_share_receipt_authorization",
   ]) {
     const args =
       name === "search_contact_share" || name === "read_contact_share_activity"
         ? { p_token: roof.token, p_revision: revision + 1 }
-        : name === "read_contact_share_entry"
+        : name === "read_contact_share_entry" ||
+            name === "read_contact_share_payments"
           ? {
               p_token: roof.token,
               p_entry_id: "cement",

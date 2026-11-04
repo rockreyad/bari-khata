@@ -92,7 +92,7 @@ export function contactAccountSummary(
   const summary = personSummary(scoped, person.id, workId);
   return {
     ...summary,
-    ...reconciledTotals(ledger, {
+    ...reconciledTotals(scoped, {
       personId: person.id,
       account,
       ...(workId ? { workId } : {}),

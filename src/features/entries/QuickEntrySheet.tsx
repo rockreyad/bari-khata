@@ -26,7 +26,11 @@ import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { MoneyInput } from "../../components/ui/MoneyInput";
 import { FormError, useFormError } from "../../components/ui/FormError";
-import { personKind, defaultContactAccount } from "../../domain/contacts";
+import {
+  personKind,
+  defaultContactAccount,
+  contactAccountLedger,
+} from "../../domain/contacts";
 import { Sheet } from "../../components/Sheet";
 import { EntryFrame } from "../../components/EntryFrame";
 import { BalanceProgress } from "../../components/ui/BalanceProgress";
@@ -452,7 +456,7 @@ export function QuickEntrySheet({
         : 0;
   const prior = selectedPerson
     ? partyAccountBalance(
-        ledger,
+        contactAccountLedger(ledger, selectedPerson, draft.account),
         selectedPerson.id,
         draft.account,
         draft.contractId || null,

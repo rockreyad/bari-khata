@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { SharedEntrySchema, SharedStatementSchema } from "./shareModel";
+import {
+  SharedEntrySchema,
+  SharedStatementSchema,
+  SharedPaymentsPageSchema,
+  appendSharedPayments,
+  validateSharedPaymentsPage,
+} from "./shareModel";
 
 const RowSchema = SharedStatementSchema.shape.rows.element;
 const maximum = Number.MAX_SAFE_INTEGER;
@@ -32,8 +38,8 @@ const payment = (key = "sample-payment", paid = 3000) => ({
   date: "2026-11-04",
   paid,
   description: "নমুনা কিস্তি",
-  paymentParts: [{ method: "cash", amount: paid }],
-  paymentMethods: ["cash"],
+  paymentParts: [{ method: "cash" as const, amount: paid }],
+  paymentMethods: ["cash" as const],
 });
 const entry = () => ({
   ...row(),
@@ -44,6 +50,98 @@ const entry = () => ({
   lines: [line()],
   payments: [payment("sample-first"), payment("sample-second")],
   receipts: [],
+});
+
+describe("bounded bill payment history", () => {
+  const payments = Array.from({ length: 500 }, (_, index) =>
+    payment(`payment-${index}`, 100),
+  );
+  const first = () =>
+    SharedEntrySchema.parse({
+      ...entry(),
+      charge: 50000,
+      lines: [line(50000)],
+      settlement: {
+        paid: 50000,
+        returned: 0,
+        refunded: 0,
+        balance: 0,
+        paymentCount: 500,
+      },
+      payments: payments.slice(0, 20),
+      paymentsTotal: 500,
+      paymentsNextOffset: 20,
+    });
+  const page = (offset: number) =>
+    SharedPaymentsPageSchema.parse({
+      key: "sample-bill",
+      revision: 7,
+      total: 500,
+      nextOffset: offset + 20 < 500 ? offset + 20 : null,
+      payments: payments.slice(offset, offset + 20),
+    });
+  it("loads 500 payments in twenty-row pages without duplicating or omitting any money", () => {
+    let result = first();
+    const settlement = result.settlement;
+    for (let offset = 20; offset < 500; offset += 20) {
+      const previous = result;
+      result = appendSharedPayments(result, page(offset));
+      expect(previous.payments).toHaveLength(offset);
+      expect(result.settlement).toBe(settlement);
+      expect(result.payments).toHaveLength(offset + 20);
+    }
+    expect(result.paymentsNextOffset).toBeNull();
+    expect(result.payments?.map((payment) => payment.key)).toEqual(
+      payments.map((payment) => payment.key),
+    );
+    expect(
+      result.payments?.reduce((sum, payment) => sum + payment.paid, 0),
+    ).toBe(50000);
+  });
+  it("accepts complete legacy details but refuses an unbounded or incomplete first payment page", () => {
+    expect(SharedEntrySchema.safeParse(entry()).success).toBe(true);
+    for (const change of [
+      { paymentsTotal: undefined },
+      { paymentsNextOffset: undefined },
+      { paymentsTotal: 499 },
+      { paymentsNextOffset: null },
+      { payments: payments.slice(0, 21), paymentsNextOffset: 21 },
+      { payments: [], paymentsNextOffset: 0 },
+      { payments: [payment("excess", 50001)], paymentsNextOffset: 1 },
+    ])
+      expect(
+        SharedEntrySchema.safeParse({ ...first(), ...change }).success,
+      ).toBe(false);
+  });
+  it("rejects mismatched revisions, scopes, repeated keys, skipped offsets and a truncated final total", () => {
+    for (const change of [
+      { key: "other-bill" },
+      { total: 499 },
+      { revision: 8 },
+      { payments: payments.slice(0, 20) },
+      { nextOffset: 41 },
+      { payments: [], nextOffset: 20 },
+    ])
+      expect(() =>
+        appendSharedPayments(first(), { ...page(20), ...change }),
+      ).toThrow();
+    let result = first();
+    for (let offset = 20; offset < 480; offset += 20)
+      result = appendSharedPayments(result, page(offset));
+    expect(() =>
+      appendSharedPayments(result, {
+        ...page(480),
+        payments: page(480).payments.map((payment) => ({
+          ...payment,
+          paid: 99,
+        })),
+      }),
+    ).toThrow("share_invalid_page");
+    for (const offset of [-1, 1.5, 100001])
+      expect(() =>
+        validateSharedPaymentsPage(page(20), "sample-bill", 7, offset),
+      ).toThrow("share_invalid_page");
+  });
 });
 
 describe("shared bill settlement validation", () => {

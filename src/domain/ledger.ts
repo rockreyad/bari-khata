@@ -322,13 +322,18 @@ export function partyAccountBalance(
   contractId: string | null = null,
 ) {
   const effective = effectiveAccounts(ledger);
-  const entries = activeEntries(ledger).filter(
+  const entries = ledger.entries.filter(
     (entry) =>
       entry.personId === personId &&
       effective.get(entry.id) === account &&
       entry.contractId === contractId,
   );
-  return [...accountBalances(entries, effective).values()].reduce(
+  const actual = [
+    ...accountBalances(
+      entries.filter((entry) => !entry.voided),
+      effective,
+    ).values(),
+  ].reduce(
     (sum, balance) => ({
       cost: sum.cost + balance.cost,
       adjustment: sum.adjustment + balance.adjustment,
@@ -341,6 +346,18 @@ export function partyAccountBalance(
     }),
     emptyBalance(),
   );
+  // This running account excludes other jobs and their agreed totals.
+  const reconciled = reconciledTotals(
+    { ...ledger, entries, contracts: [] },
+    { personId, account },
+  );
+  return {
+    ...actual,
+    adjustment: reconciled.owedCorrection,
+    balance: reconciled.reconciledBalance,
+    payable: reconciled.reconciledPayable,
+    advance: reconciled.reconciledAdvance,
+  };
 }
 
 export function contractSummary(ledger: Ledger, contractId: string) {
