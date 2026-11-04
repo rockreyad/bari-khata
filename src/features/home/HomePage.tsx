@@ -1,5 +1,8 @@
 import {
   ArrowRightIcon,
+  ArrowUpRightIcon,
+  CaretDownIcon,
+  CaretRightIcon,
   CoinsIcon,
   HardHatIcon,
   MagnifyingGlassIcon,
@@ -21,6 +24,7 @@ export function HomePage() {
   const { t, money, number, formatDigits } = useLanguageContext();
   const s = summarize(ledger);
   const paid = cashSummary(ledger);
+  const totalPaid = money(s.reconciledNetPaid);
   const pending = pendingReviewEntries(ledger).length;
   const ongoingWorks = orderedWorks(ledger).filter(
     (work) => work.status === "ongoing",
@@ -31,123 +35,153 @@ export function HomePage() {
       value: paid.byAccount.materials,
       scope: "materials",
       Icon: PackageIcon,
-      tone: "blue",
     },
     {
       label: "মিস্ত্রিকে দিয়েছি",
       value: paid.byAccount.labour,
       scope: "labour",
       Icon: HardHatIcon,
-      tone: "purple",
     },
+    ...(paid.byAccount.other !== 0
+      ? [
+          {
+            label: "অন্য কাজে দিয়েছি",
+            value: paid.byAccount.other,
+            scope: "other",
+            Icon: CoinsIcon,
+          },
+        ]
+      : []),
   ];
   return (
     <div className="home-v3 page-flow">
-      <header className="page-heading home-heading-v3">
-        <div>
-          <p className="eyebrow">{formatDigits(ledger.project.name)}</p>
-          <h1>{t("আমার হিসাব")}</h1>
-        </div>
-        <button
-          className="icon-button"
-          aria-label={t("আগের হিসাব খুঁজুন")}
-          onClick={() => go("/ledger?focus=search")}
-        >
-          <MagnifyingGlassIcon size={23} />
-        </button>
-      </header>
-      <div className="home-primary-actions">
-        <button className="primary-button" onClick={() => add()}>
-          <PlusIcon size={21} weight="bold" />
-          {t("খরচ লিখি")}
-        </button>
-        <button
-          className="secondary-button"
-          onClick={() => add({ kind: "payment" })}
-        >
-          <CoinsIcon size={23} weight="duotone" />
-          {t("টাকা দিলাম")}
-        </button>
-      </div>
-      <section className="home-total-card" aria-label={t("মোট টাকা দিয়েছি")}>
-        <div className="home-total-heading">
+      <div className="home-overview">
+        <header className="home-overview-heading">
           <div>
-            <span>{t("মোট টাকা দিয়েছি")}</span>
-            <strong>{money(s.reconciledNetPaid)}</strong>
-            {s.paidCorrection !== 0 ? (
-              <small>
-                {t("সমন্বয়")}: {money(s.paidCorrection)}
-              </small>
+            <p className="home-overview-project">
+              {formatDigits(ledger.project.name)}
+            </p>
+            <h1>{t("আমার হিসাব")}</h1>
+          </div>
+          <button
+            className="home-overview-search"
+            aria-label={t("আগের হিসাব খুঁজুন")}
+            onClick={() => go("/ledger?focus=search")}
+          >
+            <MagnifyingGlassIcon size={23} />
+          </button>
+        </header>
+        <section
+          className="home-overview-card"
+          aria-label={t("মোট টাকা দিয়েছি")}
+        >
+          <div className="home-overview-balance">
+            <div className="home-overview-balance-heading">
+              <dl className="home-overview-paid">
+                <div className="home-overview-paid-total">
+                  <dt>{t("মোট টাকা দিয়েছি")}</dt>
+                  <dd
+                    className={
+                      totalPaid.length > 16
+                        ? "home-overview-long-amount"
+                        : undefined
+                    }
+                  >
+                    {totalPaid}
+                  </dd>
+                </div>
+                {s.paidCorrection !== 0 ? (
+                  <div className="home-overview-correction">
+                    <dt>{t("সমন্বয়")}</dt>
+                    <dd>{money(s.paidCorrection)}</dd>
+                  </div>
+                ) : null}
+              </dl>
+              <button
+                className="home-overview-report"
+                onClick={() => go("/reports")}
+              >
+                {t("রিপোর্ট")}
+                <ArrowUpRightIcon size={16} aria-hidden="true" />
+              </button>
+            </div>
+            {paid.refunds > 0 ? (
+              <p className="home-overview-refund-note">
+                {t("ফেরত পাওয়া টাকা বাদ দিয়ে")}
+              </p>
+            ) : null}
+            {s.reconciledPayable > 0 ? (
+              <button
+                type="button"
+                className="home-overview-due"
+                onClick={() => go("/dues")}
+              >
+                <span>{t("দিতে বাকি")}</span>
+                <strong>{money(s.reconciledPayable)}</strong>
+                <CaretRightIcon size={16} aria-hidden="true" />
+              </button>
             ) : null}
           </div>
-          <button className="home-total-report" onClick={() => go("/reports")}>
-            {t("ভাগ করে দেখি")}
-            <ArrowRightIcon size={17} />
-          </button>
-        </div>
-        <div className="home-total-breakdown">
-          {cards.map(({ label, value, scope, Icon, tone }) => (
-            <button key={scope} onClick={() => go(`/reports?account=${scope}`)}>
-              <span className={`summary-symbol ${tone}`}>
-                <Icon size={20} weight="duotone" />
-              </span>
-              <span>{t(label)}</span>
-              <strong>{money(value)}</strong>
+          <div className="home-overview-actions">
+            <button className="home-overview-add" onClick={() => add()}>
+              <PlusIcon size={20} aria-hidden="true" />
+              {t("খরচ লিখি")}
             </button>
-          ))}
-        </div>
-        {paid.byAccount.other !== 0 ? (
+            <button
+              className="home-overview-pay"
+              onClick={() => add({ kind: "payment" })}
+            >
+              <ArrowUpRightIcon size={20} aria-hidden="true" />
+              {t("টাকা দিলাম")}
+            </button>
+          </div>
+          <details className="home-overview-details">
+            <summary>
+              {t("কোথায় কত দিয়েছি")}
+              <CaretDownIcon size={17} aria-hidden="true" />
+            </summary>
+            {s.paidCorrection !== 0 ? (
+              <p className="home-overview-cash-note">
+                {t("এই ভাগে দেওয়া ও ফেরত পাওয়া টাকার হিসাব আছে।")}
+              </p>
+            ) : null}
+            <div className="home-overview-breakdown">
+              {cards.map(({ label, value, scope, Icon }) => (
+                <button
+                  key={scope}
+                  onClick={() => go(`/reports?account=${scope}`)}
+                >
+                  <span className="home-overview-category">
+                    <Icon size={18} aria-hidden="true" />
+                    <span>{t(label)}</span>
+                  </span>
+                  <strong>{money(value)}</strong>
+                  <CaretRightIcon size={15} aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          </details>
+        </section>
+        {pending > 0 ? (
           <button
-            className="home-other-paid"
-            onClick={() => go("/reports?account=other")}
+            className="home-review-notice"
+            onClick={() => go("/review?bulk=1")}
           >
-            <CoinsIcon size={17} weight="duotone" />
-            <span>{t("অন্য কাজে দিয়েছি")}</span>
-            <strong>{money(paid.byAccount.other)}</strong>
-            <ArrowRightIcon size={15} />
+            <span className="home-review-symbol">
+              <ClipboardTextIcon size={22} weight="duotone" />
+            </span>
+            <span>
+              <strong>
+                {t("{{count}}টি হিসাবের তথ্য যোগ করা বাকি", {
+                  count: number(pending),
+                })}
+              </strong>
+              <small>{t("একসাথে দেখে ঠিক করুন")}</small>
+            </span>
+            <ArrowRightIcon size={18} />
           </button>
         ) : null}
-        {s.reconciledPayable > 0 ? (
-          <div className="home-known-due">
-            <span>{t("দিতে বাকি")}</span>
-            <strong>{money(s.reconciledPayable)}</strong>
-          </div>
-        ) : null}
-      </section>
-      <button
-        className="home-jobs-link"
-        aria-label={t("মিস্ত্রির কাজ")}
-        aria-describedby="home-jobs-caption"
-        onClick={() => go("/jobs")}
-      >
-        <span className="home-jobs-symbol">
-          <HardHatIcon size={22} weight="duotone" />
-        </span>
-        <span>
-          <strong>{t("মিস্ত্রির কাজ")}</strong>
-          <small id="home-jobs-caption">{t("অবস্থা, বাকি ও দেওয়া টাকা")}</small>
-        </span>
-        <ArrowRightIcon size={19} />
-      </button>
-      {pending > 0 ? (
-        <button
-          className="home-review-notice"
-          onClick={() => go("/review?bulk=1")}
-        >
-          <span className="home-review-symbol">
-            <ClipboardTextIcon size={22} weight="duotone" />
-          </span>
-          <span>
-            <strong>
-              {t("{{count}}টি হিসাবের তথ্য যোগ করা বাকি", {
-                count: number(pending),
-              })}
-            </strong>
-            <small>{t("একসাথে দেখে ঠিক করুন")}</small>
-          </span>
-          <ArrowRightIcon size={18} />
-        </button>
-      ) : null}
+      </div>
       <section className="panel home-history-v3">
         <div className="section-heading">
           <h2>{t("সাম্প্রতিক হিসাব")}</h2>
@@ -158,14 +192,9 @@ export function HomePage() {
         </div>
         <EntryList
           showKind
+          limit={5}
           ledger={ledger}
-          entries={[...ledger.entries]
-            .sort(
-              (a, b) =>
-                (b.date ?? "").localeCompare(a.date ?? "") ||
-                b.createdAt.localeCompare(a.createdAt),
-            )
-            .slice(0, 12)}
+          entries={ledger.entries}
           onEntry={detail}
         />
       </section>

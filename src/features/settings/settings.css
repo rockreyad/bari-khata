@@ -307,16 +307,10 @@
   margin-left: 3px;
 }
 .settings-footer-note {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 6px;
+  text-align: center;
   margin-top: 1px;
   color: var(--muted);
   font-size: 11px;
-}
-.settings-footer-note > svg {
-  flex: none;
 }
 .settings-conflict-notice {
   display: flex;

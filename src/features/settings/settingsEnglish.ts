@@ -16,7 +16,7 @@ export const settingsEnglish: Record<string, string> = {
   "ফোনে অ্যাপ রাখুন": "Add the app to your phone",
   "এক ট্যাপেই নিজের খাতা খুলুন": "Open your notebook with a tap",
   "নিজের খাতা খুলুন": "Open my notebook",
-  "নিজের হিসাব, নিজের কাছে।": "Your records, in your hands.",
+  "সংস্করণ {{version}}": "Version {{version}}",
   "এই মুহূর্তের পুরো হিসাব": "All your current records",
   "ফাইল বেছে আগে দেখে নিন": "Choose a file and review it first",
   "প্রত্যেকের হিসাব আলাদা": "Everyone has their own notebook",

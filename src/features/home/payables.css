@@ -1,0 +1,122 @@
+.home-dues-page {
+  width: 100%;
+  max-width: 760px;
+  min-width: 0;
+  margin-inline: auto;
+}
+.home-dues-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.home-dues-heading > .icon-button {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+.home-dues-heading h1 {
+  font-size: clamp(22px, 3vw, 28px);
+  font-weight: 650;
+  line-height: 1.45;
+}
+.home-dues-panel {
+  min-width: 0;
+}
+.home-dues-heading > .icon-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.home-dues-total,
+.home-dues-total dd,
+.home-dues-list,
+.home-dues-amount {
+  margin: 0;
+}
+.home-dues-total {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.home-dues-total dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+.home-dues-total dd {
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+  font-size: 28px;
+  font-weight: 650;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+.home-dues-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 16px;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 16px 0;
+  border-radius: 8px;
+  text-align: left;
+}
+.home-dues-list {
+  padding: 0;
+  list-style: none;
+}
+.home-dues-list > li + li {
+  border-top: 1px solid var(--line);
+}
+.home-dues-copy {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.home-dues-row > svg {
+  align-self: center;
+  color: var(--muted);
+}
+.home-dues-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+.home-dues-row strong {
+  font-size: 14px;
+  font-weight: 550;
+  line-height: 1.6;
+}
+.home-dues-row small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.home-dues-row > .home-dues-amount {
+  max-width: 13ch;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  font-weight: 550;
+  line-height: 1.6;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.home-dues-empty {
+  padding-top: 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .home-dues-row:hover {
+    background: var(--surface-muted);
+    color: var(--accent-strong);
+  }
+}
+.home-dues-row:active {
+  background: var(--accent-soft);
+}
+@media (max-width: 760px) {
+  .home-dues-panel {
+    padding: 20px;
+  }
+}

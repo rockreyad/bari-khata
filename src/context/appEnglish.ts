@@ -1,4 +1,6 @@
 export const appEnglish: Record<string, string> = {
+  "নতুন আপডেট এসেছে": "A new update is available",
+  "আপডেট করুন": "Update now",
   "মালের হিসাব": "Material history",
   "সব কাজ মিলিয়ে": "Across all works",
   "কেনা ও ফেরত মিলিয়ে": "Purchases less returns",

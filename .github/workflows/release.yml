@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require a commit already merged into main
+        run: git merge-base --is-ancestor HEAD origin/main
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Match the tag to the app version
+        run: npm run release:check -- "$RELEASE_TAG"
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+      - run: npm test
+      - run: npm run build
+
+  publish-release:
+    needs: verify-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the verified release
+        run: >-
+          gh release create "$RELEASE_TAG"
+          --repo "$GITHUB_REPOSITORY"
+          --verify-tag
+          --title "$RELEASE_TAG"
+          --generate-notes
+          --notes "অ্যাপের সংস্করণ ও ট্যাগ মিলিয়ে পরীক্ষা এবং build সফল হয়েছে।"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}

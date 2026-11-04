@@ -34,7 +34,7 @@ import { LedgerPage } from "../features/ledger/LedgerPage";
 
 import { AccountSchema, CostTypeSchema } from "../domain/model";
 import { QuickActionsSheet } from "../features/entries/QuickActionsSheet";
-import { usePwa } from "../lib/usePwa";
+import { PwaUpdateNotice } from "../components/PwaUpdateNotice";
 import { useParams } from "react-router";
 const QuickEntrySheet = lazy(() =>
   import("../features/entries/QuickEntrySheet").then((m) => ({
@@ -55,6 +55,11 @@ const EntitySheet = lazy(() =>
 const AnalyticsPage = lazy(() =>
   import("../features/analytics/AnalyticsPage").then((m) => ({
     default: m.AnalyticsPage,
+  })),
+);
+const PayablesPage = lazy(() =>
+  import("../features/home/PayablesPage").then((m) => ({
+    default: m.PayablesPage,
   })),
 );
 const PeoplePage = lazy(() =>
@@ -222,11 +227,13 @@ export function AppShell() {
   const { t, formatDigits } = useLanguageContext();
   const [params] = useSearchParams();
   const location = useLocation();
-  const pwa = usePwa();
   const entryPage = isEntryPage(location.pathname);
   const formOpen =
     entryPage ||
     ["_add", "_entity", "_entry", "_quick"].some((key) => params.has(key));
+  const updateBlocked =
+    formOpen ||
+    /\/settings\/(?:account\/password|assistants)\/?$/.test(location.pathname);
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [location.pathname]);
@@ -415,6 +422,7 @@ export function AppShell() {
                   element={<ContractRoute />}
                 />
                 <Route index element={<HomePage />} />
+                <Route path="dues" element={<PayablesPage />} />
                 <Route path="works" element={<WorksPage />} />
                 <Route path="works/:workId" element={<WorkPage />} />
                 <Route path="ledger" element={<LedgerPage />} />
@@ -484,7 +492,6 @@ export function AppShell() {
               />
             </svg>
           </span>
-          <span>{t("লিখি")}</span>
         </button>
         {[nav[2], nav[3]].map((item) => (
           <NotebookNavLink
@@ -495,16 +502,7 @@ export function AppShell() {
           />
         ))}
       </nav>
-      {pwa.needRefresh[0] && !formOpen ? (
-        <div className="update-banner">
-          <span>
-            {t("নতুন সংস্করণ এসেছে। অসমাপ্ত লেখা সংরক্ষণ করে আপডেট করুন।")}
-          </span>
-          <button onClick={() => void pwa.updateServiceWorker()}>
-            {t("আপডেট")}
-          </button>
-        </div>
-      ) : null}
+      <PwaUpdateNotice blocked={updateBlocked} floating />
       {entity !== "person" && params.get("_quick") === "1" ? (
         <QuickActionsSheet />
       ) : null}

@@ -8,6 +8,10 @@ import { mcpPlugin } from "./server/mcpPlugin.js";
 import { phoneOtpPlugin } from "./server/phoneOtpPlugin.ts";
 import { phoneAuthMode } from "./server/phoneOtp.ts";
 
+const { version: appVersion } = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+) as { version: string };
+
 function privateFiles(): Plugin {
   return {
     name: "bari-khata-private-files",
@@ -105,6 +109,7 @@ export default defineConfig(({ mode }) => {
   const phoneMode = phoneAuthMode(env);
   return {
     define: {
+      "import.meta.env.VITE_APP_VERSION": JSON.stringify(appVersion),
       "import.meta.env.VITE_PHONE_AUTH_MODE": JSON.stringify(phoneMode),
       "import.meta.env.VITE_ENABLE_PHONE_OTP": JSON.stringify(
         String(phoneMode !== "off"),

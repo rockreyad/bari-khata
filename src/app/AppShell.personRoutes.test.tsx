@@ -14,6 +14,7 @@ import { AppShell } from "./AppShell";
 
 const state = vi.hoisted(() => ({
   ledger: null as unknown,
+  canReload: (() => true) as () => boolean,
   forms: [] as Array<{
     kind: string;
     presentation?: string;
@@ -31,10 +32,13 @@ vi.mock("../context/LanguageProvider", () => ({
   useLanguageContext: () => ({ t: String, formatDigits: String }),
 }));
 vi.mock("../lib/usePwa", () => ({
-  usePwa: () => ({
-    needRefresh: [true, vi.fn()],
-    updateServiceWorker: vi.fn(),
-  }),
+  usePwa: (canReload: () => boolean) => {
+    state.canReload = canReload;
+    return {
+      needRefresh: [true, vi.fn()],
+      updateServiceWorker: vi.fn(),
+    };
+  },
 }));
 vi.mock("../features/home/HomePage", () => ({ HomePage: () => <p>Home</p> }));
 vi.mock("../features/works/WorksPages", () => ({
@@ -168,7 +172,8 @@ it.each([
         .querySelector(".app-frame")
         ?.classList.contains("is-entry-page"),
     ).toBe(true);
-    expect(screen.queryByRole("button", { name: "আপডেট" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "আপডেট করুন" })).toBeNull();
+    expect(state.canReload()).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Close person" }));
     await waitFor(() =>
       expect(`${current().pathname}${current().search}`).toBe(back),
@@ -178,7 +183,8 @@ it.each([
         .querySelector(".app-frame")
         ?.classList.contains("is-entry-page"),
     ).toBe(false);
-    expect(screen.getByRole("button", { name: "আপডেট" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "আপডেট করুন" })).toBeTruthy();
+    expect(state.canReload()).toBe(true);
   },
 );
 

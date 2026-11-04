@@ -1,11 +1,13 @@
 {
   "name": "bari-khata",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && node scripts/check-api-runtime.mjs && vite build",
+    "build": "npm run release:check && tsc -b && node scripts/check-api-runtime.mjs && vite build",
+    "release:check": "node scripts/check-release.mjs",
+    "setup:hooks": "node scripts/setup-hooks.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run --maxWorkers=4",
     "typecheck": "tsc -b",

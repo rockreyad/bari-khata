@@ -26,6 +26,7 @@ export function entryReturn(path: string | null | undefined, base = "") {
     if (
       !jobPage &&
       relative !== "/timeline" &&
+      !/^\/dues\/?$/.test(relative) &&
       !/^(?:\/(?:works|people|ledger|reports|materials|review|settings)(?:\/[^/]*)*|\/)?$/.test(
         relative,
       )

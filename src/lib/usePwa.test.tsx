@@ -11,6 +11,7 @@ const originalWorker = Object.getOwnPropertyDescriptor(
 let container: EventTarget;
 let waiting: { postMessage: ReturnType<typeof vi.fn> } | null;
 let postMessage: ReturnType<typeof vi.fn>;
+let checkForUpdate: ReturnType<typeof vi.fn>;
 const reload = vi.fn();
 beforeEach(() => {
   vi.stubEnv("PROD", true);
@@ -26,6 +27,7 @@ beforeEach(() => {
     }),
   );
   postMessage = vi.fn();
+  checkForUpdate = vi.fn().mockResolvedValue(undefined);
   waiting = { postMessage };
   container = new nativeWindow.EventTarget();
   const registration = Object.assign(new nativeWindow.EventTarget(), {
@@ -33,7 +35,7 @@ beforeEach(() => {
       return waiting;
     },
     installing: null,
-    update: vi.fn().mockResolvedValue(undefined),
+    update: checkForUpdate,
   });
   Object.defineProperty(registration, "waiting", { get: () => waiting });
   Object.assign(container, {
@@ -47,11 +49,34 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   if (originalWorker)
     Object.defineProperty(navigator, "serviceWorker", originalWorker);
   else Reflect.deleteProperty(navigator, "serviceWorker");
+});
+
+it("checks for new releases on reconnect and return without activating or reloading", async () => {
+  const visible = vi
+    .spyOn(document, "visibilityState", "get")
+    .mockReturnValue("visible");
+  const { unmount } = renderHook(() => usePwa());
+  await waitFor(() => expect(checkForUpdate).toHaveBeenCalledOnce());
+  window.dispatchEvent(new nativeWindow.Event("online"));
+  expect(checkForUpdate).toHaveBeenCalledTimes(2);
+  visible.mockReturnValue("hidden");
+  document.dispatchEvent(new nativeWindow.Event("visibilitychange"));
+  expect(checkForUpdate).toHaveBeenCalledTimes(2);
+  visible.mockReturnValue("visible");
+  document.dispatchEvent(new nativeWindow.Event("visibilitychange"));
+  expect(checkForUpdate).toHaveBeenCalledTimes(3);
+  expect(postMessage).not.toHaveBeenCalled();
+  expect(reload).not.toHaveBeenCalled();
+  unmount();
+  window.dispatchEvent(new nativeWindow.Event("online"));
+  document.dispatchEvent(new nativeWindow.Event("visibilitychange"));
+  expect(checkForUpdate).toHaveBeenCalledTimes(3);
 });
 
 it("does not reload when auth input arrives after Update, and allows a later explicit safe reload", async () => {
