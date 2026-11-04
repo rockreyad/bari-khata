@@ -48,18 +48,15 @@ tag দেওয়ার আগে নিশ্চিত হোন নিজের
 
 ## main-এর সুরক্ষার নিয়ম
 
-এই private repository-তে GitHub বর্তমানে দেখাচ্ছে: “Your rulesets won't be enforced on this private repository until you move to GitHub Team organization account.” তাই ruleset-এ `Active` লেখা থাকলেও এই plan-এ GitHub সেটি কার্যকর করছে বলে ধরা যাবে না। GitHub-এর settings বা অন্য clone থেকে সরাসরি বদলানো আটকাতে private repository-র সুরক্ষা সমর্থন করে এমন plan/account দরকার। repository public করা এর সমাধান হিসেবে বেছে নেওয়া হয়নি।
-
-`main`-এর [প্রস্তুত ruleset](https://github.com/rockreyad/bari-khata/settings/rules/26516070)-এ bypass নেই, pull request, `verify`, হালনাগাদ branch ও আলোচনার সমাধান লাগে; delete ও force push বন্ধ। GitHub API-ও বর্তমানে `403` দিয়ে GitHub Pro বা public repository চায়। ব্যক্তিগত private repository-র জন্য GitHub Pro, আর organization-এর জন্য উপযুক্ত GitHub Team/Enterprise plan নিয়ে কার্যকর নিয়ম আবার যাচাই করুন।
-
-GitHub repository settings-এ `main`-এর জন্য নিচের নিয়মগুলো কার্যকর থাকা দরকার:
+Repository public হওয়ায় `main`-এর [ruleset](https://github.com/rockreyad/bari-khata/settings/rules/26516070) এখন কার্যকর। admin-সহ কারও bypass নেই।
 
 - সরাসরি push-এর বদলে pull request লাগবে; নিজের admin অনুমতি দিয়ে নিয়ম এড়িয়ে যাওয়া বন্ধ থাকবে।
-- `verify` সফল না হলে merge হবে না।
+- GitHub Actions-এর `verify` সফল না হলে merge হবে না; branch-ও হালনাগাদ থাকতে হবে।
 - branch delete ও force push বন্ধ থাকবে।
 - review-এর অমীমাংসিত আলোচনা শেষ করতে হবে।
+- `main`-এ শুধু squash merge হয়, যাতে ইতিহাস সরল থাকে।
 
-একা কাজ করলে অন্য কারও approval বাধ্যতামূলক করার প্রয়োজন নেই। pull request ও সফল পরীক্ষা রেখেও নিজের পরিবর্তন নিজে merge করা যায়। GitHub-এর নিয়ম অ্যাকাউন্টের মালিককে settings খুলে ইচ্ছা করে নিয়ম বন্ধ করা থেকে আটকায় না। release-এর `v*` tag বদলানো ও মোছাও ruleset দিয়ে বন্ধ রাখা যায়।
+একা কাজ করলে অন্য কারও approval বাধ্যতামূলক নয়; pull request ও সফল পরীক্ষা লাগে। release-এর `v*` tag বদলানো বা মোছাও আলাদা ruleset দিয়ে বন্ধ। GitHub-এর নিয়ম অ্যাকাউন্টের মালিককে settings খুলে ইচ্ছা করে নিয়ম বন্ধ করা থেকে আটকায় না।
 
 ### এই কম্পিউটারের clone-এ push আটকানো
 
@@ -73,7 +70,7 @@ npm run setup:hooks
 
 `.githooks/pre-push` destination হিসেবে `refs/heads/main` পেলে নতুন push, force push ও delete আটকায়—অন্য branch থেকে `main`-এ push করলেও। আগের `v*` tag সরানো বা মুছতেও দেয় না; নতুন tag ও feature branch push করা যায়। এরপর pull request দিয়ে কাজ করুন।
 
-এটি স্থানীয় ভুল আটকায়। GitHub website, অন্য clone, `--no-verify` বা hook বন্ধ করে করা push আটকায় না। সেই জন্য কার্যকর GitHub ruleset-এর বিকল্প নয়; GitHub-এর plan সীমা না বদলানো পর্যন্ত এই সীমা থাকবে।
+এটি স্থানীয় ভুল আটকায়। GitHub website, অন্য clone, `--no-verify` বা hook বন্ধ করে করা push আটকায় না। GitHub-এর ruleset আলাদাভাবে সেই সুরক্ষা কার্যকর করে।
 
 ## কখন বাধ্যতামূলক আপডেট লাগবে
 
