@@ -259,7 +259,7 @@ describe.each(["bn", "en"] as const)(
       ).toBe(copy.one);
       const due = container.querySelector(".home-overview-due");
       expect(due?.textContent).toContain(copy.due);
-      expect(due?.querySelector("dd")?.textContent).toBe(copy.old);
+      expect(due?.querySelector("strong")?.textContent).toBe(copy.old);
       expect(container.querySelectorAll(".history-row")).toHaveLength(2);
     });
   },
@@ -336,3 +336,122 @@ it("keeps recording an expense separate from recording money paid", () => {
   expect(state.add).toHaveBeenNthCalledWith(2, { kind: "payment" });
   expect(state.go).not.toHaveBeenCalled();
 });
+
+it("shows five recent records after grouping purchases and retains every paired partial payment", () => {
+  const createdAt = "2026-11-04T00:00:00Z";
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "general", name: "সাধারণ খরচ" }],
+    entries: [
+      ...["প্রথম বিল", "দ্বিতীয় বিল", "তৃতীয় বিল", "চতুর্থ বিল"].map(
+        (label, index) => ({
+          id: `recent-${index}`,
+          kind: "expense",
+          account: "materials",
+          date: `2026-11-0${4 - index}`,
+          createdAt,
+          lines: [
+            { id: `line-${index}`, workId: "general", label, amount: 100 },
+          ],
+        }),
+      ),
+      {
+        id: "partial-bill",
+        kind: "expense",
+        account: "materials",
+        date: "2026-10-31",
+        createdAt,
+        lines: [
+          {
+            id: "partial-line",
+            workId: "general",
+            label: "পঞ্চম বিল",
+            amount: 2000,
+          },
+        ],
+      },
+      ...Array.from({ length: 8 }, (_, index) => ({
+        id: `partial-payment-${index}`,
+        kind: "payment",
+        account: "materials",
+        relatedEntryId: "partial-bill",
+        date: "2026-10-31",
+        createdAt,
+        allocations: [{ workId: "general", amount: 100 }],
+        paymentParts: [{ method: "cash", amount: 100 }],
+      })),
+      {
+        id: "older-bill",
+        kind: "expense",
+        account: "materials",
+        date: "2026-10-30",
+        createdAt,
+        lines: [
+          {
+            id: "older-line",
+            workId: "general",
+            label: "আগের বিল",
+            amount: 500,
+          },
+        ],
+      },
+    ],
+  });
+  const before = JSON.stringify(ledger);
+  const { container } = mount(ledger, "bn");
+  expect(container.querySelectorAll(".history-row")).toHaveLength(5);
+  expect(
+    [...container.querySelectorAll(".history-row-copy > strong")].map(
+      (title) => title.textContent,
+    ),
+  ).toEqual([
+    "প্রথম বিল",
+    "দ্বিতীয় বিল",
+    "তৃতীয় বিল",
+    "চতুর্থ বিল",
+    "পঞ্চম বিল",
+  ]);
+  const partial = screen.getByRole("button", { name: /পঞ্চম বিল/ });
+  expect(partial.querySelector(".history-row-amount")?.textContent).toBe(
+    "৳\u202f২০",
+  );
+  expect(partial.querySelector(".history-row-meta-v4")?.textContent).toContain(
+    "দিয়েছি ৳\u202f৮",
+  );
+  expect(container.querySelector(".history-payment")).toBeNull();
+  expect(screen.queryByRole("button", { name: /আগের বিল/ })).toBeNull();
+  expect(JSON.stringify(ledger)).toBe(before);
+});
+
+it.each([
+  ["bn", "ফেরত পাওয়া টাকা বাদ দিয়ে", "৳\u202f১৫০"],
+  ["en", "After subtracting money returned", "৳\u202f150"],
+] as const)(
+  "explains refunded money in %s without requiring a balance correction",
+  (language, explanation, total) => {
+    const base = fixture("payment");
+    const ledger = LedgerSchema.parse({
+      ...base,
+      entries: [
+        ...base.entries,
+        {
+          id: "materials-refund",
+          kind: "refund",
+          account: "materials",
+          personId: "golam",
+          date: "2026-11-03",
+          allocations: [{ workId: "general", amount: 1300 }],
+          paymentParts: [{ method: "cash", amount: 1300 }],
+        },
+      ],
+    });
+    const before = JSON.stringify(ledger);
+    const { container } = mount(ledger, language);
+    const note = screen.getByText(explanation, { exact: true });
+    expect(note.closest("details")).toBeNull();
+    expect(container.querySelector(".home-overview-correction")).toBeNull();
+    expect(
+      container.querySelector(".home-overview-paid-total > dd")?.textContent,
+    ).toBe(total);
+    expect(JSON.stringify(ledger)).toBe(before);
+  },
+);

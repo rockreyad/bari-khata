@@ -1,4 +1,7 @@
 export const cashOverviewEnglish: Record<string, string> = {
+  "কোথায় কত বাকি": "Where money is owed",
+  "এখন কোনো বাকি নেই": "Nothing is owed right now",
+  "ফেরত পাওয়া টাকা বাদ দিয়ে": "After subtracting money returned",
   "কোথায় কত দিয়েছি": "Where the money went",
   "এই ভাগে দেওয়া ও ফেরত পাওয়া টাকার হিসাব আছে।":
     "These amounts include payments and money returned.",

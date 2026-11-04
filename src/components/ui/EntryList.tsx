@@ -20,6 +20,7 @@ export type EntryListProps = {
   order?: HistoryOrder;
   grouped?: boolean;
   showKind?: boolean;
+  limit?: number;
   hidePerson?: boolean;
   hideWork?: boolean;
   amounts?: Record<string, number>;
@@ -34,6 +35,7 @@ export function EntryList({
   order = "newest",
   grouped = false,
   showKind = false,
+  limit,
   hidePerson = false,
   hideWork = false,
   amounts,
@@ -49,10 +51,11 @@ export function EntryList({
       </div>
     );
   const groups = historyGroups(entries);
+  const visibleEntries = sortHistory(groups.entries, order).slice(0, limit);
   let previousMonth = "";
   return (
     <div className="history-list">
-      {sortHistory(groups.entries, order).map((entry) => {
+      {visibleEntries.map((entry) => {
         const month = entry.date?.slice(0, 7) ?? "unknown";
         const header = grouped && month !== previousMonth;
         previousMonth = month;

@@ -13,7 +13,7 @@ export function notebookSectionActive(
       ? pathname.slice(base.length)
       : pathname
     ).replace(/\/+$/, "") || "/";
-  if (section === "/") return path === "/";
+  if (section === "/") return path === "/" || path === "/dues";
   const aliases =
     section === "/reports"
       ? [section, "/materials"]

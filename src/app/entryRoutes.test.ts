@@ -32,6 +32,8 @@ describe("safe entry return routes", () => {
     "/sample/people/shop",
     "/reconcile",
     "/reconcile?person=shop",
+    "/dues/nonsense",
+    "/dues-other",
   ])("rejects unsafe or circular real-account return %s", (path) => {
     expect(entryReturn(path)).toBe("/");
   });
@@ -45,6 +47,7 @@ describe("safe entry return routes", () => {
     "/sample/people/new",
     "/sample/people/shop/edit",
     "/sample/reconcile?person=shop",
+    "/sample/dues/nonsense",
     "//outside.test/sample/people/shop",
   ])("keeps a demo return inside the demo account for %s", (path) => {
     expect(entryReturn(path, "/sample")).toBe("/sample/");
@@ -59,6 +62,7 @@ describe("safe entry return routes", () => {
       "/review",
       "/settings",
       "/timeline",
+      "/dues",
     ]) {
       const params = new URLSearchParams({
         work: "door",
@@ -103,6 +107,21 @@ describe("safe entry return routes", () => {
       ),
     ).toBe("/sample/people/shop?work=door&account=materials");
   });
+  it.each(["", "/sample"])(
+    "preserves the dues page and pagination while removing bill details under %s",
+    (base) => {
+      expect(entryReturn(`${base}/dues?page=2&_entry=bill`, base)).toBe(
+        `${base}/dues?page=2`,
+      );
+      expect(entryReturn(`${base}/dues/?page=2&_entry=bill`, base)).toBe(
+        `${base}/dues/?page=2`,
+      );
+      const url = parsed(
+        entryUrl(base, { editId: "bill" }, `${base}/dues?page=2&_entry=bill`),
+      );
+      expect(url.searchParams.get("back")).toBe(`${base}/dues?page=2`);
+    },
+  );
 });
 
 describe("entry and contract URLs", () => {
@@ -239,6 +258,8 @@ it("treats entry, job and person creation or editing as a form page", () => {
     "/sample/jobs/one",
     "/people/worker",
     "/works/door",
+    "/dues",
+    "/sample/dues",
   ])
     expect(isEntryPage(path)).toBe(false);
 });

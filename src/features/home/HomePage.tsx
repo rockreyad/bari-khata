@@ -24,6 +24,7 @@ export function HomePage() {
   const { t, money, number, formatDigits } = useLanguageContext();
   const s = summarize(ledger);
   const paid = cashSummary(ledger);
+  const totalPaid = money(s.reconciledNetPaid);
   const pending = pendingReviewEntries(ledger).length;
   const ongoingWorks = orderedWorks(ledger).filter(
     (work) => work.status === "ongoing",
@@ -79,7 +80,15 @@ export function HomePage() {
               <dl className="home-overview-paid">
                 <div className="home-overview-paid-total">
                   <dt>{t("মোট টাকা দিয়েছি")}</dt>
-                  <dd>{money(s.reconciledNetPaid)}</dd>
+                  <dd
+                    className={
+                      totalPaid.length > 16
+                        ? "home-overview-long-amount"
+                        : undefined
+                    }
+                  >
+                    {totalPaid}
+                  </dd>
                 </div>
                 {s.paidCorrection !== 0 ? (
                   <div className="home-overview-correction">
@@ -96,11 +105,21 @@ export function HomePage() {
                 <ArrowUpRightIcon size={16} aria-hidden="true" />
               </button>
             </div>
+            {paid.refunds > 0 ? (
+              <p className="home-overview-refund-note">
+                {t("ফেরত পাওয়া টাকা বাদ দিয়ে")}
+              </p>
+            ) : null}
             {s.reconciledPayable > 0 ? (
-              <dl className="home-overview-due">
-                <dt>{t("দিতে বাকি")}</dt>
-                <dd>{money(s.reconciledPayable)}</dd>
-              </dl>
+              <button
+                type="button"
+                className="home-overview-due"
+                onClick={() => go("/dues")}
+              >
+                <span>{t("দিতে বাকি")}</span>
+                <strong>{money(s.reconciledPayable)}</strong>
+                <CaretRightIcon size={16} aria-hidden="true" />
+              </button>
             ) : null}
           </div>
           <div className="home-overview-actions">
@@ -173,14 +192,9 @@ export function HomePage() {
         </div>
         <EntryList
           showKind
+          limit={5}
           ledger={ledger}
-          entries={[...ledger.entries]
-            .sort(
-              (a, b) =>
-                (b.date ?? "").localeCompare(a.date ?? "") ||
-                b.createdAt.localeCompare(a.createdAt),
-            )
-            .slice(0, 12)}
+          entries={ledger.entries}
           onEntry={detail}
         />
       </section>
