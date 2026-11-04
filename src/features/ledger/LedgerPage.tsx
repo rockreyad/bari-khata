@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
   ArrowDownIcon,
@@ -35,6 +35,14 @@ export function LedgerPage() {
     costType = params.get("type") ?? "",
     from = validHistoryDate(params.get("from") ?? ""),
     to = validHistoryDate(params.get("to") ?? "");
+  const [searchText, setSearchText] = useState(q);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const composing = useRef(false);
+  const committedSearch = useRef(q);
+  useEffect(() => {
+    committedSearch.current = q;
+    if (!composing.current) setSearchText(q);
+  }, [q]);
   const order: HistoryOrder =
     params.get("order") === "oldest" ? "oldest" : "newest";
   const includeVoided = params.get("voided") === "yes";
@@ -80,8 +88,14 @@ export function LedgerPage() {
         else next.delete(key);
         return next;
       },
-      { replace: true },
+      { replace: true, preventScrollReset: key === "q" },
     );
+  };
+  const search = (value: string) => {
+    setSearchText(value);
+    if (value === committedSearch.current) return;
+    committedSearch.current = value;
+    update("q", value);
   };
   const contact = ledger.people.find((p) => p.id === person),
     selectedWork = ledger.works.find((w) => w.id === work);
@@ -159,17 +173,49 @@ export function LedgerPage() {
         <label className="history-search">
           <MagnifyingGlassIcon size={21} />
           <input
+            ref={searchInput}
+            type="search"
+            inputMode="search"
+            enterKeyHint="search"
+            autoComplete="off"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             aria-label={t("হিসাব খুঁজুন")}
             placeholder={t("কী খুঁজছেন?")}
-            value={q}
-            onChange={(e) => update("q", e.target.value)}
+            value={searchText}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              setSearchText(value);
+              if (
+                !composing.current &&
+                !(event.nativeEvent as InputEvent).isComposing
+              )
+                search(value);
+            }}
+            onCompositionStart={() => {
+              composing.current = true;
+            }}
+            onCompositionEnd={(event) => {
+              composing.current = false;
+              search(event.currentTarget.value);
+            }}
+            onBlur={(event) => {
+              if (!composing.current) return;
+              composing.current = false;
+              search(event.currentTarget.value);
+            }}
           />
-          {q ? (
+          {searchText ? (
             <button
               className="history-clear"
               type="button"
               aria-label={t("খোঁজ মুছুন")}
-              onClick={() => update("q", "")}
+              onClick={() => {
+                composing.current = false;
+                search("");
+                searchInput.current?.focus();
+              }}
             >
               <XIcon size={17} />
             </button>
