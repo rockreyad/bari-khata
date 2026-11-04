@@ -1,16 +1,26 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { LanguageProvider } from "../../context/LanguageProvider";
 import { LedgerSchema, type Ledger } from "../../domain/model";
 import { savePreferences } from "../../lib/preferences";
 import { HomePage } from "./HomePage";
-const state = vi.hoisted(() => ({ ledger: null as unknown, go: vi.fn() }));
+const state = vi.hoisted(() => ({
+  ledger: null as unknown,
+  add: vi.fn(),
+  go: vi.fn(),
+}));
 vi.mock("../../app/NotebookProvider", () => ({
   useNotebook: () => ({
     ledger: state.ledger as Ledger,
-    add: vi.fn(),
+    add: state.add,
     go: state.go,
     detail: vi.fn(),
   }),
@@ -19,6 +29,7 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   state.go.mockClear();
+  state.add.mockClear();
 });
 function fixture(secondKind: "payment" | "expense" | "unpaid") {
   return LedgerSchema.parse({
@@ -107,6 +118,7 @@ const labels = {
     payment: "টাকা দিয়েছি",
     due: "দিতে বাকি",
     materials: "মালের টাকা",
+    breakdown: "কোথায় কত দিয়েছি",
   },
   en: {
     total: "Total paid",
@@ -117,6 +129,7 @@ const labels = {
     payment: "Paid someone",
     due: "Amount owed",
     materials: "Material payment",
+    breakdown: "Where the money went",
   },
 };
 it("shows only ongoing notebooks on home", () => {
@@ -159,18 +172,23 @@ it("shows a corrected paid headline and a separate correction without changing c
   });
   const before = JSON.stringify(ledger);
   const { container } = mount(ledger, "en");
+  const details = container.querySelector("details.home-overview-details");
+  expect(details?.hasAttribute("open")).toBe(false);
   expect(
-    container.querySelector(".home-total-heading strong")?.textContent,
+    container.querySelector(".home-overview-paid-total > dd")?.textContent,
   ).toBe("৳\u202f200");
-  expect(container.querySelector(".home-total-heading")?.textContent).toContain(
-    "Adjustment",
-  );
-  expect(container.querySelector(".home-total-heading")?.textContent).toContain(
-    "৳\u202f37",
-  );
+  const correction = container.querySelector(".home-overview-correction");
+  expect(correction?.closest("details")).toBeNull();
+  expect(correction?.textContent).toContain("Adjustment");
+  expect(correction?.textContent).toContain("৳\u202f37");
+  fireEvent.click(screen.getByText("Where the money went", { exact: true }));
+  expect(details?.hasAttribute("open")).toBe(true);
   expect(
-    container.querySelector(".home-total-breakdown")?.textContent,
+    container.querySelector(".home-overview-breakdown")?.textContent,
   ).toContain("৳\u202f163");
+  expect(
+    screen.getByText("These amounts include payments and money returned."),
+  ).toBeTruthy();
   expect(JSON.stringify(ledger)).toBe(before);
 });
 describe.each(["bn", "en"] as const)(
@@ -183,12 +201,17 @@ describe.each(["bn", "en"] as const)(
       const { container } = mount(ledger, language);
       const headline = screen
         .getByRole("region", { name: copy.total })
-        .querySelector(".home-total-heading strong");
+        .querySelector(".home-overview-paid-total > dd");
       expect(headline?.textContent).toBe(copy.sum);
-      expect(container.querySelector(".home-known-due")).toBeNull();
+      expect(container.querySelector(".home-overview-due")).toBeNull();
+      const details = container.querySelector("details.home-overview-details");
+      expect(details?.hasAttribute("open")).toBe(false);
+      fireEvent.click(screen.getByText(copy.breakdown, { exact: true }));
+      expect(details?.hasAttribute("open")).toBe(true);
       expect(
-        screen.getByRole("button", { name: `${copy.materials}${copy.sum}` }),
-      ).toBeTruthy();
+        screen.getByRole("button", { name: new RegExp(copy.materials) })
+          .textContent,
+      ).toContain(copy.sum);
       const expense = container.querySelector(".history-expense");
       const payment = container.querySelector(".history-payment");
       expect(expense?.textContent).toContain("che");
@@ -209,7 +232,7 @@ describe.each(["bn", "en"] as const)(
       expect(
         screen
           .getByRole("region", { name: copy.total })
-          .querySelector(".home-total-heading strong")?.textContent,
+          .querySelector(".home-overview-paid-total > dd")?.textContent,
       ).toBe(copy.sum);
       expect(container.querySelectorAll(".history-expense")).toHaveLength(2);
       expect(container.querySelector(".history-payment")).toBeNull();
@@ -232,22 +255,84 @@ describe.each(["bn", "en"] as const)(
       expect(
         screen
           .getByRole("region", { name: copy.total })
-          .querySelector(".home-total-heading strong")?.textContent,
+          .querySelector(".home-overview-paid-total > dd")?.textContent,
       ).toBe(copy.one);
-      const due = container.querySelector(".home-known-due");
+      const due = container.querySelector(".home-overview-due");
       expect(due?.textContent).toContain(copy.due);
-      expect(due?.querySelector("strong")?.textContent).toBe(copy.old);
+      expect(due?.querySelector("dd")?.textContent).toBe(copy.old);
       expect(container.querySelectorAll(".history-row")).toHaveLength(2);
     });
   },
 );
 
-it("opens all contractor work directly from the home page without any existing job", () => {
-  mount(fixture("payment"), "bn");
-  fireEvent.click(
-    screen.getByRole("button", {
-      name: "মিস্ত্রির কাজ",
-    }),
+it("shows a zero paid total without inventing dues or another payment category", () => {
+  const { container } = mount(LedgerSchema.parse({}), "bn");
+  expect(
+    container.querySelector(".home-overview-paid-total > dd")?.textContent,
+  ).toBe("৳\u202f০");
+  expect(container.querySelector(".home-overview-due")).toBeNull();
+  fireEvent.click(screen.getByText("কোথায় কত দিয়েছি", { exact: true }));
+  const breakdown = within(
+    container.querySelector(".home-overview-breakdown") as HTMLElement,
   );
-  expect(state.go).toHaveBeenLastCalledWith("/jobs");
+  expect(breakdown.getAllByRole("button")).toHaveLength(2);
+  expect(
+    breakdown.getAllByRole("button").map((button) => button.textContent),
+  ).toEqual(["মালের টাকা৳\u202f০", "মজুরি৳\u202f০"]);
+});
+
+it("keeps category cash net of refunds and opens the matching reports and search", () => {
+  const base = fixture("payment");
+  const ledger = LedgerSchema.parse({
+    ...base,
+    entries: [
+      ...base.entries,
+      ...[
+        { id: "labour-paid", kind: "payment", account: "labour", amount: 5000 },
+        { id: "other-paid", kind: "payment", account: "other", amount: 1000 },
+        { id: "other-refund", kind: "refund", account: "other", amount: 300 },
+      ].map(({ amount, ...entry }) => ({
+        ...entry,
+        personId: "golam",
+        date: "2026-11-02",
+        allocations: [{ workId: "general", amount }],
+        paymentParts: [{ method: "cash", amount }],
+      })),
+    ],
+  });
+  const before = JSON.stringify(ledger);
+  const { container } = mount(ledger, "bn");
+  expect(
+    container.querySelector(".home-overview-paid-total > dd")?.textContent,
+  ).toBe("৳\u202f২২০");
+  fireEvent.click(screen.getByText("কোথায় কত দিয়েছি", { exact: true }));
+  const breakdown = within(
+    container.querySelector(".home-overview-breakdown") as HTMLElement,
+  );
+  expect(breakdown.getAllByRole("button")).toHaveLength(3);
+  for (const [label, amount, account] of [
+    ["মালের টাকা", "৳\u202f১৬৩", "materials"],
+    ["মজুরি", "৳\u202f৫০", "labour"],
+    ["অন্যান্য", "৳\u202f৭", "other"],
+  ]) {
+    const button = breakdown.getByRole("button", { name: new RegExp(label) });
+    expect(button.textContent).toContain(amount);
+    fireEvent.click(button);
+    expect(state.go).toHaveBeenLastCalledWith(`/reports?account=${account}`);
+  }
+  fireEvent.click(screen.getByRole("button", { name: "রিপোর্ট" }));
+  expect(state.go).toHaveBeenLastCalledWith("/reports");
+  fireEvent.click(screen.getByRole("button", { name: "আগের হিসাব খুঁজুন" }));
+  expect(state.go).toHaveBeenLastCalledWith("/ledger?focus=search");
+  expect(JSON.stringify(ledger)).toBe(before);
+});
+
+it("keeps recording an expense separate from recording money paid", () => {
+  mount(fixture("payment"), "bn");
+  fireEvent.click(screen.getByRole("button", { name: "খরচ লিখি" }));
+  fireEvent.click(screen.getByRole("button", { name: "টাকা দিলাম" }));
+  expect(state.add).toHaveBeenCalledTimes(2);
+  expect(state.add).toHaveBeenNthCalledWith(1);
+  expect(state.add).toHaveBeenNthCalledWith(2, { kind: "payment" });
+  expect(state.go).not.toHaveBeenCalled();
 });
