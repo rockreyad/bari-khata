@@ -36,20 +36,13 @@ import type { Ledger } from "../../domain/model";
 import { isCloudConfigured, resolveCloudConflict } from "../../data/sync";
 import { saveFile, todayDhaka } from "../../lib/display";
 import { APP_VERSION } from "../../lib/appVersion";
-import {
-  applyPalette,
-  applyTheme,
-  readPreferences,
-  savePreferences,
-  type Preferences,
-} from "../../lib/preferences";
+import { readPreferences } from "../../lib/preferences";
 import { themePalettes } from "../../lib/themes";
 import { useAuth } from "../auth/AuthProvider";
-import { SettingsAppearance } from "./SettingsAppearance";
 import { BackupImportReview } from "./BackupImportReview";
 import "./settings.css";
 
-type Panel = "appearance" | "language" | "name" | "backup" | "sync" | "install";
+type Panel = "language" | "name" | "backup" | "sync" | "install";
 
 function SettingsRow({
   title,
@@ -105,7 +98,7 @@ export function SettingsPage() {
   const auth = useAuth();
   const navigate = useNavigate();
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode]);
-  const [preferences, setPreferences] = useState(readPreferences);
+  const preferences = readPreferences();
   const selectedPalette =
     themePalettes.find((palette) => palette.value === preferences.palette) ??
     themePalettes[0];
@@ -204,13 +197,6 @@ export function SettingsPage() {
       setBusy(false);
     }
   };
-  const appearance = (change: Partial<Preferences>) => {
-    const next = { ...preferences, ...change };
-    setPreferences(next);
-    savePreferences(change);
-    applyTheme(next.theme);
-    applyPalette(next.palette);
-  };
   const loadBackup = (file?: File) => {
     if (!file) return;
     void action(async () => {
@@ -242,17 +228,15 @@ export function SettingsPage() {
   const panelTitle = restore
     ? t("কপি থেকে হিসাব মেলান")
     : t(
-        panel === "appearance"
-          ? "নিজের মতো সাজান"
-          : panel === "language"
-            ? "ভাষা"
-            : panel === "name"
-              ? "খাতার নাম"
-              : panel === "backup"
-                ? "হিসাবের কপি"
-                : panel === "sync"
-                  ? "সংরক্ষণের অবস্থা"
-                  : "ফোনে অ্যাপ রাখুন",
+        panel === "language"
+          ? "ভাষা"
+          : panel === "name"
+            ? "খাতার নাম"
+            : panel === "backup"
+              ? "হিসাবের কপি"
+              : panel === "sync"
+                ? "সংরক্ষণের অবস্থা"
+                : "ফোনে অ্যাপ রাখুন",
       );
   const pending = Boolean(
     state.pending || state.conflict || auth.status === "offline",
@@ -325,7 +309,7 @@ export function SettingsPage() {
             className="settings-appearance-card"
             type="button"
             aria-label={t("রং ও সাজ")}
-            onClick={() => openPanel("appearance")}
+            onClick={() => go("/settings/appearance")}
           >
             <span className="settings-appearance-card-top">
               <span className="settings-row-icon is-violet">
@@ -503,11 +487,6 @@ export function SettingsPage() {
                     if (result.changed) void state.sync().catch(() => {});
                   })
                 }
-              />
-            ) : panel === "appearance" ? (
-              <SettingsAppearance
-                preferences={preferences}
-                onChange={appearance}
               />
             ) : panel === "language" ? (
               <>

@@ -3,7 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { themePalettes } from "./themes";
 
 const storageKey = "bari-khata-preferences";
-const paletteIds = ["ocean", "forest", "violet", "sunset"] as const;
+const paletteIds = [
+  "ocean",
+  "forest",
+  "violet",
+  "sunset",
+  "winter",
+  "rose",
+] as const;
 let deviceDark = false;
 let deviceListeners: Set<() => void>;
 
@@ -61,11 +68,13 @@ const changeDeviceTheme = (dark: boolean) => {
 describe("theme palette compatibility", () => {
   it("keeps every persisted palette ID available with a distinct Bengali name", () => {
     expect(themePalettes.map((palette) => palette.value)).toEqual(paletteIds);
-    expect(new Set(themePalettes.map((palette) => palette.label)).size).toBe(4);
+    expect(new Set(themePalettes.map((palette) => palette.label)).size).toBe(6);
     for (const palette of themePalettes) {
       expect(palette.label).toMatch(/[\u0980-\u09ff]/);
       expect(palette.colors).toHaveLength(4);
-      expect(new URL(palette.source).hostname).toBe("colorhunt.co");
+      expect(["colorhunt.co", "coolors.co"]).toContain(
+        new URL(palette.source).hostname,
+      );
       for (const color of palette.colors)
         expect(color).toMatch(/^#[\da-f]{6}$/i);
     }
