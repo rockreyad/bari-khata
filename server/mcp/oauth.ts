@@ -245,19 +245,25 @@ export async function oauthHandler(
       .max(2048)
       .parse(url.searchParams.get("state") ?? "");
     const requestId = randomUUID();
-    await store.call("begin_authorization", {
-      requestId,
-      clientId,
-      redirectUri,
-      scopes,
-      codeChallenge,
-      resource,
-      state,
-    });
+    const authorization = await store
+      .call<{ requestId: string }>("begin_authorization", {
+        requestId,
+        clientId,
+        redirectUri,
+        scopes,
+        codeChallenge,
+        resource,
+        state,
+      })
+      .catch((error: unknown) => {
+        if (error instanceof McpError && error.code === "mcp_invalid_scope")
+          throw new McpError("invalid_scope");
+        throw error;
+      });
     return new Response(null, {
       status: 302,
       headers: {
-        Location: `${config.origin}/mcp/consent?request=${requestId}`,
+        Location: `${config.origin}/mcp/consent?request=${authorization.requestId}`,
         "Cache-Control": "no-store",
         "Referrer-Policy": "no-referrer",
       },

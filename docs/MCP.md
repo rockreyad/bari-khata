@@ -30,8 +30,15 @@ Codex CLI ব্যবহার করলে একই পাতায় কপি
 
 ```sh
 codex mcp add bari-khata --url https://your-app.example/api/mcp
+```
+
+এই কমান্ড নিজেই OAuth লগইন শুরু করে। একই সঙ্গে আলাদা `login` কমান্ড চালানোর প্রয়োজন নেই। আগের সংযোগে আবার লগইন দরকার হলে শুধু তখন চালান:
+
+```sh
 codex mcp login bari-khata
 ```
+
+সংযোগের ঠিকানা ও কনফিগ দেখতে `codex mcp get bari-khata` চালান। তারপর agent-কে `get_capabilities` চালাতে বলুন; এতে অনুমতি যাচাই হয়, হিসাব বদলায় না। শেষে `Authentication complete` দেখানো পাতাটি Codex CLI-এর। সেটি বন্ধ করে বাড়ির খাতায় ফিরতে পারেন।
 
 Codex-এর remote server যোগ করা ও OAuth লগইনের নির্দেশনা [OpenAI-এর নথিতে](https://learn.chatgpt.com/docs/extend/mcp) আছে। অন্য client-এর সেটিংসের নাম ও লগইনের ধাপ আলাদা হতে পারে।
 
@@ -85,6 +92,14 @@ Codex-এর remote server যোগ করা ও OAuth লগইনের ন�
 
 আগে দেখানোর ব্যবস্থা থাকলে বা একবারের টাকার সীমা ছাড়ালে প্রস্তাব **আপনার অনুমোদনের অপেক্ষায়** দেখা যায়। সেখানে কাজ, সহকারীর নাম, প্রযোজ্য অঙ্ক এবং আগে ও পরে হিসাব দেখে মেনে নিন। এরপর সহকারী `commit_change` চালিয়ে সংরক্ষণ শেষ করবে। শুধু মেনে নেওয়া আর খাতায় রাখা একই ধাপ নয়। মাঝখানে খাতা বদলে গেলে নতুন করে দেখে প্রস্তাব করতে হবে।
 
+## সংযোগের পরিচয় ও সময়
+
+সেটিংসে প্রতিটি সংযোগের আলাদা পরিচয়, অনুমতি দেওয়ার সময়, সর্বশেষ ব্যবহার ও প্রযোজ্য মেয়াদ বাংলাদেশের সময়ে দেখা যায়। একই নামের দুটি সংযোগ হলে পরিচয় ও অনুমতির সময় মিলিয়ে দেখুন। আলাদা client বা আলাদা লগইন থেকেও নতুন সংযোগ হতে পারে। বন্ধ করা সংযোগের তারিখ নিচের তালিকায় থাকে।
+
+একই client, redirect URI, resource, state ও PKCE challenge-সহ OAuth অনুরোধ আবার এলে একই অনুমতির অনুরোধ ব্যবহার হয়। সিদ্ধান্ত রাখার পরে বোতাম আর সেটি জমা দেয় না। অনুমোদন ও কোড বিনিময় একবারই হয়; আলাদা client-এর অনুমতি এক করে দেওয়া হয় না।
+
+`lastUsedAt` সফলভাবে পরিচয় যাচাই হওয়া MCP অনুরোধের সময়; `initialize` বা `tools/list`-ও এর মধ্যে পড়ে। সেটিংস দেখা বা ব্যর্থ লগইনে সময় বদলায় না। পুরোনো ব্যবহারের সময় সংরক্ষিত ছিল না, তাই খালি সময়কে ব্যবহার হয়নি বলে ধরে নেওয়া হয় না। **তথ্য হালনাগাদ করুন** চাপলে নতুন সময় দেখা যায়।
+
 ## সহকারীর tool ব্যবহার
 
 `get_capabilities` দিয়ে চলতি অধিকার, policy, টাকা ও ফাইলের একক এবং সীমা জানা যায়। ১২টি ledger query tool: `get_ledger_context`, `search_entities`, `get_entity`, `get_summary`, `list_entries`, `get_entry`, `get_person_statement`, `get_work_statement`, `get_contract_summary`, `list_history`, `get_change_history`, `export_statement`।
@@ -131,6 +146,8 @@ npm run dev
 
 এরপর `supabase/migrations/202611020010_active_receipt_account.sql` প্রয়োগ করুন। Account মুছে দেওয়ার পরে পুরোনো login token দিয়ে ভাউচারের storage-এ আবার file রাখা বা পড়া এই নিয়ম আটকায়। সক্রিয় account-এর নিজের file ব্যবহারের নিয়ম বহাল থাকে।
 
+`supabase/migrations/202611040004_mcp_authorization_lifecycle.sql` একই OAuth অনুরোধের পুনরাবৃত্তি আটকায় এবং `last_used_at` যোগ করে। এতে আগের ব্যবহারের সময় অনুমান করে বসানো বা সংযোগ বন্ধ করা হয় না।
+
 এই পরিবর্তন থেকে production migration বা deployment নিজে থেকে করা হয় না। প্রকাশের আগে server-এর পরিবেশ, database migration, metadata route, login callback এবং লক্ষ্য client-এর সঙ্গে সংযোগ যাচাই করুন। Remote HTTP/OAuth সমর্থন থাকা client লক্ষ্য; কোনো নির্দিষ্ট তৃতীয় পক্ষের client পরীক্ষা ছাড়া তার image/voice বা attachment সমর্থন নিশ্চিত ধরে নেবেন না।
 
 ## পরীক্ষা এবং সমস্যা দেখা
@@ -141,10 +158,11 @@ npm run build
 node --import tsx scripts/backend-mcp-check.ts
 node --import tsx scripts/backend-mcp-intents-check.ts
 node --import tsx scripts/backend-mcp-cleanup-check.ts
+node --import tsx scripts/backend-mcp-authorization-check.ts
 node --import tsx scripts/backend-mcp-http-check.ts
 ```
 
-প্রথম তিনটি backend পরীক্ষা স্থানীয় Docker Supabase-এ synthetic account ও তথ্য দিয়ে চলে এবং transaction rollback করে। এগুলো permission, মালিক আলাদা থাকা, সীমা, retry, conflict, approval, OAuth, provenance, intent duplicate, audit pagination ও নিরাপদ upload cleanup যাচাই করে। HTTP পরীক্ষা চলমান `http://localhost:5180` অ্যাপ ও স্থানীয় backend ব্যবহার করে বাস্তব login/OAuth, হিসাব, private storage, পুরোনো ভাউচার এবং একই উৎসের সমান্তরাল লেখা পরীক্ষা করে; শেষে তৈরি account ও ফাইল সরায়। কোনো পরীক্ষা production-এ চলে না।
+প্রথম চারটি backend পরীক্ষা স্থানীয় Docker Supabase-এ synthetic account ও তথ্য দিয়ে চলে এবং transaction rollback করে। এগুলো permission, মালিক আলাদা থাকা, সীমা, retry, conflict, approval, OAuth, provenance, intent duplicate, audit pagination ও নিরাপদ upload cleanup যাচাই করে। HTTP পরীক্ষা চলমান `http://localhost:5180` অ্যাপ ও স্থানীয় backend ব্যবহার করে বাস্তব login/OAuth, হিসাব, private storage, পুরোনো ভাউচার এবং একই উৎসের সমান্তরাল লেখা পরীক্ষা করে; শেষে তৈরি account ও ফাইল সরায়। কোনো পরীক্ষা production-এ চলে না।
 
 ## অব্যবহৃত স্থানীয় upload পরিষ্কার করা
 

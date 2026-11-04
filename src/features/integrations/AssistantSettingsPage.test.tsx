@@ -107,14 +107,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("assistant settings", () => {
-  it("prioritizes Codex while keeping setup and key details closed until requested", async () => {
+  it("opens Codex setup first and keeps alternate setup closed", async () => {
     mount();
     const codex = await screen.findByText("Codex-এ যোগ করুন", {
       exact: true,
     });
     const claude = screen.getByText("Claude-এ যোগ করুন", { exact: true });
     const other = screen.getByText("অন্যভাবে সংযোগ দিন", { exact: true });
-    for (const summary of [codex, claude, other])
+    expect(codex.closest("details")!.open).toBe(true);
+    for (const summary of [claude, other])
       expect(summary.closest("details")!.open).toBe(false);
     expect(
       codex.compareDocumentPosition(claude) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -206,12 +207,88 @@ describe("assistant settings", () => {
     await screen.findByRole("textbox", { name: "সংযোগের ঠিকানা" });
     await user.click(screen.getByRole("button", { name: "ঠিকানা কপি করুন" }));
     expect(copy).toHaveBeenCalledWith(endpoint);
-    await user.click(screen.getByText("Codex-এ যোগ করুন"));
     await user.click(screen.getByRole("button", { name: "কমান্ড কপি করুন" }));
     expect(copy).toHaveBeenLastCalledWith(
-      `codex mcp add bari-khata --url '${endpoint}'\ncodex mcp login bari-khata`,
+      `codex mcp add bari-khata --url '${endpoint}'`,
     );
     expect(api.create).not.toHaveBeenCalled();
+  });
+
+  it("shows grant and activity timestamps without opening permission details", async () => {
+    api.connections.mockResolvedValue({
+      connections: [{ ...connection, lastUsedAt: "2026-11-04T12:30:00Z" }],
+      endpoint,
+      available: true,
+    });
+    mount();
+    const item = (await screen.findByText(connection.name)).closest("li")!;
+    expect(within(item).getByText("অনুমতি দেওয়ার সময়")).toBeTruthy();
+    expect(within(item).getByText("সর্বশেষ ব্যবহার")).toBeTruthy();
+    for (const value of [connection.createdAt, "2026-11-04T12:30:00Z"]) {
+      const time = within(item).getByText(value);
+      expect(time.tagName).toBe("TIME");
+      expect(time.getAttribute("datetime")).toBe(value);
+      expect(time.closest("details")).toBeNull();
+    }
+  });
+
+  it("does not invent a last-use timestamp and refreshes activity metadata", async () => {
+    api.connections.mockResolvedValueOnce({
+      connections: [connection],
+      endpoint,
+      available: true,
+    });
+    const user = userEvent.setup();
+    mount();
+    expect(
+      await screen.findByText("ব্যবহারের সময় এখনও রেকর্ড হয়নি"),
+    ).toBeTruthy();
+    api.connections.mockResolvedValueOnce({
+      connections: [{ ...connection, lastUsedAt: "2026-11-04T12:40:00Z" }],
+      endpoint,
+      available: true,
+    });
+    await user.click(
+      screen.getByRole("button", { name: "তথ্য হালনাগাদ করুন" }),
+    );
+    expect(await screen.findByText("2026-11-04T12:40:00Z")).toBeTruthy();
+    expect(screen.queryByText("ব্যবহারের সময় এখনও রেকর্ড হয়নি")).toBeNull();
+    expect(api.create).not.toHaveBeenCalled();
+  });
+
+  it("keeps revoked connection dates available without offering another revocation", async () => {
+    api.connections.mockResolvedValue({
+      connections: [{ ...connection, revokedAt: "2026-11-04T12:00:00Z" }],
+      endpoint,
+      available: true,
+    });
+    const user = userEvent.setup();
+    mount();
+    await user.click(await screen.findByText("বন্ধ করা সংযোগ (1)"));
+    expect(screen.getByText("অনুমতি বন্ধের সময়")).toBeTruthy();
+    expect(screen.getByText("2026-11-04T12:00:00Z")).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "অনুমতি বন্ধ করুন" }),
+    ).toBeNull();
+  });
+
+  it("translates developer setup and usage metadata in English", async () => {
+    api.language = "en";
+    api.connections.mockResolvedValue({
+      connections: [connection],
+      endpoint,
+      available: true,
+    });
+    mount();
+    expect(
+      await screen.findByRole("heading", { name: "MCP connection" }),
+    ).toBeTruthy();
+    expect(screen.getByText("Access granted")).toBeTruthy();
+    expect(screen.getByText("Last used")).toBeTruthy();
+    expect(screen.getByText("No usage time recorded yet")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Refresh details" }),
+    ).toBeTruthy();
   });
 
   it("creates a named scoped connection with integer-poisha limits, shows its key once and copies JSON", async () => {
