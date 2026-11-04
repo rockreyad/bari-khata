@@ -28,7 +28,7 @@
 
 ## Production migration
 
-নতুন client প্রকাশের আগে নিচের ছয়টি migration ক্রমানুসারে লাগবে। এখনো প্রয়োগের চূড়ান্ত ফল এই নথিতে যোগ করা হয়নি। কোনো user, খাতা, লেনদেন, ইতিহাস বা ভাউচার reset করা হবে না।
+নিচের ছয়টি migration `wvintixauwafgvcvfafi` production প্রকল্পে ক্রমানুসারে একই transaction-এ প্রয়োগ হয়েছে। কোনো user, খাতা, লেনদেন, ইতিহাস বা ভাউচার reset করা হয়নি।
 
 1. `202611030001_person_work_links.sql`
 2. `202611030002_contract_agreed_totals.sql`
@@ -37,4 +37,6 @@
 5. `202611040002_shared_bill_activity.sql`
 6. `202611040003_shared_statement_bounded_reads.sql`
 
-প্রয়োগের আগে/পরে মূল নথির fingerprint, হিসাবের validation, RLS, private bucket ও RPC-এর অনুমতি মিলিয়ে দেখতে হবে। প্রকৃত iPhone-এর Safari/Home Screen পরীক্ষা এবং production traffic-এর capacity test সম্পন্ন হওয়ার দাবি করা হচ্ছে না।
+প্রয়োগের আগে/পরে মূল নথির fingerprint হুবহু মিলে গেছে। ১টি user, ১টি খাতা, ৩৬৬টি ledger operation ও ১টি file অপরিবর্তিত। সব বর্তমান খাতার validation পাস; ledger RLS ও দুইটি private bucket অক্ষত। Receipt authorization শুধু server-এর জন্য; payment helper public নয়। ভুল token দিয়ে নতুন/পুরোনো read RPC কোনো তথ্য দেয় না। Production-এ পরীক্ষার account বা আর্থিক ঘটনা তৈরি করা হয়নি।
+
+স্থানীয় browser-এ duplicate Vite server-এর dependency cache conflict ঠিক করে নমুনা app আবার খুলে যাচাই হয়েছে। এটি source বা production data-র পরিবর্তন নয়। প্রকৃত iPhone-এর Safari/Home Screen পরীক্ষা এবং production traffic-এর capacity test সম্পন্ন হওয়ার দাবি করা হচ্ছে না।
