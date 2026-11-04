@@ -959,19 +959,19 @@ it("chooses share and reconciliation scopes without narrowing the profile behind
 
 it.each([
   {
-    kind: "worker" as const,
+    kind: "shop" as const,
     action: "return" as const,
     label: "মাল ফেরত দিই",
     expected: { kind: "return", account: "materials" },
   },
   {
-    kind: "shop" as const,
+    kind: "driver" as const,
     action: "transport" as const,
     label: "আনার খরচ লিখি",
     expected: { kind: "expense", account: "other", costType: "transport" },
   },
 ])(
-  "honours an explicitly chosen $action shortcut for a $kind profile",
+  "honours an eligible explicitly chosen $action shortcut for a $kind profile",
   async ({ kind, action, label, expected }) => {
     state.ledger = LedgerSchema.parse({
       works: [{ id: "sample", name: "নমুনা খাতা" }],
@@ -995,3 +995,81 @@ it.each([
     });
   },
 );
+
+it.each([
+  {
+    kind: "worker" as const,
+    action: "return" as const,
+    label: "মাল ফেরত দিই",
+    account: "labour",
+  },
+  {
+    kind: "shop" as const,
+    action: "transport" as const,
+    label: "আনার খরচ লিখি",
+    account: "materials",
+  },
+  {
+    kind: "driver" as const,
+    action: "purchase" as const,
+    label: "মাল কিনলাম",
+    account: "other",
+  },
+  {
+    kind: "other" as const,
+    action: "purchase" as const,
+    label: "মাল কিনলাম",
+    account: "other",
+  },
+])(
+  "blocks a legacy incompatible $action shortcut for a $kind while keeping its selected payment action",
+  async ({ kind, action, label, account }) => {
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "sample", name: "নমুনা খাতা" }],
+      people: [
+        {
+          id: "sample-person",
+          name: "নমুনা ব্যক্তি",
+          kind,
+          quickActions: [action, "payment"],
+        },
+      ],
+    });
+    state.ledger = ledger;
+    const before = structuredClone(ledger);
+    renderPage("/people/sample-person");
+    const group = screen.getByRole("group", { name: "হিসাব লেখার বোতাম" });
+    expect(within(group).getAllByRole("button")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: label })).toBeNull();
+    expect(state.add).not.toHaveBeenCalled();
+    await userEvent.click(
+      within(group).getByRole("button", { name: "টাকা দিই" }),
+    );
+    expect(state.add).toHaveBeenCalledExactlyOnceWith({
+      kind: "payment",
+      personId: "sample-person",
+      workId: undefined,
+      account,
+    });
+    expect(ledger).toEqual(before);
+  },
+);
+
+it("does not fall back to another shortcut when every saved preference is incompatible", () => {
+  const ledger = LedgerSchema.parse({
+    people: [
+      {
+        id: "sample-person",
+        name: "নমুনা ব্যক্তি",
+        kind: "worker",
+        quickActions: ["purchase", "return", "transport"],
+      },
+    ],
+  });
+  state.ledger = ledger;
+  const before = structuredClone(ledger);
+  renderPage("/people/sample-person");
+  expect(screen.queryByRole("group", { name: "হিসাব লেখার বোতাম" })).toBeNull();
+  expect(state.add).not.toHaveBeenCalled();
+  expect(ledger).toEqual(before);
+});

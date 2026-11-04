@@ -176,10 +176,7 @@ describe("contact import in a person's form", () => {
           "supplier",
         );
         if (existingName)
-          await user.type(
-            screen.getByLabelText("দোকান বা সরবরাহকারীর নাম"),
-            existingName,
-          );
+          await user.type(screen.getByLabelText("দোকানের নাম"), existingName);
         await user.click(
           screen.getByRole("button", { name: "কন্টাক্ট থেকে নিন" }),
         );
@@ -187,11 +184,7 @@ describe("contact import in a person's form", () => {
           (screen.getByLabelText("ফোন নম্বর") as HTMLInputElement).value,
         ).toBe("01700000091");
         expect(
-          (
-            screen.getByLabelText(
-              "দোকান বা সরবরাহকারীর নাম",
-            ) as HTMLInputElement
-          ).value,
+          (screen.getByLabelText("দোকানের নাম") as HTMLInputElement).value,
         ).toBe(existingName || "শাহ আলম");
         await user.click(screen.getByRole("button", { name: "রাখুন" }));
         await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
@@ -281,13 +274,12 @@ it.each([
     expect(screen.queryByRole("button", { name: preset })).toBeNull();
     await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), presetId);
     const supplier = kind === "shop";
-    fireEvent.change(
-      screen.getByLabelText(supplier ? "দোকান বা সরবরাহকারীর নাম" : "নাম"),
-      { target: { value: "নমুনা নতুন নাম" } },
-    );
+    fireEvent.change(screen.getByLabelText(supplier ? "দোকানের নাম" : "নাম"), {
+      target: { value: "নমুনা নতুন নাম" },
+    });
     fireEvent.change(
       screen.getByLabelText(
-        supplier ? "কী মাল সরবরাহ করেন" : "পরিচয় / কী কাজ করেন",
+        supplier ? "কী বিক্রি করেন" : "পরিচয় / কী কাজ করেন",
       ),
       { target: { value: role } },
     );
@@ -302,11 +294,17 @@ it.each([
       ["return", "মাল ফেরত"],
       ["transport", "আনার খরচ"],
     ]) {
-      expect(
-        screen
-          .getByRole("button", { name: label })
-          .getAttribute("aria-pressed"),
-      ).toBe(String(actions.includes(action)));
+      const button = screen.getByRole("button", {
+        name: label,
+      }) as HTMLButtonElement;
+      expect(button.disabled).toBe(!actions.includes(action));
+      expect(button.getAttribute("aria-pressed")).toBe(
+        String(actions.includes(action)),
+      );
+      if (!actions.includes(action)) {
+        await user.click(button);
+        expect(button.getAttribute("aria-pressed")).toBe("false");
+      }
     }
     await user.click(screen.getByRole("button", { name: "রাখুন" }));
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
@@ -323,6 +321,59 @@ it.each([
     expect(next.contracts).toEqual(ledger.contracts);
   },
 );
+
+it("changes available buttons with the selected relationship without treating free text as a relationship", async () => {
+  const user = userEvent.setup();
+  const onSave = vi.fn(async (_value: Ledger) => {});
+  render(
+    <EntitySheet
+      kind="person"
+      ledger={LedgerSchema.parse({})}
+      onSave={onSave}
+      onClose={() => {}}
+      mode="demo"
+    />,
+  );
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
+  await user.type(screen.getByLabelText("নাম"), "নমুনা সম্পর্ক বদল");
+  await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "supplier");
+  await user.click(screen.getByText("পছন্দের বোতাম"));
+  const purchase = screen.getByRole("button", {
+    name: "মাল কেনা",
+  }) as HTMLButtonElement;
+  const transport = screen.getByRole("button", {
+    name: "আনার খরচ",
+  }) as HTMLButtonElement;
+  expect(purchase.disabled).toBe(false);
+  expect(transport.disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("কী বিক্রি করেন"), {
+    target: { value: "সুইপার" },
+  });
+  expect(purchase.disabled).toBe(false);
+  expect(transport.disabled).toBe(true);
+  await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "transport");
+  expect(purchase.disabled).toBe(true);
+  expect(purchase.getAttribute("aria-pressed")).toBe("false");
+  expect(transport.disabled).toBe(false);
+  expect(transport.getAttribute("aria-pressed")).toBe("true");
+  await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "service");
+  expect(purchase.disabled).toBe(true);
+  expect(transport.disabled).toBe(true);
+  expect(transport.getAttribute("aria-pressed")).toBe("false");
+  await user.click(purchase);
+  await user.click(transport);
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+  expect(onSave.mock.calls[0][0].people[0]).toMatchObject({
+    kind: "worker",
+    quickActions: ["payment"],
+  });
+});
 
 it("keeps an entered agreement open and focused while clearing and replacing its amount after a relationship change", async () => {
   const user = userEvent.setup();

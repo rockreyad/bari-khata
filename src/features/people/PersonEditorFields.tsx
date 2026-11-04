@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   BookOpenIcon,
   CaretDownIcon,
@@ -9,6 +9,7 @@ import {
 } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import type { ContactAction, Ledger, PersonKind } from "../../domain/model";
+import { contactActionChoices } from "../../domain/contacts";
 import { ContactImport } from "../../components/contacts/ContactImport";
 import { AppCombobox } from "../../components/ui/AppCombobox";
 import { AppSelect } from "../../components/ui/AppSelect";
@@ -59,6 +60,7 @@ export function PersonEditorFields({
   onContactImport: (contact: { name: string; phone: string }) => void;
 }) {
   const { t, formatDigits, number } = useLanguageContext();
+  const actionRuleId = useId();
   const preset =
     contactPresets.find((choice) => choice.id === value.contactPresetId) ??
     contactPresets.find((choice) => choice.id === "custom")!;
@@ -87,7 +89,7 @@ export function PersonEditorFields({
       <section className="person-editor-section person-editor-identity">
         <h2 className="visually-hidden">{t("নাম ও পরিচয়")}</h2>
         <label className="person-editor-name">
-          {t(supplier ? "দোকান বা সরবরাহকারীর নাম" : "নাম")}
+          {t(supplier ? "দোকানের নাম" : "নাম")}
           <input
             value={value.name}
             onChange={(event) => onChange({ name: event.target.value })}
@@ -127,13 +129,11 @@ export function PersonEditorFields({
         </label>
         <label>
           <span className="person-editor-label">
-            {t(supplier ? "কী মাল সরবরাহ করেন" : "পরিচয় / কী কাজ করেন")}
+            {t(supplier ? "কী বিক্রি করেন" : "পরিচয় / কী কাজ করেন")}
             <small>{t("ইচ্ছেমতো")}</small>
           </span>
           <AppCombobox
-            aria-label={t(
-              supplier ? "কী মাল সরবরাহ করেন" : "পরিচয় / কী কাজ করেন",
-            )}
+            aria-label={t(supplier ? "কী বিক্রি করেন" : "পরিচয় / কী কাজ করেন")}
             value={value.role}
             onChange={(event) => onChange({ role: event.target.value })}
             maxLength={200}
@@ -306,16 +306,22 @@ export function PersonEditorFields({
             className="person-editor-action-options"
             role="group"
             aria-label={t("এই নামে কোন বোতাম রাখবেন?")}
+            aria-describedby={actionRuleId}
           >
-            {allowedActions.map((action) => (
+            {contactActionChoices.map((action) => (
               <button
                 key={action}
                 type="button"
-                aria-pressed={selectedActions.includes(action)}
+                disabled={!allowedActions.includes(action)}
+                aria-pressed={
+                  allowedActions.includes(action) &&
+                  selectedActions.includes(action)
+                }
                 onClick={() => onToggleAction(action)}
               >
                 <span aria-hidden="true">
-                  {selectedActions.includes(action) ? (
+                  {allowedActions.includes(action) &&
+                  selectedActions.includes(action) ? (
                     <CheckIcon size={13} weight="bold" />
                   ) : null}
                 </span>
@@ -323,6 +329,9 @@ export function PersonEditorFields({
               </button>
             ))}
           </div>
+          <p id={actionRuleId}>
+            {t("সম্পর্কের সঙ্গে মেলে এমন বোতামই রাখা যাবে।")}
+          </p>
         </div>
       </details>
     </>

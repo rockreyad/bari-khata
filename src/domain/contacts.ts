@@ -24,11 +24,15 @@ export const contactActionChoices: ContactAction[] = [
   "return",
   "transport",
 ];
+export function availableContactActions(kind: PersonKind): ContactAction[] {
+  return [...roleActions[kind]];
+}
 export function allowedContactActions(person: Person): ContactAction[] {
+  const available = availableContactActions(personKind(person));
   return [
     ...new Set(
-      (person.quickActions ?? roleActions[personKind(person)]).filter(
-        (action) => contactActionChoices.includes(action),
+      (person.quickActions ?? available).filter((action) =>
+        available.includes(action),
       ),
     ),
   ];

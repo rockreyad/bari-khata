@@ -321,6 +321,10 @@
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
+.person-editor-action-options button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 @media (max-width: 540px) {
   .person-editor-page .entry-page-header-inner {
     min-height: 84px;

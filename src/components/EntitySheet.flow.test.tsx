@@ -124,7 +124,7 @@ function usedHouse() {
   });
 }
 
-it("keeps metadata and chosen actions from an unknown future preset through draft reopen and save", async () => {
+it("keeps unknown preset metadata through draft reopen while preventing stale incompatible actions from being enabled or saved", async () => {
   const ledger = usedHouse();
   storage.drafts.set("entity:person:new:any", {
     id: "future-person",
@@ -155,6 +155,14 @@ it("keeps metadata and chosen actions from an unknown future preset through draf
   expect(
     (screen.getByLabelText("পরিচয় / কী কাজ করেন") as HTMLInputElement).value,
   ).toBe("নমুনা নিজের পরিচয়");
+  await user.click(screen.getByText("পছন্দের বাটন"));
+  const purchase = screen.getByRole("button", {
+    name: "মাল কেনা",
+  }) as HTMLButtonElement;
+  expect(purchase.disabled).toBe(true);
+  expect(purchase.getAttribute("aria-pressed")).toBe("false");
+  await user.click(purchase);
+  expect(purchase.getAttribute("aria-pressed")).toBe("false");
   await user.click(screen.getByRole("button", { name: "ফিরুন" }));
   await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
   view.unmount();
@@ -165,6 +173,16 @@ it("keeps metadata and chosen actions from an unknown future preset through draf
   });
   view = mount(<EntitySheet {...props} />);
   await ready();
+  await user.click(screen.getByText("পছন্দের বাটন"));
+  expect(
+    (screen.getByRole("button", { name: "মাল কেনা" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(
+    screen
+      .getByRole("button", { name: "মাল কেনা" })
+      .getAttribute("aria-pressed"),
+  ).toBe("false");
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
   const saved = onSave.mock.calls[0][0];
@@ -176,7 +194,7 @@ it("keeps metadata and chosen actions from an unknown future preset through draf
     role: "নমুনা নিজের পরিচয়",
     phone: "01700000012",
     workIds: ["door"],
-    quickActions: ["purchase"],
+    quickActions: [],
   });
   expect(saved.entries).toEqual(ledger.entries);
   expect(saved.contracts).toEqual(ledger.contracts);

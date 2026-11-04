@@ -25,8 +25,10 @@ export const contactPresetsEnglish: Record<string, string> = {
   "নিজের মতো": "Choose my own",
   "নাম লিখে দরকারি বোতাম বেছে নিন":
     "Enter a name and choose the shortcuts you need",
-  "দোকান বা সরবরাহকারীর নাম": "Shop or supplier name",
-  "কী মাল সরবরাহ করেন": "What materials do they supply?",
+  "দোকানের নাম": "Shop name",
+  "কী বিক্রি করেন": "What do they sell?",
+  "সম্পর্কের সঙ্গে মেলে এমন বোতামই রাখা যাবে।":
+    "Only buttons that match this relationship can be selected.",
   "যেমন: রড ও সিমেন্ট": "For example: rebar and cement",
   "যেমন: বালু ভরাটের কাজ": "For example: sand filling",
   "সিমেন্ট ও রড": "Cement and rebar",

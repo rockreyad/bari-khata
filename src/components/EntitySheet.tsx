@@ -36,7 +36,7 @@ import { savePersonWithContract } from "../domain/personContract";
 import { saveWorkChange } from "../domain/workActivity";
 import {
   allowedContactActions,
-  contactActionChoices,
+  availableContactActions,
   personKind,
 } from "../domain/contacts";
 import {
@@ -333,13 +333,15 @@ export function EntitySheet({
       ? amount(draft.total)
       : calculatedTotal;
   const allowed =
-    kind === "person" ? contactActionChoices : Object.keys(workActionNames);
+    kind === "person"
+      ? availableContactActions(draft.contactKind)
+      : Object.keys(workActionNames);
   const personPreset =
     contactPresets.find((preset) => preset.id === draft.contactPresetId) ??
     contactPresets.find((preset) => preset.id === "custom")!;
   const hasPersonAgreement =
     personPreset.agreement || Boolean(draft.personContractAmount.trim());
-  const selected =
+  const selected = (
     draft.quickActions ??
     (kind === "person"
       ? allowedContactActions(
@@ -349,14 +351,17 @@ export function EntitySheet({
             kind: draft.contactKind,
           }),
         )
-      : ["expense", "payment"]);
-  const toggle = (action: string) =>
+      : ["expense", "payment"])
+  ).filter((action) => allowed.includes(action));
+  const toggle = (action: string) => {
+    if (!allowed.includes(action)) return;
     field(
       "quickActions",
       selected.includes(action)
         ? selected.filter((a) => a !== action)
         : [...selected, action],
     );
+  };
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (lock.current || !ready) return;

@@ -68,9 +68,7 @@ it("keeps a name typed while a device contact import is pending and saves only t
     mount(initial, onSave, onClose);
     await ready();
     await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "supplier");
-    const name = screen.getByLabelText(
-      "দোকান বা সরবরাহকারীর নাম",
-    ) as HTMLInputElement;
+    const name = screen.getByLabelText("দোকানের নাম") as HTMLInputElement;
     expect(name.value).toBe("");
     await user.click(screen.getByRole("button", { name: "কন্টাক্ট থেকে নিন" }));
     expect(select).toHaveBeenCalledWith(["name", "tel"], { multiple: false });
@@ -213,10 +211,7 @@ it("creates and reopens a shop with optional fields empty and an explicitly empt
   const first = mount(initial, onSave, onClose);
   await ready();
   await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "supplier");
-  await user.type(
-    screen.getByLabelText("দোকান বা সরবরাহকারীর নাম"),
-    "নমুনা নতুন দোকান",
-  );
+  await user.type(screen.getByLabelText("দোকানের নাম"), "নমুনা নতুন দোকান");
   const actions = await preferences(user);
   for (const name of ["টাকা দিলাম", "মাল কেনা", "মাল ফেরত"])
     await user.click(actions.getByRole("button", { name, pressed: true }));
@@ -246,10 +241,9 @@ it("creates and reopens a shop with optional fields empty and an explicitly empt
 
   const editing = mount(saved, onSave, onClose, shop.id);
   await ready();
-  expect(
-    (screen.getByLabelText("দোকান বা সরবরাহকারীর নাম") as HTMLInputElement)
-      .value,
-  ).toBe(shop.name);
+  expect((screen.getByLabelText("দোকানের নাম") as HTMLInputElement).value).toBe(
+    shop.name,
+  );
   expect((screen.getByLabelText("ফোন নম্বর") as HTMLInputElement).value).toBe(
     "",
   );
@@ -261,11 +255,8 @@ it("creates and reopens a shop with optional fields empty and an explicitly empt
         .getByRole("button", { name })
         .getAttribute("aria-pressed"),
     ).toBe("false");
-  await user.clear(screen.getByLabelText("দোকান বা সরবরাহকারীর নাম"));
-  await user.type(
-    screen.getByLabelText("দোকান বা সরবরাহকারীর নাম"),
-    "নমুনা দোকান সংশোধিত",
-  );
+  await user.clear(screen.getByLabelText("দোকানের নাম"));
+  await user.type(screen.getByLabelText("দোকানের নাম"), "নমুনা দোকান সংশোধিত");
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
   editing.unmount();
@@ -297,12 +288,9 @@ it("keeps failed edit values and custom actions in a reopening draft, then saves
   });
   const editing = mount(initial, onSave, onClose, "shop");
   await ready();
-  await user.clear(screen.getByLabelText("দোকান বা সরবরাহকারীর নাম"));
-  await user.type(
-    screen.getByLabelText("দোকান বা সরবরাহকারীর নাম"),
-    "নমুনা বদলানো দোকান",
-  );
-  const role = screen.getByRole("combobox", { name: "কী মাল সরবরাহ করেন" });
+  await user.clear(screen.getByLabelText("দোকানের নাম"));
+  await user.type(screen.getByLabelText("দোকানের নাম"), "নমুনা বদলানো দোকান");
+  const role = screen.getByRole("combobox", { name: "কী বিক্রি করেন" });
   await user.clear(role);
   await user.type(role, "সরবরাহকারী");
   const phone = screen.getByLabelText("ফোন নম্বর");
@@ -328,10 +316,9 @@ it("keeps failed edit values and custom actions in a reopening draft, then saves
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   expect(await screen.findByRole("alert")).toBeTruthy();
   expect(onClose).not.toHaveBeenCalled();
-  expect(
-    (screen.getByLabelText("দোকান বা সরবরাহকারীর নাম") as HTMLInputElement)
-      .value,
-  ).toBe("নমুনা বদলানো দোকান");
+  expect((screen.getByLabelText("দোকানের নাম") as HTMLInputElement).value).toBe(
+    "নমুনা বদলানো দোকান",
+  );
   expect((role as HTMLInputElement).value).toBe("সরবরাহকারী");
   expect(latinDigits((phone as HTMLInputElement).value)).toBe("01700000002");
   expect((await repo.read())!.ledger).toEqual(before);
@@ -348,14 +335,13 @@ it("keeps failed edit values and custom actions in a reopening draft, then saves
   });
   const reopened = mount(initial, onSave, onClose, "shop");
   await ready();
-  expect(
-    (screen.getByLabelText("দোকান বা সরবরাহকারীর নাম") as HTMLInputElement)
-      .value,
-  ).toBe("নমুনা বদলানো দোকান");
+  expect((screen.getByLabelText("দোকানের নাম") as HTMLInputElement).value).toBe(
+    "নমুনা বদলানো দোকান",
+  );
   expect(
     (
       screen.getByRole("combobox", {
-        name: "কী মাল সরবরাহ করেন",
+        name: "কী বিক্রি করেন",
       }) as HTMLInputElement
     ).value,
   ).toBe("সরবরাহকারী");
@@ -412,10 +398,14 @@ it.each([
       (screen.getByLabelText("ফোন নম্বর") as HTMLInputElement).required,
     ).toBe(false);
     const actions = await preferences(user);
-    for (const name of ["টাকা দিলাম", "মাল কেনা", "মাল ফেরত", "আনার খরচ"])
+    for (const name of ["টাকা দিলাম", "মাল কেনা", "মাল ফেরত", "আনার খরচ"]) {
+      expect(
+        (actions.getByRole("button", { name }) as HTMLButtonElement).disabled,
+      ).toBe(!allowed.includes(name));
       expect(
         actions.getByRole("button", { name }).getAttribute("aria-pressed"),
       ).toBe(String(allowed.includes(name)));
+    }
     expect(onSave).not.toHaveBeenCalled();
   },
 );
