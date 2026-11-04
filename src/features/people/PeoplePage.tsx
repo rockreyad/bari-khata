@@ -215,11 +215,6 @@ export function PeoplePage() {
                     </span>
                   )}
                 </strong>
-                {summary.paidCorrection !== 0 ? (
-                  <small>
-                    {t("সমন্বয়")}: {money(summary.paidCorrection)}
-                  </small>
-                ) : null}
                 {summary.reconciledPayable > 0 ? (
                   <small className="contact-due">
                     {t("বাকি {{amount}}", {

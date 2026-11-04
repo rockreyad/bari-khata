@@ -58,7 +58,7 @@ function renderPage(path = "/people/worker") {
     </MemoryRouter>,
   );
 }
-it("shows the person's corrected paid total with a correction note in the directory", () => {
+it("shows the person's corrected paid total without a correction note in the directory", () => {
   const base = fixture();
   const person = base.people.find((row) => row.id === "worker")!;
   const before = contactAccountSummary(base, person).netPaid;
@@ -87,7 +87,7 @@ it("shows the person's corrected paid total with a correction note in the direct
   renderPage("/people");
   const row = screen.getByRole("button", { name: /রহিম/ });
   expect(row.textContent).toContain(`৳${(before + 10000) / 100}`);
-  expect(row.textContent).toContain("সমন্বয়");
+  expect(row.textContent).not.toContain("সমন্বয়");
 });
 it("calls credit created by a paid-total adjustment my credit without claiming an actual advance", () => {
   const ledger = LedgerSchema.parse({
@@ -132,6 +132,9 @@ it("calls credit created by a paid-total adjustment my credit without claiming a
   expect(
     container.querySelector(".contact-summary-hero > strong")?.textContent,
   ).toBe("৳1500");
+  expect(
+    container.querySelector(".contact-summary-hero")?.textContent,
+  ).not.toContain("সমন্বয়সহ");
   expect(
     container.querySelector(".contact-reconciliation")?.textContent,
   ).toContain("আমার জমা৳500");
