@@ -906,7 +906,7 @@
 }
 @media (max-width: 760px) {
   .app-topbar {
-    height: 63px;
+    height: calc(64px + env(safe-area-inset-top, 0px));
   }
   .app-content {
     padding-top: 22px;

@@ -1,6 +1,7 @@
-.settings-link.active {
+.app-topbar .settings-link.active,
+.app-topbar .settings-link:hover {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 .app-frame > nav.mobile-bottom-nav {
   display: none;
