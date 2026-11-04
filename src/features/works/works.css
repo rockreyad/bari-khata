@@ -40,8 +40,8 @@
   border: 1px solid var(--line);
 }
 .work-chart-toggle[aria-expanded="true"] {
-  background: var(--accent);
-  color: var(--primary-ink);
+  background: var(--surface-muted);
+  color: var(--text);
 }
 .work-known-due,
 .notebook-card-due {
@@ -158,17 +158,13 @@
   min-height: 244px;
   padding: 17px;
   border-radius: 21px;
-  border-color: color-mix(in srgb, var(--work-color) 13%, var(--line));
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--work-color) 5%, var(--surface)),
-    var(--surface) 65%
-  );
-  box-shadow: 0 3px 16px color-mix(in srgb, var(--work-color) 4%, transparent);
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: 0 3px 16px color-mix(in srgb, var(--text) 4%, transparent);
   transform: none;
 }
 .notebook-card.notebook-card-v3.work-notebook-card:hover {
-  border-color: color-mix(in srgb, var(--work-color) 35%, var(--line));
+  border-color: color-mix(in srgb, var(--text) 22%, var(--line));
   transform: none;
 }
 .work-notebook-card.notebook-card-v3 .notebook-card-top {
@@ -226,7 +222,7 @@
   overflow-wrap: anywhere;
 }
 .work-notebook-card .notebook-card-arrow {
-  color: color-mix(in srgb, var(--work-color) 70%, var(--muted));
+  color: var(--muted);
   flex: none;
   margin-top: 4px;
 }

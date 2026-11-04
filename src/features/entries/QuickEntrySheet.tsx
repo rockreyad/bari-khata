@@ -507,33 +507,34 @@ export function QuickEntrySheet({
           !returning &&
           draft.kind !== "wage" &&
           !["shop", "worker", "driver"].includes(selectedKind ?? "") ? (
-            <div className="expense-sections">
+            <div
+              className="expense-sections"
+              role="group"
+              aria-label={t("হিসাবের ধরন")}
+            >
               {(
                 [
                   ["material", "মাল কেনা", PackageIcon],
                   ["labour", "মিস্ত্রির টাকা", HardHatIcon],
                   ["transport", "গাড়িভাড়া", TruckIcon],
                 ] as const
-              ).map(([type, label, Icon]) => (
-                <button
-                  type="button"
-                  key={type}
-                  aria-pressed={
-                    draft.costType === type ||
-                    (type === "transport" && draft.costType === "unload")
-                  }
-                  className={
-                    draft.costType === type ||
-                    (type === "transport" && draft.costType === "unload")
-                      ? "selected"
-                      : ""
-                  }
-                  onClick={() => chooseType(type)}
-                >
-                  <Icon size={21} weight="duotone" />
-                  {t(label)}
-                </button>
-              ))}
+              ).map(([type, label, Icon]) => {
+                const selected =
+                  draft.costType === type ||
+                  (type === "transport" && draft.costType === "unload");
+                return (
+                  <button
+                    type="button"
+                    key={type}
+                    aria-pressed={selected}
+                    className={selected ? "selected" : ""}
+                    onClick={() => chooseType(type)}
+                  >
+                    <Icon size={21} weight="duotone" aria-hidden="true" />
+                    {t(label)}
+                  </button>
+                );
+              })}
             </div>
           ) : null}
           {removedSelection ? (
@@ -771,10 +772,15 @@ export function QuickEntrySheet({
             </div>
           ) : null}
           {transport && !cash && selectedKind !== "driver" ? (
-            <div className="small-switch">
+            <div
+              className="small-switch"
+              role="group"
+              aria-label={t("খরচের ধরন")}
+            >
               <button
                 type="button"
                 className={draft.costType === "transport" ? "selected" : ""}
+                aria-pressed={draft.costType === "transport"}
                 onClick={() => chooseType("transport")}
               >
                 {t("গাড়িভাড়া")}
@@ -782,6 +788,7 @@ export function QuickEntrySheet({
               <button
                 type="button"
                 className={draft.costType === "unload" ? "selected" : ""}
+                aria-pressed={draft.costType === "unload"}
                 onClick={() => chooseType("unload")}
               >
                 {t("মাল নামানোর খরচ")}
@@ -792,6 +799,7 @@ export function QuickEntrySheet({
             <section className="entry-wage-basis">
               <div
                 className="entry-intent-options"
+                role="group"
                 aria-label={t("মজুরির হিসাব")}
               >
                 {(

@@ -64,13 +64,31 @@ function SharedTransactionRow({
         : account === "labour"
           ? "কাজের বিল"
           : "খরচের বিল"
-      : rowLabels[row.kind];
+      : row.kind === "payment"
+        ? "টাকা পেয়েছেন"
+        : rowLabels[row.kind];
   const amount =
     row.kind === "adjustment" ? (row.adjustment ?? 0) : row.charge || row.paid;
   const description = row.description.trim().slice(0, 100);
   const works = row.works.trim().slice(0, 70);
   const signed = (value: number) =>
     (value < 0 ? "−" : "") + money(Math.abs(value));
+  const settlement = row.settlement;
+  const status = settlement
+    ? settlement.balance > 0
+      ? settlement.paid === 0 &&
+        settlement.returned === 0 &&
+        settlement.refunded === 0
+        ? t("পুরোটাই বাকি")
+        : t("বাকি {{amount}}", { amount: money(settlement.balance) })
+      : settlement.balance < 0
+        ? t("জমা {{amount}}", { amount: money(-settlement.balance) })
+        : t(
+            settlement.returned || settlement.refunded
+              ? "হিসাব মিটেছে"
+              : "মেটানো",
+          )
+    : "";
   return (
     <article className={"shared-entry shared-entry-" + row.kind}>
       <button
@@ -81,6 +99,7 @@ function SharedTransactionRow({
           t(label),
           ...(description ? [formatDigits(description)] : []),
           signed(amount),
+          ...(status ? [status] : []),
           date(row.date),
           t("বিস্তারিত"),
         ].join(" · ")}
@@ -92,7 +111,6 @@ function SharedTransactionRow({
                 ? formatDigits(description)
                 : t(label)}
             </span>
-            <CaretRightIcon size={12} aria-hidden="true" />
           </span>
           {description && row.kind !== "expense" ? (
             <span className="shared-ledger-description">
@@ -118,30 +136,36 @@ function SharedTransactionRow({
             </span>
           ) : null}
         </span>
-        {row.kind === "adjustment" ? (
-          <span className="shared-ledger-adjustment">
-            {t("সমন্বয়")} <strong>{signed(amount)}</strong>
-          </span>
-        ) : (
-          <>
+        <span className="shared-ledger-value">
+          <strong>{signed(amount)}</strong>
+          {settlement ? (
             <span
               className={
-                "shared-ledger-amount shared-ledger-bill " +
-                (row.charge ? "" : "shared-ledger-dash")
+                "shared-bill-status " +
+                (settlement.balance > 0
+                  ? "shared-bill-outstanding"
+                  : "shared-bill-settled")
               }
             >
-              {row.charge ? <strong>{signed(row.charge)}</strong> : "—"}
+              {settlement.balance === 0 ? (
+                <CheckCircleIcon size={13} aria-hidden="true" />
+              ) : null}
+              {status}
             </span>
-            <span
-              className={
-                "shared-ledger-amount shared-ledger-paid " +
-                (row.paid ? "" : "shared-ledger-dash")
-              }
-            >
-              {row.paid ? <strong>{signed(row.paid)}</strong> : "—"}
-            </span>
-          </>
-        )}
+          ) : row.kind === "adjustment" ? (
+            <small>{t("সমন্বয়")}</small>
+          ) : null}
+          {settlement && settlement.balance > 0 && settlement.paid > 0 ? (
+            <small>
+              {t("পেয়েছেন {{amount}}", { amount: money(settlement.paid) })}
+            </small>
+          ) : null}
+        </span>
+        <CaretRightIcon
+          className="shared-ledger-open"
+          size={16}
+          aria-hidden="true"
+        />
       </button>
     </article>
   );
@@ -154,6 +178,15 @@ function SharedShopSummary({ statement }: { statement: SharedStatement }) {
   const paid = totals.reconciledNetPaid ?? totals.paid;
   const due = totals.reconciledPayable ?? totals.payable;
   const credit = totals.reconciledAdvance ?? totals.advance;
+  const fullyPaid =
+    cost > 0 &&
+    cost === paid &&
+    due === 0 &&
+    credit === 0 &&
+    !totals.costCorrection &&
+    !totals.paidCorrection &&
+    !totals.balanceCorrection &&
+    !totals.historicalCost;
   const correction = (value: number | undefined) =>
     value ? (
       <small className="shared-metric-note">
@@ -171,35 +204,38 @@ function SharedShopSummary({ statement }: { statement: SharedStatement }) {
           <small>{t("মাল ফেরত বাদে")}</small>
         ) : null}
       </div>
-      <dl className="shared-shop-balances">
-        <div>
-          <dt>{t("পরিশোধ")}</dt>
-          <dd>{money(paid)}</dd>
-          {correction(totals.paidCorrection)}
-          {statement.counts.refund ? (
-            <small>{t("টাকা ফেরত বাদে")}</small>
-          ) : null}
-        </div>
-        <div
-          className={credit > 0 ? "shared-customer-credit" : "shared-shop-due"}
-        >
-          <dt>{t(credit > 0 ? "ক্রেতা পাবেন" : "বাকি")}</dt>
-          <dd>{money(credit > 0 ? credit : due)}</dd>
-          {correction(totals.balanceCorrection)}
-        </div>
-      </dl>
+      {!fullyPaid &&
+      (cost !== 0 ||
+        paid !== 0 ||
+        due !== 0 ||
+        credit !== 0 ||
+        totals.costCorrection ||
+        totals.paidCorrection ||
+        totals.balanceCorrection) ? (
+        <dl className="shared-shop-balances">
+          <div>
+            <dt>{t("পরিশোধ")}</dt>
+            <dd>{money(paid)}</dd>
+            {correction(totals.paidCorrection)}
+            {statement.counts.refund ? (
+              <small>{t("টাকা ফেরত বাদে")}</small>
+            ) : null}
+          </div>
+          <div
+            className={
+              credit > 0 ? "shared-customer-credit" : "shared-shop-due"
+            }
+          >
+            <dt>{t(credit > 0 ? "ক্রেতা পাবেন" : "বাকি")}</dt>
+            <dd>{money(credit > 0 ? credit : due)}</dd>
+            {correction(totals.balanceCorrection)}
+          </div>
+        </dl>
+      ) : null}
       {due === 0 && credit === 0 ? (
         <p className="shared-paid-status">
           <CheckCircleIcon size={16} />
-          {t(
-            cost > 0 &&
-              !totals.costCorrection &&
-              !totals.paidCorrection &&
-              !totals.balanceCorrection &&
-              !totals.historicalCost
-              ? "পরিশোধিত"
-              : "বাকি নেই",
-          )}
+          {t(fullyPaid ? "পুরো বিল মেটানো" : "বাকি নেই")}
         </p>
       ) : null}
     </section>
@@ -322,7 +358,8 @@ export function SharedStatementPage() {
   const due = totals?.reconciledPayable ?? totals?.payable ?? 0;
   const credit = totals?.reconciledAdvance ?? totals?.advance ?? 0;
   const metrics = [
-    ...(cost !== 0 || totals?.costCorrection
+    ...((cost !== 0 && (cost !== paid || due > 0 || credit > 0)) ||
+    totals?.costCorrection
       ? [
           {
             label: isShop ? "মালের বিল" : isWorker ? "কাজের বিল" : "খরচের বিল",
@@ -482,7 +519,18 @@ export function SharedStatementPage() {
                   ))}
                 </dl>
               ) : credit === 0 ? (
-                <p className="shared-settled">{t("বাকি নেই")}</p>
+                <p className="shared-settled">
+                  {t(
+                    cost > 0 &&
+                      cost === paid &&
+                      !totals?.paidCorrection &&
+                      !totals?.costCorrection &&
+                      !totals?.balanceCorrection &&
+                      !totals?.historicalCost
+                      ? "পুরো বিল মেটানো"
+                      : "বাকি নেই",
+                  )}
+                </p>
               ) : null}
               {credit > 0 ? (
                 <details className="shared-reconciliation">
@@ -662,11 +710,6 @@ export function SharedStatementPage() {
                       })}
                     </h3>
                     <div className="shared-month-entries">
-                      <div className="shared-ledger-columns" aria-hidden="true">
-                        <span>{t("তারিখ / বিবরণ")}</span>
-                        <span>{t("বিল")}</span>
-                        <span>{t("পরিশোধ")}</span>
-                      </div>
                       {rows.map((row) => (
                         <SharedTransactionRow
                           key={row.key}

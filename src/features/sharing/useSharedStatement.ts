@@ -109,6 +109,7 @@ export function useSharedStatement() {
           captured.filter || undefined,
           {
             signal: abort.signal,
+            grouped: true,
             ...(captured.query ? { query: captured.query } : {}),
           },
         );

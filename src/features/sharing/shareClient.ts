@@ -121,7 +121,7 @@ export async function readShare(
   offset = 0,
   revision?: number,
   kind?: SharedKind,
-  options?: { signal?: AbortSignal; query?: string },
+  options?: { signal?: AbortSignal; query?: string; grouped?: boolean },
 ): Promise<SharedStatement | null> {
   if (!validShareToken(token)) return null;
   options?.signal?.throwIfAborted();
@@ -136,14 +136,17 @@ export async function readShare(
   const query = options?.query ?? "";
   if (typeof query !== "string" || query.length > SHARED_QUERY_MAX_LENGTH)
     throw new Error("share_invalid_page");
-  const request = anonymousClient().rpc("search_contact_share", {
-    p_token: token,
-    p_offset: offset,
-    p_limit: SHARED_PAGE_SIZE,
-    p_revision: revision ?? null,
-    p_query: query,
-    ...(kind ? { p_kind: kind } : {}),
-  });
+  const request = anonymousClient().rpc(
+    options?.grouped ? "read_contact_share_activity" : "search_contact_share",
+    {
+      p_token: token,
+      p_offset: offset,
+      p_limit: SHARED_PAGE_SIZE,
+      p_revision: revision ?? null,
+      p_query: query,
+      ...(kind ? { p_kind: kind } : {}),
+    },
+  );
   const result = await (options?.signal
     ? request.abortSignal(options.signal)
     : request);

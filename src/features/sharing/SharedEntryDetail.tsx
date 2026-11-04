@@ -39,9 +39,32 @@ type Preview = { id: string; url: string; name: string; mime: string };
 
 export function SharedEntryDetail(props: SharedEntryDetailProps) {
   return (
-    <Detail
+    <SelectedDetail
       key={`${props.token}:${props.entryId}:${props.revision}`}
       {...props}
+    />
+  );
+}
+function SelectedDetail(props: SharedEntryDetailProps) {
+  const [path, setPath] = useState([props.entryId]);
+  const selected = path[path.length - 1];
+  return (
+    <Detail
+      key={selected}
+      {...props}
+      entryId={selected}
+      onBack={
+        path.length > 1
+          ? () => setPath((previous) => previous.slice(0, -1))
+          : undefined
+      }
+      onSelectEntry={(key) =>
+        setPath((previous) =>
+          previous.includes(key)
+            ? previous.slice(0, previous.indexOf(key) + 1)
+            : [...previous, key],
+        )
+      }
     />
   );
 }
@@ -52,7 +75,12 @@ function Detail({
   onClose,
   onUnavailable,
   onStale,
-}: SharedEntryDetailProps) {
+  onBack,
+  onSelectEntry,
+}: SharedEntryDetailProps & {
+  onBack?: () => void;
+  onSelectEntry: (key: string) => void;
+}) {
   const { t, money, date, formatDigits } = useLanguageContext();
   const [entry, setEntry] = useState<SharedEntry | null>(null);
   const [loading, setLoading] = useState(true);
@@ -202,9 +230,17 @@ function Detail({
     entry?.kind === "adjustment"
       ? (entry.adjustment ?? 0)
       : entry?.charge || entry?.paid || 0;
+  const billLines = entry?.lines.length
+    ? entry.lines
+    : (entry?.relatedBill?.lines ?? []);
   return (
     <Sheet title={t("লেনদেনের বিস্তারিত")} onClose={close}>
       <div className="shared-entry-detail" aria-busy={loading}>
+        {onBack ? (
+          <button type="button" className="text-button" onClick={onBack}>
+            {t("আগের হিসাবে ফিরুন")}
+          </button>
+        ) : null}
         {error ? (
           <p role="alert">{error}</p>
         ) : loading ? (
@@ -233,7 +269,47 @@ function Detail({
                 <p>{t("পুরোনো তথ্য; বর্তমান হিসাবে ধরা হয়নি")}</p>
               ) : null}
             </header>
-            {entry.description && !entry.lines.length ? (
+            {billLines.length ? (
+              <section>
+                <h3>{t("বিলের বিবরণ")}</h3>
+                <dl>
+                  {billLines.map((line, index) => (
+                    <div key={index}>
+                      <dt>
+                        {formatDigits(line.label)}
+                        {line.quantity !== undefined ? (
+                          <small>
+                            {formatDigits(
+                              `${line.quantity}${line.unit ? ` ${line.unit}` : ""}`,
+                            )}
+                          </small>
+                        ) : null}
+                        {line.workName ? (
+                          <small>{formatDigits(line.workName)}</small>
+                        ) : null}
+                      </dt>
+                      <dd>{money(line.amount)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            ) : null}
+            {entry.relatedBill ? (
+              <section>
+                <h3>{t("যে বিলের টাকা দেওয়া হয়েছে")}</h3>
+                <dl>
+                  <div>
+                    <dt>{t("বিলের মোট")}</dt>
+                    <dd>{money(entry.relatedBill.charge)}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("বিলের তারিখ")}</dt>
+                    <dd>{date(entry.relatedBill.date)}</dd>
+                  </div>
+                </dl>
+              </section>
+            ) : null}
+            {entry.description && !billLines.length ? (
               <section>
                 <h3>{t("বিবরণ")}</h3>
                 <p className="shared-full-text">
@@ -266,19 +342,57 @@ function Detail({
                 </dl>
               </section>
             ) : null}
-            {entry.lines.length ? (
-              <section>
-                <h3>{t("বিলের বিবরণ")}</h3>
+            {entry.payments?.length ? (
+              <section className="shared-detail-payments">
+                <h3>{t("টাকা দেওয়ার হিসাব")}</h3>
                 <dl>
-                  {entry.lines.map((line, index) => (
-                    <div key={index}>
+                  {entry.payments.map((payment) => (
+                    <div key={payment.key}>
                       <dt>
-                        {formatDigits(line.label)}
-                        {line.workName ? (
-                          <small>{formatDigits(line.workName)}</small>
+                        <time dateTime={payment.date ?? undefined}>
+                          {date(payment.date, {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </time>
+                        {payment.paymentParts.length ? (
+                          <small>
+                            {payment.paymentParts
+                              .map((part) =>
+                                payment.paymentParts.length > 1
+                                  ? `${t(methods[part.method])} ${money(part.amount)}`
+                                  : t(methods[part.method]),
+                              )
+                              .join(" · ")}
+                          </small>
+                        ) : payment.paymentMethods.length ? (
+                          <small>
+                            {payment.paymentMethods
+                              .map((method) => t(methods[method]))
+                              .join(" · ")}
+                          </small>
+                        ) : null}
+                        {payment.description ? (
+                          <small>{formatDigits(payment.description)}</small>
                         ) : null}
                       </dt>
-                      <dd>{money(line.amount)}</dd>
+                      <dd>
+                        {money(payment.paid)}
+                        <button
+                          type="button"
+                          className="text-button"
+                          onClick={() => onSelectEntry(payment.key)}
+                          aria-label={[
+                            t("পরিশোধ"),
+                            date(payment.date),
+                            money(payment.paid),
+                            t("বিস্তারিত"),
+                          ].join(" · ")}
+                        >
+                          {t("বিস্তারিত")}
+                        </button>
+                      </dd>
                     </div>
                   ))}
                 </dl>

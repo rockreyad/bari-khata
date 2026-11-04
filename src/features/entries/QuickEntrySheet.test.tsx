@@ -162,7 +162,10 @@ describe("quick entry creation flow", () => {
       screen.getByRole("heading", { level: 1, name: "গাড়িভাড়া দিই" }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "গাড়িভাড়া", pressed: true }),
+      within(screen.getByRole("group", { name: "হিসাবের ধরন" })).getByRole(
+        "button",
+        { name: "গাড়িভাড়া", pressed: true },
+      ),
     ).toBeTruthy();
     expect(screen.getByLabelText("কী বাবদ খরচ")).toBeTruthy();
     expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(

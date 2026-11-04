@@ -1,80 +1,150 @@
 .share-link-card {
-  padding: 18px;
+  padding: 16px;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 16px;
   background: var(--surface);
-  margin: 0 0 22px;
+  margin: 0;
 }
 .share-link-heading {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: flex-start;
 }
 .share-link-symbol {
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
   flex: none;
-  border-radius: 13px;
-  background: var(--accent-soft);
+  border-radius: 11px;
+  background: var(--surface-muted);
   color: var(--accent);
 }
+.share-link-intro {
+  min-width: 0;
+  flex: 1;
+}
+.share-link-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
 .share-link-heading h3 {
-  font-size: 16px;
-  margin: 0 0 5px;
+  font-size: 15px;
+  margin: 0;
+  line-height: 1.5;
 }
 .share-link-heading p {
   color: var(--muted);
   font-size: 12px;
-  margin: 0;
-  line-height: 1.7;
+  margin: 3px 0 0;
+  line-height: 1.6;
 }
 .share-link-card .helper-text {
-  font-size: 11px;
-  line-height: 1.8;
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 12px 0 0;
 }
 .share-link-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-top: 15px;
+  margin-top: 12px;
 }
+.share-link-actions .primary-button,
 .share-link-actions .secondary-button {
   min-height: 44px;
-  font-size: 12px;
+  font-size: 13px;
 }
-.share-link-actions .text-button {
-  font-size: 12px;
-  min-height: 44px;
+.share-link-create .primary-button {
+  width: 100%;
 }
 .share-active {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--accent);
-  margin: 14px 0 8px;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.share-active svg {
+  color: var(--success);
+}
+.share-link-ready {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.share-link-ready .share-link-actions {
+  margin: 0;
+  flex-wrap: nowrap;
 }
 .share-url-field {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin: 12px 0;
+  min-width: 0;
 }
 .share-url-field input {
   min-width: 0;
   width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
   font-family: ui-monospace, monospace;
   font-size: 11px;
   direction: ltr;
+  text-overflow: ellipsis;
+}
+.share-link-actions .share-native-button {
+  padding: 0;
+  min-width: 44px;
+  width: 44px;
+  flex: none;
+}
+.share-copy-button {
+  white-space: nowrap;
+}
+.share-link-management {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.share-link-management summary {
+  width: fit-content;
+  min-height: 32px;
+  align-content: center;
+  color: var(--muted);
+  cursor: pointer;
+}
+.share-link-management summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+.share-link-management .text-button {
+  min-height: 44px;
+  font-size: 12px;
+  margin-right: 12px;
+}
+.share-link-management .share-revoke {
+  color: var(--danger, #b24545);
 }
 .share-error {
   font-size: 12px;
   line-height: 1.8;
   color: var(--danger, #b24545);
   margin: 12px 0;
+}
+@media (max-width: 420px) {
+  .share-link-ready {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .share-copy-button {
+    flex: 1;
+  }
 }
 .shared-statement-page {
   max-width: 820px;
@@ -551,31 +621,22 @@
   border-radius: 16px;
   background: var(--surface);
 }
-.shared-ledger-columns,
-.shared-ledger-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 112px) minmax(0, 112px);
-  align-items: start;
-  gap: 10px;
-}
-.shared-ledger-columns {
-  padding: 11px 0;
-  color: var(--muted);
-  font-size: 11px;
-}
-.shared-ledger-columns > span:not(:first-child) {
-  text-align: right;
-}
 .shared-entry {
   display: block;
   min-width: 0;
   padding: 0;
+}
+.shared-entry + .shared-entry {
   border-top: 1px solid var(--line);
 }
 .shared-ledger-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: 16px;
   width: 100%;
-  min-height: 65px;
-  padding: 14px 0;
+  min-height: 82px;
+  padding: 18px 0;
   border: 0;
   background: transparent;
   color: var(--text);
@@ -585,62 +646,70 @@
 .shared-ledger-row:hover {
   background: color-mix(in srgb, var(--muted) 4%, transparent);
 }
+.shared-ledger-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
 .shared-ledger-info {
   display: grid;
   min-width: 0;
-  gap: 3px;
+  gap: 4px;
 }
 .shared-ledger-label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 550;
-  line-height: 1.6;
+  line-height: 1.7;
 }
-.shared-ledger-label svg {
-  flex: none;
-  color: var(--muted);
-}
-.shared-ledger-label > span {
+.shared-ledger-label > span,
+.shared-ledger-description {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .shared-ledger-description {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: 12px;
   line-height: 1.6;
 }
-.shared-ledger-amount {
+.shared-ledger-value {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
   min-width: 0;
-  padding-top: 1px;
+  max-width: 220px;
   text-align: right;
-  font-size: 17px;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }
-.shared-ledger-amount strong {
+.shared-ledger-value > strong {
+  font-size: 18px;
+  line-height: 1.5;
   font-weight: 600;
-}
-.shared-ledger-dash {
-  color: var(--line);
-}
-.shared-ledger-adjustment {
-  grid-column: 2 / -1;
-  align-self: center;
-  text-align: right;
-  color: var(--muted);
-  font-size: 11px;
   overflow-wrap: anywhere;
 }
-.shared-ledger-adjustment strong {
-  display: block;
+.shared-ledger-value > small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.shared-ledger-open {
+  color: var(--muted);
+}
+.shared-bill-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.shared-bill-status svg {
+  flex: none;
+}
+.shared-bill-settled {
+  color: var(--muted);
+}
+.shared-bill-outstanding {
   color: var(--text);
-  font-size: 17px;
   font-weight: 600;
 }
 .shared-entry-meta {
@@ -929,16 +998,19 @@
   .shared-month-entries {
     padding: 0 15px;
   }
-  .shared-ledger-columns,
   .shared-ledger-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 80px) minmax(0, 80px);
-    gap: 7px;
+    grid-template-columns: minmax(0, 1fr) minmax(90px, auto) 12px;
+    gap: 9px;
+    padding: 16px 0;
   }
-  .shared-ledger-amount {
-    font-size: 15px;
+  .shared-ledger-value {
+    max-width: 145px;
   }
-  .shared-ledger-row {
-    padding: 13px 0;
+  .shared-ledger-value > strong {
+    font-size: 16px;
+  }
+  .shared-ledger-label {
+    font-size: 13px;
   }
 }
 @media (max-width: 360px) {
@@ -976,4 +1048,11 @@
   .shared-overview {
     break-inside: avoid;
   }
+}
+
+.shared-detail-payments dd .text-button {
+  display: block;
+  margin: 4px 0 0 auto;
+  padding: 2px 0;
+  font-size: 12px;
 }

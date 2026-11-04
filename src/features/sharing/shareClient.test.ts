@@ -62,6 +62,45 @@ afterEach(() => {
 });
 
 describe("public shared statement client", () => {
+  it("requests grouped activity only when selected and preserves the raw event endpoint by default", async () => {
+    const grouped = page(1, 1);
+    grouped.rows[0].settlement = {
+      paid: 70,
+      returned: 0,
+      refunded: 0,
+      balance: 30,
+      paymentCount: 1,
+    };
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(grouped)))
+      .mockResolvedValueOnce(new Response(JSON.stringify(page())))
+      .mockResolvedValueOnce(new Response(JSON.stringify(page())));
+    const { readShare } = await import("./shareClient");
+    const result = await readShare(token, 0, 7, undefined, {
+      grouped: true,
+      query: "নমুনা মাল",
+    });
+    expect(result?.rows[0].settlement).toEqual(grouped.rows[0].settlement);
+    expect(new URL(String(fetchMock.mock.calls[0][0])).pathname).toBe(
+      "/rest/v1/rpc/read_contact_share_activity",
+    );
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
+      p_token: token,
+      p_offset: 0,
+      p_limit: SHARED_PAGE_SIZE,
+      p_revision: 7,
+      p_query: "নমুনা মাল",
+    });
+    await readShare(token);
+    await readShare(token, 0, undefined, undefined, { grouped: false });
+    for (const [input, init] of fetchMock.mock.calls.slice(1)) {
+      expect(new URL(String(input)).pathname).toBe(
+        "/rest/v1/rpc/search_contact_share",
+      );
+      expect(init).toMatchObject({ cache: "no-store", credentials: "omit" });
+    }
+    expect(owner.session).not.toHaveBeenCalled();
+  });
   it("sends a scoped server query without putting private search text in the URL", async () => {
     const { readShare } = await import("./shareClient");
     await readShare(token, 0, undefined, undefined, { query: "সিমেন্ট" });

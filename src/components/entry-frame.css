@@ -22,8 +22,7 @@
 .entry-page {
   min-height: 100dvh;
   padding-bottom: 130px;
-  background:
-    linear-gradient(160deg, var(--accent-soft), transparent 340px), var(--bg);
+  background: var(--bg);
 }
 .entry-page-header {
   position: sticky;

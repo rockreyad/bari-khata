@@ -101,7 +101,7 @@ describe("bounded shared statement page navigation", () => {
       0,
       undefined,
       undefined,
-      { signal: expect.any(AbortSignal), query: "সিমেন্ট" },
+      { signal: expect.any(AbortSignal), grouped: true, query: "সিমেন্ট" },
     ]);
     expect(hook.result.current.statement).toEqual(searched);
   });
@@ -119,7 +119,11 @@ describe("bounded shared statement page navigation", () => {
       20,
       1,
       undefined,
-      { signal: expect.any(AbortSignal), query: "x".repeat(200) },
+      {
+        signal: expect.any(AbortSignal),
+        grouped: true,
+        query: "x".repeat(200),
+      },
     ]);
     await act(async () => {
       await hook.result.current.previous();
@@ -129,7 +133,11 @@ describe("bounded shared statement page navigation", () => {
       0,
       1,
       undefined,
-      { signal: expect.any(AbortSignal), query: "x".repeat(200) },
+      {
+        signal: expect.any(AbortSignal),
+        grouped: true,
+        query: "x".repeat(200),
+      },
     ]);
   });
   it("clears a pending query when the capability changes before debounce completes", async () => {
@@ -207,7 +215,7 @@ describe("bounded shared statement page navigation", () => {
       0,
       undefined,
       undefined,
-      { signal: expect.any(AbortSignal) },
+      { signal: expect.any(AbortSignal), grouped: true },
     );
     await act(async () => {
       await hook.result.current.next();

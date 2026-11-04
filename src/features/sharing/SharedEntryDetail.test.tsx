@@ -132,6 +132,125 @@ it("shows bill lines once instead of repeating their combined description", asyn
   expect(screen.queryByRole("heading", { name: "বিবরণ" })).toBeNull();
   expect(screen.queryByText("পরিশোধের মাধ্যম")).toBeNull();
 });
+it("shows the purchased items and quantity when opening a linked payment, with bill and payment amounts kept distinct", async () => {
+  mocked.detail.mockResolvedValue({
+    ...fixture(),
+    description: "নমুনা সিমেন্ট",
+    relatedBill: {
+      key: "sample-bill",
+      date: "2026-10-30",
+      charge: 20000,
+      lines: [
+        {
+          label: "নমুনা সিমেন্ট",
+          amount: 18000,
+          workName: "নমুনা ছাদ",
+          quantity: 2,
+          unit: "বস্তা",
+        },
+        { label: "নমুনা বালু", amount: 2000, workName: "নমুনা ছাদ" },
+      ],
+    },
+  });
+  render(<SharedEntryDetail {...props()} />);
+  await screen.findByText("বিলের বিবরণ");
+  expect(screen.getAllByText("নমুনা সিমেন্ট")).toHaveLength(1);
+  expect(screen.getByText("নমুনা বালু")).toBeTruthy();
+  expect(screen.getByText("2 বস্তা")).toBeTruthy();
+  expect(screen.getByText("৳100")).toBeTruthy();
+  expect(screen.getByText("৳200")).toBeTruthy();
+  expect(screen.getByText("2026-10-30")).toBeTruthy();
+  expect(screen.getByText("যে বিলের টাকা দেওয়া হয়েছে")).toBeTruthy();
+  expect(
+    screen.queryByText("এই টাকার সঙ্গে কোনো বিলের বিবরণ লেখা নেই।"),
+  ).toBeNull();
+});
+it("shows payment history inside a bill and opens its note in the same sheet before returning to the bill", async () => {
+  const bill = {
+    ...fixture(),
+    kind: "expense",
+    charge: 10000,
+    paid: 0,
+    description: "নমুনা মাল",
+    note: "",
+    paymentParts: [],
+    paymentMethods: [],
+    lines: [{ label: "নমুনা মাল", amount: 10000, workName: "নমুনা দরজা" }],
+    receipts: [],
+    payments: [
+      {
+        key: "sample-part-payment",
+        date: "2026-11-02",
+        paid: 4000,
+        description: "",
+        paymentParts: [{ method: "cash", amount: 4000 }],
+        paymentMethods: ["cash"],
+      },
+    ],
+  };
+  const before = JSON.stringify(bill);
+  mocked.detail
+    .mockResolvedValueOnce(bill)
+    .mockResolvedValueOnce({
+      ...fixture("sample-part-payment"),
+      date: "2026-11-02",
+      paid: 4000,
+      description: "",
+      note: "নমুনা কিস্তির নোট",
+      paymentParts: [{ method: "cash", amount: 4000 }],
+      paymentMethods: ["cash"],
+      relatedBill: {
+        key: bill.key,
+        date: bill.date,
+        charge: bill.charge,
+        lines: bill.lines,
+      },
+    })
+    .mockResolvedValueOnce(bill);
+  render(<SharedEntryDetail {...props()} />);
+  await screen.findByRole("heading", { name: "টাকা দেওয়ার হিসাব" });
+  expect(screen.getByText("৳40")).toBeTruthy();
+  expect(screen.getByText("নগদ")).toBeTruthy();
+  const billSignal = mocked.detail.mock.calls[0][3].signal as AbortSignal;
+  await userEvent.click(
+    screen.getByRole("button", {
+      name: "পরিশোধ · 2026-11-02 · ৳40 · বিস্তারিত",
+    }),
+  );
+  await screen.findByText("নমুনা কিস্তির নোট");
+  expect(screen.getAllByRole("dialog")).toHaveLength(1);
+  expect(screen.getByText("নমুনা মাল")).toBeTruthy();
+  expect(
+    screen.queryByRole("heading", { name: "টাকা দেওয়ার হিসাব" }),
+  ).toBeNull();
+  expect(billSignal.aborted).toBe(true);
+  expect(mocked.receipt).not.toHaveBeenCalled();
+  await userEvent.click(
+    screen.getByRole("button", { name: "আগের হিসাবে ফিরুন" }),
+  );
+  await screen.findByRole("heading", { name: "টাকা দেওয়ার হিসাব" });
+  expect(screen.queryByText("নমুনা কিস্তির নোট")).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "আগের হিসাবে ফিরুন" }),
+  ).toBeNull();
+  expect(JSON.stringify(bill)).toBe(before);
+});
+it.each(["মোট মজুরির চুক্তি", "আগাম টাকা"])(
+  "shows a standalone payment's %s without treating a missing bill as a problem",
+  async (description) => {
+    mocked.detail.mockResolvedValue({ ...fixture(), description });
+    render(<SharedEntryDetail {...props()} />);
+    await screen.findByText(description);
+    expect(
+      screen.queryByText("এই টাকার সঙ্গে কোনো বিলের বিবরণ লেখা নেই।"),
+    ).toBeNull();
+    expect(screen.queryByRole("heading", { name: "বিলের বিবরণ" })).toBeNull();
+    expect(screen.queryByText("যে বিলের টাকা দেওয়া হয়েছে")).toBeNull();
+    expect(screen.getByText("নমুনা দরজা")).toBeTruthy();
+    expect(screen.getByText("নমুনা পরিশোধের নোট")).toBeTruthy();
+    expect(screen.getByText("বিকাশ")).toBeTruthy();
+  },
+);
 it.each(["missing", "stale"] as const)(
   "clears private detail when authorization is %s",
   async (state) => {

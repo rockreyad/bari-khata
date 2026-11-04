@@ -42,10 +42,10 @@
   padding: 9px 16px;
 }
 .contacts-tabs.people-role-tabs > button.active {
-  border-color: var(--text);
-  background: var(--text);
-  color: var(--surface);
-  font-weight: 500;
+  border-color: var(--line);
+  background: var(--surface-muted);
+  color: var(--accent-strong);
+  font-weight: 600;
 }
 .people-active-scope {
   display: flex;

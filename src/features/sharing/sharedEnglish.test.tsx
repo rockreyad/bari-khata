@@ -15,7 +15,12 @@ afterEach(() => {
 });
 it("translates all static shared-page and detail copy through the real English language provider", () => {
   const copy = new Set<string>();
-  for (const file of ["SharedStatementPage.tsx", "SharedEntryDetail.tsx"]) {
+  for (const file of [
+    "SharedStatementPage.tsx",
+    "SharedEntryDetail.tsx",
+    "ShareLinkControls.tsx",
+    "../people/StatementSheet.tsx",
+  ]) {
     const source = ts.createSourceFile(
       file,
       readFileSync(new URL(file, import.meta.url), "utf8"),

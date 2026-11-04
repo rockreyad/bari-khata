@@ -260,7 +260,7 @@ describe("public live statements", () => {
       0,
       undefined,
       undefined,
-      { signal: expect.any(AbortSignal) },
+      { signal: expect.any(AbortSignal), grouped: true },
     );
     await user.click(screen.getByRole("button", { name: "পরের পাতা" }));
     await waitFor(() =>
@@ -271,7 +271,7 @@ describe("public live statements", () => {
       20,
       1,
       undefined,
-      { signal: expect.any(AbortSignal) },
+      { signal: expect.any(AbortSignal), grouped: true },
     );
     expect(screen.queryByText("নমুনা বিল 1")).toBeNull();
     expect(container.querySelectorAll(".shared-entry")).toHaveLength(1);
@@ -296,7 +296,7 @@ describe("public live statements", () => {
       0,
       1,
       undefined,
-      { signal: expect.any(AbortSignal) },
+      { signal: expect.any(AbortSignal), grouped: true },
     );
     expect(screen.queryByText("টাকা দিয়েছি")).toBeNull();
     expect(container.querySelectorAll(".shared-entry")).toHaveLength(20);
@@ -451,7 +451,7 @@ describe("public live statements", () => {
       0,
       undefined,
       undefined,
-      { signal: expect.any(AbortSignal) },
+      { signal: expect.any(AbortSignal), grouped: true },
     );
     expect(screen.queryByText("রহিম")).toBeNull();
   });
@@ -533,7 +533,7 @@ it("keeps the shop's full bill, payment and due summary while searching all scop
     0,
     undefined,
     undefined,
-    { signal: expect.any(AbortSignal), query: "ফেরত" },
+    { signal: expect.any(AbortSignal), grouped: true, query: "ফেরত" },
   );
   await user.click(screen.getByRole("button", { name: "কপি নামান" }));
   await waitFor(() => expect(mocked.download).toHaveBeenCalledOnce());
@@ -612,26 +612,31 @@ it.each([
     expect(
       container.querySelector(".shared-shop-bill > strong")?.textContent,
     ).toBe(bill);
-    const payment = screen.getByText("পরিশোধ", {
-      selector: "dt",
-    }).parentElement!;
-    expect(payment.querySelector("dd")?.textContent).toBe(received);
-    const remaining = screen.getByText(corrections ? "ক্রেতা পাবেন" : "বাকি", {
-      selector: "dt",
-    }).parentElement!;
-    expect(remaining.querySelector("dd")?.textContent).toBe(balance);
     if (corrections) {
+      const payment = screen.getByText("পরিশোধ", {
+        selector: "dt",
+      }).parentElement!;
+      expect(payment.querySelector("dd")?.textContent).toBe(received);
+      const remaining = screen.getByText("ক্রেতা পাবেন", {
+        selector: "dt",
+      }).parentElement!;
+      expect(remaining.querySelector("dd")?.textContent).toBe(balance);
       expect(
         container.querySelector(".shared-shop-bill small")?.textContent,
       ).toBe("সমন্বয়সহ · ৳-100");
       expect(payment.querySelector("small")?.textContent).toBe(
         "সমন্বয়সহ · +৳150",
       );
-      expect(screen.queryByText("পরিশোধিত")).toBeNull();
-    } else if (cost === 0) {
-      expect(screen.getByText("বাকি নেই")).toBeTruthy();
-      expect(screen.queryByText("পরিশোধিত")).toBeNull();
-    } else expect(screen.getByText("পরিশোধিত")).toBeTruthy();
+      expect(screen.queryByText("পুরো বিল মেটানো")).toBeNull();
+    } else {
+      expect(screen.queryByText("পরিশোধ", { selector: "dt" })).toBeNull();
+      expect(screen.queryByText("বাকি", { selector: "dt" })).toBeNull();
+      expect(
+        screen.getByText(cost === 0 ? "বাকি নেই" : "পুরো বিল মেটানো"),
+      ).toBeTruthy();
+      const summary = screen.getByRole("region", { name: "হিসাবের সারাংশ" });
+      expect(within(summary).getAllByText(bill)).toHaveLength(1);
+    }
     expect(JSON.stringify(statement)).toBe(before);
   },
 );
@@ -676,7 +681,7 @@ it("shows a noncash balance waiver as no amount owed without claiming the bill w
   mocked.read.mockResolvedValue(statement);
   const { container } = render(<SharedStatementPage />);
   await screen.findByText("বাকি নেই");
-  expect(screen.queryByText("পরিশোধিত")).toBeNull();
+  expect(screen.queryByText("পুরো বিল মেটানো")).toBeNull();
   expect(
     container.querySelector(".shared-shop-bill > strong")?.textContent,
   ).toBe("৳300");
@@ -689,9 +694,12 @@ it("shows a noncash balance waiver as no amount owed without claiming the bill w
     "৳0",
   );
   expect(
-    container.querySelector(".shared-entry-expense .shared-ledger-paid")
+    container.querySelector(".shared-entry-expense .shared-bill-status"),
+  ).toBeNull();
+  expect(
+    container.querySelector(".shared-entry-expense .shared-ledger-value")
       ?.textContent,
-  ).toBe("—");
+  ).toBe("৳300");
   expect(
     container.querySelector(".shared-entry-adjustment .shared-ledger-paid"),
   ).toBeNull();
@@ -977,25 +985,20 @@ it("identifies received cash, cash returned, bills and noncash corrections from 
   await screen.findByText("নমুনা ব্যাংক জমা");
   const row = (kind: string) =>
     within(container.querySelector<HTMLElement>(`.shared-entry-${kind}`)!);
-  expect(row("payment").getByText("পরিশোধ")).toBeTruthy();
+  expect(row("payment").getByText("টাকা পেয়েছেন")).toBeTruthy();
   expect(row("payment").getByText("৳100")).toBeTruthy();
   expect(row("refund").getByText("টাকা ফেরত")).toBeTruthy();
   expect(row("refund").getByText("−৳10")).toBeTruthy();
   expect(row("expense").getByText("নমুনা মালের বিবরণ")).toBeTruthy();
   expect(
-    container.querySelector(".shared-entry-expense .shared-ledger-bill")
+    container.querySelector(".shared-entry-expense .shared-bill-status"),
+  ).toBeNull();
+  expect(
+    container.querySelector(".shared-entry-expense .shared-ledger-value")
       ?.textContent,
   ).toBe("৳300");
   expect(
-    container.querySelector(".shared-entry-expense .shared-ledger-paid")
-      ?.textContent,
-  ).toBe("—");
-  expect(
-    container.querySelector(".shared-entry-payment .shared-ledger-bill")
-      ?.textContent,
-  ).toBe("—");
-  expect(
-    container.querySelector(".shared-entry-payment .shared-ledger-paid")
+    container.querySelector(".shared-entry-payment .shared-ledger-value")
       ?.textContent,
   ).toBe("৳100");
   expect(row("expense_credit").getByText("মাল ফেরত")).toBeTruthy();
@@ -1335,7 +1338,7 @@ it.each(["payment", "refund"] as const)(
     await screen.findByText("নমুনা পুরোনো নগদ তথ্য");
     const row = container.querySelector<HTMLElement>(`.shared-entry-${kind}`)!;
     expect(
-      within(row).getByText(kind === "payment" ? "পরিশোধ" : "টাকা ফেরত"),
+      within(row).getByText(kind === "payment" ? "টাকা পেয়েছেন" : "টাকা ফেরত"),
     ).toBeTruthy();
     expect(
       within(row).getByText("পুরোনো তথ্য; বর্তমান হিসাবে ধরা হয়নি"),
@@ -1346,3 +1349,130 @@ it.each(["payment", "refund"] as const)(
     ).toBe("৳0");
   },
 );
+
+it("shows one bill with a single amount and its payment status, while keeping partial and independent payments clear", async () => {
+  const source = page();
+  mocked.read.mockResolvedValue(
+    SharedStatementSchema.parse({
+      ...source,
+      account: "materials",
+      total: 4,
+      nextOffset: null,
+      rows: [
+        {
+          ...source.rows[0],
+          key: "settled",
+          description: "সিমেন্ট",
+          settlement: {
+            paid: 30000,
+            returned: 0,
+            refunded: 0,
+            balance: 0,
+            paymentCount: 1,
+          },
+        },
+        {
+          ...source.rows[0],
+          key: "partial",
+          description: "রড",
+          settlement: {
+            paid: 10000,
+            returned: 0,
+            refunded: 0,
+            balance: 20000,
+            paymentCount: 2,
+          },
+        },
+        {
+          ...source.rows[0],
+          key: "unpaid",
+          description: "ইট",
+          settlement: {
+            paid: 0,
+            returned: 0,
+            refunded: 0,
+            balance: 30000,
+            paymentCount: 0,
+          },
+        },
+        {
+          ...source.rows[0],
+          key: "advance",
+          kind: "payment",
+          charge: 0,
+          paid: 5000,
+          description: "আলাদা অগ্রিম",
+        },
+      ],
+    }),
+  );
+  const user = userEvent.setup();
+  const { container } = render(<SharedStatementPage />);
+  await screen.findByText("সিমেন্ট");
+  expect(container.querySelectorAll(".shared-entry")).toHaveLength(4);
+  const settled = screen.getByRole("button", { name: /বিল · সিমেন্ট/ });
+  expect(within(settled).getAllByText("৳300")).toHaveLength(1);
+  expect(within(settled).getByText("মেটানো")).toBeTruthy();
+  expect(
+    within(screen.getByRole("button", { name: /বিল · রড/ })).getByText(
+      "বাকি ৳200",
+    ),
+  ).toBeTruthy();
+  expect(
+    within(screen.getByRole("button", { name: /বিল · রড/ })).getByText(
+      "পেয়েছেন ৳100",
+    ),
+  ).toBeTruthy();
+  expect(
+    within(screen.getByRole("button", { name: /বিল · ইট/ })).getByText(
+      "পুরোটাই বাকি",
+    ),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: /টাকা পেয়েছেন · আলাদা অগ্রিম/ }),
+  ).toBeTruthy();
+  expect(container.querySelector(".shared-ledger-columns")).toBeNull();
+  await user.click(settled);
+  expect(mocked.detail).toHaveBeenLastCalledWith({
+    token: "a".repeat(64),
+    entryId: "settled",
+    revision: 1,
+  });
+});
+
+it("does not repeat matching worker bill and received totals", async () => {
+  const source = page();
+  mocked.read.mockResolvedValue({
+    ...source,
+    total: 0,
+    nextOffset: null,
+    rows: [],
+    totals: { ...source.totals, paid: 30000, payable: 0 },
+  });
+  render(<SharedStatementPage />);
+  await screen.findByText("মোট পেয়েছেন");
+  const summary = screen.getByRole("region", { name: "হিসাবের সারাংশ" });
+  expect(within(summary).getAllByText("৳300")).toHaveLength(1);
+  expect(within(summary).getByText("পুরো বিল মেটানো")).toBeTruthy();
+});
+
+it("does not call the worker's bill fully paid when old bills have unknown payment", async () => {
+  const source = page();
+  mocked.read.mockResolvedValue({
+    ...source,
+    total: 0,
+    nextOffset: null,
+    rows: [],
+    totals: {
+      ...source.totals,
+      paid: 30000,
+      payable: 0,
+      historicalCost: 50000,
+    },
+  });
+  render(<SharedStatementPage />);
+  await screen.findByText("মোট পেয়েছেন");
+  const summary = screen.getByRole("region", { name: "হিসাবের সারাংশ" });
+  expect(within(summary).queryByText("পুরো বিল মেটানো")).toBeNull();
+  expect(within(summary).getByText("বাকি নেই")).toBeTruthy();
+});

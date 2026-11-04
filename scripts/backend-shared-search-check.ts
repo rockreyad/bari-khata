@@ -7,7 +7,10 @@ import {
   appendBalanceAdjustment,
   readBalanceAdjustmentScope,
 } from "../src/domain/balanceAdjustments";
-import { SharedStatementSchema } from "../src/features/sharing/shareModel";
+import {
+  SharedEntrySchema,
+  SharedStatementSchema,
+} from "../src/features/sharing/shareModel";
 
 const status = JSON.parse(
   execFileSync("./node_modules/.bin/supabase", ["status", "-o", "json"], {
@@ -129,6 +132,7 @@ try {
       { id: "driver", name: "নমুনা গাড়িচালক", kind: "driver" },
       { id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" },
     ],
+    items: [{ id: "sample-item", name: "নমুনা আসল মালের নাম" }],
     contracts: [
       {
         id: "job",
@@ -152,6 +156,31 @@ try {
       ...Array.from({ length: 25 }, (_, index) =>
         bill(`page-${index}`, `PaginationSample ${index}`),
       ),
+      ...Array.from({ length: 25 }, (_, index) => ({
+        ...cash(`page-cash-${index}`, 10000),
+        relatedEntryId: `page-${index}`,
+        note: `GroupedPaymentSample ${index}`,
+      })),
+      {
+        ...cash("cement-cash", 10000),
+        relatedEntryId: "cement",
+        note: "নমুনা পরিশোধের কথা",
+      },
+      {
+        ...bill("item-name", "", 5000),
+        lines: [
+          {
+            id: "item-name-line",
+            workId: "roof",
+            itemId: "sample-item",
+            label: "",
+            amount: 5000,
+            quantity: "2.5",
+            unit: "বস্তা",
+            costType: "material",
+          },
+        ],
+      },
       bill("landfill", "নমুনা মাটি ভরাট", 600000),
       bill("small-amount", "নমুনা ছোট অঙ্ক", 6000),
       {
@@ -177,6 +206,7 @@ try {
       },
       {
         ...cash("split-cash", 12000),
+        relatedEntryId: "split",
         note: "hiddenpaymentmemoqzx",
         allocations: [
           { workId: "roof", amount: 3000 },
@@ -187,7 +217,7 @@ try {
           { method: "other", amount: 6000 },
         ],
       },
-      { ...cash("refund", 1000), kind: "refund" },
+      { ...cash("refund", 1000), kind: "refund", relatedEntryId: "cement" },
       {
         ...bill("returned", "নমুনা ফেরত", 1000),
         kind: "expense_credit",
@@ -197,8 +227,14 @@ try {
         ...bill("old-bill", "নমুনা পুরোনো বিল", 5000),
         balanceImpact: "historical",
       },
-      { ...cash("old-cash", 900), balanceImpact: "historical" },
+      {
+        ...cash("old-cash", 900),
+        balanceImpact: "historical",
+        relatedEntryId: "cement",
+      },
       { ...bill("voided", "privatevoidwordqzx"), voided: true },
+      { ...cash("voided-cash", 333), relatedEntryId: "voided" },
+      { ...cash("historical-bill-cash", 444), relatedEntryId: "old-bill" },
       bill("another-person", "privatepersonwordqzx", 9999, "roof", "another"),
       bill(
         "another-account",
@@ -311,6 +347,14 @@ try {
       p_token: token,
       p_entry_id: id,
       p_revision: pinned,
+    });
+  const activity = (token: string, query = "", offset = 0, pinned = revision) =>
+    rpc("read_contact_share_activity", {
+      p_token: token,
+      p_offset: offset,
+      p_limit: 20,
+      p_revision: pinned,
+      p_query: query,
     });
   const authorization = (
     token: string,
@@ -467,10 +511,113 @@ try {
         "paymentParts",
         "paymentMethods",
         "receipts",
+        "settlement",
+        "payments",
       ]
         .sort()
         .join(","),
     "Detail cannot expose owner, provenance, source or audit fields.",
+  );
+  SharedEntrySchema.parse(visible);
+  const groupedFirst = SharedStatementSchema.parse(
+    await activity(roof.token, "paginationsample"),
+  );
+  const groupedSecond = SharedStatementSchema.parse(
+    await activity(roof.token, "paginationsample", groupedFirst.nextOffset!),
+  );
+  check(
+    groupedFirst.total === 25 &&
+      groupedFirst.rows.length === 20 &&
+      groupedSecond.rows.length === 5 &&
+      groupedSecond.nextOffset === null,
+    "Linked bill/payment groups must paginate before returning bounded pages.",
+  );
+  check(
+    new Set([...groupedFirst.rows, ...groupedSecond.rows].map((row) => row.key))
+      .size === 25 &&
+      [...groupedFirst.rows, ...groupedSecond.rows].every(
+        (row) =>
+          row.kind === "expense" &&
+          row.paid === 0 &&
+          row.settlement?.paid === 10000 &&
+          row.settlement.balance === 0,
+      ),
+    "Grouped pages must contain each bill once and preserve raw financial event fields.",
+  );
+  const byPayment = SharedStatementSchema.parse(
+    await activity(roof.token, "groupedpaymentsample"),
+  );
+  check(
+    byPayment.total === 25 &&
+      byPayment.rows.every(
+        (row) => row.kind === "expense" && row.settlement?.paymentCount === 1,
+      ),
+    "Searching linked payment metadata must find the whole bill group.",
+  );
+  const cementGroup = (await activity(roof.token, "Portland")).rows.find(
+    (row: { key: string }) => row.key === "cement",
+  );
+  check(
+    cementGroup.settlement.paid === 10000 &&
+      cementGroup.settlement.returned === 1000 &&
+      cementGroup.settlement.refunded === 1000 &&
+      cementGroup.settlement.balance === 113450 &&
+      cementGroup.settlement.paymentCount === 1,
+    "Bill settlement must include only explicitly related current payments, returns and refunds.",
+  );
+  const returnedGroup = await activity(roof.token, "নমুনা ফেরত"),
+    refundGroup = await activity(roof.token, "refund"),
+    historicalGroup = await activity(roof.token, "9");
+  check(
+    returnedGroup.rows.some(
+      (row: { kind: string }) => row.kind === "expense_credit",
+    ) &&
+      refundGroup.rows.some((row: { kind: string }) => row.kind === "refund"),
+    "Returns and refunds must remain independent visible events.",
+  );
+  check(
+    historicalGroup.rows.some(
+      (row: { key: string; historical: boolean }) =>
+        row.key === "old-cash" && row.historical,
+    ),
+    "A historical linked payment must remain independent and cannot settle a current bill.",
+  );
+  for (const [amount, key] of [
+    ["3.33", "voided-cash"],
+    ["4.44", "historical-bill-cash"],
+  ]) {
+    check(
+      (await activity(roof.token, amount)).rows.some(
+        (row: { key: string; kind: string }) =>
+          row.key === key && row.kind === "payment",
+      ),
+      "Payments against a cancelled or historical bill must remain visible independently.",
+    );
+  }
+  const fullActivity = SharedStatementSchema.parse(await activity(roof.token));
+  check(
+    JSON.stringify(fullActivity.totals) === JSON.stringify(full.totals) &&
+      JSON.stringify(fullActivity.counts) === JSON.stringify(full.counts),
+    "Grouping cannot change accounting totals or raw event counts.",
+  );
+  check(
+    visible.payments.length === 1 &&
+      visible.payments[0].key === "cement-cash" &&
+      visible.payments[0].paid === 10000 &&
+      visible.payments[0].paymentParts[0].amount === 10000,
+    "Bill detail must include current linked payment history with safe methods.",
+  );
+  const enriched = SharedEntrySchema.parse(
+    await detail(roof.token, "item-name"),
+  );
+  check(
+    enriched.lines[0].label === "নমুনা আসল মালের নাম" &&
+      enriched.lines[0].quantity === 2.5 &&
+      enriched.lines[0].unit === "বস্তা" &&
+      (await activity(roof.token, "আসল মালের নাম")).rows.some(
+        (row: { key: string }) => row.key === "item-name",
+      ),
+    "Item names and quantities must be available when the legacy line label is empty.",
   );
   const partial = await detail(roof.token, "split"),
     partialCash = await detail(roof.token, "split-cash");
@@ -481,6 +628,44 @@ try {
       partial.note === "" &&
       partial.receipts.length === 0,
     "Partial bill detail must omit other notebooks and global metadata.",
+  );
+  SharedEntrySchema.parse(partial);
+  SharedEntrySchema.parse(partialCash);
+  check(
+    partial.settlement.paid === 3000 &&
+      partial.payments.length === 1 &&
+      partial.payments[0].paid === 3000 &&
+      partial.payments[0].paymentParts.length === 0 &&
+      partial.payments[0].paymentMethods.length === 0,
+    "Grouped bill history cannot reveal off-scope payment amounts or methods.",
+  );
+  check(
+    partialCash.relatedBill.key === "split" &&
+      partialCash.relatedBill.charge === 10000 &&
+      partialCash.relatedBill.lines.length === 1 &&
+      partialCash.relatedBill.lines[0].label === "ছাদের পাথর",
+    "Linked payment detail must show only its shared notebook's purchased items.",
+  );
+  for (const query of [
+    "zxprivatefloorword",
+    "hiddenworkmemoqzx",
+    "hiddenvouchernameqzx",
+    "hiddenpaymentmemoqzx",
+    "bank",
+    "privatepersonwordqzx",
+    "privateaccountwordqzx",
+    "privatevoidwordqzx",
+  ])
+    check(
+      (await activity(roof.token, query)).total === 0,
+      "Grouped search must not expose off-scope data through linked events.",
+    );
+  check(
+    (await activity(worker.token, "কাজের চুক্তি")).rows.some(
+      (row: { key: string; description: string }) =>
+        row.key === "wage-cash" && row.description === "নমুনা কাজের চুক্তি",
+    ),
+    "Standalone worker payments must retain a scoped contract description.",
   );
   check(
     partialCash.paid === 3000 &&
@@ -574,11 +759,12 @@ try {
   );
   for (const name of [
     "search_contact_share",
+    "read_contact_share_activity",
     "read_contact_share_entry",
     "contact_share_receipt_authorization",
   ]) {
     const args =
-      name === "search_contact_share"
+      name === "search_contact_share" || name === "read_contact_share_activity"
         ? { p_token: roof.token, p_revision: revision + 1 }
         : name === "read_contact_share_entry"
           ? {
