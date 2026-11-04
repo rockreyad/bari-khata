@@ -6,9 +6,12 @@ export function personWorks(ledger: Ledger, person: Person) {
     if (contract.personId === person.id && contract.workId)
       ids.add(contract.workId);
   for (const entry of ledger.entries)
-    if (entry.personId === person.id)
+    if (entry.personId === person.id) {
       for (const part of [...entry.lines, ...entry.allocations])
         ids.add(part.workId);
+      if (entry.kind === "adjustment" && entry.adjustment?.workId)
+        ids.add(entry.adjustment.workId);
+    }
   return ledger.works.filter((work) => ids.has(work.id));
 }
 

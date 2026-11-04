@@ -3,7 +3,14 @@ export { useNotebook } from "./NotebookContext";
 export type { AddOptions } from "./NotebookContext";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
-import { entryReturn, entryUrl, contractUrl, isEntryPage } from "./entryRoutes";
+import {
+  entryReturn,
+  entryUrl,
+  contractUrl,
+  personUrl,
+  isEntryPage,
+  isPersonFormPage,
+} from "./entryRoutes";
 import { useLedger } from "../data/useLedger";
 import { getActiveOwner } from "../data/database";
 import { useLanguageContext } from "../context/LanguageProvider";
@@ -72,7 +79,12 @@ export function NotebookProvider({
       isEntryPage(location.pathname) &&
       !["_entity", "_entry", "_quick"].some((key) => currentParams.has(key))
     ) {
-      navigate(entryReturn(currentParams.get("back"), base), { replace: true });
+      const fallback = isPersonFormPage(location.pathname)
+        ? `${base}/people`
+        : `${base}/`;
+      navigate(entryReturn(currentParams.get("back") ?? fallback, base), {
+        replace: true,
+      });
       return;
     }
     setSearch(
@@ -132,6 +144,14 @@ export function NotebookProvider({
     },
     entity: (kind, id, workId, personId) => {
       if (!currentScope()) return;
+      if (kind === "person") {
+        const previous = isEntryPage(location.pathname)
+          ? (new URLSearchParams(location.search).get("back") ??
+            `${base}/people`)
+          : `${location.pathname}${location.search}`;
+        navigate(personUrl(base, id, workId, personId, previous));
+        return;
+      }
       if (kind === "contract") {
         navigate(
           contractUrl(

@@ -18,6 +18,7 @@ vi.mock("../context/LanguageProvider", () => ({
     formatDigits: (value: string | number) => localizedDigits(value, "bn"),
     number: String,
     money: String,
+    date: (value: string | null) => value ?? "—",
   }),
 }));
 vi.mock("../data/repository", () => ({

@@ -33,6 +33,9 @@ describe("contextual job navigation", () => {
     "/jobs/job-one",
     "/jobs/job-one/edit",
     "/entries/new",
+    "/people/new",
+    "/people/new/",
+    "/people/worker/edit",
     "/jobs/new",
     "/login",
     "/sample/people/me",
@@ -45,6 +48,8 @@ describe("contextual job navigation", () => {
     "/sample-other/people/me",
     "/sample/jobs/job-one",
     "/sample/entries/new",
+    "/sample/people/new",
+    "/sample/people/worker/edit",
   ])("keeps demo account boundaries for %s", (origin) => {
     expect(jobReturn(origin, "/sample", "/people/worker")).toBe(
       "/people/worker",
@@ -63,4 +68,17 @@ describe("contextual job navigation", () => {
     );
     expect(jobReturn(null, "/sample")).toBe("/jobs");
   });
+  it.each(["", "/sample"])(
+    "never creates a job-detail return to a person form under %s",
+    (base) => {
+      for (const form of ["/people/new", "/people/worker/edit"]) {
+        const url = new URL(
+          jobDetailUrl("job-one", `${base}${form}`, base),
+          "https://bari.invalid",
+        );
+        expect(url.searchParams.get("back")).toBe(`${base}/jobs`);
+        expect(jobReturn(`${base}${form}`, base)).toBe("/jobs");
+      }
+    },
+  );
 });

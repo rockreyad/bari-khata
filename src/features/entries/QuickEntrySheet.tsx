@@ -390,6 +390,7 @@ export function QuickEntrySheet({
     removedJob ||
     ledger.works.find((work) => work.id === draft.workId)?.archivedAt;
   const selectedKind = selectedPerson ? personKind(selectedPerson) : null;
+  const canCreateWork = selectedKind !== "shop";
   const labour = wage || (!cash && draft.costType === "labour");
   const transport = ["transport", "unload"].includes(draft.costType);
   const material = draft.costType === "material";
@@ -568,7 +569,9 @@ export function QuickEntrySheet({
                       {w.archivedAt ? ` · ${t("মুছে রাখা")} ` : ""}
                     </option>
                   ))}
-                <option value="__new__">{t("+ নতুন খাতা খুলব")}</option>
+                {canCreateWork ? (
+                  <option value="__new__">{t("+ নতুন খাতা খুলব")}</option>
+                ) : null}
               </AppSelect>
             </label>
             <label>
@@ -615,7 +618,7 @@ export function QuickEntrySheet({
               </AppSelect>
             </label>
           </div>
-          {!draft.workId ? (
+          {canCreateWork && !draft.workId ? (
             <button
               className="text-button"
               type="button"

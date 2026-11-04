@@ -8,6 +8,8 @@ export const balanceAdjustmentEnglish: Record<string, string> = {
     "The adjustment history in this copy is inconsistent. Choose a newer backup.",
   "সব ধরনের হিসাব": "All accounts",
   "মোট হিসাব মেলাই": "Reconcile total",
+  "সব খাতার মোট মিলবে। আলাদা খাতায় ভাগ হবে না।":
+    "This adjusts the total across all notebooks. It will not be divided among individual notebooks.",
   "যে মোট মিলাব": "Total to reconcile",
   "মোট দিয়েছি": "Total paid",
   "মোট খরচ": "Total cost",

@@ -91,7 +91,10 @@ export function JobsPage() {
   const balances = useMemo(() => jobBalances(ledger), [ledger]);
   const scoped = useMemo(
     () =>
-      recentJobs(ledger.contracts.filter((job) => !job.archivedAt)).filter(
+      recentJobs(
+        ledger.contracts.filter((job) => !job.archivedAt),
+        ledger.entries,
+      ).filter(
         (job) =>
           (!personId || job.personId === personId) &&
           (!workId || contractAppliesToWork(job, workId)) &&
@@ -104,7 +107,15 @@ export function JobsPage() {
               .toLocaleLowerCase()
               .includes(normalized)),
       ),
-    [ledger.contracts, personId, workId, normalized, peopleById, t],
+    [
+      ledger.contracts,
+      ledger.entries,
+      personId,
+      workId,
+      normalized,
+      peopleById,
+      t,
+    ],
   );
   const jobs = scoped.filter(
     (job) =>

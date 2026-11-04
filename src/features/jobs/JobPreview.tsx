@@ -136,7 +136,7 @@ export function JobPreview({
       </header>
       {contracts.length ? (
         <div className="job-preview-track" aria-label={t("কাজের তালিকা")}>
-          {recentJobs(contracts)
+          {recentJobs(contracts, ledger.entries)
             .slice(0, 4)
             .map((job) => (
               <JobTile

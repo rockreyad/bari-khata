@@ -1,4 +1,21 @@
 export const formEnglish: Record<string, string> = {
+  "দেওয়া টাকা বদলাই": "Edit payment",
+  "বাকি {{amount}}": "Due {{amount}}",
+  "আমার জমা {{amount}}": "My credit {{amount}}",
+  "সর্বশেষ তথ্য দেখি": "Review latest payment",
+  "নাম, খাতা ও তারিখ": "Name, notebook and date",
+  "নাম ছাড়া হিসাব": "Unnamed entry",
+  "মাধ্যম, নোট ও ছবি": "Payment method, notes and photos",
+  "নোট ও ছবি": "Notes and photos",
+  "{{count}}টি ছবি বা ভাউচার": "{{count}} photos or receipts",
+  "আরও তথ্য": "More details",
+  "এই কেনাকাটার পরিশোধ": "Payment for this purchase",
+  "দামের সঙ্গে দেওয়া টাকা বদলাবে না। প্রয়োজন হলে পরিশোধটি খুলে বদলান।":
+    "Changing the price will not change the recorded payment. Open the payment if it also needs correcting.",
+  "সঙ্গে রাখা দেওয়া টাকার হিসাব বদলেছে। আবার খুলে মিলিয়ে নিন।":
+    "The payment saved with this purchase has changed. Reopen the entry and check it.",
+  "বিল ও দেওয়া টাকা একসঙ্গে বদলানো যাচ্ছে না। যুক্ত হিসাবটি খুলে মিলিয়ে নিন।":
+    "The bill and payment cannot be changed together. Open the payment and check it.",
   "অসমাপ্ত লেখা বাদ দিন": "Discard draft",
   "অসমাপ্ত লেখা বাদ দেওয়া যায়নি। আবার চেষ্টা করুন।":
     "The draft could not be discarded. Please try again.",

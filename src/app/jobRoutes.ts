@@ -1,3 +1,5 @@
+import { isPersonFormPage } from "./entryRoutes";
+
 function originPath(origin: string | null | undefined, base: string) {
   if (!origin?.startsWith("/") || origin.startsWith("//")) return null;
   try {
@@ -7,6 +9,7 @@ function originPath(origin: string | null | undefined, base: string) {
       return null;
     const path = (base ? url.pathname.slice(base.length) : url.pathname) || "/";
     if (
+      isPersonFormPage(path) ||
       path === "/jobs/new" ||
       !/^(?:\/(?:people|works)(?:\/[^/]+)?\/?|\/jobs\/?|\/)$/.test(path)
     )

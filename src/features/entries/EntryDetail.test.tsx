@@ -1,5 +1,7 @@
+// @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { LedgerSchema, type Ledger } from "../../domain/model";
 import { replaceEntry, setEntryVoided } from "../../domain/ledger";
@@ -7,13 +9,26 @@ import { EntryDetail } from "./EntryDetail";
 const { notebook } = vi.hoisted(() => ({ notebook: vi.fn() }));
 vi.mock("../../app/NotebookProvider", () => ({ useNotebook: notebook }));
 vi.mock("../../components/Sheet", () => ({
-  Sheet: ({ children, title }: { children: ReactNode; title: string }) => (
+  Sheet: ({
+    children,
+    title,
+    subtitle,
+    footer,
+  }: {
+    children: ReactNode;
+    title: string;
+    subtitle?: string;
+    footer?: ReactNode;
+  }) => (
     <section>
       <h1>{title}</h1>
+      {subtitle ? <p>{subtitle}</p> : null}
       {children}
+      {footer}
     </section>
   ),
 }));
+afterEach(cleanup);
 vi.mock("../../data/repository", () => ({
   createWorkspaceStorage: () => ({ getReceipt: vi.fn() }),
 }));
@@ -59,7 +74,177 @@ function renderDetail(ledger: Ledger, id = ledger.entries[0].id) {
 }
 const revisionMarkup = (html: string) =>
   html.match(/<ol class="entry-revision-list">[\s\S]*?<\/ol>/)?.[0] ?? "";
+function markup(html: string) {
+  const node = document.createElement("div");
+  node.innerHTML = html;
+  return node;
+}
+function simplePurchase(payment = 100000) {
+  const stamp = "2026-11-01T08:00:00.000Z";
+  return LedgerSchema.parse({
+    works: [{ id: "door", name: "নমুনা খাতা" }],
+    people: [{ id: "shop", name: "নমুনা দোকান", kind: "shop" }],
+    entries: [
+      {
+        id: "bill",
+        kind: "expense",
+        personId: "shop",
+        date: "2026-11-01",
+        createdAt: stamp,
+        updatedAt: stamp,
+        lines: [
+          { id: "line", workId: "door", label: "নমুনা মাল", amount: 100000 },
+        ],
+      },
+      {
+        id: "paid",
+        kind: "payment",
+        relatedEntryId: "bill",
+        personId: "shop",
+        date: "2026-11-01",
+        createdAt: stamp,
+        updatedAt: stamp,
+        allocations: [{ workId: "door", amount: payment }],
+        paymentParts: [{ method: "bank", amount: payment }],
+      },
+    ],
+  });
+}
 describe("transaction detail activity", () => {
+  it.each([
+    [100000, "বাকি নেই"],
+    [60000, "বাকি ৳400"],
+    [120000, "আমার জমা ৳200"],
+  ] as const)(
+    "shows a simple co-created payment of %s as a concise paid status with its true balance",
+    (paid, status) => {
+      const ledger = simplePurchase(paid);
+      const before = JSON.stringify(ledger);
+      const html = renderDetail(ledger, "bill");
+      expect(html).toContain('class="entry-paid-status-v5"');
+      expect(html).toContain('aria-label="পরিশোধের বিস্তারিত"');
+      const row = markup(html).querySelector(".entry-paid-status-v5")!;
+      expect(row.textContent).toContain("দিয়েছি");
+      expect(row.querySelector("strong")?.textContent).toBe(`৳${paid / 100}`);
+      expect(row.querySelector("small")?.textContent).toBe(status);
+      expect(html).not.toContain('class="entry-payment-fold-v5"');
+      expect(html).not.toContain("এই বিলের সঙ্গে রাখা পরিশোধ");
+      expect(JSON.stringify(ledger)).toBe(before);
+    },
+  );
+
+  it("keeps the exact payment and its method, date and ordinary editor reachable from the compact status", () => {
+    const ledger = simplePurchase();
+    const detail = vi.fn(),
+      add = vi.fn(),
+      save = vi.fn();
+    notebook.mockReturnValue({
+      ledger,
+      mode: "demo",
+      close: vi.fn(),
+      add,
+      save,
+      notify: vi.fn(),
+      go: vi.fn(),
+      detail,
+    });
+    const view = render(<EntryDetail id="bill" />);
+    fireEvent.click(screen.getByRole("button", { name: "পরিশোধের বিস্তারিত" }));
+    expect(detail).toHaveBeenCalledExactlyOnceWith("paid");
+    view.rerender(<EntryDetail id="paid" />);
+    expect(screen.getByText("ব্যাংক")).toBeTruthy();
+    expect(view.container.textContent).toContain(calendarLabel("2026-11-01"));
+    fireEvent.click(screen.getByRole("button", { name: "সংশোধন করুন" }));
+    expect(add).toHaveBeenCalledExactlyOnceWith({ editId: "paid" });
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("keeps a later partial payment in the plain payment-history disclosure", () => {
+    const source = simplePurchase(30000);
+    const ledger = LedgerSchema.parse({
+      ...source,
+      entries: [
+        source.entries[0],
+        {
+          ...source.entries[1],
+          date: "2026-11-02",
+          createdAt: "2026-11-02T08:00:00.000Z",
+        },
+      ],
+    });
+    const html = renderDetail(ledger, "bill");
+    expect(html).toContain("পরিশোধের ইতিহাস");
+    expect(html).toContain('class="entry-payment-fold-v5"');
+    expect(html).toContain("৳300");
+    expect(html).toContain("ব্যাংক");
+    expect(html).toContain(calendarLabel("2026-11-02"));
+    expect(html).not.toContain('class="entry-paid-status-v5"');
+    expect(html).not.toContain("এই বিলের সঙ্গে রাখা পরিশোধ");
+  });
+
+  it.each([false, true])(
+    "keeps refunds, returns and cancelled events distinct in payment history (material return %s)",
+    (includeReturn) => {
+      const source = simplePurchase(70000);
+      const ledger = LedgerSchema.parse({
+        ...source,
+        entries: [
+          ...source.entries,
+          ...(
+            [
+              ["later", "payment", 30000, false],
+              ["refund", "refund", 10000, false],
+              ["void-refund", "refund", 9000, true],
+              ["void-payment", "payment", 80000, true],
+            ] as const
+          ).map(([id, kind, amount, voided]) => ({
+            id,
+            kind,
+            voided,
+            relatedEntryId: "bill",
+            personId: "shop",
+            date: "2026-11-02",
+            createdAt: "2026-11-02T08:00:00.000Z",
+            allocations: [{ workId: "door", amount }],
+            paymentParts: [{ amount }],
+          })),
+          ...(includeReturn
+            ? [
+                {
+                  id: "return",
+                  kind: "expense_credit",
+                  relatedEntryId: "bill",
+                  personId: "shop",
+                  lines: [
+                    {
+                      id: "return-line",
+                      workId: "door",
+                      label: "নমুনা মাল ফেরত",
+                      amount: 20000,
+                    },
+                  ],
+                },
+              ]
+            : []),
+        ],
+      });
+      const html = renderDetail(ledger, "bill");
+      const node = markup(html);
+      const summary = node.querySelector(".entry-payment-fold-v5 > summary")!;
+      expect(summary.textContent).toContain("পরিশোধ ও ফেরত");
+      if (includeReturn) expect(summary.textContent).not.toContain("৳");
+      else expect(summary.querySelector("strong")?.textContent).toBe("৳900");
+      expect(node.querySelectorAll(".detail-linked-row")).toHaveLength(
+        includeReturn ? 6 : 5,
+      );
+      expect(node.querySelectorAll(".detail-linked-row.is-void")).toHaveLength(
+        2,
+      );
+      expect(html).toContain("টাকা ফেরত পেয়েছি");
+      if (includeReturn) expect(html).toContain("মাল ফেরত");
+      expect(html).not.toContain('class="entry-paid-status-v5"');
+    },
+  );
   it("shows a notebook paid-total correction as an adjustment without inventing a person or bill", () => {
     const ledger = LedgerSchema.parse({
       works: [{ id: "work", name: "পরীক্ষার খাতা" }],
@@ -309,7 +494,7 @@ describe("transaction detail activity", () => {
       detail: vi.fn(),
     });
     const html = renderToString(<EntryDetail id="bill" />);
-    expect(html).toContain("এই বিলের সঙ্গে রাখা পরিশোধ");
+    expect(html).toContain("পরিশোধের ইতিহাস");
     expect(html).toContain('<details class="entry-payment-fold-v5">');
     expect(html).not.toContain("এই বিলের টাকার হিসাব");
     expect(html).not.toContain("লেনদেন চাপলে সেই টাকার পুরো ইতিহাস দেখবেন।");
@@ -737,7 +922,7 @@ it("keeps a linked material return reachable without presenting it as a zero pay
     detail: vi.fn(),
   });
   const html = renderToString(<EntryDetail id="bill" />);
-  expect(html).toContain("বিলের লেনদেন");
+  expect(html).toContain("পরিশোধ ও ফেরত");
   expect(html).toContain("মাল ফেরত");
   expect(html).not.toContain("৳0");
 });

@@ -1,4 +1,54 @@
 export const sharedEnglish: Record<string, string> = {
+  "মাল কেনা": "Purchase",
+  "মোট বিল": "Total bills",
+  "ক্রেতা পাবেন": "Customer credit",
+  "মাল ফেরত বাদে": "Less returned goods",
+  "টাকা ফেরত বাদে": "Less refunded money",
+  পরিশোধিত: "Paid in full",
+  "লেনদেন খুঁজুন": "Search transactions",
+  "বিবরণ, তারিখ বা টাকা দিয়ে খুঁজুন": "Search by description, date or amount",
+  "খোঁজা মুছুন": "Clear search",
+  "কিছু মেলেনি। অন্যভাবে খুঁজে দেখুন।": "No matches. Try a different search.",
+  "তারিখ / বিবরণ": "Date / description",
+  "হিসাব খোলা যায়নি। বন্ধ করে আবার চেষ্টা করুন।":
+    "Could not open the entry. Close it and try again.",
+  "ভাউচারটি অনেক বড়। যিনি পাঠিয়েছেন তাঁর কাছ থেকে নিন।":
+    "This voucher is too large. Ask the sender for a copy.",
+  "ভাউচার খোলা যায়নি। আবার চেষ্টা করুন।":
+    "Could not open the voucher. Try again.",
+  "পরিশোধের মাধ্যম": "Payment method",
+  "বিলের বিবরণ": "Bill items",
+  "ছবি ও ভাউচার": "Photos and vouchers",
+  "ভাউচার দেখি": "View voucher",
+  "ভাউচার নামান": "Download voucher",
+  "মোট পাওয়া": "Total received",
+  "বিলের মোট": "Bill total",
+  "টাকা পেয়েছেন": "Money received",
+  "ফেরত দিয়েছেন": "Money returned",
+  পেয়েছেন: "Received",
+  "শুধু দেখার কপি": "View-only copy",
+  "হিসাব আসছে…": "Loading statement…",
+  "অল্প অল্প করে লেনদেন দেখানো হবে।":
+    "Transactions will appear a page at a time.",
+  "নতুন হিসাব এসেছে": "The statement has changed",
+  "সব খাতা মিলিয়ে": "Across all notebooks",
+  "আসলে পেয়েছেন {{amount}}": "Actually received {{amount}}",
+  "ফেরত দেওয়া টাকা বাদে": "Less money returned",
+  "আপনার কাছে জমা": "Credit with you",
+  "হিসাবের জমা": "Account credit",
+  "কাজ ও চুক্তি": "Jobs and contracts",
+  "কাজের চুক্তি": "Work contract",
+  "চুক্তির পাতা": "Contract pages",
+  "পরের চুক্তি": "Next contracts",
+  "পূর্ণ বিবরণ": "Full description",
+  "সব লেনদেনের কপি তৈরি হচ্ছে…": "Preparing a copy of all transactions…",
+  "লেনদেন আসছে…": "Loading transactions…",
+  "লেনদেনের পাতা": "Transaction pages",
+  "পাতা {{page}}": "Page {{page}}",
+  "হিসাবের পাতা মিলছে না। হালনাগাদ করে আবার দেখুন।":
+    "This page does not match the statement. Refresh and try again.",
+  "হিসাবের কপি অনেক বড়। যিনি পাঠিয়েছেন তাঁর কাছ থেকে কপি নিন।":
+    "This statement is too large to download here. Ask the sender for a copy.",
   "{{count}}টি চুক্তি": "{{count}} contracts",
   "কাজের বিল": "Work bills",
   "হিসাবের সারাংশ": "Account summary",
@@ -66,4 +116,6 @@ export const sharedEnglish: Record<string, string> = {
   "এই নামের কোনো হিসাব এখনও লেখা হয়নি।":
     "No entries have been recorded for this person yet.",
   "পুরোনো খরচ; পরিশোধ জানা নেই": "Historical cost; payment unknown",
+  "পুরোনো তথ্য; বর্তমান হিসাবে ধরা হয়নি":
+    "Historical entry; excluded from the current balance",
 };

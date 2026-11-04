@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LanguageProvider } from "../context/LanguageProvider";
 import {
@@ -13,6 +19,23 @@ import { LedgerRepository } from "../data/repository";
 import { LedgerSchema, type Ledger } from "../domain/model";
 import { savePreferences } from "../lib/preferences";
 import { EntrySheet } from "./EntrySheet";
+
+function reveal<T extends HTMLElement>(element: T): T {
+  const ancestors: HTMLDetailsElement[] = [];
+  for (
+    let parent = element.parentElement;
+    parent;
+    parent = parent.parentElement
+  )
+    if (parent instanceof HTMLDetailsElement) ancestors.unshift(parent);
+  for (const section of ancestors)
+    if (!section.open) {
+      const summary = section.querySelector<HTMLElement>(":scope > summary");
+      if (!summary) throw new Error("Expected a disclosure summary");
+      fireEvent.click(summary);
+    }
+  return element;
+}
 
 const databases: LedgerDatabase[] = [];
 beforeAll(() => {
@@ -123,6 +146,7 @@ it.each([
     const trigger = view.container.querySelector<HTMLButtonElement>(
       '[data-control="date"]',
     )!;
+    reveal(trigger);
     const before = trigger.textContent;
     await user.click(trigger);
     await user.click(
@@ -153,6 +177,9 @@ it.each([
           }) as HTMLButtonElement
         ).disabled,
       ).toBe(false),
+    );
+    reveal(
+      view.container.querySelector<HTMLButtonElement>('[data-control="date"]')!,
     );
     expect(
       view.container.querySelector('[data-control="date"]')!.textContent,

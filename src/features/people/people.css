@@ -777,21 +777,9 @@
   }
 }
 
-.contact-bill-progress {
-  padding: 0 29px 23px;
-}
-@media (max-width: 600px) {
-  .contact-bill-progress {
-    padding: 0 21px 21px;
-  }
-}
-
 .contact-summary-card > .spending-chart-card {
   padding: 22px 29px 20px;
   border-top: 1px solid var(--line);
-}
-.contact-summary-card .contact-bill-progress {
-  padding-bottom: 24px;
 }
 .contact-job-totals {
   padding: 0 29px 20px;

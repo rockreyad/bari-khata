@@ -150,7 +150,7 @@ export function reconciledTotals(ledger: Ledger, scope: FinancialScope = {}) {
     } else if (entry.contractId && entry.personId)
       bucket(entry.personId, entry.account, entry.contractId).adjustment +=
         owed;
-    else if (scope.workId || (scope.personId && scope.account)) pool += owed;
+    else if (scope.personId && scope.account) pool += owed;
     else if (change.target === "person" && entry.personId) {
       const group = JSON.stringify([entry.personId, entry.account]);
       personPools.set(group, (personPools.get(group) ?? 0n) + owed);

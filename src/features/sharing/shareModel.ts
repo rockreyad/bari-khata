@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+export const SHARED_PAGE_SIZE = 20;
+export const SHARED_QUERY_MAX_LENGTH = 200;
+export const SHARED_RECEIPT_MAX_BYTES = 10 * 1024 * 1024;
+export const SHARED_RECEIPT_MIMES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+] as const;
+
 const SafeAmount = z
   .number()
   .int()
@@ -108,3 +118,69 @@ export const SharedStatementSchema = z.object({
 export type SharedStatement = z.infer<typeof SharedStatementSchema>;
 
 export type SharedKind = SharedStatement["rows"][number]["kind"];
+const SharedMethodSchema = z.enum(["cash", "bkash", "bank", "other"]);
+export const SharedEntrySchema =
+  SharedStatementSchema.shape.rows.element.safeExtend({
+    key: z.string().min(1).max(160),
+    revision: z.number().int().positive(),
+    note: z.string().max(10000),
+    paymentParts: z
+      .array(
+        z.object({
+          method: SharedMethodSchema,
+          amount: SafeAmount.refine((value) => value >= 0),
+        }),
+      )
+      .max(100),
+    paymentMethods: z.array(SharedMethodSchema).max(4),
+    lines: z
+      .array(
+        z.object({
+          label: z.string().max(300),
+          amount: SafeAmount.refine((value) => value >= 0),
+          workName: z.string().max(200),
+        }),
+      )
+      .max(1000),
+    receipts: z
+      .array(
+        z.object({
+          id: z.string().min(1).max(160),
+          name: z.string().min(1).max(300),
+          mime: z.enum(SHARED_RECEIPT_MIMES),
+          size: z
+            .number()
+            .int()
+            .positive()
+            .max(25 * 1024 * 1024),
+        }),
+      )
+      .max(30),
+  });
+export type SharedEntry = z.infer<typeof SharedEntrySchema>;
+
+export function validateSharedPage(
+  page: SharedStatement,
+  offset: number,
+  expectedRevision?: number,
+  kind?: SharedKind,
+): SharedStatement {
+  if (expectedRevision !== undefined && page.revision !== expectedRevision)
+    throw new Error("share_changed");
+  const end = offset + page.rows.length;
+  const keys = new Set(page.rows.map((row) => row.key));
+  if (
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    offset > 100000 ||
+    page.rows.length > SHARED_PAGE_SIZE ||
+    keys.size !== page.rows.length ||
+    page.rows.some((row) => !row.key.length || (kind && row.kind !== kind)) ||
+    end > page.total ||
+    (end < page.total
+      ? !page.rows.length || page.nextOffset !== end
+      : page.nextOffset !== null)
+  )
+    throw new Error("share_invalid_page");
+  return page;
+}

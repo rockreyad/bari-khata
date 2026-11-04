@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CaretDownIcon, CheckIcon } from "@phosphor-icons/react";
 import type { Ledger, Person } from "../../domain/model";
 import { personWorks } from "../../domain/personWorkLinks";
 import { useLanguageContext } from "../../context/LanguageProvider";
-import { AppSelect } from "../../components/ui/AppSelect";
+import { Sheet } from "../../components/Sheet";
 import "./person-work-links.css";
 
 export function PersonNotebooks({
@@ -17,6 +18,16 @@ export function PersonNotebooks({
   onSelect: (workId: string) => void;
 }) {
   const { t, formatDigits } = useLanguageContext();
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const restoreFocus = useRef(false);
+  useEffect(() => {
+    if (open || !restoreFocus.current) return;
+    restoreFocus.current = false;
+    // Sheet has no connected trigger; restore focus after its focus trap unmounts.
+    const timer = window.setTimeout(() => trigger.current?.focus(), 0);
+    return () => window.clearTimeout(timer);
+  }, [open]);
   const works = useMemo(() => {
     const linked = personWorks(ledger, person);
     const selected = ledger.works.find((work) => work.id === selectedWorkId);
@@ -25,20 +36,57 @@ export function PersonNotebooks({
       : linked;
   }, [ledger, person, selectedWorkId]);
   if (!works.length) return null;
+  const selected = works.find((work) => work.id === selectedWorkId);
+  const label = selected ? formatDigits(selected.name) : t("সব খাতা");
+  const close = () => {
+    restoreFocus.current = true;
+    setOpen(false);
+  };
   return (
-    <div className="person-notebooks">
-      <AppSelect
+    <span className="person-notebooks">
+      <span aria-hidden="true">·</span>
+      <button
+        ref={trigger}
+        type="button"
+        className="person-notebook-trigger"
         aria-label={t("খাতা বেছে দেখুন")}
-        value={selectedWorkId}
-        onChange={(event) => onSelect(event.target.value)}
+        aria-description={label}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title={label}
+        onClick={() => setOpen(true)}
       >
-        <option value="">{t("সব খাতা")}</option>
-        {works.map((work) => (
-          <option key={work.id} value={work.id}>
-            {formatDigits(work.name)}
-          </option>
-        ))}
-      </AppSelect>
-    </div>
+        <span className="person-notebook-label">{label}</span>
+        <CaretDownIcon size={13} aria-hidden="true" />
+      </button>
+      {open ? (
+        <Sheet
+          title={t("খাতা বেছে দেখুন")}
+          subtitle={formatDigits(person.name)}
+          onClose={close}
+        >
+          <div className="person-notebook-options">
+            {[{ id: "", name: t("সব খাতা") }, ...works].map((work) => (
+              <button
+                key={work.id}
+                type="button"
+                className="person-notebook-option"
+                aria-pressed={selectedWorkId === work.id}
+                autoFocus={selectedWorkId === work.id}
+                onClick={() => {
+                  if (work.id !== selectedWorkId) onSelect(work.id);
+                  close();
+                }}
+              >
+                <span>{formatDigits(work.name)}</span>
+                {selectedWorkId === work.id ? (
+                  <CheckIcon size={19} weight="bold" aria-hidden="true" />
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </Sheet>
+      ) : null}
+    </span>
   );
 }

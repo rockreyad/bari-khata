@@ -11,7 +11,20 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import { Camera, Plus, Receipt, Trash2, Wallet, Wrench } from "lucide-react";
+import {
+  CalendarDays,
+  Camera,
+  ChevronDown,
+  ChevronRight,
+  Pencil,
+  Plus,
+  Receipt,
+  Store,
+  Trash2,
+  UserRound,
+  Wallet,
+  Wrench,
+} from "lucide-react";
 import { z } from "zod";
 import { useLanguageContext } from "../context/LanguageProvider";
 import { createWorkspaceStorage } from "../data/repository";
@@ -22,6 +35,11 @@ import {
   type Ledger,
 } from "../domain/model";
 import { canAssignContact } from "../domain/contacts";
+import {
+  fullyPaidPurchasePayment,
+  paidPurchasePayment,
+  replacePaidPurchase,
+} from "../domain/paidPurchaseEdit";
 import {
   entryTotal,
   parseAmount,
@@ -90,6 +108,10 @@ const DraftSchema = z.object({
   workerPaid: z.boolean(),
   paidNow: z.boolean(),
   paidAmount: numericDraftText(),
+  // Keep old bill-only drafts from silently changing a previously recorded payment.
+  updatePurchasePayment: z.boolean().default(false),
+  purchasePaymentId: z.string().default(""),
+  purchasePaymentUpdatedAt: z.string().default(""),
   split: z.boolean().default(false),
   newPersonId: z.string().default(""),
   newPersonName: z.string().default(""),
@@ -194,6 +216,9 @@ function startDraft(
     workerPaid,
     paidNow: kind === "purchase" && !workerPaid,
     paidAmount: "",
+    updatePurchasePayment: false,
+    purchasePaymentId: "",
+    purchasePaymentUpdatedAt: "",
     split: false,
     newPersonId: crypto.randomUUID(),
     newPersonName: "",
@@ -202,9 +227,10 @@ function startDraft(
   };
 }
 
-function editDraft(entry: Entry): Draft {
+function editDraft(entry: Entry, ledger?: Ledger): Draft {
   const workId = entry.lines[0]?.workId ?? entry.allocations[0]?.workId ?? "";
   const initial = startDraft(workId, entry.personId ?? "");
+  const purchasePayment = ledger ? paidPurchasePayment(ledger, entry.id) : null;
   return {
     ...initial,
     id: entry.id,
@@ -226,6 +252,11 @@ function editDraft(entry: Entry): Draft {
     account: entry.account,
     note: entry.note,
     paidNow: false,
+    updatePurchasePayment: Boolean(
+      ledger && fullyPaidPurchasePayment(ledger, entry.id),
+    ),
+    purchasePaymentId: purchasePayment?.id ?? "",
+    purchasePaymentUpdatedAt: purchasePayment?.updatedAt ?? "",
     amount: moneyInputValue(
       entry.paymentParts.reduce((sum, part) => sum + part.amount, 0),
     ),
@@ -291,7 +322,7 @@ function SupportedEntrySheet({
   const draftKey = `entry:${editEntryId ?? `${defaultWorkId ?? "all"}:${defaultPersonId ?? "all"}:${initialKind ?? "purchase"}`}`;
   const [draft, setDraft] = useState<Draft>(() =>
     original
-      ? editDraft(original)
+      ? editDraft(original, ledger)
       : startDraft(
           defaultWorkId ??
             ledger.works.find((work) => !work.archivedAt)?.id ??
@@ -372,6 +403,22 @@ function SupportedEntrySheet({
             !entry.voided,
         )
       : [];
+  const purchasePayment = original
+    ? paidPurchasePayment(ledger, original.id)
+    : null;
+  const updatingPurchasePayment = Boolean(
+    original && draft.updatePurchasePayment,
+  );
+  const purchasePaymentStale =
+    updatingPurchasePayment &&
+    (!purchasePayment ||
+      purchasePayment.id !== draft.purchasePaymentId ||
+      purchasePayment.updatedAt !== draft.purchasePaymentUpdatedAt);
+  const purchasePaidAmount = updatingPurchasePayment
+    ? lineTotal
+    : purchasePayment
+      ? entryTotal(purchasePayment)
+      : 0;
 
   useEffect(() => {
     mounted.current = true;
@@ -843,7 +890,13 @@ function SupportedEntrySheet({
         )
           throw new Error(t("কার কাছে বাকি থাকবে, তার নাম দিন।"));
       }
-      if (original) next = replaceExpenseAndSettlements(next, entry);
+      if (original && updatingPurchasePayment) {
+        if (purchasePaymentStale || !purchasePayment)
+          throw new Error(
+            t("সঙ্গে রাখা দেওয়া টাকার হিসাব বদলেছে। আবার খুলে মিলিয়ে নিন।"),
+          );
+        next = replacePaidPurchase(next, entry, purchasePayment);
+      } else if (original) next = replaceExpenseAndSettlements(next, entry);
       else
         next.entries = [
           ...next.entries.filter(
@@ -875,15 +928,22 @@ function SupportedEntrySheet({
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "";
       setError(
-        message === "Linked payment: keep the same person, account and work"
-          ? t(
-              "এই বিলের সঙ্গে টাকা দেওয়ার হিসাব আছে। কাজ, ব্যক্তি বা চুক্তি বদলাতে আগে যুক্ত হিসাবটি দেখুন। দাম ও বিবরণ বদলানো যাবে।",
-            )
-          : /[\u0980-\u09ff]/.test(message)
-            ? message
-            : t(
-                "হিসাবটি রাখা যায়নি। তথ্য ও ফোনের খালি জায়গা দেখে আবার চেষ্টা করুন।",
-              ),
+        message === "paid_purchase_payment_stale"
+          ? t("সঙ্গে রাখা দেওয়া টাকার হিসাব বদলেছে। আবার খুলে মিলিয়ে নিন।")
+          : message === "paid_purchase_not_eligible"
+            ? t(
+                "বিল ও দেওয়া টাকা একসঙ্গে বদলানো যাচ্ছে না। যুক্ত হিসাবটি খুলে মিলিয়ে নিন।",
+              )
+            : message ===
+                "Linked payment: keep the same person, account and work"
+              ? t(
+                  "এই বিলের সঙ্গে টাকা দেওয়ার হিসাব আছে। কাজ, ব্যক্তি বা চুক্তি বদলাতে আগে যুক্ত হিসাবটি দেখুন। দাম ও বিবরণ বদলানো যাবে।",
+                )
+              : /[\u0980-\u09ff]/.test(message)
+                ? message
+                : t(
+                    "হিসাবটি রাখা যায়নি। তথ্য ও ফোনের খালি জায়গা দেখে আবার চেষ্টা করুন।",
+                  ),
       );
       lock.current = false;
       setSaving(false);
@@ -960,6 +1020,16 @@ function SupportedEntrySheet({
     hydrated.current = true;
     setReady(true);
   };
+
+  function reviewLatestPayment() {
+    setError("");
+    setDraft((current) => ({
+      ...current,
+      updatePurchasePayment: false,
+      purchasePaymentId: purchasePayment?.id ?? "",
+      purchasePaymentUpdatedAt: purchasePayment?.updatedAt ?? "",
+    }));
+  }
 
   async function correctLinkedPayment(id: string) {
     if (lock.current || processingFiles || !ready || !onCorrectLinkedPayment)
@@ -1043,11 +1113,940 @@ function SupportedEntrySheet({
     other: "অন্য মাধ্যমে",
   };
 
+  const contextFields = (
+    <>
+      <div className="form-grid">
+        <label className="field">
+          <span className="field-label">{t("কোন কাজের হিসাব")}</span>
+          <AppSelect
+            className="field-input"
+            value={draft.workId}
+            onChange={(event) => chooseWork(event.target.value)}
+            required
+          >
+            <option value="">{t("কাজ বেছে নিন")}</option>
+            {workOptions}
+          </AppSelect>
+        </label>
+        <label className="field">
+          <span className="field-label">{t("তারিখ")}</span>
+          <AppDatePicker
+            className="field-input"
+            type="date"
+            value={draft.date}
+            disabled={draft.unknownDate}
+            onChange={(event) => field("date", event.target.value)}
+            required={!draft.unknownDate}
+          />
+        </label>
+      </div>
+      <label className="check-field">
+        <input
+          type="checkbox"
+          checked={draft.unknownDate}
+          onChange={(event) => field("unknownDate", event.target.checked)}
+        />
+        {t("তারিখ জানা নেই")}
+      </label>
+      <label className="field">
+        <span className="field-label">
+          {t(
+            isCash
+              ? draft.kind === "refund"
+                ? "কার কাছ থেকে পেয়েছেন"
+                : "কাকে টাকা দিয়েছেন"
+              : draft.workerPaid
+                ? "কোন মিস্ত্রি নিজের টাকা খরচ করেছেন"
+                : "কার সঙ্গে হিসাব",
+          )}
+        </span>
+        <AppSelect
+          className="field-input"
+          value={draft.personId}
+          onChange={(event) => {
+            field("personId", event.target.value);
+            field("contractId", "");
+          }}
+        >
+          <option value="">{t("নাম ছাড়া রাখব")}</option>
+          {ledger.people
+            .filter(
+              (person) =>
+                !person.archivedAt ||
+                (Boolean(original) && person.id === original?.personId),
+            )
+            .map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.name}
+                {person.role ? ` · ${person.role}` : ""}
+              </option>
+            ))}
+          <option value="__new__">{t("নতুন নাম লিখব")}</option>
+        </AppSelect>
+      </label>
+      {draft.personId === "__new__" ? (
+        <label className="field">
+          <span className="field-label">{t("ব্যক্তি বা দোকানের নাম")}</span>
+          <input
+            className="field-input"
+            value={draft.newPersonName}
+            maxLength={200}
+            onChange={(event) => field("newPersonName", event.target.value)}
+            placeholder={t("নাম লিখুন")}
+            required
+          />
+        </label>
+      ) : null}
+      {isCash ? (
+        <label className="field">
+          <span className="field-label">{t("কী বাবদ টাকা")}</span>
+          <AppSelect
+            className="field-input"
+            value={draft.account}
+            onChange={(event) => {
+              field("account", event.target.value as Draft["account"]);
+              field("contractId", "");
+            }}
+          >
+            <option value="materials">{t("মালামালের টাকা")}</option>
+            <option value="labour">{t("মজুরির টাকা")}</option>
+            <option value="other">{t("অন্য টাকা")}</option>
+          </AppSelect>
+        </label>
+      ) : null}
+      {draft.kind === "return" || draft.kind === "refund" ? (
+        <label className="field">
+          <span className="field-label">{t("আগের কোন বিলের হিসাব")}</span>
+          <AppSelect
+            className="field-input"
+            value={draft.relatedEntryId}
+            onChange={(event) => {
+              const bill = ledger.entries.find(
+                (entry) => entry.id === event.target.value,
+              );
+              field("relatedEntryId", event.target.value);
+              if (bill) {
+                field("personId", bill.personId ?? "");
+                field("account", bill.account);
+                field("contractId", bill.contractId ?? "__none__");
+                const workId = bill.lines[0]?.workId ?? draft.workId;
+                field("workId", workId);
+                field("split", false);
+                field("rows", [
+                  {
+                    ...newRow(
+                      workId,
+                      bill.account === "labour" ? "labour" : "material",
+                    ),
+                    itemId: bill.lines[0]?.itemId ?? "",
+                    name: bill.lines[0]?.label ?? "",
+                  },
+                ]);
+              }
+            }}
+          >
+            <option value="">{t("বিল বেছে নিন বা নামের খাতায় রাখুন")}</option>
+            {relatedBills.map((bill) => (
+              <option key={bill.id} value={bill.id}>
+                {bill.lines[0]?.label || bill.note || t("কেনাকাটার বিল")} ·{" "}
+                {money(bill.lines.reduce((sum, line) => sum + line.amount, 0))}
+              </option>
+            ))}
+          </AppSelect>
+          <span className="form-hint muted">
+            {t(
+              "শুধু ফেরত দেওয়া অংশের দাম লিখুন। টাকা হাতে পেলে তার হিসাব আলাদা হবে।",
+            )}
+          </span>
+        </label>
+      ) : null}
+      {(isLabour || draft.account === "labour") && eligibleContracts.length ? (
+        <label className="field">
+          <span className="field-label">{t("কোন চুক্তির হিসাব")}</span>
+          <AppSelect
+            className="field-input"
+            value={selectedContractId || "__none__"}
+            onChange={(event) => {
+              field("contractId", event.target.value);
+              if (event.target.value !== "__none__") {
+                field("split", false);
+                field(
+                  "rows",
+                  draft.rows.map((row) => ({
+                    ...row,
+                    workId: draft.workId,
+                  })),
+                );
+              }
+            }}
+          >
+            <option value="__none__">{t("চুক্তি ছাড়া রাখব")}</option>
+            {eligibleContracts.map((contract) => (
+              <option key={contract.id} value={contract.id}>
+                {contract.title || t("মজুরির চুক্তি")}
+              </option>
+            ))}
+          </AppSelect>
+        </label>
+      ) : null}
+    </>
+  );
+  const addCostRowButton = (
+    <button
+      type="button"
+      className={
+        original
+          ? "text-button entry-edit-add-row"
+          : "secondary-button full-width"
+      }
+      onClick={() =>
+        field("rows", [
+          ...draft.rows,
+          newRow(draft.workId, isLabour ? "labour" : "material"),
+        ])
+      }
+    >
+      <Plus size={17} />
+      {t(isLabour ? "আরেকটি কাজের হিসাব" : "আরেকটি মাল বা খরচ")}
+    </button>
+  );
+  const amountFields = (
+    <>
+      {isCash ? (
+        <>
+          {!draft.split ? (
+            <label className="field entry-edit-amount">
+              <span className="field-label">{t("টাকার পরিমাণ")}</span>
+              <div
+                className="money-input"
+                data-amount-size={
+                  draft.amount.length > 14
+                    ? "small"
+                    : draft.amount.length > 10
+                      ? "medium"
+                      : "large"
+                }
+              >
+                <span aria-hidden="true">৳</span>
+                <MoneyInput
+                  className="field-input amount-input"
+                  inputMode="decimal"
+                  value={draft.amount}
+                  onChange={(event) => field("amount", event.target.value)}
+                  placeholder="0"
+                  required
+                />
+              </div>
+            </label>
+          ) : (
+            <div className="cost-lines">
+              {draft.rows.map((row, index) => (
+                <div className="cost-line" key={row.id}>
+                  <div className="form-grid">
+                    <label className="field">
+                      <span className="field-label">{t("কাজ")}</span>
+                      <AppSelect
+                        className="field-input"
+                        value={row.workId}
+                        onChange={(event) =>
+                          rowField(index, "workId", event.target.value)
+                        }
+                        required
+                      >
+                        {workOptions}
+                      </AppSelect>
+                    </label>
+                    <label className="field">
+                      <span className="field-label">{t("টাকা")}</span>
+                      <MoneyInput
+                        className="field-input"
+                        inputMode="decimal"
+                        value={row.amount}
+                        onChange={(event) =>
+                          rowField(index, "amount", event.target.value)
+                        }
+                        required
+                      />
+                    </label>
+                  </div>
+                  {draft.rows.length > 1 ? (
+                    <button
+                      type="button"
+                      className="text-button danger-text"
+                      onClick={() =>
+                        field(
+                          "rows",
+                          draft.rows.filter(
+                            (_, position) => index !== position,
+                          ),
+                        )
+                      }
+                    >
+                      <Trash2 size={14} />
+                      {t("এই ভাগ সরান")}
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() =>
+                  field("rows", [...draft.rows, newRow(draft.workId)])
+                }
+              >
+                <Plus size={16} />
+                {t("আরেক কাজে ভাগ করুন")}
+              </button>
+            </div>
+          )}
+          {!(draft.account === "labour" && selectedContractId) ? (
+            <label className="check-field">
+              <input
+                type="checkbox"
+                checked={draft.split}
+                onChange={(event) => {
+                  field("split", event.target.checked);
+                  if (event.target.checked)
+                    field("rows", [
+                      { ...newRow(draft.workId), amount: draft.amount },
+                    ]);
+                  else field("amount", moneyInputValue(lineTotal));
+                }}
+              />
+              {t("একাধিক কাজে ভাগ করব")}
+            </label>
+          ) : null}
+          {!original ? (
+            <p className="form-hint muted">
+              {t(
+                draft.kind === "refund"
+                  ? "এটি শুধু টাকা ফেরত পাওয়ার হিসাব। মাল ফেরত দিলে তার হিসাব আলাদা লিখুন।"
+                  : "আগের বাকি মেটালে নতুন খরচ বাড়বে না। বাড়তি টাকা দিলে তা তার কাছে জমা থাকবে।",
+              )}
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <div className="cost-lines">
+            {draft.rows.map((row, index) => (
+              <div className="cost-line" key={row.id}>
+                <div
+                  className={`line-top ${original && draft.rows.length === 1 ? "entry-edit-single-top" : ""}`}
+                >
+                  <span className="field-label">
+                    {t("খরচ {{index}}", { index: index + 1 })}
+                  </span>
+                  {draft.rows.length > 1 ? (
+                    <button
+                      type="button"
+                      className="icon-button danger-text"
+                      aria-label={t("এই খরচ সরান")}
+                      onClick={() =>
+                        field(
+                          "rows",
+                          draft.rows.filter(
+                            (_, position) => index !== position,
+                          ),
+                        )
+                      }
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  ) : null}
+                </div>
+                {!original ? (
+                  <>
+                    {!isLabour ? (
+                      <label className="field">
+                        <span className="field-label">{t("খরচের ধরন")}</span>
+                        <AppSelect
+                          className="field-input"
+                          value={row.costType}
+                          onChange={(event) =>
+                            rowField(
+                              index,
+                              "costType",
+                              event.target.value as DraftRow["costType"],
+                            )
+                          }
+                        >
+                          {costTypes
+                            .filter((type) => type !== "labour")
+                            .map((type) => (
+                              <option key={type} value={type}>
+                                {t(costNames[type])}
+                              </option>
+                            ))}
+                        </AppSelect>
+                      </label>
+                    ) : null}
+                  </>
+                ) : null}
+                <label className="field entry-edit-amount">
+                  <span className="field-label">{t("মোট দাম")}</span>
+                  <div
+                    className="money-input"
+                    data-amount-size={
+                      row.amount.length > 14
+                        ? "small"
+                        : row.amount.length > 10
+                          ? "medium"
+                          : "large"
+                    }
+                  >
+                    <span aria-hidden="true">৳</span>
+                    <MoneyInput
+                      className="field-input"
+                      inputMode="decimal"
+                      value={row.amount}
+                      onChange={(event) =>
+                        rowField(index, "amount", event.target.value)
+                      }
+                      placeholder="0"
+                      required
+                    />
+                  </div>
+                </label>
+                <label className="field entry-edit-description">
+                  <span className="field-label">
+                    {t(isLabour ? "কাজের বিবরণ" : "মালামাল বা খরচের নাম")}
+                  </span>
+                  <AppCombobox
+                    className="field-input"
+                    suggestions={ledger.items.map((item) => ({
+                      value: item.name,
+                      description: item.brand,
+                    }))}
+                    value={row.name}
+                    maxLength={300}
+                    onChange={(event) => {
+                      rowField(index, "name", event.target.value);
+                      rowField(index, "itemId", "");
+                    }}
+                    placeholder={t(
+                      isLabour
+                        ? "যেমন: প্লাস্টারের কাজ"
+                        : row.costType === "material"
+                          ? "যেমন: টাইলসের আঠা"
+                          : costNames[row.costType],
+                    )}
+                    required={!isLabour && row.costType === "material"}
+                  />
+                </label>
+                <details className="line-details">
+                  <summary>
+                    <span>
+                      {t(
+                        original
+                          ? "আরও তথ্য"
+                          : "পরিমাণ বা অন্য কাজের ভাগ যোগ করুন",
+                      )}
+                    </span>
+                    {original ? (
+                      <small>
+                        {[
+                          !isLabour && row.costType !== "material"
+                            ? t(costNames[row.costType])
+                            : "",
+                          [formatDigits(row.quantity), row.unit]
+                            .filter(Boolean)
+                            .join(" "),
+                          row.workId !== draft.workId
+                            ? ledger.works.find(
+                                (work) => work.id === row.workId,
+                              )?.name
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </small>
+                    ) : null}
+                  </summary>
+                  {original ? (
+                    <>
+                      {!isLabour ? (
+                        <label className="field">
+                          <span className="field-label">{t("খরচের ধরন")}</span>
+                          <AppSelect
+                            className="field-input"
+                            value={row.costType}
+                            onChange={(event) =>
+                              rowField(
+                                index,
+                                "costType",
+                                event.target.value as DraftRow["costType"],
+                              )
+                            }
+                          >
+                            {costTypes
+                              .filter((type) => type !== "labour")
+                              .map((type) => (
+                                <option key={type} value={type}>
+                                  {t(costNames[type])}
+                                </option>
+                              ))}
+                          </AppSelect>
+                        </label>
+                      ) : null}
+                    </>
+                  ) : null}
+                  <div className="form-grid">
+                    <label className="field">
+                      <span className="field-label">{t("পরিমাণ")}</span>
+                      <NumericInput
+                        className="field-input"
+                        inputMode="decimal"
+                        value={row.quantity}
+                        maxLength={60}
+                        onChange={(event) =>
+                          rowField(index, "quantity", event.target.value)
+                        }
+                        placeholder={t("ইচ্ছা হলে লিখুন")}
+                      />
+                    </label>
+                    <label className="field">
+                      <span className="field-label">{t("একক")}</span>
+                      <input
+                        className="field-input"
+                        value={row.unit}
+                        maxLength={60}
+                        onChange={(event) =>
+                          rowField(index, "unit", event.target.value)
+                        }
+                        placeholder={t("বস্তা, পিস, কেজি…")}
+                      />
+                    </label>
+                  </div>
+                  {!(isLabour && selectedContractId) ? (
+                    <label className="field">
+                      <span className="field-label">{t("কোন কাজে লাগবে")}</span>
+                      <AppSelect
+                        className="field-input"
+                        value={row.workId}
+                        onChange={(event) =>
+                          rowField(index, "workId", event.target.value)
+                        }
+                      >
+                        {workOptions}
+                      </AppSelect>
+                    </label>
+                  ) : null}
+                  {original && draft.rows.length === 1
+                    ? addCostRowButton
+                    : null}
+                </details>
+              </div>
+            ))}
+          </div>
+          {!original || draft.rows.length > 1 ? addCostRowButton : null}
+          <div
+            className={`entry-total ${original && draft.rows.length === 1 ? "entry-edit-single-total" : ""}`}
+          >
+            <span>
+              {t(
+                draft.kind === "return"
+                  ? "ফেরত দেওয়া মালের মূল্য"
+                  : "মোট হিসাব",
+              )}
+            </span>
+            <strong>{money(lineTotal)}</strong>
+          </div>
+          {draft.kind === "purchase" && !original ? (
+            <label className="check-field">
+              <input
+                type="checkbox"
+                checked={draft.workerPaid}
+                onChange={(event) => {
+                  field("workerPaid", event.target.checked);
+                  field("paidNow", !event.target.checked);
+                }}
+              />
+              {t("মিস্ত্রি নিজের টাকা দিয়ে কিনেছেন")}
+            </label>
+          ) : null}
+          {draft.workerPaid ? (
+            <p className="form-hint muted">
+              {t(
+                "এই খরচ তার নামে জমা হবে। ফেরত দেওয়া টাকা আলাদা হিসাবে থাকবে।",
+              )}
+            </p>
+          ) : null}
+          {purchasePayment || updatingPurchasePayment ? (
+            <section
+              className="paid-purchase-correction"
+              aria-label={t("এই কেনাকাটার পরিশোধ")}
+            >
+              {purchasePaymentStale ? (
+                <>
+                  <p role="alert">
+                    {t(
+                      "সঙ্গে রাখা দেওয়া টাকার হিসাব বদলেছে। আবার খুলে মিলিয়ে নিন।",
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={reviewLatestPayment}
+                  >
+                    {t("সর্বশেষ তথ্য দেখি")}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="paid-purchase-amount">
+                    <span>{t("দিয়েছি")}</span>
+                    {onCorrectLinkedPayment && purchasePayment ? (
+                      <button
+                        type="button"
+                        className="entry-edit-paid-link"
+                        aria-label={t("দেওয়া টাকা বদলাই")}
+                        onClick={() =>
+                          void correctLinkedPayment(purchasePayment.id)
+                        }
+                      >
+                        <strong>{money(purchasePaidAmount)}</strong>
+                        <ChevronRight size={16} />
+                      </button>
+                    ) : (
+                      <strong>{money(purchasePaidAmount)}</strong>
+                    )}
+                  </div>
+                  <p className="entry-edit-payment-status">
+                    {purchasePaidAmount === lineTotal
+                      ? t("বাকি নেই")
+                      : purchasePaidAmount < lineTotal
+                        ? t("বাকি {{amount}}", {
+                            amount: money(lineTotal - purchasePaidAmount),
+                          })
+                        : t("আমার জমা {{amount}}", {
+                            amount: money(purchasePaidAmount - lineTotal),
+                          })}
+                  </p>
+                </>
+              )}
+            </section>
+          ) : !original && draft.kind !== "return" ? (
+            <>
+              <label className="check-field">
+                <input
+                  type="checkbox"
+                  checked={draft.paidNow}
+                  onChange={(event) => field("paidNow", event.target.checked)}
+                />
+                {t(
+                  draft.workerPaid
+                    ? "এখন তার টাকা ফেরত দিয়েছি"
+                    : "এই হিসাবের সঙ্গে টাকা দিয়েছি",
+                )}
+              </label>
+              {draft.paidNow ? (
+                <label className="field">
+                  <span className="field-label">
+                    {t("এখন কত টাকা দিয়েছেন")}
+                  </span>
+                  <div className="money-input">
+                    <span aria-hidden="true">৳</span>
+                    <MoneyInput
+                      className="field-input"
+                      inputMode="decimal"
+                      value={draft.paidAmount}
+                      onChange={(event) =>
+                        field("paidAmount", event.target.value)
+                      }
+                      placeholder={moneyInputValue(lineTotal)}
+                    />
+                  </div>
+                </label>
+              ) : null}
+              {draft.paidNow &&
+              personIdForHint(draft) &&
+              cashTotal > lineTotal ? (
+                <p className="credit-hint">
+                  {t("বাড়তি {{amount}} তার কাছে জমা থাকবে।", {
+                    amount: money(cashTotal - lineTotal),
+                  })}
+                </p>
+              ) : null}
+            </>
+          ) : !original ? (
+            <p className="form-hint muted">
+              {t("এতে শুধু খরচ কমবে। ফেরত পাওয়া টাকা আলাদা হিসাবে লিখুন।")}
+            </p>
+          ) : null}
+        </>
+      )}
+    </>
+  );
+  const paymentMethodFields = (
+    <>
+      {isCash || (!original && draft.paidNow && draft.kind !== "return") ? (
+        <div className="payment-methods">
+          <span className="field-label">
+            {t(
+              draft.kind === "refund"
+                ? "কোন মাধ্যমে পেয়েছেন"
+                : "কোন মাধ্যমে দিয়েছেন",
+            )}
+          </span>
+          {draft.methods.map((part, index) => (
+            <div className="method-row" key={index}>
+              <AppSelect
+                className="field-input"
+                aria-label={t("টাকা দেওয়ার মাধ্যম")}
+                value={part.method}
+                onChange={(event) =>
+                  field(
+                    "methods",
+                    draft.methods.map((item, position) =>
+                      position === index
+                        ? {
+                            ...item,
+                            method: event.target.value as typeof part.method,
+                          }
+                        : item,
+                    ),
+                  )
+                }
+              >
+                {Object.entries(methodNames).map(([value, name]) => (
+                  <option key={value} value={value}>
+                    {t(name)}
+                  </option>
+                ))}
+              </AppSelect>
+              {draft.methods.length > 1 ? (
+                <>
+                  <MoneyInput
+                    className="field-input"
+                    aria-label={t("এই মাধ্যমে কত টাকা")}
+                    inputMode="decimal"
+                    value={part.amount}
+                    onChange={(event) =>
+                      field(
+                        "methods",
+                        draft.methods.map((item, position) =>
+                          position === index
+                            ? { ...item, amount: event.target.value }
+                            : item,
+                        ),
+                      )
+                    }
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="icon-button danger-text"
+                    aria-label={t("এই মাধ্যম সরান")}
+                    onClick={() =>
+                      field(
+                        "methods",
+                        draft.methods.filter(
+                          (_, position) => position !== index,
+                        ),
+                      )
+                    }
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </>
+              ) : null}
+            </div>
+          ))}
+          <button
+            type="button"
+            className="text-button"
+            onClick={() =>
+              field("methods", [
+                ...draft.methods.map((part) =>
+                  draft.methods.length === 1
+                    ? { ...part, amount: moneyInputValue(cashTotal) }
+                    : part,
+                ),
+                { method: "bkash", amount: "" },
+              ])
+            }
+          >
+            <Plus size={14} />
+            {t("অন্য মাধ্যমেও দিয়েছি")}
+          </button>
+          {draft.methods.length > 1 ? (
+            <p className="form-hint muted">
+              {t("সব মাধ্যম মিলিয়ে মোট {{amount}} হতে হবে।", {
+                amount: money(cashTotal),
+              })}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </>
+  );
+  const extraFields = (
+    <>
+      <label className="field">
+        <span className="field-label">{t("মনে রাখার কথা")}</span>
+        <textarea
+          className="field-input"
+          rows={3}
+          value={draft.note}
+          maxLength={10000}
+          onChange={(event) => field("note", event.target.value)}
+          placeholder={t("কী বাবদ, কোথা থেকে বা অন্য কিছু…")}
+        />
+      </label>
+      <input
+        ref={fileInput}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,application/pdf"
+        multiple
+        hidden
+        onChange={(event) => {
+          void addFiles(event.target.files);
+        }}
+      />
+      <button
+        type="button"
+        className="secondary-button full-width"
+        onClick={() => fileInput.current?.click()}
+      >
+        <Camera size={17} />
+        {t("ভাউচার বা ছবি যোগ করুন")}
+      </button>
+      {original?.receipts.length ? (
+        <p className="form-hint muted">
+          {t("আগের {{count}}টি ভাউচার রাখা আছে।", {
+            count: original.receipts.length,
+          })}
+        </p>
+      ) : null}
+      {files.map(({ id, file }) => (
+        <div className="attachment-row" key={id}>
+          <Receipt size={17} />
+          <span>{formatDigits(file.name)}</span>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={t("ভাউচার সরান")}
+            onClick={() =>
+              setFiles((current) => current.filter((item) => item.id !== id))
+            }
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="text-button danger-text"
+        onClick={discard}
+      >
+        {t("অসমাপ্ত লেখা বাদ দিন")}
+      </button>
+    </>
+  );
+  const linkedPaymentFields = (
+    <>
+      {original &&
+      linkedPayments.length > 0 &&
+      !purchasePayment &&
+      !updatingPurchasePayment ? (
+        <details className="linked-payment-correction">
+          <summary>
+            <span>{t("দিয়েছি")}</span>
+            <strong>
+              {money(
+                linkedPayments.reduce(
+                  (sum, payment) => sum + entryTotal(payment),
+                  0,
+                ),
+              )}
+            </strong>
+          </summary>
+          <p>
+            {t(
+              "দামের সঙ্গে দেওয়া টাকা বদলাবে না। প্রয়োজন হলে পরিশোধটি খুলে বদলান।",
+            )}
+          </p>
+          {onCorrectLinkedPayment
+            ? linkedPayments.map((payment) => (
+                <button
+                  key={payment.id}
+                  type="button"
+                  className="text-button"
+                  onClick={() => void correctLinkedPayment(payment.id)}
+                >
+                  {t("দেওয়া টাকার হিসাব ঠিক করি")} ·{" "}
+                  {money(entryTotal(payment))} ·{" "}
+                  {date(payment.date, { year: "numeric" })}
+                </button>
+              ))
+            : null}
+        </details>
+      ) : null}
+    </>
+  );
+  const editPersonName =
+    draft.personId === "__new__"
+      ? draft.newPersonName || t("নতুন নাম লিখব")
+      : ledger.people.find((person) => person.id === draft.personId)?.name ||
+        t("নাম ছাড়া হিসাব");
+  const editPerson = ledger.people.find(
+    (person) => person.id === draft.personId,
+  );
+  const editWorkName = ledger.works.find(
+    (work) => work.id === draft.workId,
+  )?.name;
+  const editDate = draft.unknownDate
+    ? t("তারিখ জানা নেই")
+    : date(draft.date, { year: "numeric" });
+  const editContext = [
+    isCash
+      ? t(
+          draft.account === "materials"
+            ? "মালামালের টাকা"
+            : draft.account === "labour"
+              ? "মজুরির টাকা"
+              : "অন্য টাকা",
+        )
+      : "",
+    (isLabour || draft.account === "labour") && eligibleContracts.length
+      ? selectedContractId
+        ? eligibleContracts.find(
+            (contract) => contract.id === selectedContractId,
+          )?.title || t("মজুরির চুক্তি")
+        : t("চুক্তি ছাড়া রাখব")
+      : "",
+    draft.relatedEntryId
+      ? ledger.entries.find((entry) => entry.id === draft.relatedEntryId)
+          ?.lines[0]?.label || t("কেনাকাটার বিল")
+      : "",
+  ].filter(Boolean);
+  const extraSummary = [
+    isCash
+      ? draft.methods
+          .map(
+            (part) =>
+              `${t(methodNames[part.method])}${draft.methods.length > 1 ? ` ${money(poisha(part.amount) || 0)}` : ""}`,
+          )
+          .join(" · ")
+      : "",
+    draft.note.trim(),
+    (original?.receipts.length || 0) + files.length > 0
+      ? t("{{count}}টি ছবি বা ভাউচার", {
+          count: (original?.receipts.length || 0) + files.length,
+        })
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   const Frame = presentation === "page" ? EntryFrame : Sheet;
   return (
     <Frame
       title={t(original ? "হিসাব বদলান" : "নতুন হিসাব")}
-      subtitle={t("ছোট ছোট হিসাব, এক জায়গায়।")}
+      subtitle={original ? undefined : t("ছোট ছোট হিসাব, এক জায়গায়।")}
+      className={original ? "entry-editor-page" : undefined}
       onClose={close}
       footer={
         <button
@@ -1055,7 +2054,11 @@ function SupportedEntrySheet({
           form="entry-form"
           className="primary-button full-width"
           disabled={
-            saving || processingFiles || !ready || !availableWorks.length
+            saving ||
+            processingFiles ||
+            !ready ||
+            !availableWorks.length ||
+            purchasePaymentStale
           }
         >
           {saving
@@ -1068,7 +2071,15 @@ function SupportedEntrySheet({
     >
       <form
         id="entry-form"
-        className="sheet-form"
+        className={`sheet-form ${original ? "entry-editor-form" : ""}`}
+        onInvalid={(event) => {
+          const target = event.target as HTMLElement;
+          let parent = target.parentElement;
+          while (parent) {
+            if (parent instanceof HTMLDetailsElement) parent.open = true;
+            parent = parent.parentElement;
+          }
+        }}
         onSubmit={(event) => {
           void submit(event);
         }}
@@ -1132,721 +2143,78 @@ function SupportedEntrySheet({
           className="sheet-fields"
           disabled={saving || processingFiles || !ready}
         >
-          {original &&
-          linkedPayments.length &&
-          lineTotal !== entryTotal(original) ? (
-            <section
-              className="linked-payment-correction"
-              aria-label={t("এই বিলের সঙ্গে রাখা পরিশোধ")}
-            >
-              <p>
-                {t(
-                  "বিলের দাম বদলালেও আগের দেওয়া টাকা বদলাবে না। দেওয়া টাকা ঠিক করতে সেই হিসাবটি খুলুন।",
-                )}
-              </p>
-              {onCorrectLinkedPayment
-                ? linkedPayments.map((payment) => (
-                    <button
-                      key={payment.id}
-                      type="button"
-                      className="text-button"
-                      onClick={() => void correctLinkedPayment(payment.id)}
-                    >
-                      {t("দেওয়া টাকার হিসাব ঠিক করি")} ·{" "}
-                      {money(entryTotal(payment))} ·{" "}
-                      {date(payment.date, { year: "numeric" })}
-                    </button>
-                  ))
-                : null}
-            </section>
-          ) : null}
-          <div className="form-grid">
-            <label className="field">
-              <span className="field-label">{t("কোন কাজের হিসাব")}</span>
-              <AppSelect
-                className="field-input"
-                value={draft.workId}
-                onChange={(event) => chooseWork(event.target.value)}
-                required
+          {original ? (
+            <div className="entry-edit-canvas">
+              <section
+                className="entry-edit-main"
+                aria-label={t(kindNames[draft.kind])}
               >
-                <option value="">{t("কাজ বেছে নিন")}</option>
-                {workOptions}
-              </AppSelect>
-            </label>
-            <label className="field">
-              <span className="field-label">{t("তারিখ")}</span>
-              <AppDatePicker
-                className="field-input"
-                type="date"
-                value={draft.date}
-                disabled={draft.unknownDate}
-                onChange={(event) => field("date", event.target.value)}
-                required={!draft.unknownDate}
-              />
-            </label>
-          </div>
-          <label className="check-field">
-            <input
-              type="checkbox"
-              checked={draft.unknownDate}
-              onChange={(event) => field("unknownDate", event.target.checked)}
-            />
-            {t("তারিখ জানা নেই")}
-          </label>
-          <label className="field">
-            <span className="field-label">
-              {t(
-                isCash
-                  ? draft.kind === "refund"
-                    ? "কার কাছ থেকে পেয়েছেন"
-                    : "কাকে টাকা দিয়েছেন"
-                  : draft.workerPaid
-                    ? "কোন মিস্ত্রি নিজের টাকা খরচ করেছেন"
-                    : "কার সঙ্গে হিসাব",
-              )}
-            </span>
-            <AppSelect
-              className="field-input"
-              value={draft.personId}
-              onChange={(event) => {
-                field("personId", event.target.value);
-                field("contractId", "");
-              }}
-            >
-              <option value="">{t("নাম ছাড়া রাখব")}</option>
-              {ledger.people
-                .filter(
-                  (person) =>
-                    !person.archivedAt ||
-                    (Boolean(original) && person.id === original?.personId),
-                )
-                .map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.name}
-                    {person.role ? ` · ${person.role}` : ""}
-                  </option>
-                ))}
-              <option value="__new__">{t("নতুন নাম লিখব")}</option>
-            </AppSelect>
-          </label>
-          {draft.personId === "__new__" ? (
-            <label className="field">
-              <span className="field-label">{t("ব্যক্তি বা দোকানের নাম")}</span>
-              <input
-                className="field-input"
-                value={draft.newPersonName}
-                maxLength={200}
-                onChange={(event) => field("newPersonName", event.target.value)}
-                placeholder={t("নাম লিখুন")}
-                required
-              />
-            </label>
-          ) : null}
-          {isCash ? (
-            <label className="field">
-              <span className="field-label">{t("কী বাবদ টাকা")}</span>
-              <AppSelect
-                className="field-input"
-                value={draft.account}
-                onChange={(event) => {
-                  field("account", event.target.value as Draft["account"]);
-                  field("contractId", "");
-                }}
-              >
-                <option value="materials">{t("মালামালের টাকা")}</option>
-                <option value="labour">{t("মজুরির টাকা")}</option>
-                <option value="other">{t("অন্য টাকা")}</option>
-              </AppSelect>
-            </label>
-          ) : null}
-          {draft.kind === "return" || draft.kind === "refund" ? (
-            <label className="field">
-              <span className="field-label">{t("আগের কোন বিলের হিসাব")}</span>
-              <AppSelect
-                className="field-input"
-                value={draft.relatedEntryId}
-                onChange={(event) => {
-                  const bill = ledger.entries.find(
-                    (entry) => entry.id === event.target.value,
-                  );
-                  field("relatedEntryId", event.target.value);
-                  if (bill) {
-                    field("personId", bill.personId ?? "");
-                    field("account", bill.account);
-                    field("contractId", bill.contractId ?? "__none__");
-                    const workId = bill.lines[0]?.workId ?? draft.workId;
-                    field("workId", workId);
-                    field("split", false);
-                    field("rows", [
-                      {
-                        ...newRow(
-                          workId,
-                          bill.account === "labour" ? "labour" : "material",
-                        ),
-                        itemId: bill.lines[0]?.itemId ?? "",
-                        name: bill.lines[0]?.label ?? "",
-                      },
-                    ]);
-                  }
-                }}
-              >
-                <option value="">
-                  {t("বিল বেছে নিন বা নামের খাতায় রাখুন")}
-                </option>
-                {relatedBills.map((bill) => (
-                  <option key={bill.id} value={bill.id}>
-                    {bill.lines[0]?.label || bill.note || t("কেনাকাটার বিল")} ·{" "}
-                    {money(
-                      bill.lines.reduce((sum, line) => sum + line.amount, 0),
-                    )}
-                  </option>
-                ))}
-              </AppSelect>
-              <span className="form-hint muted">
-                {t(
-                  "শুধু ফেরত দেওয়া অংশের দাম লিখুন। টাকা হাতে পেলে তার হিসাব আলাদা হবে।",
-                )}
-              </span>
-            </label>
-          ) : null}
-          {(isLabour || draft.account === "labour") &&
-          eligibleContracts.length ? (
-            <label className="field">
-              <span className="field-label">{t("কোন চুক্তির হিসাব")}</span>
-              <AppSelect
-                className="field-input"
-                value={selectedContractId || "__none__"}
-                onChange={(event) => {
-                  field("contractId", event.target.value);
-                  if (event.target.value !== "__none__") {
-                    field("split", false);
-                    field(
-                      "rows",
-                      draft.rows.map((row) => ({
-                        ...row,
-                        workId: draft.workId,
-                      })),
-                    );
-                  }
-                }}
-              >
-                <option value="__none__">{t("চুক্তি ছাড়া রাখব")}</option>
-                {eligibleContracts.map((contract) => (
-                  <option key={contract.id} value={contract.id}>
-                    {contract.title || t("মজুরির চুক্তি")}
-                  </option>
-                ))}
-              </AppSelect>
-            </label>
-          ) : null}
-          {isCash ? (
-            <>
-              {!draft.split ? (
-                <label className="field">
-                  <span className="field-label">{t("টাকার পরিমাণ")}</span>
-                  <div className="money-input">
-                    <span aria-hidden="true">৳</span>
-                    <MoneyInput
-                      className="field-input amount-input"
-                      inputMode="decimal"
-                      value={draft.amount}
-                      onChange={(event) => field("amount", event.target.value)}
-                      placeholder="0"
-                      required
-                    />
-                  </div>
-                </label>
-              ) : (
-                <div className="cost-lines">
-                  {draft.rows.map((row, index) => (
-                    <div className="cost-line" key={row.id}>
-                      <div className="form-grid">
-                        <label className="field">
-                          <span className="field-label">{t("কাজ")}</span>
-                          <AppSelect
-                            className="field-input"
-                            value={row.workId}
-                            onChange={(event) =>
-                              rowField(index, "workId", event.target.value)
-                            }
-                            required
-                          >
-                            {workOptions}
-                          </AppSelect>
-                        </label>
-                        <label className="field">
-                          <span className="field-label">{t("টাকা")}</span>
-                          <MoneyInput
-                            className="field-input"
-                            inputMode="decimal"
-                            value={row.amount}
-                            onChange={(event) =>
-                              rowField(index, "amount", event.target.value)
-                            }
-                            required
-                          />
-                        </label>
-                      </div>
-                      {draft.rows.length > 1 ? (
-                        <button
-                          type="button"
-                          className="text-button danger-text"
-                          onClick={() =>
-                            field(
-                              "rows",
-                              draft.rows.filter(
-                                (_, position) => index !== position,
-                              ),
-                            )
-                          }
-                        >
-                          <Trash2 size={14} />
-                          {t("এই ভাগ সরান")}
-                        </button>
-                      ) : null}
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() =>
-                      field("rows", [...draft.rows, newRow(draft.workId)])
-                    }
-                  >
-                    <Plus size={16} />
-                    {t("আরেক কাজে ভাগ করুন")}
-                  </button>
+                <div className="entry-edit-kind">
+                  {isCash ? (
+                    <Wallet size={17} aria-hidden="true" />
+                  ) : isLabour ? (
+                    <Wrench size={17} aria-hidden="true" />
+                  ) : (
+                    <Receipt size={17} aria-hidden="true" />
+                  )}
+                  <span>{t(kindNames[draft.kind])}</span>
                 </div>
-              )}
-              {!(draft.account === "labour" && selectedContractId) ? (
-                <label className="check-field">
-                  <input
-                    type="checkbox"
-                    checked={draft.split}
-                    onChange={(event) => {
-                      field("split", event.target.checked);
-                      if (event.target.checked)
-                        field("rows", [
-                          { ...newRow(draft.workId), amount: draft.amount },
-                        ]);
-                      else field("amount", moneyInputValue(lineTotal));
-                    }}
-                  />
-                  {t("একাধিক কাজে ভাগ করব")}
-                </label>
-              ) : null}
-              <p className="form-hint muted">
-                {t(
-                  draft.kind === "refund"
-                    ? "এটি শুধু টাকা ফেরত পাওয়ার হিসাব। মাল ফেরত দিলে তার হিসাব আলাদা লিখুন।"
-                    : "আগের বাকি মেটালে নতুন খরচ বাড়বে না। বাড়তি টাকা দিলে তা তার কাছে জমা থাকবে।",
-                )}
-              </p>
-            </>
+                {amountFields}
+                {linkedPaymentFields}
+              </section>
+              <details className="entry-edit-context">
+                <summary aria-label={t("নাম, খাতা ও তারিখ")}>
+                  <span className="entry-edit-person-mark" aria-hidden="true">
+                    {editPerson?.kind === "shop" ? (
+                      <Store size={21} />
+                    ) : (
+                      <UserRound size={21} />
+                    )}
+                  </span>
+                  <span className="entry-edit-person-copy">
+                    <strong>{editPersonName}</strong>
+                    {editWorkName ? <small>{editWorkName}</small> : null}
+                  </span>
+                  <span className="entry-edit-change">
+                    {t("বদলাই")}
+                    <Pencil size={15} aria-hidden="true" />
+                  </span>
+                  <span className="entry-edit-context-meta">
+                    <span>
+                      <CalendarDays size={14} aria-hidden="true" />
+                      {editDate}
+                    </span>
+                    {editContext.map((label, index) => (
+                      <span key={index}>{label}</span>
+                    ))}
+                  </span>
+                </summary>
+                <div className="entry-edit-context-fields">{contextFields}</div>
+              </details>
+              <details className="entry-edit-extras">
+                <summary>
+                  <span>
+                    <strong>
+                      {t(isCash ? "মাধ্যম, নোট ও ছবি" : "নোট ও ছবি")}
+                    </strong>
+                    {extraSummary ? <small>{extraSummary}</small> : null}
+                  </span>
+                  <ChevronDown size={18} />
+                </summary>
+                <div className="entry-edit-extra-fields">
+                  {paymentMethodFields}
+                  {extraFields}
+                </div>
+              </details>
+            </div>
           ) : (
             <>
-              <div className="cost-lines">
-                {draft.rows.map((row, index) => (
-                  <div className="cost-line" key={row.id}>
-                    <div className="line-top">
-                      <span className="field-label">
-                        {t("খরচ {{index}}", { index: index + 1 })}
-                      </span>
-                      {draft.rows.length > 1 ? (
-                        <button
-                          type="button"
-                          className="icon-button danger-text"
-                          aria-label={t("এই খরচ সরান")}
-                          onClick={() =>
-                            field(
-                              "rows",
-                              draft.rows.filter(
-                                (_, position) => index !== position,
-                              ),
-                            )
-                          }
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      ) : null}
-                    </div>
-                    {!isLabour ? (
-                      <label className="field">
-                        <span className="field-label">{t("খরচের ধরন")}</span>
-                        <AppSelect
-                          className="field-input"
-                          value={row.costType}
-                          onChange={(event) =>
-                            rowField(
-                              index,
-                              "costType",
-                              event.target.value as DraftRow["costType"],
-                            )
-                          }
-                        >
-                          {costTypes
-                            .filter((type) => type !== "labour")
-                            .map((type) => (
-                              <option key={type} value={type}>
-                                {t(costNames[type])}
-                              </option>
-                            ))}
-                        </AppSelect>
-                      </label>
-                    ) : null}
-                    <label className="field">
-                      <span className="field-label">
-                        {t(isLabour ? "কাজের বিবরণ" : "মালামাল বা খরচের নাম")}
-                      </span>
-                      <AppCombobox
-                        className="field-input"
-                        suggestions={ledger.items.map((item) => ({
-                          value: item.name,
-                          description: item.brand,
-                        }))}
-                        value={row.name}
-                        maxLength={300}
-                        onChange={(event) => {
-                          rowField(index, "name", event.target.value);
-                          rowField(index, "itemId", "");
-                        }}
-                        placeholder={t(
-                          isLabour
-                            ? "যেমন: প্লাস্টারের কাজ"
-                            : row.costType === "material"
-                              ? "যেমন: টাইলসের আঠা"
-                              : costNames[row.costType],
-                        )}
-                        required={!isLabour && row.costType === "material"}
-                      />
-                    </label>
-                    <label className="field">
-                      <span className="field-label">{t("মোট দাম")}</span>
-                      <div className="money-input">
-                        <span aria-hidden="true">৳</span>
-                        <MoneyInput
-                          className="field-input"
-                          inputMode="decimal"
-                          value={row.amount}
-                          onChange={(event) =>
-                            rowField(index, "amount", event.target.value)
-                          }
-                          placeholder="0"
-                          required
-                        />
-                      </div>
-                    </label>
-                    <details className="line-details">
-                      <summary>
-                        {t("পরিমাণ বা অন্য কাজের ভাগ যোগ করুন")}
-                      </summary>
-                      <div className="form-grid">
-                        <label className="field">
-                          <span className="field-label">{t("পরিমাণ")}</span>
-                          <NumericInput
-                            className="field-input"
-                            inputMode="decimal"
-                            value={row.quantity}
-                            maxLength={60}
-                            onChange={(event) =>
-                              rowField(index, "quantity", event.target.value)
-                            }
-                            placeholder={t("ইচ্ছা হলে লিখুন")}
-                          />
-                        </label>
-                        <label className="field">
-                          <span className="field-label">{t("একক")}</span>
-                          <input
-                            className="field-input"
-                            value={row.unit}
-                            maxLength={60}
-                            onChange={(event) =>
-                              rowField(index, "unit", event.target.value)
-                            }
-                            placeholder={t("বস্তা, পিস, কেজি…")}
-                          />
-                        </label>
-                      </div>
-                      {!(isLabour && selectedContractId) ? (
-                        <label className="field">
-                          <span className="field-label">
-                            {t("কোন কাজে লাগবে")}
-                          </span>
-                          <AppSelect
-                            className="field-input"
-                            value={row.workId}
-                            onChange={(event) =>
-                              rowField(index, "workId", event.target.value)
-                            }
-                          >
-                            {workOptions}
-                          </AppSelect>
-                        </label>
-                      ) : null}
-                    </details>
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                className="secondary-button full-width"
-                onClick={() =>
-                  field("rows", [
-                    ...draft.rows,
-                    newRow(draft.workId, isLabour ? "labour" : "material"),
-                  ])
-                }
-              >
-                <Plus size={17} />
-                {t(isLabour ? "আরেকটি কাজের হিসাব" : "আরেকটি মাল বা খরচ")}
-              </button>
-              <div className="entry-total">
-                <span>
-                  {t(
-                    draft.kind === "return"
-                      ? "ফেরত দেওয়া মালের মূল্য"
-                      : "মোট হিসাব",
-                  )}
-                </span>
-                <strong>{money(lineTotal)}</strong>
-              </div>
-              {draft.kind === "purchase" && !original ? (
-                <label className="check-field">
-                  <input
-                    type="checkbox"
-                    checked={draft.workerPaid}
-                    onChange={(event) => {
-                      field("workerPaid", event.target.checked);
-                      field("paidNow", !event.target.checked);
-                    }}
-                  />
-                  {t("মিস্ত্রি নিজের টাকা দিয়ে কিনেছেন")}
-                </label>
-              ) : null}
-              {draft.workerPaid ? (
-                <p className="form-hint muted">
-                  {t(
-                    "এই খরচ তার নামে জমা হবে। ফেরত দেওয়া টাকা আলাদা হিসাবে থাকবে।",
-                  )}
-                </p>
-              ) : null}
-              {!original && draft.kind !== "return" ? (
-                <>
-                  <label className="check-field">
-                    <input
-                      type="checkbox"
-                      checked={draft.paidNow}
-                      onChange={(event) =>
-                        field("paidNow", event.target.checked)
-                      }
-                    />
-                    {t(
-                      draft.workerPaid
-                        ? "এখন তার টাকা ফেরত দিয়েছি"
-                        : "এই হিসাবের সঙ্গে টাকা দিয়েছি",
-                    )}
-                  </label>
-                  {draft.paidNow ? (
-                    <label className="field">
-                      <span className="field-label">
-                        {t("এখন কত টাকা দিয়েছেন")}
-                      </span>
-                      <div className="money-input">
-                        <span aria-hidden="true">৳</span>
-                        <MoneyInput
-                          className="field-input"
-                          inputMode="decimal"
-                          value={draft.paidAmount}
-                          onChange={(event) =>
-                            field("paidAmount", event.target.value)
-                          }
-                          placeholder={moneyInputValue(lineTotal)}
-                        />
-                      </div>
-                    </label>
-                  ) : null}
-                  {draft.paidNow &&
-                  personIdForHint(draft) &&
-                  cashTotal > lineTotal ? (
-                    <p className="credit-hint">
-                      {t("বাড়তি {{amount}} তার কাছে জমা থাকবে।", {
-                        amount: money(cashTotal - lineTotal),
-                      })}
-                    </p>
-                  ) : null}
-                </>
-              ) : (
-                <p className="form-hint muted">
-                  {t(
-                    original
-                      ? "টাকা দেওয়া বা ফেরত পাওয়ার হিসাব আলাদা করে বদলান।"
-                      : "এতে শুধু খরচ কমবে। ফেরত পাওয়া টাকা আলাদা হিসাবে লিখুন।",
-                  )}
-                </p>
-              )}
+              {contextFields}
+              {amountFields}
+              {paymentMethodFields}
+              {extraFields}
             </>
           )}
-          {isCash || (!original && draft.paidNow && draft.kind !== "return") ? (
-            <div className="payment-methods">
-              <span className="field-label">
-                {t(
-                  draft.kind === "refund"
-                    ? "কোন মাধ্যমে পেয়েছেন"
-                    : "কোন মাধ্যমে দিয়েছেন",
-                )}
-              </span>
-              {draft.methods.map((part, index) => (
-                <div className="method-row" key={index}>
-                  <AppSelect
-                    className="field-input"
-                    aria-label={t("টাকা দেওয়ার মাধ্যম")}
-                    value={part.method}
-                    onChange={(event) =>
-                      field(
-                        "methods",
-                        draft.methods.map((item, position) =>
-                          position === index
-                            ? {
-                                ...item,
-                                method: event.target
-                                  .value as typeof part.method,
-                              }
-                            : item,
-                        ),
-                      )
-                    }
-                  >
-                    {Object.entries(methodNames).map(([value, name]) => (
-                      <option key={value} value={value}>
-                        {t(name)}
-                      </option>
-                    ))}
-                  </AppSelect>
-                  {draft.methods.length > 1 ? (
-                    <>
-                      <MoneyInput
-                        className="field-input"
-                        aria-label={t("এই মাধ্যমে কত টাকা")}
-                        inputMode="decimal"
-                        value={part.amount}
-                        onChange={(event) =>
-                          field(
-                            "methods",
-                            draft.methods.map((item, position) =>
-                              position === index
-                                ? { ...item, amount: event.target.value }
-                                : item,
-                            ),
-                          )
-                        }
-                        required
-                      />
-                      <button
-                        type="button"
-                        className="icon-button danger-text"
-                        aria-label={t("এই মাধ্যম সরান")}
-                        onClick={() =>
-                          field(
-                            "methods",
-                            draft.methods.filter(
-                              (_, position) => position !== index,
-                            ),
-                          )
-                        }
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </>
-                  ) : null}
-                </div>
-              ))}
-              <button
-                type="button"
-                className="text-button"
-                onClick={() =>
-                  field("methods", [
-                    ...draft.methods.map((part) =>
-                      draft.methods.length === 1
-                        ? { ...part, amount: moneyInputValue(cashTotal) }
-                        : part,
-                    ),
-                    { method: "bkash", amount: "" },
-                  ])
-                }
-              >
-                <Plus size={14} />
-                {t("অন্য মাধ্যমেও দিয়েছি")}
-              </button>
-              {draft.methods.length > 1 ? (
-                <p className="form-hint muted">
-                  {t("সব মাধ্যম মিলিয়ে মোট {{amount}} হতে হবে।", {
-                    amount: money(cashTotal),
-                  })}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-          <label className="field">
-            <span className="field-label">{t("মনে রাখার কথা")}</span>
-            <textarea
-              className="field-input"
-              rows={3}
-              value={draft.note}
-              maxLength={10000}
-              onChange={(event) => field("note", event.target.value)}
-              placeholder={t("কী বাবদ, কোথা থেকে বা অন্য কিছু…")}
-            />
-          </label>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/jpeg,image/png,image/webp,application/pdf"
-            multiple
-            hidden
-            onChange={(event) => {
-              void addFiles(event.target.files);
-            }}
-          />
-          <button
-            type="button"
-            className="secondary-button full-width"
-            onClick={() => fileInput.current?.click()}
-          >
-            <Camera size={17} />
-            {t("ভাউচার বা ছবি যোগ করুন")}
-          </button>
-          {original?.receipts.length ? (
-            <p className="form-hint muted">
-              {t("আগের {{count}}টি ভাউচার রাখা আছে।", {
-                count: original.receipts.length,
-              })}
-            </p>
-          ) : null}
-          {files.map(({ id, file }) => (
-            <div className="attachment-row" key={id}>
-              <Receipt size={17} />
-              <span>{formatDigits(file.name)}</span>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label={t("ভাউচার সরান")}
-                onClick={() =>
-                  setFiles((current) =>
-                    current.filter((item) => item.id !== id),
-                  )
-                }
-              >
-                <Trash2 size={15} />
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            className="text-button danger-text"
-            onClick={discard}
-          >
-            {t("অসমাপ্ত লেখা বাদ দিন")}
-          </button>
         </fieldset>
       </form>
     </Frame>

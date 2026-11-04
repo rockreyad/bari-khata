@@ -110,16 +110,6 @@
   font-size: 11px;
   line-height: 1.7;
 }
-.work-adjustment-link {
-  display: flex;
-  justify-content: flex-end;
-  padding: 8px 24px;
-  border-top: 1px solid var(--line);
-}
-.work-adjustment-link button {
-  min-height: 36px;
-  font-size: 12px;
-}
 .notebook-card-due {
   padding-top: 12px;
   font-size: 11px;

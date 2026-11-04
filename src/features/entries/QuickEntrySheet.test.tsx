@@ -12,6 +12,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LedgerSchema, type Ledger } from "../../domain/model";
@@ -426,6 +427,120 @@ it("opens a full purchase page shaped for its shop and previews paying more than
     payable: 500000,
     advance: 0,
   });
+});
+
+it.each(["দোকান", "ডিলার"])(
+  "keeps existing notebook allocation without quick notebook creation for a %s purchase",
+  async (role) => {
+    state.notebook.ledger = LedgerSchema.parse({
+      works: [{ id: "roof", name: "ছাদের খাতা" }],
+      people: [{ id: "shop", name: "নমুনা বিক্রেতা", kind: "shop", role }],
+    });
+    const user = userEvent.setup();
+    render(
+      <QuickEntrySheet
+        presentation="page"
+        options={{ kind: "expense", personId: "shop" }}
+      />,
+    );
+    await ready();
+    const notebooks = screen.getByRole("combobox", { name: "কাজের খাতা" });
+    expect(
+      within(notebooks).queryByRole("option", { name: "+ নতুন খাতা খুলব" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "নতুন কাজের খাতা খুলব" }),
+    ).toBeNull();
+    await user.selectOptions(notebooks, "roof");
+    await user.type(screen.getByLabelText("কী কিনলেন"), "সিমেন্ট");
+    await user.type(screen.getByLabelText("কত টাকা"), "1000");
+    await user.click(screen.getByRole("button", { name: "রাখুন" }));
+    await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
+    const saved = state.notebook.ledger as Ledger;
+    expect(saved.works.map((work) => work.id)).toEqual(["roof"]);
+    expect(saved.contracts).toEqual([]);
+    expect(saved.entries).toHaveLength(2);
+    expect(
+      saved.entries.find((entry) => entry.kind === "expense"),
+    ).toMatchObject({
+      personId: "shop",
+      account: "materials",
+      contractId: null,
+      lines: [{ workId: "roof", costType: "material", amount: 100000 }],
+    });
+    expect(
+      saved.entries.find((entry) => entry.kind === "payment"),
+    ).toMatchObject({
+      personId: "shop",
+      account: "materials",
+      contractId: null,
+      allocations: [{ workId: "roof", amount: 100000 }],
+    });
+  },
+);
+
+it.each(["payment", "return"] as const)(
+  "keeps existing notebook choices but no create shortcut in a dealer %s flow",
+  async (kind) => {
+    state.notebook.ledger = LedgerSchema.parse({
+      works: [{ id: "roof", name: "ছাদের খাতা" }],
+      people: [
+        { id: "shop", name: "নমুনা ডিলার", kind: "shop", role: "ডিলার" },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<QuickEntrySheet options={{ kind, personId: "shop" }} />);
+    await ready();
+    const notebooks = screen.getByRole("combobox", { name: "কাজের খাতা" });
+    expect(
+      within(notebooks).getByRole("option", { name: "ছাদের খাতা" }),
+    ).toBeTruthy();
+    expect(
+      within(notebooks).queryByRole("option", { name: "+ নতুন খাতা খুলব" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "নতুন কাজের খাতা খুলব" }),
+    ).toBeNull();
+    await user.selectOptions(notebooks, "roof");
+    expect((notebooks as HTMLSelectElement).value).toBe("roof");
+    expect(state.notebook.save).not.toHaveBeenCalled();
+  },
+);
+
+it("hides notebook creation only while a shop is selected and keeps the unfinished payment when switching to a worker", async () => {
+  state.notebook.ledger = LedgerSchema.parse({
+    works: [{ id: "roof", name: "ছাদের খাতা" }],
+    people: [
+      { id: "shop", name: "নমুনা দোকান", kind: "shop" },
+      { id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" },
+    ],
+  });
+  const user = userEvent.setup();
+  render(<QuickEntrySheet options={{ kind: "payment" }} />);
+  await ready();
+  const notebooks = screen.getByRole("combobox", { name: "কাজের খাতা" });
+  expect(
+    within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
+  ).toBeTruthy();
+  await user.type(screen.getByLabelText("কত টাকা"), "1700");
+  await user.selectOptions(screen.getByLabelText("কাকে দিচ্ছেন"), "shop");
+  expect(
+    within(notebooks).queryByRole("option", { name: "+ নতুন খাতা খুলব" }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "নতুন কাজের খাতা খুলব" }),
+  ).toBeNull();
+  await user.selectOptions(screen.getByLabelText("কাকে দিচ্ছেন"), "worker");
+  expect(
+    within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "নতুন কাজের খাতা খুলব" }),
+  ).toBeTruthy();
+  expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
+    "1700",
+  );
+  expect(state.notebook.save).not.toHaveBeenCalled();
 });
 
 it("pays a house-contract worker once and previews total agreement progress across work notebooks", async () => {

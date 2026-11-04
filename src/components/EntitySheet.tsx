@@ -19,13 +19,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import {
-  CheckIcon,
-  HardHatIcon,
-  StorefrontIcon,
-  TruckIcon,
-  UserIcon,
-} from "@phosphor-icons/react";
+import { CheckIcon } from "@phosphor-icons/react";
 import { z } from "zod";
 import { useLanguageContext } from "../context/LanguageProvider";
 import { createWorkspaceStorage } from "../data/repository";
@@ -50,9 +44,8 @@ import { Sheet } from "./Sheet";
 import { WorkMark, workIconChoices, workColorChoices } from "./ui/Icons";
 import { AppSelect } from "./ui/AppSelect";
 import { AppDatePicker } from "./ui/AppDatePicker";
-import { AppCombobox } from "./ui/AppCombobox";
 import { MoneyInput } from "./ui/MoneyInput";
-import { ContactImport } from "./contacts/ContactImport";
+import { PersonEditorFields } from "../features/people/PersonEditorFields";
 import { FormError, useFormError } from "./ui/FormError";
 import "../features/people/person-work-links.css";
 type Kind = "work" | "person" | "contract";
@@ -101,18 +94,6 @@ const DraftSchema = z.object({
   personContractAmount: numericDraftText(),
 });
 type Draft = z.infer<typeof DraftSchema>;
-const personKinds = [
-  { id: "shop", label: "দোকান", Icon: StorefrontIcon },
-  { id: "worker", label: "মিস্ত্রি", Icon: HardHatIcon },
-  { id: "driver", label: "গাড়ির লোক", Icon: TruckIcon },
-  { id: "other", label: "অন্য ব্যক্তি", Icon: UserIcon },
-] as const;
-const personActionNames = {
-  payment: "টাকা দিলাম",
-  purchase: "মাল কেনা",
-  return: "মাল ফেরত",
-  transport: "আনার খরচ",
-};
 const roleSuggestions = [
   "সুইপার",
   "লেবার",
@@ -409,8 +390,13 @@ export function EntitySheet({
         });
         next = saveWorkChange(next, work);
       } else if (kind === "person") {
+        const previous = next.people.find((person) => person.id === editId);
+        if (editId && (!previous || previous.archivedAt))
+          throw new Error(
+            t("এই নামটি এখন বদলানো যাচ্ছে না। ফিরে গিয়ে আবার দেখুন।"),
+          );
         const person = PersonSchema.parse({
-          ...next.people.find((p) => p.id === editId),
+          ...previous,
           id: draft.id,
           name: draft.name.trim(),
           phone: latinDigits(draft.phone.trim()),
@@ -558,8 +544,39 @@ export function EntitySheet({
     }
   }
   const Frame = presentation === "page" ? EntryFrame : Sheet;
+  const personPage = kind === "person" && presentation === "page";
+  const originalPerson =
+    kind === "person" && editId
+      ? ledger.people.find((person) => person.id === editId)
+      : undefined;
+  if (
+    kind === "person" &&
+    editId &&
+    (!originalPerson || originalPerson.archivedAt)
+  )
+    return (
+      <Frame title={t("নামের তথ্য")} onClose={() => void close()}>
+        <FormError {...errorNotice} className="form-error" />
+        <p className="entity-notice" role="status">
+          {t(
+            originalPerson?.archivedAt
+              ? "নামটি মুছে রাখা আছে। আগে ফিরিয়ে আনুন।"
+              : "এই নামটি পাওয়া যাচ্ছে না।",
+          )}
+        </p>
+      </Frame>
+    );
   return (
     <Frame
+      {...(personPage
+        ? {
+            className: "person-editor-page",
+            subtitle: editId
+              ? formatDigits(originalPerson?.name ?? "")
+              : t("মানুষ ও দোকান"),
+            busy: saving,
+          }
+        : {})}
       title={t(
         kind === "work"
           ? editId
@@ -567,8 +584,8 @@ export function EntitySheet({
             : "কাজের খাতা খুলব"
           : kind === "person"
             ? editId
-              ? "নামের তথ্য"
-              : "নাম যোগ করব"
+              ? "তথ্য বদলাই"
+              : "নাম যোগ করি"
             : editId
               ? "কাজ বদলাই"
               : "নতুন কাজ",
@@ -586,7 +603,11 @@ export function EntitySheet({
         </button>
       }
     >
-      <form id="entity-form" className="entity-form-v3" onSubmit={submit}>
+      <form
+        id="entity-form"
+        className={`entity-form-v3 ${kind === "person" ? "person-editor-form" : ""}`}
+        onSubmit={submit}
+      >
         <FormError {...errorNotice} className="form-error" />
         {notice ? (
           <p className="entity-notice" role="status">
@@ -736,179 +757,37 @@ export function EntitySheet({
               </details>
             </>
           ) : kind === "person" ? (
-            <>
-              <section className="contact-kind-choices">
-                {personKinds.map(({ id, label, Icon }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    aria-pressed={draft.contactKind === id}
-                    className={draft.contactKind === id ? "selected" : ""}
-                    onClick={() =>
-                      setDraft((d) => ({
-                        ...d,
-                        contactKind: id,
-                        quickActions: null,
-                      }))
-                    }
-                  >
-                    <Icon size={26} weight="duotone" />
-                    <span>{t(label)}</span>
-                  </button>
-                ))}
-              </section>
-              <label>
-                {t(draft.contactKind === "shop" ? "দোকানের নাম" : "নাম")}
-                <input
-                  autoFocus
-                  value={draft.name}
-                  onChange={(e) => field("name", e.target.value)}
-                  required
-                  maxLength={200}
-                  placeholder={t("নাম লিখুন")}
-                />
-              </label>
-              <label>
-                {t("পরিচয় / কী কাজ করেন")}
-                <AppCombobox
-                  value={draft.role}
-                  onChange={(event) => field("role", event.target.value)}
-                  maxLength={200}
-                  placeholder={t(
-                    "যেমন: সুইপার, লেবার, ঠিকাদার, ডিলার বা ইঞ্জিনিয়ার",
-                  )}
-                  suggestions={personRoleChoices}
-                />
-              </label>
-              <label>
-                {t("ফোন নম্বর")}
-                <NumericInput
-                  type="tel"
-                  value={draft.phone}
-                  onChange={(e) => field("phone", e.target.value)}
-                  placeholder={t("না দিলেও হবে")}
-                />
-              </label>
-              <ContactImport
-                onPick={({ name, phone }) => {
-                  setError("");
-                  setDraft((current) => ({
-                    ...current,
-                    name: current.name.trim() ? current.name : name,
-                    phone,
-                  }));
-                }}
-              />
-              <fieldset className="person-work-picker">
-                <legend>{t("কোন কোন খাতায়")}</legend>
-                <p className="field-hint">
-                  {t(
-                    "একাধিক খাতা বেছে নিতে পারেন। এতে নতুন খরচ বা চুক্তি হবে না।",
-                  )}
-                </p>
-                <div className="person-work-options">
-                  {ledger.works
-                    .filter(
-                      (work) =>
-                        !work.archivedAt ||
-                        draft.personWorkIds.includes(work.id),
-                    )
-                    .map((work) => (
-                      <label className="person-work-option" key={work.id}>
-                        <input
-                          type="checkbox"
-                          checked={draft.personWorkIds.includes(work.id)}
-                          onChange={(event) =>
-                            field(
-                              "personWorkIds",
-                              event.target.checked
-                                ? [...draft.personWorkIds, work.id]
-                                : draft.personWorkIds.filter(
-                                    (id) => id !== work.id,
-                                  ),
-                            )
-                          }
-                        />
-                        <span>
-                          {work.archivedAt
-                            ? t("{{name}} (সরানো)", {
-                                name: formatDigits(work.name),
-                              })
-                            : formatDigits(work.name)}
-                        </span>
-                      </label>
-                    ))}
-                </div>
-                {!ledger.works.some((work) => !work.archivedAt) ? (
-                  <p className="field-hint">
-                    {t("খাতা যোগ করলে এখানে বেছে নিতে পারবেন।")}
-                  </p>
-                ) : null}
-              </fieldset>
-              {!editId && draft.contactKind === "worker" ? (
-                <details className="entity-extra">
-                  <summary>{t("কাজের টাকা")}</summary>
-                  <div className="entity-extra-body">
-                    <p className="field-hint">{t("না থাকলে খালি রাখুন।")}</p>
-                    <label>
-                      {t("কাজের খাতা")}
-                      <AppSelect
-                        value={notebookValue}
-                        onChange={(event) => chooseNotebook(event.target.value)}
-                      >
-                        <option value="">{t("পরে বেছে নেব")}</option>
-                        {ledger.works
-                          .filter(
-                            (work) =>
-                              !work.archivedAt ||
-                              (Boolean(editId) && work.id === notebookValue),
-                          )
-                          .map((work) => (
-                            <option key={work.id} value={work.id}>
-                              {work.name}
-                            </option>
-                          ))}
-                      </AppSelect>
-                    </label>
-                    <label>
-                      {t("কাজের টাকা")}
-                      <MoneyInput
-                        aria-label={t("কাজের টাকা")}
-                        value={draft.personContractAmount}
-                        onChange={(e) =>
-                          field("personContractAmount", e.target.value)
-                        }
-                        placeholder={t("যেমন: ৬০০০০০")}
-                      />
-                    </label>
-                  </div>
-                </details>
-              ) : null}
-              <details className="entity-extra">
-                <summary>{t("পছন্দের বোতাম")}</summary>
-                <div className="entity-extra-body">
-                  <h3>{t("এই নামে কোন বোতাম রাখবেন?")}</h3>
-                  <div className="preset-options">
-                    {(allowed as ContactAction[]).map((id) => (
-                      <button
-                        type="button"
-                        key={id}
-                        aria-pressed={selected.includes(id)}
-                        className={selected.includes(id) ? "selected" : ""}
-                        onClick={() => toggle(id)}
-                      >
-                        <span>
-                          {selected.includes(id) ? (
-                            <CheckIcon size={14} />
-                          ) : null}
-                        </span>
-                        {t(personActionNames[id])}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </details>
-            </>
+            <PersonEditorFields
+              value={draft}
+              ledger={ledger}
+              editing={Boolean(editId)}
+              roleChoices={personRoleChoices}
+              allowedActions={allowed as ContactAction[]}
+              selectedActions={selected}
+              notebookValue={notebookValue}
+              onChange={(patch) => {
+                setError("");
+                setDraft((current) => ({ ...current, ...patch }));
+              }}
+              onKind={(contactKind) => {
+                setError("");
+                setDraft((current) =>
+                  current.contactKind === contactKind
+                    ? current
+                    : { ...current, contactKind, quickActions: null },
+                );
+              }}
+              onNotebook={chooseNotebook}
+              onToggleAction={toggle}
+              onContactImport={({ name, phone }) => {
+                setError("");
+                setDraft((current) => ({
+                  ...current,
+                  name: current.name.trim() ? current.name : name,
+                  phone,
+                }));
+              }}
+            />
           ) : (
             <>
               {identityMismatch ? (

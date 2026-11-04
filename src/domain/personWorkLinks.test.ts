@@ -4,6 +4,7 @@ import { personKind } from "./contacts";
 import { summarize } from "./ledger";
 import { savePersonWithContract } from "./personContract";
 import { personWorks, preservesPersonWorkLinks } from "./personWorkLinks";
+import { appendBalanceAdjustment } from "./balanceAdjustments";
 
 const fixture = () =>
   LedgerSchema.parse({
@@ -40,18 +41,15 @@ describe("person notebook associations", () => {
     { workIds: ["bathroom", "bathroom"] },
     { workIds: [null] },
     { workIds: "bathroom" },
-  ])(
-    "rejects invalid notebook links %j",
-    ({ workIds }) => {
-      const ledger = fixture();
-      expect(() =>
-        LedgerSchema.parse({
-          ...ledger,
-          people: [{ ...ledger.people[0], workIds }],
-        }),
-      ).toThrow();
-    },
-  );
+  ])("rejects invalid notebook links %j", ({ workIds }) => {
+    const ledger = fixture();
+    expect(() =>
+      LedgerSchema.parse({
+        ...ledger,
+        people: [{ ...ledger.people[0], workIds }],
+      }),
+    ).toThrow();
+  });
 
   it("keeps explicit clearing distinct from an old client omitting associations", () => {
     const before = fixture();
@@ -83,5 +81,24 @@ describe("person notebook associations", () => {
     });
     expect(personWorks(ledger, ledger.people[0])).toHaveLength(2);
     expect(personWorks(ledger, ledger.people[1])).toEqual([]);
+  });
+
+  it("keeps a person's notebook reachable when its only record is a scoped adjustment", () => {
+    const ledger = appendBalanceAdjustment(fixture(), {
+      target: "person",
+      personId: "worker",
+      account: "labour",
+      workId: "electric",
+      basis: "paid",
+      expectedBefore: 0,
+      after: 10000,
+      reason: "নমুনা খাতার দেওয়া মোট মিলিয়েছি",
+    });
+    expect(
+      personWorks(ledger, ledger.people[0]).map((work) => work.id),
+    ).toEqual(["electric"]);
+    expect(ledger.entries).toHaveLength(1);
+    expect(ledger.entries[0].kind).toBe("adjustment");
+    expect(summarize(ledger, "electric").paid).toBe(0);
   });
 });
