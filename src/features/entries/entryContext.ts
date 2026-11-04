@@ -8,6 +8,7 @@ import {
   hasPaymentWriting,
   inferPaymentJob,
   paymentPurpose,
+  preferredPaymentJob,
 } from "./paymentIntent";
 export { partyAccountBalance } from "../../domain/ledger";
 export function applicableQuickContracts(
@@ -60,9 +61,29 @@ export function entryContext(ledger: Ledger, options: AddOptions) {
       contract.personId === person?.id &&
       account === "labour",
   );
+  const defaultJob =
+    person &&
+    kind === "payment" &&
+    options.contractId === undefined &&
+    options.purpose !== "charge" &&
+    options.purpose !== "wage"
+      ? preferredPaymentJob(
+          ledger,
+          person.id,
+          account,
+          options.workId !== undefined
+            ? applicableQuickContracts(ledger, person.id, options.workId)
+            : ledger.contracts,
+          false,
+        )
+      : undefined;
   let workId =
     options.workId ??
-    (requestedJob?.scope === "work" ? (requestedJob.workId ?? "") : "");
+    (requestedJob?.scope === "work"
+      ? (requestedJob.workId ?? "")
+      : defaultJob?.scope === "work"
+        ? (defaultJob.workId ?? "")
+        : "");
   if (!workId && person) {
     const contracts = ledger.contracts.filter(
       (c) =>
@@ -136,7 +157,7 @@ export function entryContext(ledger: Ledger, options: AddOptions) {
   );
   const contractId =
     account === "labour"
-      ? options.contractId
+      ? options.contractId !== undefined
         ? (requestedContract?.id ??
           (ledger.contracts.some(
             (job) =>
@@ -147,9 +168,11 @@ export function entryContext(ledger: Ledger, options: AddOptions) {
             ? options.contractId
             : ""))
         : kind === "payment" &&
-            contracts.length === 1 &&
-            inferPaymentJob(ledger, person!.id, account, contracts[0].id)
-          ? contracts[0].id
+            person &&
+            options.purpose !== "charge" &&
+            options.purpose !== "wage"
+          ? (preferredPaymentJob(ledger, person!.id, account, contracts)?.id ??
+            "")
           : ""
       : "";
   return QuickDraftSchema.parse({
@@ -269,20 +292,35 @@ export function entryWorkChange(
   ledger: Ledger,
   draft: ReturnType<typeof entryContext>,
   workId: string,
+  explicitScope = false,
 ) {
   const contracts = applicableQuickContracts(
     ledger,
     draft.personId,
     workId || undefined,
   );
+  const canDefaultJob =
+    draft.kind === "payment" &&
+    !explicitScope &&
+    !hasPaymentWriting(draft) &&
+    draft.purpose !== "wage";
   const chosen =
     contracts.find((contract) => contract.id === draft.contractId) ??
-    (contracts.length === 1 &&
-    inferPaymentJob(ledger, draft.personId, draft.account, contracts[0].id)
-      ? contracts[0]
-      : undefined);
+    (canDefaultJob
+      ? preferredPaymentJob(ledger, draft.personId, draft.account, contracts)
+      : draft.kind !== "payment" &&
+          !explicitScope &&
+          contracts.length === 1 &&
+          inferPaymentJob(
+            ledger,
+            draft.personId,
+            draft.account,
+            contracts[0].id,
+          )
+        ? contracts[0]
+        : undefined);
   const contractId =
-    draft.account === "labour" && draft.purpose !== "charge"
+    draft.account === "labour" && (draft.purpose !== "charge" || canDefaultJob)
       ? (chosen?.id ?? "")
       : "";
   return {
@@ -290,6 +328,7 @@ export function entryWorkChange(
     contractId,
     purpose:
       draft.kind === "payment" &&
+      !explicitScope &&
       !hasPaymentWriting(draft) &&
       draft.purpose !== "advance"
         ? paymentPurpose(ledger, { ...draft, contractId })

@@ -1,4 +1,4 @@
-import type { Ledger } from "../../domain/model";
+import type { Contract, Ledger } from "../../domain/model";
 import { reconciledTotals } from "../../domain/adjustmentMath";
 import { entryPaymentBalance } from "./entryPaymentBalance";
 import { contactAccountLedger } from "../../domain/contacts";
@@ -96,13 +96,78 @@ export function inferPaymentJob(
   account: QuickDraft["account"],
   contractId: string,
 ) {
+  return (
+    canInferPaymentScope(ledger, personId, account) &&
+    paymentIntent(ledger, { personId, account, contractId }).canSettle
+  );
+}
+
+function canInferPaymentScope(
+  ledger: Ledger,
+  personId: string,
+  account: QuickDraft["account"],
+) {
   const person = ledger.people.find((row) => row.id === personId);
   return Boolean(
     person &&
+    !person.archivedAt &&
+    account === "labour" &&
     !contactAccountLedger(ledger, person, account).entries.some(
       (entry) => !entry.voided && !entry.contractId,
-    ) &&
-    paymentIntent(ledger, { personId, account, contractId }).canSettle,
+    ),
+  );
+}
+
+export function preferredPaymentJob(
+  ledger: Ledger,
+  personId: string,
+  account: QuickDraft["account"],
+  contracts: Contract[],
+  allowUnclassified = true,
+) {
+  // Aggregate money cannot be silently assigned to one of the person's jobs.
+  if (!canInferPaymentScope(ledger, personId, account)) return undefined;
+  const available = contracts.filter(
+    (job) =>
+      job.personId === personId &&
+      !job.archivedAt &&
+      (job.scope === "house" ||
+        ledger.works.some(
+          (work) => work.id === job.workId && !work.archivedAt,
+        )),
+  );
+  const ongoing = available.filter((job) => job.status === "ongoing");
+  const preferred = ongoing.length
+    ? ongoing
+    : available.filter((job) => job.status === "done");
+  const stamp = (job: Contract) => {
+    const statusChanges = job.activity.filter(
+      (event) =>
+        event.after.status === job.status &&
+        event.before?.status !== event.after.status,
+    );
+    const events = statusChanges.length
+      ? statusChanges
+      : [...job.activity, ...job.history];
+    return (
+      events.reduce(
+        (latest, event) => Math.max(latest, Date.parse(event.at) || 0),
+        0,
+      ) ||
+      Date.parse(job.agreedOn ?? "") ||
+      0
+    );
+  };
+  return (
+    preferred
+      .map((job) => ({ job, at: stamp(job) }))
+      .sort((a, b) => b.at - a.at || a.job.id.localeCompare(b.job.id))[0]
+      ?.job ??
+    (allowUnclassified &&
+    available.length === 1 &&
+    inferPaymentJob(ledger, personId, account, available[0].id)
+      ? available[0]
+      : undefined)
   );
 }
 

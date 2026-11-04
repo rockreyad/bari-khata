@@ -127,6 +127,9 @@ export function QuickEntrySheet({
   const financialScopeChosen = useRef(
     Boolean(options.account || options.costType || options.purpose),
   );
+  const jobScopeChosen = useRef(
+    options.contractId !== undefined || Boolean(options.purpose),
+  );
   const owner = useRef(getActiveOwner());
   const queue = useRef(Promise.resolve());
   const latest = useRef({ draft, files });
@@ -198,6 +201,7 @@ export function QuickEntrySheet({
               draft,
             );
             financialScopeChosen.current = true;
+            jobScopeChosen.current = true;
             latest.current = { draft: restored, files: parsed.files };
             setDraft(restored);
             setFiles(parsed.files);
@@ -252,7 +256,7 @@ export function QuickEntrySheet({
             financialScopeChosen.current,
           )
         : name === "workId"
-          ? entryWorkChange(ledger, d, String(value))
+          ? entryWorkChange(ledger, d, String(value), jobScopeChosen.current)
           : name === "personId" || (name === "account" && value !== "labour")
             ? { contractId: "" }
             : {}),
@@ -481,6 +485,7 @@ export function QuickEntrySheet({
   };
   const choosePurpose = (purpose: "charge" | "settle" | "advance") => {
     financialScopeChosen.current = true;
+    jobScopeChosen.current = true;
     setError("");
     setDraft((current) => changePaymentPurpose(current, purpose));
   };
@@ -736,6 +741,7 @@ export function QuickEntrySheet({
                         (job) => job.id === e.target.value,
                       );
                       financialScopeChosen.current = true;
+                      jobScopeChosen.current = true;
                       setDraft((current) => {
                         const scope = {
                           personId: job?.personId ?? current.personId,

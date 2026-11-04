@@ -1750,3 +1750,132 @@ it("uses an explicit labour expense type consistently for the preview and saved 
   expect(saved.entries[1].relatedEntryId).toBe(saved.entries[0].id);
   expect(saved.people[0].kind).toBe("shop");
 });
+
+describe("NARC-131 preferred payment job", () => {
+  function jobsLedger() {
+    return LedgerSchema.parse({
+      works: [
+        { id: "tiles", name: "টাইলসের খাতা" },
+        { id: "paint", name: "রঙের খাতা" },
+      ],
+      people: [{ id: "person", name: "নমুনা মিস্ত্রি", kind: "worker" }],
+      contracts: [
+        {
+          id: "done",
+          title: "রং করা",
+          personId: "person",
+          workId: "paint",
+          status: "done",
+          agreedOn: "2026-11-04",
+          total: 100000,
+        },
+        {
+          id: "ongoing",
+          title: "টাইলস বসানো",
+          personId: "person",
+          workId: "tiles",
+          status: "ongoing",
+          agreedOn: "2026-10-01",
+          total: 200000,
+        },
+      ],
+    });
+  }
+
+  it("opens the ongoing job and notebook, then records only its payment", async () => {
+    const original = jobsLedger();
+    state.notebook.ledger = original;
+    const user = userEvent.setup();
+    render(
+      <QuickEntrySheet
+        presentation="page"
+        options={{ kind: "payment", personId: "person" }}
+      />,
+    );
+    await ready();
+    expect(
+      (screen.getByLabelText("কাজ", { exact: true }) as HTMLSelectElement)
+        .value,
+    ).toBe("ongoing");
+    expect(
+      (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value,
+    ).toBe("tiles");
+    expect(
+      screen.getByRole("button", { name: "বাকি মেটাই", pressed: true }),
+    ).toBeTruthy();
+    await user.type(screen.getByLabelText("কত টাকা"), "500");
+    await user.click(screen.getByRole("button", { name: "রাখুন" }));
+    await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
+    const saved = state.notebook.ledger as Ledger;
+    expect(saved.contracts).toEqual(original.contracts);
+    expect(saved.entries).toHaveLength(1);
+    expect(saved.entries[0]).toMatchObject({
+      kind: "payment",
+      contractId: "ongoing",
+      personId: "person",
+      allocations: [{ workId: "tiles", amount: 50000 }],
+    });
+    expect(summarize(saved).cost).toBe(0);
+  });
+
+  it("keeps a manual Other work choice across notebook changes and reopening", async () => {
+    state.notebook.ledger = jobsLedger();
+    const user = userEvent.setup();
+    const options = { kind: "payment", personId: "person" } as const;
+    const view = render(
+      <QuickEntrySheet presentation="page" options={options} />,
+    );
+    await ready();
+    await user.selectOptions(screen.getByLabelText("কাজ", { exact: true }), "");
+    await user.selectOptions(screen.getByLabelText("কাজের খাতা"), "paint");
+    expect(
+      (screen.getByLabelText("কাজ", { exact: true }) as HTMLSelectElement)
+        .value,
+    ).toBe("");
+    expect(
+      screen.getByRole("button", { name: "নতুন বিল ও টাকা", pressed: true }),
+    ).toBeTruthy();
+    await user.type(screen.getByLabelText("কত টাকা"), "125");
+    view.unmount();
+    await waitFor(() => {
+      expect(state.drafts.has("quick-v2:payment:all:person")).toBe(true);
+    });
+    render(<QuickEntrySheet presentation="page" options={options} />);
+    await ready();
+    expect(
+      (screen.getByLabelText("কাজ", { exact: true }) as HTMLSelectElement)
+        .value,
+    ).toBe("");
+    expect(
+      (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value,
+    ).toBe("paint");
+    expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
+      "125",
+    );
+    expect(
+      screen.getByRole("button", { name: "নতুন বিল ও টাকা", pressed: true }),
+    ).toBeTruthy();
+  });
+
+  it("clears an inapplicable automatic job after money is written instead of assigning it to another notebook's job", async () => {
+    state.notebook.ledger = jobsLedger();
+    const user = userEvent.setup();
+    render(
+      <QuickEntrySheet
+        presentation="page"
+        options={{ kind: "payment", personId: "person" }}
+      />,
+    );
+    await ready();
+    await user.type(screen.getByLabelText("কত টাকা"), "125");
+    await user.selectOptions(screen.getByLabelText("কাজের খাতা"), "paint");
+    expect(
+      (screen.getByLabelText("কাজ", { exact: true }) as HTMLSelectElement)
+        .value,
+    ).toBe("");
+    expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
+      "125",
+    );
+    expect(state.notebook.save).not.toHaveBeenCalled();
+  });
+});
