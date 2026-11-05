@@ -26,8 +26,11 @@ import {
   personKind,
   sortContactEntries,
 } from "../../domain/contacts";
-import { getContactEntryDefaults } from "../../domain/contactEntryPolicy";
-import type { Account } from "../../domain/model";
+import {
+  contactEntryPolicy,
+  getContactEntryDefaults,
+} from "../../domain/contactEntryPolicy";
+import { AccountSchema, type Account } from "../../domain/model";
 import { contractAppliesToWork } from "../../domain/contracts";
 import { personSummary } from "../../domain/ledger";
 import { partyLedger } from "../../domain/partyLedger";
@@ -118,14 +121,52 @@ export function PersonPage() {
       account,
     });
   const addPayment = () => {
-    const defaults = entryDefaults(defaultAccount);
-    add({
-      kind: "payment",
-      personId: person.id,
-      workId: defaults.workId || undefined,
-      account: defaults.account,
-      ...(defaults.contractId ? { contractId: defaults.contractId } : {}),
+    const policy = contactEntryPolicy(person);
+    const chargeType =
+      kind !== "shop" &&
+      (kind === "worker" || policy.defaultAccount === "labour")
+        ? (policy.chargeCostTypes.find((type) => type === "labour") ??
+          policy.chargeCostTypes[0])
+        : kind === "driver"
+          ? (policy.chargeCostTypes.find((type) => type === "transport") ??
+            policy.chargeCostTypes[0])
+          : undefined;
+    const defaults = getContactEntryDefaults(ledger, person, {
+      workId: workId || undefined,
+      account: chargeType
+        ? chargeType === "labour"
+          ? "labour"
+          : "other"
+        : defaultAccount,
+      contractId: params.get("contract") ?? undefined,
     });
+    const query = new URLSearchParams({
+      person: person.id,
+      account: defaults.account,
+      back: `${base ?? ""}/parties/${encodeURIComponent(person.id)}${params.size ? `?${params}` : ""}`,
+      purpose: chargeType ? "charge" : "party-payment",
+    });
+    if (defaults.workId) query.set("work", defaults.workId);
+    const contract = ledger.contracts.find(
+      (row) => row.id === defaults.contractId,
+    );
+    if (
+      defaults.account === "labour" &&
+      contract &&
+      (!defaults.workId || contractAppliesToWork(contract, defaults.workId))
+    )
+      query.set("contract", contract.id);
+    if (chargeType) {
+      query.set("type", chargeType);
+      query.set("paid", "yes");
+    } else {
+      query.set("dueWork", workId || "all");
+      query.set(
+        "dueAccount",
+        AccountSchema.safeParse(params.get("account")).data ?? "all",
+      );
+    }
+    go(`${chargeType ? "/write/charge" : "/write"}?${query}`);
   };
   const addPurchase = () => {
     const defaults = entryDefaults("materials");

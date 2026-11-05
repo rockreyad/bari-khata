@@ -4,6 +4,7 @@ import { z } from "zod";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { EntryFrame } from "../../components/EntryFrame";
+import { EntitySheet } from "../../components/EntitySheet";
 import { MoneyInput } from "../../components/ui/MoneyInput";
 import { PaymentMethodField } from "../../components/PaymentMethodField";
 import { AppSelect } from "../../components/ui/AppSelect";
@@ -13,7 +14,7 @@ import {
   TransactionDetails,
 } from "../../components/TransactionFields";
 import { FormError, useFormError } from "../../components/ui/FormError";
-import { AccountSchema, PersonSchema } from "../../domain/model";
+import { AccountSchema, MoneySchema, PersonSchema } from "../../domain/model";
 import { parseAmount } from "../../domain/ledger";
 import { partyLedger } from "../../domain/partyLedger";
 import {
@@ -33,6 +34,7 @@ import { QuickSavedDraftSchema } from "../entries/quickEntry";
 import { HouseSavedNotice } from "./HouseSavedNotice";
 import { HouseAttachments } from "./HouseAttachments";
 import { paymentPresentation } from "./paymentPresentation";
+import { partyDueItems } from "../home/partyDueItems";
 
 const PaymentDraftSchema = z.object({
   id: z.string().min(1).max(150),
@@ -43,6 +45,7 @@ const PaymentDraftSchema = z.object({
   workId: z.string().max(160),
   account: z.union([AccountSchema, z.literal("")]),
   contractId: z.string().max(160),
+  billId: z.string().max(160).default(""),
   intent: z.enum(["payment", "settlement", "advance", "receivable"]),
   date: z.string().max(10),
   method: z.enum(["cash", "bkash", "bank", "other"]),
@@ -55,9 +58,11 @@ const PaymentDraftSchema = z.object({
   files: QuickSavedDraftSchema.shape.files,
 });
 type Draft = z.infer<typeof PaymentDraftSchema>;
-type PaymentFormIssue = HousePaymentIssue | "invalid_date" | "invalid_intent";
+type PaymentFormIssue =
+  HousePaymentIssue | "invalid_date" | "invalid_intent" | "exceeds_due";
 const issueText: Record<PaymentFormIssue, string> = {
   invalid_intent: "টাকা দেওয়ার ধরন বেছে নিন।",
+  exceeds_due: "এই বাকির চেয়ে বেশি টাকা লিখেছেন। অঙ্কটি কমিয়ে দিন।",
   invalid_date: "সঠিক তারিখ বেছে নিন।",
   invalid_person: "যাঁকে টাকা দিয়েছেন, তাঁর নাম বেছে নিন।",
   invalid_amount: "সঠিক টাকার অঙ্ক দিন।",
@@ -82,7 +87,7 @@ function amount(value: string) {
 }
 
 export function HousePaymentForm() {
-  const { ledger, save, close, entity, notify } = useNotebook();
+  const { ledger, save, close, entity, notify, mode } = useNotebook();
   const { t, money, formatDigits, date } = useLanguageContext();
   const [params] = useSearchParams();
   const initial = useMemo<Draft>(() => {
@@ -93,6 +98,9 @@ export function HousePaymentForm() {
         })
       : null;
     const requestedIntent = params.get("intent") ?? params.get("purpose");
+    const presetAmount =
+      MoneySchema.safeParse(Number(params.get("amount"))).data ?? 0;
+    const activeWorks = ledger.works.filter((work) => !work.archivedAt);
     const intent =
       requestedIntent === "advance" ||
       requestedIntent === "receivable" ||
@@ -104,14 +112,19 @@ export function HousePaymentForm() {
       personId: params.get("person") ?? "",
       personName: "",
       newPersonId: crypto.randomUUID(),
-      amount: "",
+      amount: presetAmount > 0 ? moneyInputValue(presetAmount) : "",
       workId:
         params.get("work") ??
-        (intent === "advance" ? (defaults?.workId ?? "") : ""),
+        (intent === "advance"
+          ? defaults?.workId ||
+            (activeWorks.length === 1 ? activeWorks[0].id : "")
+          : ""),
       account:
         AccountSchema.safeParse(params.get("account")).data ??
         (intent === "advance" ? (defaults?.account ?? "") : ""),
-      contractId: params.get("contract") ?? "",
+      contractId:
+        params.get("contract") === "none" ? "" : (params.get("contract") ?? ""),
+      billId: params.get("bill") ?? "",
       intent,
       date: todayDhaka(),
       method: "cash",
@@ -124,7 +137,7 @@ export function HousePaymentForm() {
       files: [],
     };
   }, []);
-  const key = `house-payment:${params.get("person") ?? "all"}:${params.get("work") ?? "all"}:${params.get("contract") ?? "all"}${initial.intent === "advance" || initial.intent === "receivable" ? `:${initial.intent}` : ""}`;
+  const key = `house-payment:${params.get("person") ?? "all"}:${params.get("work") ?? "all"}:${params.get("contract") ?? "all"}${initial.intent === "advance" || initial.intent === "receivable" ? `:${initial.intent}` : ""}${params.has("amount") ? `:due:${params.get("account") ?? "all"}:${params.get("bill") ?? "all"}` : ""}`;
   const {
     value: draft,
     update,
@@ -143,6 +156,7 @@ export function HousePaymentForm() {
   const [error, setError, errorNotice] = useFormError();
   const [invalidField, setInvalidField] = useState("");
   const [saving, setSaving] = useState(false);
+  const [creatingWork, setCreatingWork] = useState(false);
   const lock = useRef(false);
   const finished = useRef(false);
   const total = amount(draft.amount);
@@ -172,6 +186,10 @@ export function HousePaymentForm() {
     () => partyLedger(planningLedger, resolvedPersonId),
     [planningLedger, resolvedPersonId],
   );
+  const settlement = params.get("purpose") === "settle" && params.has("amount");
+  const selectedBill = summary.bills.find(
+    (bill) => bill.entry.id === draft.billId,
+  );
   const choices = summary.bills.flatMap((bill) =>
     bill.works
       .filter(
@@ -192,31 +210,74 @@ export function HousePaymentForm() {
         date: bill.entry.date,
       })),
   );
+  let billAmountLeft = total;
+  const presetAllocations = choices
+    .filter((choice) => choice.billId === draft.billId)
+    .flatMap((choice) => {
+      const value = Math.min(billAmountLeft, choice.outstanding);
+      billAmountLeft -= value;
+      return value > 0
+        ? [{ billId: choice.billId, workId: choice.workId, amount: value }]
+        : [];
+    });
   const request: HousePaymentRequest = {
     personId: resolvedPersonId,
     amount: total,
     intent,
     workId: draft.workId || undefined,
     account: draft.account || undefined,
-    contractId: draft.contractId || undefined,
+    contractId:
+      draft.contractId ||
+      (intent === "advance" || params.get("contract") === "none"
+        ? null
+        : undefined),
     confirmUnallocatedCash: draft.confirmUnallocatedCash,
-    ...(draft.allocations
+    ...(draft.billId
       ? {
-          allocations: choices.flatMap((choice) => {
-            const value = amount(draft.allocations?.[choice.key] ?? "");
-            return value > 0
-              ? [
-                  {
-                    billId: choice.billId,
-                    workId: choice.workId,
-                    amount: value,
-                  },
-                ]
-              : [];
-          }),
+          allocations: presetAllocations,
         }
-      : {}),
+      : settlement
+        ? { allocations: [] }
+        : draft.allocations
+          ? {
+              allocations: choices.flatMap((choice) => {
+                const value = amount(draft.allocations?.[choice.key] ?? "");
+                return value > 0
+                  ? [
+                      {
+                        billId: choice.billId,
+                        workId: choice.workId,
+                        amount: value,
+                      },
+                    ]
+                  : [];
+              }),
+            }
+          : {}),
   };
+  const currentSettlementLimit = (current: typeof planningLedger) =>
+    settlement
+      ? partyDueItems(current, resolvedPersonId, {
+          ...(params.get("dueWork") && params.get("dueWork") !== "all"
+            ? { workId: params.get("dueWork")! }
+            : {}),
+          ...(AccountSchema.safeParse(params.get("dueAccount")).data
+            ? { account: AccountSchema.parse(params.get("dueAccount")) }
+            : {}),
+        })
+          .filter(
+            (row) =>
+              (params.get("balanceOnly") === "1"
+                ? !row.billId
+                : !draft.billId || row.billId === draft.billId) &&
+              (!draft.workId || row.workId === draft.workId) &&
+              (!draft.account || row.account === draft.account) &&
+              (request.contractId === undefined ||
+                row.contractId === request.contractId),
+          )
+          .reduce((sum, row) => sum + row.amount, 0)
+      : null;
+  const settlementLimit = currentSettlementLimit(planningLedger);
   const plan = planHousePayment(planningLedger, request);
   const presentation = paymentPresentation(planningLedger, request, plan, {
     date: draft.date,
@@ -314,18 +375,11 @@ export function HousePaymentForm() {
   const showScope =
     Boolean(person) &&
     intent !== "receivable" &&
-    (intent !== "payment" ||
-      [
-        "invalid_work",
-        "invalid_account",
-        "invalid_contract",
-        "choose_scope",
-      ].includes(invalidField)) &&
-    (intent === "advance" ||
-      (!noMatchingBills &&
-        plan.remainder > 0 &&
-        plan.issues.includes("choose_scope")) ||
-      Boolean(draft.workId || draft.account || draft.contractId));
+    (showAccount ||
+      Boolean(draft.contractId) ||
+      ledger.contracts.some(
+        (row) => !row.archivedAt && row.personId === draft.personId,
+      ));
   const showOutcome =
     Boolean(person) &&
     total > 0 &&
@@ -356,6 +410,13 @@ export function HousePaymentForm() {
     try {
       if (intent === "receivable") throw new Error("invalid_intent");
       if (total <= 0) throw new Error("invalid_amount");
+      if (
+        (intent === "advance" || (settlement && plan.newWork)) &&
+        !draft.workId
+      )
+        throw new Error("invalid_work");
+      if (settlementLimit !== null && total > settlementLimit)
+        throw new Error("exceeds_due");
       const timestamp = Date.parse(`${draft.date}T00:00:00Z`);
       if (
         !Number.isFinite(timestamp) ||
@@ -380,6 +441,9 @@ export function HousePaymentForm() {
           const next = newPerson
             ? { ...current, people: [...current.people, newPerson] }
             : current;
+          const latestLimit = currentSettlementLimit(next);
+          if (latestLimit !== null && total > latestLimit)
+            throw new Error("exceeds_due");
           return recordHousePayment(
             next,
             {
@@ -426,6 +490,28 @@ export function HousePaymentForm() {
       setSaving(false);
     }
   }
+  if (creatingWork)
+    return (
+      <EntitySheet
+        kind="work"
+        presentation="page"
+        ledger={ledger}
+        mode={mode}
+        onClose={() => setCreatingWork(false)}
+        onSave={async (next) => {
+          const created = next.works.find(
+            (work) => !ledger.works.some((existing) => existing.id === work.id),
+          );
+          if (!created) throw new Error("invalid_work");
+          await save((current) => {
+            if (current.works.some((work) => work.id === created.id))
+              throw new Error("duplicate");
+            return { ...current, works: [...current.works, created] };
+          });
+          change("workId", created.id);
+        }}
+      />
+    );
   const savedEntryIds = ledger.entries
     .filter(
       (entry) => entry.id === draft.id || entry.id.startsWith(`${draft.id}:`),
@@ -449,7 +535,13 @@ export function HousePaymentForm() {
     );
   return (
     <EntryFrame
-      title={t(intent === "advance" ? "অগ্রিম দিলাম" : "টাকা দিলাম")}
+      title={t(
+        intent === "advance"
+          ? "অগ্রিম দিলাম"
+          : settlement
+            ? "বাকি পরিশোধ"
+            : "টাকা দিলাম",
+      )}
       className="house-write-page transaction-page"
       busy={saving}
       onClose={() =>
@@ -560,19 +652,78 @@ export function HousePaymentForm() {
                 {error}
               </p>
             )}
-            {person && (presentation.beforeDue ?? 0) > 0 && (
-              <p className="house-payment-balance">
-                {t("মোট বাকি {{amount}}", {
-                  amount: money(presentation.beforeDue ?? 0),
-                })}
-              </p>
-            )}
+            <label>
+              {t("কোন খাতায়")}
+              <AppSelect
+                aria-label={t("কোন খাতায়")}
+                required={intent === "advance"}
+                value={draft.workId}
+                aria-invalid={invalidField === "invalid_work"}
+                aria-describedby={
+                  invalidField === "invalid_work"
+                    ? "house-payment-error"
+                    : undefined
+                }
+                onChange={(event) => {
+                  const workId = event.target.value;
+                  if (workId === "__new__") {
+                    void flush()
+                      .then(() => setCreatingWork(true))
+                      .catch(() =>
+                        setError(
+                          t(
+                            "অসমাপ্ত লেখা রাখা যায়নি। বন্ধ করার আগে আবার চেষ্টা করুন।",
+                          ),
+                        ),
+                      );
+                  } else change("workId", workId);
+                }}
+              >
+                <option value="">
+                  {t(intent === "advance" ? "খাতা বেছে নিন" : "বিল অনুযায়ী")}
+                </option>
+                {ledger.works
+                  .filter((work) => !work.archivedAt)
+                  .map((work) => (
+                    <option key={work.id} value={work.id}>
+                      {formatDigits(work.name)}
+                    </option>
+                  ))}
+                <option value="__new__">{t("+ নতুন খাতা")}</option>
+              </AppSelect>
+            </label>
+            {person &&
+              intent !== "advance" &&
+              (presentation.beforeDue ?? 0) > 0 && (
+                <p className="house-payment-balance">
+                  {t("মোট বাকি {{amount}}", {
+                    amount: money(presentation.beforeDue ?? 0),
+                  })}
+                </p>
+              )}
             <TransactionAmount
               label={t("কত দিয়েছেন")}
               value={draft.amount}
               onChange={(value) => change("amount", value)}
               required
-              error={invalidField === "invalid_amount" ? error : undefined}
+              hint={
+                selectedBill
+                  ? formatDigits(
+                      selectedBill.entry.note ||
+                        selectedBill.entry.lines
+                          .map((line) => line.label)
+                          .filter(Boolean)
+                          .join(" · ") ||
+                        t("বিল"),
+                    )
+                  : undefined
+              }
+              error={
+                invalidField === "invalid_amount" ||
+                invalidField === "exceeds_due"
+                  ? error
+                  : undefined
+              }
             />
             {intent === "receivable" && (
               <div
@@ -600,12 +751,22 @@ export function HousePaymentForm() {
             {intent === "receivable" && (
               <p className="field-hint">{t("টাকা দেওয়ার ধরন বেছে নিন।")}</p>
             )}
+            {intent === "advance" && (
+              <label>
+                {t("কারণ")} <span className="field-hint">{t("ইচ্ছেমতো")}</span>
+                <input
+                  aria-label={t("কারণ")}
+                  value={draft.note}
+                  maxLength={10000}
+                  onChange={(event) => change("note", event.target.value)}
+                />
+              </label>
+            )}
             {showScope && (
               <TransactionDetails
                 summary={t("খাতা ও কাজ")}
                 className="house-payment-scope"
                 defaultOpen={
-                  intent === "advance" ||
                   (remainderConfirmed &&
                     plan.issues.includes("choose_scope")) ||
                   [
@@ -617,37 +778,6 @@ export function HousePaymentForm() {
                 }
               >
                 <div className="transaction-grid">
-                  <label>
-                    {t("কোন খাতায়")}
-                    <AppSelect
-                      aria-label={t("কোন খাতায়")}
-                      aria-invalid={
-                        invalidField === "invalid_work" ||
-                        (invalidField === "choose_scope" && !draft.workId)
-                      }
-                      aria-describedby={
-                        invalidField === "invalid_work" ||
-                        invalidField === "choose_scope"
-                          ? "house-payment-error"
-                          : undefined
-                      }
-                      value={draft.workId}
-                      onChange={(event) => change("workId", event.target.value)}
-                    >
-                      <option value="">
-                        {t(
-                          intent === "settlement" ? "বিল অনুযায়ী" : "বেছে নিন",
-                        )}
-                      </option>
-                      {ledger.works
-                        .filter((work) => !work.archivedAt)
-                        .map((work) => (
-                          <option key={work.id} value={work.id}>
-                            {formatDigits(work.name)}
-                          </option>
-                        ))}
-                    </AppSelect>
-                  </label>
                   {showAccount && (
                     <label>
                       {t("কী বাবদ")}
@@ -817,6 +947,7 @@ export function HousePaymentForm() {
           {person &&
             total > 0 &&
             (intent === "settlement" || intent === "payment") &&
+            !settlement &&
             choices.length > 0 && (
               <TransactionDetails
                 summary={t("কোন বিলে কত যাবে")}
@@ -899,7 +1030,9 @@ export function HousePaymentForm() {
               </TransactionDetails>
             )}
           <TransactionDetails
-            summary={t("ভাউচার, নোট ও তারিখ")}
+            summary={t(
+              intent === "advance" ? "ভাউচার ও তারিখ" : "ভাউচার, নোট ও তারিখ",
+            )}
             defaultOpen={invalidField === "invalid_date"}
           >
             <label>
@@ -916,14 +1049,16 @@ export function HousePaymentForm() {
                 onChange={(event) => change("date", event.target.value)}
               />
             </label>
-            <label>
-              {t("বাড়তি কথা")}
-              <textarea
-                value={draft.note}
-                maxLength={10000}
-                onChange={(event) => change("note", event.target.value)}
-              />
-            </label>
+            {intent !== "advance" && (
+              <label>
+                {t("বাড়তি কথা")}
+                <textarea
+                  value={draft.note}
+                  maxLength={10000}
+                  onChange={(event) => change("note", event.target.value)}
+                />
+              </label>
+            )}
             <HouseAttachments
               files={draft.files}
               entryId={draft.id}

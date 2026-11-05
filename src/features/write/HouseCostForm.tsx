@@ -5,6 +5,7 @@ import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { EntryFrame } from "../../components/EntryFrame";
+import { EntitySheet } from "../../components/EntitySheet";
 import { PaymentMethodField } from "../../components/PaymentMethodField";
 import { MoneyInput } from "../../components/ui/MoneyInput";
 import { NumericInput } from "../../components/ui/NumericInput";
@@ -68,9 +69,10 @@ const savedSchema = QuickSavedDraftSchema.safeExtend({
 });
 
 export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
-  const { ledger, save, close, notify } = useNotebook();
+  const { ledger, save, close, notify, mode } = useNotebook();
   const { t, money, formatDigits } = useLanguageContext();
   const [params] = useSearchParams();
+  const paidEntry = action === "charge" && params.get("paid") === "yes";
   const initial = useMemo(() => {
     const requested = CostTypeSchema.safeParse(params.get("type")).data;
     const person = ledger.people.find((row) => row.id === params.get("person"));
@@ -87,6 +89,10 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
           contractId: params.get("contract") ?? undefined,
         })
       : null;
+    const activeWorks = ledger.works.filter((work) => !work.archivedAt);
+    const workId =
+      params.get("work") ??
+      (defaults?.workId || (activeWorks.length === 1 ? activeWorks[0].id : ""));
     const draft = entryContext(ledger, {
       kind: "expense",
       costType,
@@ -97,14 +103,27 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
             ? "labour"
             : "other",
       personId: params.get("person") ?? undefined,
-      workId: params.get("work") ?? defaults?.workId ?? undefined,
+      workId: workId || undefined,
       contractId: params.get("contract") ?? undefined,
       milestoneId: params.get("milestone") ?? undefined,
     });
     return {
       draft: {
         ...draft,
-        payment: action === "charge" ? ("due" as const) : ("full" as const),
+        workId,
+        rows: workId
+          ? draft.rows
+          : draft.rows.map((row) => ({
+              ...row,
+              label: "",
+              groupId: "",
+              groupName: "",
+              unit: "",
+            })),
+        payment:
+          action === "charge" && !paidEntry
+            ? ("due" as const)
+            : ("full" as const),
       },
       files: [],
       useAdvance: false,
@@ -117,7 +136,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
       payerContact: { id: "", name: "", newId: crypto.randomUUID() },
     };
   }, []);
-  const key = `house-cost:${action}:${params.get("person") ?? "all"}:${params.get("work") ?? "all"}:${params.get("contract") ?? "none"}:${params.get("milestone") ?? "none"}`;
+  const key = `house-cost:${action}:${params.get("person") ?? "all"}:${params.get("work") ?? "all"}:${params.get("contract") ?? "none"}:${params.get("milestone") ?? "none"}${paidEntry ? ":paid" : ""}`;
   const { value, update, ready, failed, clear, flush } = useInlineDraft(
     key,
     savedSchema,
@@ -144,6 +163,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
   const [error, setError, errorNotice] = useFormError();
   const [invalidField, setInvalidField] = useState("");
   const [saving, setSaving] = useState(false);
+  const [creatingWork, setCreatingWork] = useState(false);
   const lock = useRef(false);
   const finished = useRef(false);
   const field = <K extends keyof QuickDraft>(key: K, next: QuickDraft[K]) => {
@@ -209,7 +229,12 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
       draft: {
         ...current.draft,
         personId,
-        workId: defaults?.workId ?? current.draft.workId,
+        workId:
+          defaults?.workId ||
+          current.draft.workId ||
+          (ledger.works.filter((work) => !work.archivedAt).length === 1
+            ? ledger.works.find((work) => !work.archivedAt)!.id
+            : ""),
         costType,
         account:
           costType === "material"
@@ -221,6 +246,37 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
         milestoneId: "",
       },
     }));
+  };
+  const chooseWork = (workId: string) => {
+    setError("");
+    setInvalidField("");
+    update((current) => {
+      const contract = ledger.contracts.find(
+        (row) =>
+          row.id === current.draft.contractId &&
+          !row.archivedAt &&
+          (row.scope === "house" || row.workId === workId),
+      );
+      return {
+        ...current,
+        useAdvance: false,
+        advanceSignature: "",
+        draft: {
+          ...current.draft,
+          workId,
+          contractId: contract?.id ?? "",
+          milestoneId: contract ? current.draft.milestoneId : "",
+        },
+      };
+    });
+  };
+  const newWork = async () => {
+    try {
+      await flush();
+      setCreatingWork(true);
+    } catch {
+      setError(t("অসমাপ্ত লেখা রাখা যায়নি। বন্ধ করার আগে আবার চেষ্টা করুন।"));
+    }
   };
   const total = draft.rows.reduce((sum, row) => sum + readMoney(row.amount), 0);
   const advance = useMemo(() => {
@@ -287,6 +343,15 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
           invalidTarget = `label:${row.id}`;
           throw new Error("label");
         }
+      }
+      if (
+        !draft.workId ||
+        !ledger.works.some(
+          (work) => work.id === draft.workId && !work.archivedAt,
+        )
+      ) {
+        invalidTarget = "work";
+        throw new Error("work");
       }
       if (!validQuickDate(draft.date)) throw new Error("date");
       if (staleAdvance) throw new Error("house_advance_changed");
@@ -359,15 +424,17 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                 ? "এই হিসাব আগেই রাখা হয়েছে। আগের হিসাব খুলে দেখুন।"
                 : code === "date"
                   ? "সঠিক তারিখ বেছে নিন।"
-                  : code === "person"
-                    ? draft.payment === "worker"
-                      ? "কে দিয়েছেন, তাঁর নাম বেছে নিন।"
-                      : "বাকি কার কাছে থাকবে, তাঁর নাম দিন।"
-                    : code === "label"
-                      ? "কী মাল বা কাজের বিল, লিখুন।"
-                      : code === "amount"
-                        ? "সঠিক টাকার অঙ্ক দিন। দেওয়া টাকা ও অগ্রিম যেন বিলের বেশি না হয়।"
-                        : "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
+                  : code === "work"
+                    ? "খাতা বেছে নিন।"
+                    : code === "person"
+                      ? draft.payment === "worker"
+                        ? "কে দিয়েছেন, তাঁর নাম বেছে নিন।"
+                        : "বাকি কার কাছে থাকবে, তাঁর নাম দিন।"
+                      : code === "label"
+                        ? "কী মাল বা কাজের বিল, লিখুন।"
+                        : code === "amount"
+                          ? "সঠিক টাকার অঙ্ক দিন। দেওয়া টাকা ও অগ্রিম যেন বিলের বেশি না হয়।"
+                          : "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
         ),
       );
     } finally {
@@ -446,6 +513,28 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
   const errorId = "house-cost-error";
   const personLabel = action === "purchase" ? "কর্মী বা দোকান" : "কর্মী";
   const personInvalid = invalidField === "person";
+  if (creatingWork)
+    return (
+      <EntitySheet
+        kind="work"
+        presentation="page"
+        ledger={ledger}
+        mode={mode}
+        onClose={() => setCreatingWork(false)}
+        onSave={async (next) => {
+          const created = next.works.find(
+            (work) => !ledger.works.some((previous) => previous.id === work.id),
+          );
+          if (!created) throw new Error("work");
+          await save((current) => {
+            if (current.works.some((work) => work.id === created.id))
+              throw new Error("duplicate");
+            return { ...current, works: [...current.works, created] };
+          });
+          chooseWork(created.id);
+        }}
+      />
+    );
   return (
     <EntryFrame
       title={t(action === "purchase" ? "মাল কিনেছি" : "কাজের বিল")}
@@ -711,21 +800,17 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               {t("খাতা")}
               <AppSelect
                 aria-label={t("খাতা")}
+                required
                 value={draft.workId}
+                aria-invalid={invalidField === "work"}
+                aria-describedby={invalidField === "work" ? errorId : undefined}
                 onChange={(event) =>
-                  update((current) => ({
-                    ...current,
-                    useAdvance: false,
-                    draft: {
-                      ...current.draft,
-                      workId: event.target.value,
-                      contractId: "",
-                      milestoneId: "",
-                    },
-                  }))
+                  event.target.value === "__new__"
+                    ? void newWork()
+                    : chooseWork(event.target.value)
                 }
               >
-                <option value="">{t("সাধারণ খরচ")}</option>
+                <option value="">{t("খাতা বেছে নিন")}</option>
                 {ledger.works
                   .filter((work) => !work.archivedAt)
                   .map((work) => (
@@ -733,6 +818,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                       {formatDigits(work.name)}
                     </option>
                   ))}
+                <option value="__new__">{t("+ নতুন খাতা বানান")}</option>
               </AppSelect>
             </label>
           </div>

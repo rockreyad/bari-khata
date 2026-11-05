@@ -321,13 +321,21 @@ it("keeps purchasing and one shop payment action with the current work prefilled
   expect(screen.queryByRole("button", { name: "বাকি মেটাই" })).toBeNull();
   expect(screen.queryByRole("button", { name: "অগ্রিম" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "টাকা দিই" }));
-  expect(state.add).toHaveBeenLastCalledWith({
-    kind: "payment",
-    personId: "shop",
-    workId: "door",
+  const target = new URL(
+    state.go.mock.calls.at(-1)![0],
+    "https://bari.invalid",
+  );
+  expect(target.pathname).toBe("/write");
+  expect(Object.fromEntries(target.searchParams)).toEqual({
+    person: "shop",
     account: "materials",
+    work: "door",
+    purpose: "party-payment",
+    dueWork: "door",
+    dueAccount: "all",
+    back: "/parties/shop?work=door",
   });
-  expect(state.add).toHaveBeenCalledTimes(2);
+  expect(state.add).toHaveBeenCalledTimes(1);
 });
 
 it("hides a paid shop bar while retaining the exact surplus as advance", () => {

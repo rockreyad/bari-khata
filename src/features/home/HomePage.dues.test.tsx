@@ -151,6 +151,10 @@ function mount(
           <Route path={`${state.base}/dues`} element={<PayablesPage />} />
           <Route path={`${state.base}/ledger`} element={<LedgerPage />} />
           <Route
+            path={`${state.base}/write/payment`}
+            element={<p>Payment opened</p>}
+          />
+          <Route
             path={`${state.base}/parties/:id`}
             element={<p>Account opened</p>}
           />
@@ -303,10 +307,20 @@ it("opens payment directly from an active worker's due without changing records"
   await user.click(
     screen.getByRole("button", { name: "টাকা দিই: নমুনা দোকান" }),
   );
-  expect(state.add).toHaveBeenCalledWith({
-    kind: "payment",
+  const url = new URL(state.go.mock.calls[0][0], "https://example.invalid");
+  expect(url.pathname).toBe("/write/payment");
+  expect(Object.fromEntries(url.searchParams)).toMatchObject({
+    person: "shop",
+    amount: "10000",
+    account: "materials",
+    contract: "none",
     purpose: "settle",
-    personId: "shop",
+    balanceOnly: "1",
+    dueWork: "all",
+    dueAccount: "all",
+    back: "/dues",
   });
+  expect(url.searchParams.has("bill")).toBe(false);
+  expect(state.add).not.toHaveBeenCalled();
   expect(JSON.stringify(ledger)).toBe(before);
 });

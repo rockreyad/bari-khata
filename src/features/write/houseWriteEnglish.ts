@@ -1,4 +1,10 @@
 export const houseWriteEnglish: Record<string, string> = {
+  "আগের বাকি হিসাব": "Outstanding balances",
+  "এই বাকির চেয়ে বেশি টাকা লিখেছেন। অঙ্কটি কমিয়ে দিন।":
+    "The amount is more than this outstanding balance. Reduce it to continue.",
+  কারণ: "Reason",
+  "ভাউচার ও তারিখ": "Receipt and date",
+  "বাকি পরিশোধ": "Settle balance",
   "কী হয়েছে?": "What happened?",
   "ঘটনা বেছে নিন। বাকি হিসাব আমরা দেখিয়ে দেব।":
     "Choose what happened. We will show how it changes your account.",

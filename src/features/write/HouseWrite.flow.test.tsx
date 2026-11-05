@@ -35,6 +35,7 @@ import { partyLedger } from "../../domain/partyLedger";
 import { summarize } from "../../domain/ledger";
 import { appendBalanceAdjustment } from "../../domain/balanceAdjustments";
 import { planHousePayment } from "../../domain/housePayments";
+import { partyDueItems, partyDuePaymentUrl } from "../home/partyDueItems";
 import { savePreferences } from "../../lib/preferences";
 import { latinDigits } from "../../lib/numerals";
 import { HouseCostForm } from "./HouseCostForm";
@@ -861,6 +862,41 @@ it("honors advance intent and configured supplier account and sector when opened
   ]);
 });
 
+it("requires an explicit notebook for an advance when no single associated notebook exists", async () => {
+  const initial = base();
+  const repo = await setup(initial);
+  const user = userEvent.setup();
+  mount(
+    initial,
+    <HousePaymentForm />,
+    "/write/payment?person=party&intent=advance",
+  );
+  await ready();
+  const notebook = screen.getByLabelText("কোন খাতায়") as HTMLSelectElement;
+  expect(notebook.closest("details")).toBeNull();
+  expect(notebook.value).toBe("");
+  await user.type(screen.getByLabelText("কত দিয়েছেন"), "50");
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  expect(screen.getByRole("alert").textContent).toBe(
+    "টাকা কোন কাজে দেওয়া হয়েছে, বেছে নিন।",
+  );
+  expect(notebook.getAttribute("aria-invalid")).toBe("true");
+  expect(api.save).not.toHaveBeenCalled();
+  expect((await repo.read())!.ledger.entries).toHaveLength(0);
+  expect((await repo.read())!.ledger.works).toEqual(initial.works);
+  await user.selectOptions(notebook, "roof");
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  expect((await repo.read())!.ledger.entries).toMatchObject([
+    {
+      kind: "payment",
+      paymentContext: "advance",
+      allocations: [{ workId: "roof", amount: 5000 }],
+    },
+  ]);
+  expect((await repo.read())!.ledger.works).toEqual(initial.works);
+});
+
 it("keeps a disabled-payment deep link from saving cash", async () => {
   const initial = LedgerSchema.parse({
     ...base(),
@@ -1016,6 +1052,310 @@ it("shows a combined payment proposal and saves the selected bills without creat
     netPaid: 15000,
     reconciledPayable: 15000,
   });
+});
+
+it("restores a modified bill settlement draft independently of ordinary cash drafts and reopens its remaining due", async () => {
+  const initial = withBills();
+  const repo = await setup(initial);
+  const user = userEvent.setup();
+  const storage = createWorkspaceStorage();
+  const ordinaryKey = "house-payment:party:roof:none";
+  let page = mount(initial, <HousePaymentForm />, `${payPath}&contract=none`);
+  await ready();
+  await user.type(screen.getByLabelText("কত দিয়েছেন"), "33");
+  let ordinaryDraft: unknown;
+  await waitFor(async () => {
+    ordinaryDraft = await storage.readDraft(ordinaryKey);
+    expect(ordinaryDraft).toMatchObject({ amount: "33", billId: "" });
+  });
+  page.unmount();
+  const due = partyDueItems(initial, "party").find(
+    (row) => row.billId === "later",
+  )!;
+  expect(due.amount).toBe(20000);
+  const back = "/parties/party?work=roof";
+  const path = partyDuePaymentUrl(due, back);
+  const query = new URL(path, "https://bari.invalid").searchParams;
+  expect(Object.fromEntries(query)).toMatchObject({
+    person: "party",
+    work: "roof",
+    account: "materials",
+    contract: "none",
+    amount: "20000",
+    bill: "later",
+    purpose: "settle",
+    back,
+  });
+  page = mount(initial, <HousePaymentForm />, path);
+  await ready();
+  const amount = screen.getByLabelText("কত দিয়েছেন") as HTMLInputElement;
+  expect(latinDigits(amount.value)).toBe("200");
+  expect(
+    (screen.getByLabelText("কাকে দিয়েছেন") as HTMLSelectElement).value,
+  ).toBe("party");
+  expect((screen.getByLabelText("কোন খাতায়") as HTMLSelectElement).value).toBe(
+    "roof",
+  );
+  fireEvent.change(amount, { target: { value: "75" } });
+  await user.click(
+    within(screen.getByRole("group", { name: "কীভাবে দিয়েছেন" })).getByRole(
+      "button",
+      { name: "ব্যাংক" },
+    ),
+  );
+  const key = "house-payment:party:roof:none:due:materials:later";
+  await waitFor(async () =>
+    expect(await storage.readDraft(key)).toMatchObject({
+      amount: "75",
+      billId: "later",
+      contractId: "",
+      method: "bank",
+    }),
+  );
+  page.unmount();
+  repo.database.close();
+  await repo.database.open();
+  page = mount((await repo.read())!.ledger, <HousePaymentForm />, path);
+  await ready();
+  expect(
+    latinDigits(
+      (screen.getByLabelText("কত দিয়েছেন") as HTMLInputElement).value,
+    ),
+  ).toBe("75");
+  expect(
+    screen.getByRole("button", { name: "ব্যাংক", pressed: true }),
+  ).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  page.unmount();
+  repo.database.close();
+  await repo.database.open();
+  const saved = (await repo.read())!.ledger;
+  expect(saved.entries.filter((entry) => entry.kind === "expense")).toEqual(
+    initial.entries,
+  );
+  expect(
+    saved.entries.filter((entry) => entry.kind === "payment"),
+  ).toMatchObject([
+    {
+      personId: "party",
+      contractId: null,
+      account: "materials",
+      paymentParts: [{ method: "bank", amount: 7500 }],
+    },
+  ]);
+  expect(saved.paymentAllocations).toMatchObject([
+    { billId: "later", workId: "roof", amount: 7500 },
+  ]);
+  expect(summarize(saved)).toMatchObject({
+    cost: 30000,
+    cashPaid: 7500,
+    reconciledPayable: 22500,
+  });
+  expect(await storage.readDraft(key)).toBeNull();
+  expect(await storage.readDraft(ordinaryKey)).toEqual(ordinaryDraft);
+  const remaining = partyDueItems(saved, "party").find(
+    (row) => row.billId === "later",
+  )!;
+  expect(remaining.amount).toBe(12500);
+  mount(saved, <HousePaymentForm />, partyDuePaymentUrl(remaining, back));
+  await ready();
+  expect(
+    latinDigits(
+      (screen.getByLabelText("কত দিয়েছেন") as HTMLInputElement).value,
+    ),
+  ).toBe("125");
+  expect(api.save).toHaveBeenCalledOnce();
+  expect((await repo.read())!.ledger.entries).toHaveLength(3);
+});
+
+it("rejects paying more than the selected bill's due even when the same person has other unpaid bills", async () => {
+  const initial = withBills();
+  const repo = await setup(initial);
+  const user = userEvent.setup();
+  const due = partyDueItems(initial, "party").find(
+    (row) => row.billId === "old",
+  )!;
+  mount(initial, <HousePaymentForm />, partyDuePaymentUrl(due, "/dues"));
+  await ready();
+  const amount = screen.getByLabelText("কত দিয়েছেন") as HTMLInputElement;
+  expect(latinDigits(amount.value)).toBe("100");
+  fireEvent.change(amount, { target: { value: "150" } });
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  expect(screen.getByRole("alert").textContent).toBe(
+    "এই বাকির চেয়ে বেশি টাকা লিখেছেন। অঙ্কটি কমিয়ে দিন।",
+  );
+  expect(amount.getAttribute("aria-invalid")).toBe("true");
+  expect(api.save).not.toHaveBeenCalled();
+  expect((await repo.read())!.ledger.entries).toEqual(initial.entries);
+  expect((await repo.read())!.ledger.paymentAllocations).toHaveLength(0);
+  expect(latinDigits(amount.value)).toBe("150");
+  fireEvent.change(amount, { target: { value: "100" } });
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  const saved = (await repo.read())!.ledger;
+  expect(saved.entries.filter((entry) => entry.kind === "expense")).toEqual(
+    initial.entries,
+  );
+  expect(saved.paymentAllocations).toMatchObject([
+    { billId: "old", amount: 10000 },
+  ]);
+  expect(summarize(saved)).toMatchObject({
+    cost: 30000,
+    cashPaid: 10000,
+    reconciledPayable: 20000,
+  });
+});
+
+it("rechecks a selected due inside the save when concurrent work corrections leave the payment signature unchanged", async () => {
+  const bills = LedgerSchema.parse({
+    ...base(),
+    entries: [
+      {
+        id: "roof-bill",
+        kind: "expense",
+        personId: "party",
+        account: "materials",
+        lines: [
+          {
+            id: "roof-line",
+            workId: "roof",
+            label: "নমুনা ছাদের বিল",
+            amount: 10000,
+          },
+        ],
+      },
+      {
+        id: "wall-bill",
+        kind: "expense",
+        personId: "party",
+        account: "materials",
+        lines: [
+          {
+            id: "wall-line",
+            workId: "wall",
+            label: "নমুনা দেয়ালের বিল",
+            amount: 10000,
+          },
+        ],
+      },
+    ],
+  });
+  const correct = (
+    ledger: Ledger,
+    workId: string,
+    before: number,
+    after: number,
+  ) =>
+    appendBalanceAdjustment(ledger, {
+      target: "person",
+      personId: "party",
+      account: "materials",
+      workId,
+      basis: "balance",
+      expectedBefore: before,
+      after,
+      reason: "নমুনা খাতার বাকি ঠিক করা",
+      date: "2026-11-05",
+    });
+  const initial = correct(
+    correct(bills, "roof", 10000, 5000),
+    "wall",
+    10000,
+    15000,
+  );
+  const scope = { workId: "roof", account: "materials" as const };
+  const due = partyDueItems(initial, "party", scope)[0];
+  expect(due.amount).toBe(5000);
+  const request = {
+    personId: "party",
+    amount: 5000,
+    intent: "payment" as const,
+    workId: "roof",
+    account: "materials" as const,
+    contractId: null,
+    allocations: due.billId
+      ? [{ billId: due.billId, workId: "roof", amount: 5000 }]
+      : [],
+  };
+  const beforePlan = planHousePayment(initial, request);
+  expect(beforePlan.issues).toEqual([]);
+  const repo = await setup(initial);
+  const user = userEvent.setup();
+  mount(
+    initial,
+    <HousePaymentForm />,
+    partyDuePaymentUrl(due, "/dues?person=party&work=roof", scope),
+  );
+  await ready();
+  const amount = screen.getByLabelText("কত দিয়েছেন") as HTMLInputElement;
+  expect(latinDigits(amount.value)).toBe("50");
+  let concurrent: Ledger | undefined;
+  api.beforeSave = async (current) => {
+    await current.save((ledger) => {
+      concurrent = correct(
+        correct(ledger, "roof", 5000, 3000),
+        "wall",
+        15000,
+        17000,
+      );
+      return concurrent;
+    });
+  };
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "এই বাকির চেয়ে বেশি টাকা লিখেছেন। অঙ্কটি কমিয়ে দিন।",
+  );
+  const afterPlan = planHousePayment(concurrent!, request);
+  expect(afterPlan.issues).toEqual([]);
+  expect(afterPlan.signature).toBe(beforePlan.signature);
+  expect(partyLedger(concurrent!, "party").payable).toBe(
+    partyLedger(initial, "party").payable,
+  );
+  expect(
+    partyDueItems(concurrent!, "party", scope).reduce(
+      (sum, row) => sum + row.amount,
+      0,
+    ),
+  ).toBe(3000);
+  expect((await repo.read())!.ledger.entries).toEqual(concurrent!.entries);
+  expect(
+    (await repo.read())!.ledger.entries.some(
+      (entry) => entry.kind === "payment",
+    ),
+  ).toBe(false);
+  expect((await repo.read())!.ledger.paymentAllocations).toHaveLength(0);
+  expect(latinDigits(amount.value)).toBe("50");
+  expect(api.close).not.toHaveBeenCalled();
+  fireEvent.change(amount, { target: { value: "30" } });
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  repo.database.close();
+  await repo.database.open();
+  const saved = (await repo.read())!.ledger;
+  expect(saved.entries.filter((entry) => entry.kind === "expense")).toEqual(
+    bills.entries,
+  );
+  expect(
+    saved.entries.filter((entry) => entry.kind === "payment"),
+  ).toMatchObject([
+    {
+      paymentParts: [{ amount: 3000 }],
+      allocations: [{ workId: "roof", amount: 3000 }],
+    },
+  ]);
+  expect(summarize(saved)).toMatchObject({
+    cost: 20000,
+    cashPaid: 3000,
+    reconciledPayable: 17000,
+  });
+  expect(partyDueItems(saved, "party", scope)).toHaveLength(0);
+  expect(
+    partyDueItems(saved, "party", {
+      workId: "wall",
+      account: "materials",
+    }).reduce((sum, row) => sum + row.amount, 0),
+  ).toBe(17000);
 });
 
 it("saves ordinary cash above the known bills without relabeling the extra amount as an explicit advance", async () => {

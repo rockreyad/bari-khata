@@ -58,6 +58,11 @@
   margin-bottom: 16px;
   min-height: 44px;
 }
+.quick-choice-person {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 15px;
+}
 .quick-sector-shortcuts {
   margin-top: 20px;
   border-top: 1px solid var(--line);

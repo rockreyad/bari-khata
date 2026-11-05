@@ -1,5 +1,10 @@
 export const entityNavigationEnglish: Record<string, string> = {
   "বেছে নিন": "Choose one",
+  "বাকির হিসাব": "Dues",
+  "জানা বাকি": "Known dues",
+  "পরিশোধ: {{name}}": "Pay: {{name}}",
+  "খাতা পাওয়া যায়নি": "Notebook not found",
+  "এই নামটি পাওয়া যাচ্ছে না।": "This worker was not found.",
   "প্রতিটি খরচের খাতা বেছে নিন।": "Choose a notebook for every cost.",
   "মালের জন্য দোকান আর মজুরির জন্য কর্মীর নাম বেছে নিন।":
     "Choose a shop for materials and a worker for labour.",

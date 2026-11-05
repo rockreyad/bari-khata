@@ -5,7 +5,6 @@ import {
   HandCoinsIcon,
   HardHatIcon,
   PackageIcon,
-  CoinsIcon,
   FolderPlusIcon,
   ReceiptIcon,
   UserPlusIcon,
@@ -15,10 +14,59 @@ import { LegacyEntryDrafts } from "../write/LegacyEntryDrafts";
 import { Sheet } from "../../components/Sheet";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
-export function QuickActionsSheet() {
-  const { add, entity, close, go } = useNotebook();
-  const { t } = useLanguageContext();
-  const [balanceChoices, setBalanceChoices] = useState(false);
+import type { Account } from "../../domain/model";
+import { entryReturn } from "../../app/entryRoutes";
+type PartyPaymentContext = {
+  personId: string;
+  workId?: string;
+  account?: Account;
+  contractId?: string;
+  dueWork?: string;
+  dueAccount?: Account | "all";
+  back?: string;
+};
+export function QuickActionsSheet({
+  partyPayment,
+}: {
+  partyPayment?: PartyPaymentContext;
+}) {
+  const { add, entity, close, go, ledger, base = "" } = useNotebook();
+  const { t, formatDigits } = useLanguageContext();
+  const [balanceChoices, setBalanceChoices] = useState(Boolean(partyPayment));
+  const person = partyPayment
+    ? ledger.people.find(
+        (row) => row.id === partyPayment.personId && !row.archivedAt,
+      )
+    : null;
+  const openBalance = (action: "advance" | "dues") => {
+    if (!partyPayment) {
+      if (action === "advance") add({ kind: "payment", purpose: "advance" });
+      else go("/dues");
+      return;
+    }
+    const params = new URLSearchParams({
+      person: partyPayment.personId,
+      back: entryReturn(partyPayment.back, base),
+    });
+    const work =
+      action === "advance"
+        ? partyPayment.workId
+        : partyPayment.dueWork === "all"
+          ? undefined
+          : (partyPayment.dueWork ?? partyPayment.workId);
+    const account =
+      action === "advance"
+        ? partyPayment.account
+        : partyPayment.dueAccount === "all"
+          ? undefined
+          : (partyPayment.dueAccount ?? partyPayment.account);
+    if (work) params.set("work", work);
+    if (account) params.set("account", account);
+    if (action === "advance" && partyPayment.contractId)
+      params.set("contract", partyPayment.contractId);
+    if (action === "advance") params.set("purpose", "advance");
+    go(`${action === "advance" ? "/write/payment" : "/dues"}?${params}`);
+  };
   const actions = balanceChoices
     ? [
         {
@@ -26,14 +74,14 @@ export function QuickActionsSheet() {
           hint: "কাজ বা মাল পাওয়ার আগে টাকা",
           Icon: HandCoinsIcon,
           tone: "orange",
-          run: () => add({ kind: "payment", purpose: "advance" }),
+          run: () => openBalance("advance"),
         },
         {
           label: "বাকি দেখি",
-          hint: "কাকে কত দিতে হবে",
+          hint: partyPayment ? "আগের বাকি হিসাব" : "কাকে কত দিতে হবে",
           Icon: ReceiptIcon,
           tone: "blue",
-          run: () => go("/dues"),
+          run: () => openBalance("dues"),
         },
       ]
     : [
@@ -69,20 +117,18 @@ export function QuickActionsSheet() {
           tone: "orange",
           run: () => setBalanceChoices(true),
         },
-        {
-          label: "টাকা দিলাম",
-          hint: "যাকে টাকা দিয়েছেন, তার নামে রাখুন",
-          Icon: CoinsIcon,
-          tone: "pink",
-          run: () => add({ kind: "payment", purpose: "settle" }),
-        },
       ];
   return (
     <Sheet
       title={t(balanceChoices ? "অগ্রিম বা বাকি" : "কী লিখবেন?")}
       onClose={close}
     >
-      {balanceChoices && (
+      {partyPayment && (
+        <p className="quick-choice-person">
+          {person ? formatDigits(person.name) : t("এই নামটি খাতায় নেই")}
+        </p>
+      )}
+      {balanceChoices && !partyPayment && (
         <button
           type="button"
           className="text-button quick-choice-back"
@@ -92,31 +138,33 @@ export function QuickActionsSheet() {
           {t("সব কাজ")}
         </button>
       )}
-      <div className="quick-launch">
-        {actions.map(({ label, hint, Icon, tone, run }) => (
-          <button type="button" key={label} onClick={run}>
-            <span className={`launch-mark ${tone}`}>
-              <Icon size={27} weight="duotone" aria-hidden="true" />
-            </span>
-            <span>
-              <strong>{t(label)}</strong> <small>{t(hint)}</small>
-            </span>
-            <ArrowRightIcon size={20} aria-hidden="true" />
-          </button>
-        ))}
-        {!balanceChoices && (
-          <div className="launch-secondary">
-            <button type="button" onClick={() => entity("work")}>
-              <FolderPlusIcon size={22} aria-hidden="true" />
-              {t("নতুন খাতা বানান")}
+      {(!partyPayment || person) && (
+        <div className="quick-launch">
+          {actions.map(({ label, hint, Icon, tone, run }) => (
+            <button type="button" key={label} onClick={run}>
+              <span className={`launch-mark ${tone}`}>
+                <Icon size={27} weight="duotone" aria-hidden="true" />
+              </span>
+              <span>
+                <strong>{t(label)}</strong> <small>{t(hint)}</small>
+              </span>
+              <ArrowRightIcon size={20} aria-hidden="true" />
             </button>
-            <button type="button" onClick={() => entity("person")}>
-              <UserPlusIcon size={22} aria-hidden="true" />
-              {t("নতুন কর্মী")}
-            </button>
-          </div>
-        )}
-      </div>
+          ))}
+          {!balanceChoices && (
+            <div className="launch-secondary">
+              <button type="button" onClick={() => entity("work")}>
+                <FolderPlusIcon size={22} aria-hidden="true" />
+                {t("নতুন খাতা বানান")}
+              </button>
+              <button type="button" onClick={() => entity("person")}>
+                <UserPlusIcon size={22} aria-hidden="true" />
+                {t("নতুন কর্মী")}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {!balanceChoices && <LegacyEntryDrafts />}
     </Sheet>
   );
