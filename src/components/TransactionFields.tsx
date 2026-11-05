@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { CaretDownIcon } from "@phosphor-icons/react";
 import { useLanguageContext } from "../context/LanguageProvider";
 import { MoneyInput } from "./ui/MoneyInput";
@@ -31,16 +31,30 @@ export function TransactionAmount({
 }) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
-  const { number } = useLanguageContext();
+  const { t, number } = useLanguageContext();
+  const input = useRef<HTMLInputElement>(null);
   return (
     <div className={`transaction-amount ${className}`} data-invalid={!!error}>
       <label htmlFor={inputId}>{label}</label>
+      <button
+        type="button"
+        className="text-button transaction-amount-focus"
+        disabled={disabled}
+        onClick={() => {
+          input.current?.focus({ preventScroll: true });
+          input.current?.scrollIntoView?.({ block: "center" });
+        }}
+      >
+        {t("টাকার ঘরে লিখুন")}
+      </button>
       <div
         className="transaction-amount-control"
         data-compact={value.length > 9}
       >
         <span aria-hidden="true">৳</span>
         <MoneyInput
+          ref={input}
+          data-entry-amount
           id={inputId}
           aria-label={inputLabel ?? label}
           value={value}

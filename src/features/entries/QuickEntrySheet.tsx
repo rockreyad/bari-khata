@@ -615,6 +615,7 @@ export function QuickEntrySheet({
               : "খরচ লিখি";
   return (
     <Frame
+      focusAmountWhenReady={ready && !saving && !needsIntent}
       title={t(title)}
       className="transaction-page legacy-transaction-page"
       onClose={() => void requestClose()}

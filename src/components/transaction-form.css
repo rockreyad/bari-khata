@@ -100,9 +100,19 @@
   outline-offset: 3px;
 }
 .transaction-amount {
+  position: relative;
   min-width: 0;
   display: grid;
   gap: 6px;
+}
+.transaction-amount-focus {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 13px;
+}
+.transaction-amount input {
+  scroll-margin-block: 24px;
 }
 .transaction-amount > label {
   font-size: 13px;
