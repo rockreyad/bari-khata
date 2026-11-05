@@ -8,6 +8,7 @@ export type TransactionExtrasProps = {
   noteField?: ReactNode;
   children?: ReactNode;
   hasReceipts?: boolean;
+  defaultOpen?: boolean;
 };
 
 export function TransactionExtras({
@@ -15,36 +16,37 @@ export function TransactionExtras({
   noteField,
   children,
   hasReceipts = false,
+  defaultOpen = false,
 }: TransactionExtrasProps) {
   const { t } = useLanguageContext();
-  const [receiptsOpen, setReceiptsOpen] = useState(hasReceipts);
+  const [open, setOpen] = useState(hasReceipts || defaultOpen);
   useEffect(() => {
-    if (hasReceipts) setReceiptsOpen(true);
-  }, [hasReceipts]);
+    if (hasReceipts || defaultOpen) setOpen(true);
+  }, [hasReceipts, defaultOpen]);
   return (
-    <section className="transaction-extras" aria-label={t("তারিখ ও নোট")}>
-      <h2>{t("তারিখ ও নোট")}</h2>
-      <div className="transaction-extras-fields">
-        <div className="transaction-extras-date">{dateField}</div>
-        {noteField ? (
-          <div className="transaction-extras-note">{noteField}</div>
+    <details
+      className="transaction-extras"
+      aria-label={t("ভাউচার, নোট ও তারিখ")}
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary>
+        <PaperclipIcon size={18} aria-hidden="true" />
+        <span>{t("ভাউচার, নোট ও তারিখ")}</span>
+        {hasReceipts ? <small>{t("রসিদ আছে")}</small> : null}
+        <CaretDownIcon size={16} aria-hidden="true" />
+      </summary>
+      <div className="transaction-extras-content">
+        <div className="transaction-extras-fields">
+          <div className="transaction-extras-date">{dateField}</div>
+          {noteField ? (
+            <div className="transaction-extras-note">{noteField}</div>
+          ) : null}
+        </div>
+        {children ? (
+          <div className="transaction-extras-receipts">{children}</div>
         ) : null}
       </div>
-      {children ? (
-        <details
-          className="transaction-extras-receipts"
-          open={receiptsOpen}
-          onToggle={(event) => setReceiptsOpen(event.currentTarget.open)}
-        >
-          <summary>
-            <PaperclipIcon size={18} aria-hidden="true" />
-            <span>{t("ছবি বা রসিদ")}</span>
-            <small>{t("না দিলেও হবে")}</small>
-            <CaretDownIcon size={16} aria-hidden="true" />
-          </summary>
-          <div className="transaction-extras-receipt-content">{children}</div>
-        </details>
-      ) : null}
-    </section>
+    </details>
   );
 }

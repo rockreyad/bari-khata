@@ -1033,6 +1033,7 @@ export function HousePaymentForm() {
               </TransactionDetails>
             )}
           <TransactionExtras
+            defaultOpen={invalidField === "invalid_date"}
             hasReceipts={draft.files.length > 0}
             dateField={
               <label>

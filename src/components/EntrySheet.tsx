@@ -3,6 +3,7 @@ import { EntryFrame } from "./EntryFrame";
 import { numericDraftText, moneyInputValue } from "../lib/numericFields";
 import { NumericInput } from "./ui/NumericInput";
 import { latinDigits } from "../lib/numerals";
+import { NEW_RECEIPT_MAX_BYTES } from "../lib/attachmentLimits";
 import {
   useCallback,
   useEffect,
@@ -997,8 +998,7 @@ function SupportedEntrySheet({
     if (
       incoming.some(
         (file) =>
-          file.size >
-            (file.type === "application/pdf" ? 10 : 25) * 1024 * 1024 ||
+          file.size > NEW_RECEIPT_MAX_BYTES ||
           ![
             "image/jpeg",
             "image/png",
@@ -1008,17 +1008,14 @@ function SupportedEntrySheet({
       )
     ) {
       setError(
-        t(
-          "JPG, PNG, WebP ছবি বা PDF দিন। PDF {{pdfLimit}} MB ও ছবি {{imageLimit}} MB-এর মধ্যে হতে হবে।",
-          { pdfLimit: number(10), imageLimit: number(25) },
-        ),
+        t("JPG, PNG, WebP ছবি বা PDF দিন। প্রতিটি ২ MB-এর মধ্যে হতে হবে।"),
       );
       return;
     }
     setProcessingFiles(true);
     try {
       const compacted = await Promise.all(incoming.map(compactPhoto));
-      if (compacted.some((file) => file.size > 10 * 1024 * 1024))
+      if (compacted.some((file) => file.size > NEW_RECEIPT_MAX_BYTES))
         throw new Error(t("ছবিটি অনেক বড়। ছোট ছবি দিয়ে আবার চেষ্টা করুন।"));
       setFiles((current) => [
         ...current,
@@ -1312,7 +1309,7 @@ function SupportedEntrySheet({
         </label>
       ) : null}
       {!isCash &&
-      (original || draft.rows.length > 1) &&
+      (mixedWorkLines || (original && !isLabour)) &&
       !(isLabour && selectedContractId) ? (
         <div className="entry-line-contexts">
           {draft.rows.map((row, index) => (
@@ -1320,7 +1317,7 @@ function SupportedEntrySheet({
               {draft.rows.length > 1 ? (
                 <p>{row.name || t("খরচ {{index}}", { index: index + 1 })}</p>
               ) : null}
-              {draft.rows.length > 1 ? (
+              {mixedWorkLines ? (
                 <label className="field">
                   <span className="field-label">{t("খাতা")}</span>
                   <AppSelect
@@ -1428,54 +1425,10 @@ function SupportedEntrySheet({
                       />
                     </label>
                   </div>
-                  {draft.rows.length > 1 ? (
-                    <button
-                      type="button"
-                      className="text-button danger-text"
-                      onClick={() =>
-                        field(
-                          "rows",
-                          draft.rows.filter(
-                            (_, position) => index !== position,
-                          ),
-                        )
-                      }
-                    >
-                      <Trash2 size={14} />
-                      {t("এই ভাগ সরান")}
-                    </button>
-                  ) : null}
                 </div>
               ))}
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() =>
-                  field("rows", [...draft.rows, newRow(draft.workId)])
-                }
-              >
-                <Plus size={16} />
-                {t("আরেক খাতায় ভাগ করুন")}
-              </button>
             </div>
           )}
-          {!(draft.account === "labour" && selectedContractId) ? (
-            <label className="check-field">
-              <input
-                type="checkbox"
-                checked={draft.split}
-                onChange={(event) => {
-                  field("split", event.target.checked);
-                  if (event.target.checked)
-                    field("rows", [
-                      { ...newRow(draft.workId), amount: draft.amount },
-                    ]);
-                  else field("amount", moneyInputValue(lineTotal));
-                }}
-              />
-              {t("একাধিক খাতায় ভাগ করব")}
-            </label>
-          ) : null}
           {!original ? (
             <p className="form-hint muted">
               {t(
@@ -1801,42 +1754,10 @@ function SupportedEntrySheet({
                     }
                     required
                   />
-                  <button
-                    type="button"
-                    className="icon-button danger-text"
-                    aria-label={t("এই মাধ্যম সরান")}
-                    onClick={() =>
-                      field(
-                        "methods",
-                        draft.methods.filter(
-                          (_, position) => position !== index,
-                        ),
-                      )
-                    }
-                  >
-                    <Trash2 size={15} />
-                  </button>
                 </>
               ) : null}
             </div>
           ))}
-          <button
-            type="button"
-            className="text-button"
-            onClick={() =>
-              field("methods", [
-                ...draft.methods.map((part) =>
-                  draft.methods.length === 1
-                    ? { ...part, amount: moneyInputValue(cashTotal) }
-                    : part,
-                ),
-                { method: "bkash", amount: "" },
-              ])
-            }
-          >
-            <Plus size={14} />
-            {t("অন্য মাধ্যমেও দিয়েছি")}
-          </button>
           {draft.methods.length > 1 ? (
             <p className="form-hint muted">
               {t("সব মাধ্যম মিলিয়ে মোট {{amount}} হতে হবে।", {
@@ -1855,19 +1776,13 @@ function SupportedEntrySheet({
         <AppDatePicker
           className="field-input"
           type="date"
-          value={draft.date}
-          disabled={draft.unknownDate}
-          onChange={(event) => field("date", event.target.value)}
+          value={draft.unknownDate ? "" : draft.date}
+          onChange={(event) => {
+            field("date", event.target.value);
+            field("unknownDate", !event.target.value);
+          }}
           required={!draft.unknownDate}
         />
-      </label>
-      <label className="check-field">
-        <input
-          type="checkbox"
-          checked={draft.unknownDate}
-          onChange={(event) => field("unknownDate", event.target.checked)}
-        />
-        {t("তারিখ জানা নেই")}
       </label>
     </>
   );
@@ -1909,6 +1824,9 @@ function SupportedEntrySheet({
         <Camera size={17} />
         {t("ভাউচার বা ছবি যোগ করুন")}
       </button>
+      <p className="form-hint muted">
+        {t("প্রতিটি ছবি বা PDF সর্বোচ্চ ২ MB।")}
+      </p>
       {original?.receipts.length ? (
         <p className="form-hint muted">
           {t("আগের {{count}}টি ভাউচার রাখা আছে।", {

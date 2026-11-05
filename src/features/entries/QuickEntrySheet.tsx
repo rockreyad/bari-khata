@@ -26,6 +26,7 @@ import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { MoneyInput } from "../../components/ui/MoneyInput";
 import { TransactionExtras } from "../../components/TransactionExtras";
+import { NEW_RECEIPT_MAX_BYTES } from "../../lib/attachmentLimits";
 import {
   TransactionAmount,
   TransactionDetails,
@@ -1484,13 +1485,13 @@ export function QuickEntrySheet({
                   onChange={(e) => {
                     const incoming = Array.from(e.target.files ?? []);
                     if (
-                      incoming.some((file) => file.size > 10 * 1024 * 1024) ||
+                      incoming.some(
+                        (file) => file.size > NEW_RECEIPT_MAX_BYTES,
+                      ) ||
                       files.length + incoming.length > 20
                     ) {
                       setError(
-                        t(
-                          "প্রতিটি ভাউচার ১০ MB-এর মধ্যে রাখুন। সর্বোচ্চ ২০টি।",
-                        ),
+                        t("প্রতিটি ভাউচার ২ MB-এর মধ্যে রাখুন। সর্বোচ্চ ২০টি।"),
                       );
                       return;
                     }
@@ -1507,6 +1508,9 @@ export function QuickEntrySheet({
                   }}
                 />
               </label>
+              <p className="form-hint muted">
+                {t("প্রতিটি ছবি বা PDF সর্বোচ্চ ২ MB।")}
+              </p>
               {files.map((f) => (
                 <div className="attachment-row" key={f.id}>
                   <span>{formatDigits(f.name ?? t("ভাউচার"))}</span>

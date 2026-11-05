@@ -16,7 +16,7 @@ vi.mock("../context/LanguageProvider", () => ({
 }));
 afterEach(cleanup);
 
-it("keeps date and note visible while an optional receipt can be added without submitting", async () => {
+it("folds date, note and the existing optional receipt controls together without losing mounted values", async () => {
   const user = userEvent.setup();
   const submit = vi.fn((event: React.FormEvent) => event.preventDefault());
   render(
@@ -43,15 +43,18 @@ it("keeps date and note visible while an optional receipt can be added without s
       <button type="submit">রাখুন</button>
     </form>,
   );
-  const section = screen.getByRole("region", { name: "তারিখ ও নোট" });
-  const date = within(section).getByRole("textbox", { name: "তারিখ" });
-  const note = within(section).getByRole("textbox", { name: "নোট" });
-  expect(date.closest("details")).toBeNull();
-  expect(note.closest("details")).toBeNull();
-  const summary = within(section).getByText("ছবি বা রসিদ").closest("summary")!;
-  const details = summary.closest("details")!;
+  const details = screen.getByRole("group", {
+    name: "ভাউচার, নোট ও তারিখ",
+  }) as HTMLDetailsElement;
+  const date = within(details).getByLabelText("তারিখ");
+  const note = within(details).getByLabelText("নোট");
+  expect(date.closest("details")).toBe(details);
+  expect(note.closest("details")).toBe(details);
+  const summary = within(details)
+    .getByText("ভাউচার, নোট ও তারিখ")
+    .closest("summary")!;
   expect(details.open).toBe(false);
-  const receipt = within(section).getByLabelText(
+  const receipt = within(details).getByLabelText(
     "ছবি যোগ করি",
   ) as HTMLInputElement;
   expect(receipt.required).toBe(false);
@@ -64,7 +67,7 @@ it("keeps date and note visible while an optional receipt can be added without s
   await user.type(note, " নতুন কথা");
   await user.click(summary);
   expect(details.open).toBe(false);
-  expect(within(section).getByLabelText("ছবি যোগ করি")).toBe(receipt);
+  expect(within(details).getByLabelText("ছবি যোগ করি")).toBe(receipt);
   expect(receipt.files?.[0].name).toBe("sample.pdf");
   expect((note as HTMLTextAreaElement).value).toBe("নমুনা আগের নোট নতুন কথা");
   expect((date as HTMLInputElement).value).toBe("2026-11-06");
@@ -116,7 +119,7 @@ it("opens restored receipts without remounting their controls and remains user-c
   view.rerender(<Form restored />);
   await waitFor(() => expect(details.open).toBe(true));
   await user.type(input, " নতুন নাম");
-  await user.click(screen.getByText("ছবি বা রসিদ").closest("summary")!);
+  await user.click(screen.getByText("ভাউচার, নোট ও তারিখ").closest("summary")!);
   expect(details.open).toBe(false);
   view.rerender(<Form restored />);
   expect(details.open).toBe(false);
@@ -128,7 +131,7 @@ it("opens restored receipts without remounting their controls and remains user-c
   expect(removed).not.toHaveBeenCalled();
 });
 
-it("does not show an empty receipt section when no receipt controls were provided", () => {
+it("keeps date-only extras foldable without an empty receipt area", () => {
   render(
     <TransactionExtras
       dateField={
@@ -139,6 +142,21 @@ it("does not show an empty receipt section when no receipt controls were provide
       }
     />,
   );
-  expect(screen.getByRole("region", { name: "তারিখ ও নোট" })).toBeTruthy();
-  expect(screen.queryByText("ছবি বা রসিদ")).toBeNull();
+  const details = screen.getByRole("group", {
+    name: "ভাউচার, নোট ও তারিখ",
+  }) as HTMLDetailsElement;
+  expect(details.open).toBe(false);
+  expect(details.querySelector(".transaction-extras-receipts")).toBeNull();
+});
+
+it("reveals a date that failed validation", async () => {
+  const view = render(
+    <TransactionExtras dateField={<input aria-label="তারিখ" />} />,
+  );
+  const details = screen.getByLabelText("তারিখ").closest("details")!;
+  expect(details.open).toBe(false);
+  view.rerender(
+    <TransactionExtras defaultOpen dateField={<input aria-label="তারিখ" />} />,
+  );
+  await waitFor(() => expect(details.open).toBe(true));
 });

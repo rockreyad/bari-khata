@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { FilePdfIcon, PaperclipIcon, XIcon } from "@phosphor-icons/react";
 import type { ReceiptInput } from "../../data/repository";
 import { useLanguageContext } from "../../context/LanguageProvider";
+import { NEW_RECEIPT_MAX_BYTES } from "../../lib/attachmentLimits";
 
 function AttachmentPreview({ file }: { file: Blob }) {
   const [url, setUrl] = useState("");
@@ -36,7 +37,7 @@ export function HouseAttachments({
         <PaperclipIcon size={21} aria-hidden="true" />
         <span>
           {t("ভাউচার যোগ করুন")}
-          <small>{t("ছবি বা PDF")}</small>
+          <small>{t("ছবি বা PDF · সর্বোচ্চ ২ MB")}</small>
         </span>
         <input
           type="file"
@@ -54,11 +55,11 @@ export function HouseAttachments({
                     "image/png",
                     "image/webp",
                     "application/pdf",
-                  ].includes(file.type) || file.size > 10 * 1024 * 1024,
+                  ].includes(file.type) || file.size > NEW_RECEIPT_MAX_BYTES,
               )
             ) {
               onError(
-                t("ছবি বা PDF দিন। প্রতিটি ১০ MB-এর মধ্যে, সর্বোচ্চ ২০টি।"),
+                t("ছবি বা PDF দিন। প্রতিটি ২ MB-এর মধ্যে, সর্বোচ্চ ২০টি।"),
               );
             } else
               onChange([
