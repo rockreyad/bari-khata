@@ -13,12 +13,13 @@ import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { AppMenu } from "../../components/ui/AppMenu";
 import { contactSummary, personKind } from "../../domain/contacts";
+import { contactCommitmentSummary } from "../../domain/contactCommitments";
 import { matchesContact } from "./people";
 import { PersonMark, kindLabels } from "./ContactIdentity";
 import { PeopleRoleTabs } from "./PeopleRoleTabs";
 import { peopleRoles, roleKey, visibleRoleTabs } from "./peopleRoles";
 import { usePeopleRoleTabs } from "./usePeopleRoleTabs";
-import { contactPresetFor, contactPresets } from "./contactPresets";
+import { contactRoles, contactPresets } from "./contactPresets";
 import "./people.css";
 export function PeoplePage() {
   const { ledger, entity, go, mode } = useNotebook();
@@ -49,23 +50,38 @@ export function PeoplePage() {
     () =>
       ledger.people
         .filter((person) => !person.archivedAt)
-        .map((person) => ({
-          person,
-          summary: contactSummary(ledger, person),
-        })),
+        .map((person) => {
+          const summary = contactSummary(ledger, person);
+          const commitments = ledger.contracts.some(
+            (contract) => contract.personId === person.id,
+          )
+            ? contactCommitmentSummary(ledger, person.id)
+            : null;
+          return {
+            person,
+            summary,
+            remaining: commitments?.remaining ?? summary.reconciledPayable,
+            extra: commitments?.extra ?? summary.reconciledAdvance,
+            valid: commitments?.valid ?? !summary.balanceAmbiguous,
+            needsReview: commitments
+              ? !commitments.valid || commitments.balanceAmbiguous
+              : summary.balanceAmbiguous,
+          };
+        }),
     [ledger],
   );
   const shown = rows
     .filter(
-      ({ person, summary }) =>
+      ({ person, remaining, extra, valid }) =>
         matchesContact(person, query) &&
         (kind === "all" || personKind(person) === kind) &&
-        (!activeType || contactPresetFor(person).id === activeType) &&
+        (!activeType ||
+          (contactRoles(person).length
+            ? contactRoles(person).includes(activeType as never)
+            : activeType === "custom")) &&
         (!activeRole || roleKey(person.role) === activeRole) &&
         (status === "all" ||
-          (status === "due"
-            ? summary.reconciledPayable > 0
-            : summary.reconciledAdvance > 0)),
+          (status === "due" ? valid && remaining > 0 : valid && extra > 0)),
     )
     .sort(
       (a, b) =>
@@ -129,17 +145,17 @@ export function PeoplePage() {
     <div className="contacts-page">
       <header className="page-heading">
         <div>
-          <h1>{t("মানুষ ও দোকান")}</h1>
+          <h1>{t("কর্মী")}</h1>
           <p>{t("কাকে কত দিয়েছি, এক নজরে।")}</p>
         </div>
         <button className="primary-button" onClick={() => entity("person")}>
           <PlusIcon size={19} />
-          {t("নাম যোগ করি")}
+          {t("নতুন কর্মী")}
         </button>
       </header>
-      <button className="people-jobs-link" onClick={() => go("/jobs")}>
+      <button className="people-jobs-link" onClick={() => go("/works")}>
         <HardHatIcon size={21} weight="duotone" />
-        <span>{t("মিস্ত্রির সব কাজ")}</span>
+        <span>{t("সব কাজ")}</span>
         <ArrowRightIcon size={18} />
       </button>
       <div className="contacts-search">
@@ -208,19 +224,16 @@ export function PeoplePage() {
         </div>
       ))}
       {shown.length ? (
-        <section
-          className="contacts-list"
-          aria-label={t("মানুষ ও দোকানের তালিকা")}
-        >
+        <section className="contacts-list" aria-label={t("কর্মীর তালিকা")}>
           <div className="contacts-list-caption">
             <span>{t("নাম")}</span>
             <span>{t("টাকা দিয়েছি")}</span>
           </div>
-          {shown.map(({ person, summary }) => (
+          {shown.map(({ person, summary, remaining, valid, needsReview }) => (
             <button
               className="contact-row"
               key={person.id}
-              onClick={() => go(`/people/${encodeURIComponent(person.id)}`)}
+              onClick={() => go(`/parties/${encodeURIComponent(person.id)}`)}
             >
               <PersonMark person={person} />
               <span className="contact-row-name">
@@ -244,12 +257,18 @@ export function PeoplePage() {
                     </span>
                   )}
                 </strong>
-                {summary.reconciledPayable > 0 ? (
+                {valid && remaining > 0 ? (
                   <small className="contact-due">
-                    {t("বাকি {{amount}}", {
-                      amount: money(summary.reconciledPayable),
-                    })}
+                    {t(
+                      needsReview ? "জানা বাকি {{amount}}" : "বাকি {{amount}}",
+                      {
+                        amount: money(remaining),
+                      },
+                    )}
                   </small>
+                ) : null}
+                {needsReview ? (
+                  <small className="contact-due">{t("যাচাই বাকি")}</small>
                 ) : null}
               </span>
               <ArrowRightIcon className="contact-row-chevron" size={16} />

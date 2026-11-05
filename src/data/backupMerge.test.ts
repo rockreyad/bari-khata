@@ -1,3 +1,4 @@
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it } from "vitest";
 import { LedgerSchema, type Ledger } from "../domain/model";
@@ -124,7 +125,7 @@ describe("reviewed backup merging", () => {
     await target.mergeBackup(backup, options(initial));
     expect((await target.read())!.ownerId).toBe(secondOwner);
     expect((await target.read())!.ledger).toEqual(
-      (await source.read())!.ledger,
+      migrateArchitecture((await source.read())!.ledger).ledger,
     );
     expect((await source.read())!.generation).toBe(0);
     setActiveOwner(firstOwner);
@@ -360,6 +361,7 @@ describe("reviewed backup merging", () => {
       ),
     ).toEqual(new Uint8Array([1, 2, 3, 4]));
     const corrupt = JSON.parse(backup);
+    delete corrupt.integrity;
     corrupt.receipts[0].base64 = "BAQDBA==";
     const saved = (await repo.read())!;
     await expect(

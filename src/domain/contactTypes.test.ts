@@ -13,7 +13,7 @@ import {
 
 describe("durable contact types", () => {
   it.each(["shop", "driver"] as const)(
-    "keeps a legacy %s account while explicit unclassified type exposes only payment",
+    "keeps a legacy %s account while an explicit custom type honors configured actions",
     (kind) => {
       const person = PersonSchema.parse({
         id: "person",
@@ -22,7 +22,12 @@ describe("durable contact types", () => {
         contactType: "custom",
         quickActions: ["payment", "purchase", "return", "transport"],
       });
-      expect(allowedContactActions(person)).toEqual(["payment"]);
+      expect(allowedContactActions(person)).toEqual([
+        "payment",
+        "purchase",
+        "return",
+        "transport",
+      ]);
       expect(defaultContactAccount(person)).toBe(
         kind === "shop" ? "materials" : "other",
       );

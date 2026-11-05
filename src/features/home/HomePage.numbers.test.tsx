@@ -15,12 +15,14 @@ import { HomePage } from "./HomePage";
 const state = vi.hoisted(() => ({
   ledger: null as unknown,
   add: vi.fn(),
+  quick: vi.fn(),
   go: vi.fn(),
 }));
 vi.mock("../../app/NotebookProvider", () => ({
   useNotebook: () => ({
     ledger: state.ledger as Ledger,
     add: state.add,
+    quick: state.quick,
     go: state.go,
     detail: vi.fn(),
   }),
@@ -30,6 +32,7 @@ afterEach(() => {
   localStorage.clear();
   state.go.mockClear();
   state.add.mockClear();
+  state.quick.mockClear();
 });
 function fixture(secondKind: "payment" | "expense" | "unpaid") {
   return LedgerSchema.parse({
@@ -331,9 +334,9 @@ it("keeps recording an expense separate from recording money paid", () => {
   mount(fixture("payment"), "bn");
   fireEvent.click(screen.getByRole("button", { name: "খরচ লিখি" }));
   fireEvent.click(screen.getByRole("button", { name: "টাকা দিলাম" }));
-  expect(state.add).toHaveBeenCalledTimes(2);
-  expect(state.add).toHaveBeenNthCalledWith(1);
-  expect(state.add).toHaveBeenNthCalledWith(2, { kind: "payment" });
+  expect(state.quick).toHaveBeenCalledOnce();
+  expect(state.add).toHaveBeenCalledOnce();
+  expect(state.add).toHaveBeenLastCalledWith({ kind: "payment" });
   expect(state.go).not.toHaveBeenCalled();
 });
 
@@ -455,3 +458,42 @@ it.each([
     expect(JSON.stringify(ledger)).toBe(before);
   },
 );
+
+it("keeps the established overview and a neutral status for an unresolved contract correction", () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "নমুনা সেক্টর" }],
+    people: [{ id: "person", name: "নমুনা পক্ষ", kind: "worker" }],
+    contracts: [
+      { id: "contract", personId: "person", workId: "work", total: 10000 },
+    ],
+    entries: [
+      {
+        id: "correction",
+        kind: "adjustment",
+        personId: "person",
+        account: "labour",
+        contractId: "contract",
+        note: "নমুনা পুরোনো ছাড়",
+        adjustment: {
+          target: "person",
+          basis: "balance",
+          account: "labour",
+          workId: "work",
+          before: 10000,
+          after: 8000,
+          delta: -2000,
+        },
+      },
+    ],
+  });
+  const before = structuredClone(ledger);
+  const { container } = mount(ledger, "bn");
+  expect(container.querySelector(".home-overview-card")).toBeTruthy();
+  expect(
+    container.querySelector(".home-overview-paid-total dd")?.textContent,
+  ).toBe("৳\u202f০");
+  expect(screen.getByText("বাকির হিসাব যাচাই বাকি")).toBeTruthy();
+  expect(container.querySelector(".home-overview-due")).toBeNull();
+  expect(container.querySelector(".house-write-actions")).toBeNull();
+  expect(ledger).toEqual(before);
+});

@@ -37,7 +37,7 @@ import { savePersonWithContract } from "../domain/personContract";
 import { saveWorkChange } from "../domain/workActivity";
 import {
   allowedContactActions,
-  availableContactActions,
+  availablePartyActions,
   canCreateContactJob,
   personKind,
 } from "../domain/contacts";
@@ -45,7 +45,9 @@ import {
   contactPresets,
   contactPresetFor,
   contactPresetFrom,
+  contactRoles,
 } from "../features/people/contactPresets";
+import { ContactTypeSchema } from "../domain/contactTypes";
 import { parseAmount } from "../domain/ledger";
 import { Sheet } from "./Sheet";
 import { WorkMark, workIconChoices, workColorChoices } from "./ui/Icons";
@@ -78,6 +80,8 @@ const DraftSchema = z.object({
   completedOn: z.string().nullable().default(null),
   contactKind: z.enum(["worker", "shop", "driver", "other"]).default("other"),
   contactPresetId: z.string().max(100).default("custom"),
+  roles: z.array(ContactTypeSchema).max(8).optional(),
+  identityType: z.enum(["", "person", "organization"]).default(""),
   quickActions: z.array(z.string()).nullable().default(null),
   role: z.string().default(""),
   personWorkIds: z.array(z.string()).max(10000).default([]),
@@ -145,6 +149,7 @@ function initial(
         ...person,
         contactKind: personKind(person),
         contactPresetId: contactPresetFor(person).id,
+        roles: contactRoles(person),
         personWorkIds: person.workIds ?? [],
       });
   }
@@ -283,7 +288,8 @@ export function EntitySheet({
             if (
               kind === "person" &&
               typeof value === "object" &&
-              !("contactPresetId" in value)
+              !("contactPresetId" in value) &&
+              ("contactKind" in value || "role" in value)
             )
               parsed.data.contactPresetId = contactPresetFrom(
                 parsed.data.contactKind,
@@ -344,26 +350,39 @@ export function EntitySheet({
     draft.basis === "fixed" || draft.totalOverridden
       ? amount(draft.total)
       : calculatedTotal;
-  const personPreset =
-    contactPresets.find((preset) => preset.id === draft.contactPresetId) ??
-    contactPresets.find((preset) => preset.id === "custom")!;
+  const personPreset = contactPresets.find(
+    (preset) => preset.id === draft.contactPresetId,
+  );
+  const storedPerson =
+    kind === "person" && editId
+      ? ledger.people.find((person) => person.id === editId)
+      : undefined;
+  const storedOtherRoles =
+    storedPerson?.roles?.filter(
+      (role) => role !== contactPresetFor(storedPerson).id,
+    ) ?? [];
+  const personRoles =
+    draft.roles === undefined && !storedOtherRoles.length
+      ? undefined
+      : [...new Set([...(draft.roles ?? []), ...storedOtherRoles])];
+  const personRules = PersonSchema.parse({
+    id: draft.id,
+    name: draft.name || "new",
+    kind: draft.contactKind,
+    contactType: personPreset?.id,
+    roles: personRoles,
+  });
   const allowed =
     kind === "person"
-      ? availableContactActions(personPreset.kind)
+      ? availablePartyActions(personRules)
       : Object.keys(workActionNames);
+  const personAgreementAllowed = canCreateContactJob(personRules);
   const hasPersonAgreement =
-    personPreset.agreement || Boolean(draft.personContractAmount.trim());
+    personAgreementAllowed || Boolean(draft.personContractAmount.trim());
   const selected = (
     draft.quickActions ??
     (kind === "person"
-      ? allowedContactActions(
-          PersonSchema.parse({
-            id: draft.id,
-            name: draft.name || "new",
-            kind: draft.contactKind,
-            contactType: personPreset.id,
-          }),
-        )
+      ? allowedContactActions(personRules)
       : ["expense", "payment"])
   ).filter((action) => allowed.includes(action));
   const toggle = (action: string) => {
@@ -383,7 +402,7 @@ export function EntitySheet({
     setError("");
     try {
       if (identityMismatch)
-        throw new Error(t("এই কাজে হিসাব আছে। নাম ও খাতা বদলানো যাবে না।"));
+        throw new Error(t("এই কাজে হিসাব আছে। কর্মী ও খাতা বদলানো যাবে না।"));
       let next = structuredClone(ledger);
       if (kind !== "contract" && !draft.name.trim())
         throw new Error(t("নাম লিখুন।"));
@@ -416,7 +435,11 @@ export function EntitySheet({
           role: draft.role.trim(),
           workIds: draft.personWorkIds,
           kind: draft.contactKind,
-          contactType: personPreset.id,
+          contactType: personPreset?.id ?? previous?.contactType,
+          roles: personRoles,
+          identityType: previous
+            ? previous.identityType
+            : draft.identityType || undefined,
           quickActions:
             draft.quickActions === null
               ? null
@@ -568,7 +591,7 @@ export function EntitySheet({
     (!originalPerson || originalPerson.archivedAt)
   )
     return (
-      <Frame title={t("নামের তথ্য")} onClose={() => void close()}>
+      <Frame title={t("কর্মীর তথ্য")} onClose={() => void close()}>
         <FormError {...errorNotice} className="form-error" />
         <p className="entity-notice" role="status">
           {t(
@@ -586,7 +609,7 @@ export function EntitySheet({
             className: "person-editor-page",
             subtitle: editId
               ? formatDigits(originalPerson?.name ?? "")
-              : t("মানুষ ও দোকান"),
+              : undefined,
             busy: saving,
           }
         : {})}
@@ -594,11 +617,11 @@ export function EntitySheet({
         kind === "work"
           ? editId
             ? "খাতার তথ্য"
-            : "কাজের খাতা খুলব"
+            : "নতুন খাতা বানান"
           : kind === "person"
             ? editId
-              ? "তথ্য বদলাই"
-              : "নাম যোগ করি"
+              ? "কর্মীর তথ্য"
+              : "নতুন কর্মী"
             : editId
               ? "কাজ বদলাই"
               : "নতুন কাজ",
@@ -633,12 +656,12 @@ export function EntitySheet({
               <div className="work-preview">
                 <WorkMark icon={draft.icon} color={draft.color} size={29} />
                 <div>
-                  <strong>{draft.name || t("আপনার কাজের খাতা")}</strong>
+                  <strong>{draft.name || t("আপনার খাতা")}</strong>
                   <span>{t("যেভাবে চিনতে সুবিধা হয়, সেভাবে সাজান।")}</span>
                 </div>
               </div>
               <label>
-                {t("কাজের নাম")}
+                {t("খাতার নাম")}
                 <input
                   autoFocus
                   placeholder={t("যেমন: বাথরুমের কাজ")}
@@ -774,6 +797,7 @@ export function EntitySheet({
               value={draft}
               ledger={ledger}
               editing={Boolean(editId)}
+              agreementAllowed={personAgreementAllowed}
               allowedActions={allowed as ContactAction[]}
               selectedActions={selected}
               notebookValue={notebookValue}
@@ -790,6 +814,14 @@ export function EntitySheet({
                         ...current,
                         contactPresetId: preset.id,
                         contactKind: preset.kind,
+                        roles: [
+                          ...new Set([
+                            ...(current.roles ?? []).filter(
+                              (role) => role !== current.contactPresetId,
+                            ),
+                            ...(preset.id === "custom" ? [] : [preset.id]),
+                          ]),
+                        ],
                         role: t(preset.role),
                         quickActions: [...preset.actions],
                       },
@@ -810,18 +842,18 @@ export function EntitySheet({
             <>
               {identityMismatch ? (
                 <div className="entity-notice" role="alert">
-                  <p>{t("এই কাজে হিসাব আছে। নাম ও খাতা বদলানো যাবে না।")}</p>
+                  <p>{t("এই কাজে হিসাব আছে। কর্মী ও খাতা বদলানো যাবে না।")}</p>
                   <button
                     type="button"
                     className="secondary-button"
                     onClick={restoreIdentity}
                   >
-                    {t("আগের নাম ও খাতা রাখি")}
+                    {t("আগের কর্মী ও খাতা রাখি")}
                   </button>
                 </div>
               ) : identityLocked ? (
                 <p className="field-hint">
-                  {t("এই কাজে হিসাব আছে। নাম ও খাতা বদলানো যাবে না।")}
+                  {t("এই কাজে হিসাব আছে। কর্মী ও খাতা বদলানো যাবে না।")}
                 </p>
               ) : null}
               <label>
@@ -855,7 +887,7 @@ export function EntitySheet({
                 </AppSelect>
               </label>
               <label>
-                {t("কাজের খাতা")}
+                {t("খাতা")}
                 <AppSelect
                   value={notebookValue}
                   onChange={(event) => chooseNotebook(event.target.value)}
@@ -895,7 +927,8 @@ export function EntitySheet({
                     .filter(
                       (person) =>
                         canCreateContactJob(person) ||
-                        person.id === originalContract?.personId,
+                        person.id === originalContract?.personId ||
+                        person.id === draft.personId,
                     )
                     .map((p) => (
                       <option key={p.id} value={p.id}>

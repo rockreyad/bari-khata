@@ -36,7 +36,8 @@
   display: inline-flex;
   transition: transform 0.18s;
 }
-.app-select[data-state="open"] .app-select-caret {
+.app-select[data-state="open"] .app-select-caret,
+.app-date-trigger[data-state="open"] .app-select-caret {
   transform: rotate(180deg);
 }
 .app-select:hover:not(:disabled),
@@ -96,12 +97,24 @@
   overflow-wrap: anywhere;
 }
 .app-select-option[data-state="checked"] {
-  background: var(--surface);
+  background: var(--accent-soft);
   color: var(--accent-strong);
   font-weight: 600;
 }
+.app-select-option[data-state="checked"]::before {
+  content: "";
+  position: absolute;
+  inset-block: 12px;
+  left: 3px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--accent-strong);
+}
 .app-select-option[data-highlighted] {
   background: var(--surface-muted);
+}
+.app-select-option[data-highlighted][data-state="checked"] {
+  background: var(--accent-soft);
 }
 .app-select-option[data-disabled] {
   opacity: 0.4;
@@ -176,23 +189,15 @@
   background: var(--line);
 }
 .app-date-trigger {
-  justify-content: flex-start;
+  justify-content: space-between;
   font-variant-numeric: tabular-nums;
 }
 .app-date-trigger > svg {
-  color: var(--accent);
+  color: var(--muted);
   flex: none;
 }
 .app-date-trigger.is-empty {
   color: var(--muted);
-}
-.date-trigger-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--line);
-  flex: none;
-  margin-left: auto;
 }
 .app-date-popup {
   z-index: 260;

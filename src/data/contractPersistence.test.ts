@@ -1,3 +1,4 @@
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import { expect, it } from "vitest";
 import { LedgerDatabase } from "./database";
@@ -43,13 +44,16 @@ it("reopens and restores contract history while refusing a save or backup that d
     const restore = new LedgerRepository(restoreDb);
     await restore.ensure("real", LedgerSchema.parse({}));
     await restore.importBackup(backup, { replace: true });
-    expect((await restore.read("real"))?.ledger).toEqual(changed);
+    expect((await restore.read("real"))?.ledger).toEqual(
+      migrateArchitecture(changed).ledger,
+    );
     const stripped = structuredClone(changed);
     stripped.contracts[0].activity = [];
     await expect(repo.save(stripped)).rejects.toThrow(
       "contract_history_would_be_lost",
     );
     const corrupt = JSON.parse(backup);
+    delete corrupt.integrity;
     corrupt.ledger.contracts[0].activity = [];
     await expect(
       repo.importBackup(JSON.stringify(corrupt), { replace: true }),

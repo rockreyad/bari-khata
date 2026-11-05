@@ -4,9 +4,9 @@ import { loginTarget } from "./loginTarget";
 describe("login return path", () => {
   it.each([
     "/",
-    "/works/door?tab=labour",
+    "/sectors/door?tab=labour",
     "/settings/account",
-    "/jobs?status=done#list",
+    "/works?status=done#list",
   ])("keeps the requested app page %s", (path) =>
     expect(loginTarget(path)).toBe(path),
   );
@@ -22,13 +22,13 @@ describe("login return path", () => {
     "/REGISTER/resend",
     "/login",
     "/login/pin",
-    "/login/pin?from=/jobs",
+    "/login/pin?from=/works",
     "/register",
     "/register/resend",
     "/auth/confirm",
-    "/works/../login/pin",
+    "/sectors/../login/pin",
     "/%6cogin/pin",
-    "/works\n/door",
+    "/sectors\n/door",
     "/%ZZ",
   ])("rejects external, invalid or looping login destinations %s", (path) => {
     expect(loginTarget(path)).toBe("/");

@@ -32,6 +32,7 @@ import { adjustmentBasisLabels } from "../history/adjustmentDisplay";
 import "../history/history.css";
 import "../history/history-v4.css";
 import "./entry-detail.css";
+import { PaymentBillMatch } from "./PaymentBillMatch";
 const auditLabels: Partial<Record<EntryChangeField, string>> = {
   kind: "হিসাবের ধরন",
   date: "লেনদেনের তারিখ",
@@ -53,7 +54,7 @@ const auditLabels: Partial<Record<EntryChangeField, string>> = {
   paymentPurposeId: "কিসের টাকা",
   provenance: "যে সহকারী লিখেছে",
   amount: "টাকার পরিমাণ",
-  workId: "কাজের খাতা",
+  workId: "খাতা",
   label: "মালের নাম",
   itemId: "মালের নাম",
   materialGroupId: "মালের ধরন",
@@ -432,7 +433,7 @@ export function EntryDetail({ id }: { id: string }) {
                       label: t("ব্যক্তি বা দোকানের পাতা"),
                       onSelect: () =>
                         go(
-                          `/people/${encodeURIComponent(person.id)}?account=${entry.account}`,
+                          `/parties/${encodeURIComponent(person.id)}?account=${entry.account}`,
                         ),
                     },
                     {
@@ -524,7 +525,7 @@ export function EntryDetail({ id }: { id: string }) {
                 </strong>
               </div>
               <div>
-                <span>{t("কাজের খাতা")}</span>
+                <span>{t("খাতা")}</span>
                 <strong>
                   {adjustment.workId
                     ? fieldText("workId", adjustment.workId)
@@ -543,7 +544,7 @@ export function EntryDetail({ id }: { id: string }) {
             aria-label={formatDigits(person.name)}
             onClick={() =>
               go(
-                `/people/${encodeURIComponent(person.id)}?account=${entry.account}`,
+                `/parties/${encodeURIComponent(person.id)}?account=${entry.account}`,
               )
             }
           >
@@ -586,7 +587,7 @@ export function EntryDetail({ id }: { id: string }) {
                       <button
                         className="detail-entity-link-v4"
                         onClick={() =>
-                          go(`/works/${encodeURIComponent(line.workId)}`)
+                          go(`/sectors/${encodeURIComponent(line.workId)}`)
                         }
                       >
                         {formatDigits(
@@ -631,7 +632,7 @@ export function EntryDetail({ id }: { id: string }) {
                 <button
                   className="detail-entity-link-v4"
                   onClick={() =>
-                    go(`/works/${encodeURIComponent(part.workId)}`)
+                    go(`/sectors/${encodeURIComponent(part.workId)}`)
                   }
                 >
                   {formatDigits(
@@ -843,6 +844,9 @@ export function EntryDetail({ id }: { id: string }) {
               ) : null}
             </div>
           </details>
+        ) : null}
+        {entry.kind === "payment" ? (
+          <PaymentBillMatch key={entry.id} paymentId={entry.id} />
         ) : null}
         {confirm ? (
           <ConfirmationDialog

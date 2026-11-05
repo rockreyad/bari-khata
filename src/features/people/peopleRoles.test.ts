@@ -166,6 +166,18 @@ describe("contact type tabs", () => {
   });
 });
 
+it("counts the same stable identity in every explicit role and keeps a role-free identity unclassified", () => {
+  const source = [
+    PersonSchema.parse({ ...people[0], roles: ["supplier", "professional"] }),
+    PersonSchema.parse({ ...people[1], roles: [] }),
+  ];
+  expect(peopleRoles(source)).toEqual([
+    { key: "supplier", label: "দোকানদার", count: 1 },
+    { key: "professional", label: "ইঞ্জিনিয়ার / পরামর্শক", count: 1 },
+    { key: "custom", label: "ধরন বাছা হয়নি", count: 1 },
+  ]);
+});
+
 describe("visible type tabs", () => {
   const tabs = peopleRoles(people);
 

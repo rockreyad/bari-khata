@@ -46,14 +46,14 @@ it("shows one complete remaining total without adding an already included wage b
   context.ledger = ledger;
   const original = JSON.stringify(ledger);
   const { container } = render(
-    <MemoryRouter initialEntries={["/works/tiles?tab=labour"]}>
+    <MemoryRouter initialEntries={["/sectors/tiles?tab=labour"]}>
       <WorkCard
         work={ledger.works.find((work) => work.id === "tiles")!}
         ledger={ledger}
         onOpen={vi.fn()}
       />
       <Routes>
-        <Route path="/works/:workId" element={<WorkPage />} />
+        <Route path="/sectors/:workId" element={<WorkPage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -61,10 +61,10 @@ it("shows one complete remaining total without adding an already included wage b
     container.querySelector(".work-overview-total strong")?.textContent,
   ).toBe("৳794000");
   expect(container.querySelector(".work-known-due")?.textContent).toBe(
-    "মোট বাকি৳80400",
+    "মোট বাকি৳15000",
   );
   expect(container.querySelector(".notebook-card-due")?.textContent).toBe(
-    "মোট বাকি৳80400",
+    "মোট বাকি৳15000",
   );
   expect(
     within(
@@ -105,9 +105,9 @@ it("keeps an existing person's correction in the notebook totals and history wit
   context.ledger = ledger;
   const before = JSON.stringify(ledger);
   const { container } = render(
-    <MemoryRouter initialEntries={["/works/tiles?tab=labour"]}>
+    <MemoryRouter initialEntries={["/sectors/tiles?tab=labour"]}>
       <Routes>
-        <Route path="/works/:workId" element={<WorkPage />} />
+        <Route path="/sectors/:workId" element={<WorkPage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -146,9 +146,9 @@ it("keeps shared obligations separate and opens their exact source even after th
   });
   context.ledger = setEntityRemoved(ledger, "contract", "shared", true);
   const { container } = render(
-    <MemoryRouter initialEntries={["/works/work?tab=labour"]}>
+    <MemoryRouter initialEntries={["/sectors/work?tab=labour"]}>
       <Routes>
-        <Route path="/works/:workId" element={<WorkPage />} />
+        <Route path="/sectors/:workId" element={<WorkPage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -161,8 +161,8 @@ it("keeps shared obligations separate and opens their exact source even after th
   await userEvent.click(screen.getByText("সব খাতা মিলিয়ে কাজের বাকি"));
   await userEvent.click(screen.getByRole("button", { name: /পুরো বাড়ির কাজ/ }));
   const target = new URL(context.go.mock.calls[0][0], "https://bari.invalid");
-  expect(target.pathname).toBe("/jobs/shared");
-  expect(target.searchParams.get("back")).toBe("/works/work?tab=labour");
+  expect(target.pathname).toBe("/works/shared");
+  expect(target.searchParams.get("back")).toBe("/sectors/work?tab=labour");
 });
 it("shows only a recent preview while keeping the complete work total and a scoped history route", async () => {
   context.ledger = LedgerSchema.parse({
@@ -183,9 +183,9 @@ it("shows only a recent preview while keeping the complete work total and a scop
     })),
   });
   const { container } = render(
-    <MemoryRouter initialEntries={["/works/cement?tab=material"]}>
+    <MemoryRouter initialEntries={["/sectors/cement?tab=material"]}>
       <Routes>
-        <Route path="/works/:workId" element={<WorkPage />} />
+        <Route path="/sectors/:workId" element={<WorkPage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -223,9 +223,9 @@ it("opens a work with all payments visible and one paid total, without advance j
     ],
   });
   const { container } = render(
-    <MemoryRouter initialEntries={["/works/door"]}>
+    <MemoryRouter initialEntries={["/sectors/door"]}>
       <Routes>
-        <Route path="/works/:workId" element={<WorkPage />} />
+        <Route path="/sectors/:workId" element={<WorkPage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -269,9 +269,9 @@ it("keeps one labour paid total visible at zero and labels broader history as al
     works: [{ id: "empty", name: "খালি খাতা" }],
   });
   const { container } = render(
-    <MemoryRouter initialEntries={["/works/empty?tab=labour"]}>
+    <MemoryRouter initialEntries={["/sectors/empty?tab=labour"]}>
       <Routes>
-        <Route path="/works/:workId" element={<WorkPage />} />
+        <Route path="/sectors/:workId" element={<WorkPage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -345,9 +345,9 @@ it("shows only the entire labour payment total without treating a small bill or 
   context.ledger = ledger;
   const before = JSON.stringify(ledger);
   const { container } = render(
-    <MemoryRouter initialEntries={["/works/electric?tab=labour"]}>
+    <MemoryRouter initialEntries={["/sectors/electric?tab=labour"]}>
       <Routes>
-        <Route path="/works/:workId" element={<WorkPage />} />
+        <Route path="/sectors/:workId" element={<WorkPage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -419,9 +419,9 @@ it("keeps active wage payments and refunds visible after only their bill is canc
     ],
   });
   const { container } = render(
-    <MemoryRouter initialEntries={["/works/one?tab=labour"]}>
+    <MemoryRouter initialEntries={["/sectors/one?tab=labour"]}>
       <Routes>
-        <Route path="/works/:workId" element={<WorkPage />} />
+        <Route path="/sectors/:workId" element={<WorkPage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -449,7 +449,7 @@ it("finds work names using either numeral script while preserving their stored n
   });
   context.ledger = ledger;
   render(
-    <MemoryRouter initialEntries={["/works"]}>
+    <MemoryRouter initialEntries={["/sectors"]}>
       <WorksPage />
     </MemoryRouter>,
   );
@@ -568,10 +568,10 @@ it("shows all cash paid for doors in both its card and page while preserving the
   const before = JSON.stringify(ledger);
   context.ledger = ledger;
   const { container } = render(
-    <MemoryRouter initialEntries={["/works/door"]}>
+    <MemoryRouter initialEntries={["/sectors/door"]}>
       <WorkCard work={ledger.works[0]} ledger={ledger} onOpen={vi.fn()} />
       <Routes>
-        <Route path="/works/:workId" element={<WorkPage />} />
+        <Route path="/sectors/:workId" element={<WorkPage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -619,9 +619,9 @@ it.each([
       works: [{ id: "work", name: "কাজ", quickActions }],
     });
     const { container } = render(
-      <MemoryRouter initialEntries={["/works/work?tab=labour"]}>
+      <MemoryRouter initialEntries={["/sectors/work?tab=labour"]}>
         <Routes>
-          <Route path="/works/:workId" element={<WorkPage />} />
+          <Route path="/sectors/:workId" element={<WorkPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -666,9 +666,9 @@ it("keeps mixed work actions separate while routing the worker shortcut through 
     ],
   });
   const { container } = render(
-    <MemoryRouter initialEntries={["/works/mixed"]}>
+    <MemoryRouter initialEntries={["/sectors/mixed"]}>
       <Routes>
-        <Route path="/works/:workId" element={<WorkPage />} />
+        <Route path="/sectors/:workId" element={<WorkPage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -721,7 +721,7 @@ function renderWorkTabs(path: string) {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route
-          path="/works/:workId"
+          path="/sectors/:workId"
           element={
             <>
               <WorkPage />
@@ -851,9 +851,11 @@ it("keeps compact colored cards clickable without footer clutter and shows due o
 
 it("keeps tab selection in the route, preserves other filters and supports native keyboard activation", async () => {
   renderWorkTabs(
-    "/works/door?tab=material&account=materials&from=2026-01-01&q=cement",
+    "/sectors/door?tab=material&account=materials&from=2026-01-01&q=cement",
   );
-  const group = screen.getByRole("group", { name: "খাতার লেনদেন বেছে দেখুন" });
+  const group = screen.getByRole("group", {
+    name: "খাতার লেনদেন বেছে দেখুন",
+  });
   expect(within(group).getAllByRole("button")).toHaveLength(6);
   for (const button of within(group).getAllByRole("button")) {
     expect(button.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
@@ -890,8 +892,10 @@ it("keeps tab selection in the route, preserves other filters and supports nativ
 });
 
 it("reveals the last active tab within a narrow rail and brings the first tab back without changing filters", () => {
-  renderWorkTabs("/works/door?tab=activity&q=cement");
-  const rail = screen.getByRole("group", { name: "খাতার লেনদেন বেছে দেখুন" });
+  renderWorkTabs("/sectors/door?tab=activity&q=cement");
+  const rail = screen.getByRole("group", {
+    name: "খাতার লেনদেন বেছে দেখুন",
+  });
   Object.defineProperties(rail, {
     clientWidth: { configurable: true, value: 260 },
     scrollWidth: { configurable: true, value: 610 },
@@ -997,9 +1001,9 @@ it("shows scoped compact job previews on the labour tab and routes details away 
   const before = JSON.stringify(ledger);
   context.ledger = ledger;
   const { container } = render(
-    <MemoryRouter initialEntries={["/works/door?tab=labour"]}>
+    <MemoryRouter initialEntries={["/sectors/door?tab=labour"]}>
       <Routes>
-        <Route path="/works/:workId" element={<WorkPage />} />
+        <Route path="/sectors/:workId" element={<WorkPage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -1008,10 +1012,10 @@ it("shows scoped compact job previews on the labour tab and routes details away 
   expect(tiles).toHaveLength(2);
   expect(tiles[0].textContent).toContain("শাহ আলম");
   expect(tiles[0].textContent).toContain("৳10000");
-  expect(tiles[0].textContent).toContain("৳8000");
+  expect(tiles[0].textContent).toContain("দিয়েছি৳2000");
   expect(tiles[1].textContent).toContain("রহিম");
   expect(tiles[1].textContent).toContain("৳50000");
-  expect(tiles[1].textContent).toContain("৳45000");
+  expect(tiles[1].textContent).toContain("দিয়েছি৳5000");
   expect(preview.textContent).not.toContain("শুধু ছাদের কাজ");
   expect(preview.textContent).not.toContain("পুরো বাড়ি");
   expect(within(preview).queryByRole("progressbar")).toBeNull();
@@ -1022,8 +1026,8 @@ it("shows scoped compact job previews on the labour tab and routes details away 
     context.go.mock.calls.at(-1)?.[0] ?? "",
     "https://bari.invalid",
   );
-  expect(jobRoute.pathname).toBe("/jobs/door-job");
-  expect(jobRoute.searchParams.get("back")).toBe("/works/door?tab=labour");
+  expect(jobRoute.pathname).toBe("/works/door-job");
+  expect(jobRoute.searchParams.get("back")).toBe("/sectors/door?tab=labour");
   screen.getByRole("button", { name: "খাতার আরও কাজ" }).focus();
   await userEvent.setup().keyboard("{Enter}");
   expect(await screen.findByRole("menu")).toBeTruthy();
@@ -1060,7 +1064,7 @@ function renderWorksDirectory(path: string) {
 }
 
 it("restores notebook search and status from the URL and preserves other filters while switching chips", () => {
-  renderWorksDirectory("/works?status=done&q=8&from=2026-01-01");
+  renderWorksDirectory("/sectors?status=done&q=8&from=2026-01-01");
   const filters = screen.getByRole("group", { name: "কাজের অবস্থা" });
   expect(
     within(filters).getByRole("button", { name: "শেষ", pressed: true }),
@@ -1102,12 +1106,12 @@ it("restores notebook search and status from the URL and preserves other filters
   ).searchParams;
   expect(Object.fromEntries(params)).toEqual({ from: "2026-01-01" });
   expect(screen.getByRole("heading", { name: "All rods" })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "নতুন খাতা" }));
+  fireEvent.click(screen.getByRole("button", { name: "নতুন খাতা বানান" }));
   expect(context.entity).toHaveBeenCalledWith("work");
 });
 
 it("treats an invalid status as all and retains the literal search word all", () => {
-  renderWorksDirectory("/works?status=unknown&q=all");
+  renderWorksDirectory("/sectors?status=unknown&q=all");
   const filters = screen.getByRole("group", { name: "কাজের অবস্থা" });
   expect(
     within(filters).getByRole("button", { name: "সব", pressed: true }),
@@ -1131,7 +1135,7 @@ it("treats an invalid status as all and retains the literal search word all", ()
 
 it("clears an empty filtered result without dropping unrelated URL state or changing notebook records", () => {
   const { container } = renderWorksDirectory(
-    "/works?status=done&q=missing&from=2026-01-01",
+    "/sectors?status=done&q=missing&from=2026-01-01",
   );
   const before = JSON.stringify(context.ledger);
   expect(container.querySelectorAll(".work-notebook-card")).toHaveLength(0);

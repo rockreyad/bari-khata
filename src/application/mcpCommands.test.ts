@@ -38,11 +38,53 @@ function purchase(extra: Record<string, unknown> = {}) {
   };
 }
 describe("MCP financial commands", () => {
+  it("enforces saved contact actions for new commands while retaining edits to existing source history", () => {
+    const saved = applyMcpCommand(fixture(), purchase(), context).ledger;
+    saved.people.find((person) => person.id === "shop")!.quickActions = [];
+    const before = structuredClone(saved);
+    expect(() => applyMcpCommand(saved, purchase(), context)).toThrow(
+      "contact_rules",
+    );
+    expect(() =>
+      applyMcpCommand(
+        saved,
+        {
+          type: "record_advance",
+          date: "2026-11-02",
+          person_id: "shop",
+          account: "materials",
+          work_id: "roof",
+          amount_paisa: 1000,
+          method: "cash",
+        },
+        context,
+      ),
+    ).toThrow("contact_rules");
+    expect(saved).toEqual(before);
+    const corrected = applyMcpCommand(
+      saved,
+      {
+        type: "update_entry",
+        entry_id: saved.entries[0].id,
+        expected_updated_at: context.now,
+        reason: "নমুনা কথা ঠিক করেছি",
+        changes: { note: "নমুনা সংশোধিত কথা" },
+      },
+      context,
+    ).ledger;
+    expect(corrected.entries[0].lines).toEqual(saved.entries[0].lines);
+    expect(corrected.entries[0].revisions).toHaveLength(1);
+  });
   it.each(["worker", "shop", "driver", "other"] as const)(
     "keeps explicitly requested purchases, labour, transport and material returns separate for %s",
     (kind) => {
       const original = fixture();
-      original.people[1] = { ...original.people[1], kind, role: "নমুনা পরিচয়" };
+      original.people[1] = {
+        ...original.people[1],
+        kind,
+        role: "নমুনা পরিচয়",
+        roles: ["supplier", "craftsperson", "transport"],
+      };
       const before = JSON.stringify(original);
       let ledger = applyMcpCommand(
         original,
@@ -147,6 +189,7 @@ describe("MCP financial commands", () => {
     (kind) => {
       const original = fixture();
       original.people[1].kind = kind;
+      original.people[1].roles = ["craftsperson"];
       let ledger = applyMcpCommand(
         original,
         {
@@ -200,7 +243,8 @@ describe("MCP financial commands", () => {
       expect(contractSummary(ledger, agreement.id)).toMatchObject({
         agreed: 100000,
         paid: 25000,
-        remaining: 75000,
+        remaining: 0,
+        remainingCommitment: 75000,
       });
       expect(summarize(ledger)).toMatchObject({ cost: 0, paid: 25000 });
       for (const change of [{ person_id: "shop" }, { work_id: "tiles" }]) {
@@ -509,7 +553,8 @@ describe("MCP financial commands", () => {
     });
     expect(updated.contracts[0].activity).toHaveLength(2);
     expect(contractSummary(updated, id)).toMatchObject({
-      remaining: 65000000,
+      remaining: 0,
+      remainingCommitment: 65000000,
       payable: 0,
     });
   });

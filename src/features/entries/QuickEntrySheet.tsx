@@ -25,16 +25,25 @@ import { EntitySheet } from "../../components/EntitySheet";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { MoneyInput } from "../../components/ui/MoneyInput";
+import {
+  TransactionAmount,
+  TransactionDetails,
+} from "../../components/TransactionFields";
 import { FormError, useFormError } from "../../components/ui/FormError";
 import { personKind } from "../../domain/contacts";
+import {
+  canRecordContactCash,
+  canRecordContactCost,
+  canRecordContactReturn,
+} from "../../domain/contactEntryPolicy";
 import { Sheet } from "../../components/Sheet";
 import { EntryFrame } from "../../components/EntryFrame";
-import { BalanceProgress } from "../../components/ui/BalanceProgress";
 import { EntryPaymentPreview } from "./EntryPaymentPreview";
 import { entryPaymentBalance } from "./entryPaymentBalance";
 import { moneyInputValue } from "../../lib/numericFields";
 import "./entry-page.css";
-import { PaymentIcon } from "../../components/ui/Icons";
+import "./legacy-transaction.css";
+import { PaymentMethodField } from "../../components/PaymentMethodField";
 import {
   createWorkspaceStorage,
   type ReceiptInput,
@@ -102,9 +111,11 @@ const costNames = {
 export function QuickEntrySheet({
   options,
   presentation = "sheet",
+  resumeDraftKey,
 }: {
   options: AddOptions;
   presentation?: "sheet" | "page";
+  resumeDraftKey?: string;
 }) {
   const { ledger, mode, save, close, notify } = useNotebook();
   const { t, money, formatDigits } = useLanguageContext();
@@ -112,10 +123,12 @@ export function QuickEntrySheet({
   const baseDraftKey = `quick-v2:${options.kind ?? "expense"}:${options.workId ?? "all"}:${options.personId ?? "all"}${options.costType ? `:${options.costType}` : ""}`;
   const legacyKey = `${baseDraftKey}${options.purpose ? `:${options.purpose}` : ""}`;
   const accountDraftKey = `${legacyKey}${options.account ? `:account=${options.account}` : ""}`;
-  const key = `${accountDraftKey}${options.contractId ? `:job=${options.contractId}` : ""}`;
+  const key =
+    resumeDraftKey?.startsWith("quick-v2:") && resumeDraftKey.length <= 1500
+      ? resumeDraftKey
+      : `${accountDraftKey}${options.contractId ? `:job=${options.contractId}` : ""}${options.milestoneId ? `:milestone=${options.milestoneId}` : ""}`;
   const [draft, setDraft] = useState(() => entryContext(ledger, options));
   const [ready, setReady] = useState(false);
-  const [more, setMore] = useState(false);
   const [creatingWork, setCreatingWork] = useState(false);
   const [files, setFiles] = useState<ReceiptInput[]>([]);
   const [error, setError, errorNotice] = useFormError();
@@ -169,7 +182,9 @@ export function QuickEntrySheet({
           (!options.account || parsed.draft.account === context.account) &&
           (!options.purpose || parsed.draft.purpose === options.purpose) &&
           (!options.contractId ||
-            parsed.draft.contractId === context.contractId)
+            parsed.draft.contractId === context.contractId) &&
+          (!options.milestoneId ||
+            parsed.draft.milestoneId === context.milestoneId)
         ) {
           hydratedKeys.current.add(candidate);
           hydratedSources.current.set(candidate, draftFingerprint(parsed));
@@ -258,7 +273,7 @@ export function QuickEntrySheet({
         : name === "workId"
           ? entryWorkChange(ledger, d, String(value), jobScopeChosen.current)
           : name === "personId" || (name === "account" && value !== "labour")
-            ? { contractId: "" }
+            ? { contractId: "", milestoneId: "" }
             : {}),
     }));
   };
@@ -402,7 +417,7 @@ export function QuickEntrySheet({
                 : code === "date"
                   ? "সঠিক তারিখ বেছে নিন।"
                   : code === "work"
-                    ? "কোন কাজের খাতার টাকা, তা বেছে নিন।"
+                    ? "কোন খাতার টাকা, তা বেছে নিন।"
                     : code === "group"
                       ? "নতুন মালের ধরনটির নাম লিখুন।"
                       : code === "account_changed" ||
@@ -416,8 +431,9 @@ export function QuickEntrySheet({
                               ? "মজুরির কাজ ও ব্যক্তির সঙ্গে নির্ধারিত দর মিলছে না।"
                               : code === "removed_entity"
                                 ? "মুছে রাখা নাম, খাতা বা কাজ আগে ফিরিয়ে আনুন।"
-                                : code === "person_kind"
-                                  ? "মালের জন্য দোকান আর মজুরির জন্য মিস্ত্রির নাম বেছে নিন।"
+                                : code === "person_kind" ||
+                                    code === "contact_rules"
+                                  ? "এই নামের নিয়মে এই হিসাব রাখা যাবে না। ধরন বা নাম বদলান।"
                                   : "সঠিক টাকা ও প্রয়োজনীয় তথ্য দিন। হিসাব রাখা যায়নি।",
           ),
         );
@@ -457,13 +473,17 @@ export function QuickEntrySheet({
   const selectedKind = selectedPerson ? personKind(selectedPerson) : null;
   const canCreateWork = true;
   const intent = paymentIntent(ledger, draft);
+  const legacyReceivable =
+    draft.kind === "payment" && draft.advanceContext === "receivable";
   const needsIntent =
     draft.kind === "payment" &&
-    ((draft.purpose === "settle" && !intent.canSettle) ||
+    (legacyReceivable ||
+      (draft.purpose === "settle" && !intent.canSettle) ||
       (draft.purpose === "wage" && draft.account !== "labour") ||
       (intent.hasJob && ["charge", "wage"].includes(draft.purpose)));
-  const intentMessage =
-    draft.purpose === "wage" && draft.account !== "labour"
+  const intentMessage = legacyReceivable
+    ? "টাকা দেওয়ার ধরন বেছে নিন।"
+    : draft.purpose === "wage" && draft.account !== "labour"
       ? "নতুন বিল নাকি শুধু টাকা দেওয়া, বেছে নিন।"
       : intent.balance === null
         ? "বাকি নিশ্চিত নয়। কাজ বেছে নিন, বা নতুন বিল কিংবা অগ্রিম বেছে নিন।"
@@ -477,7 +497,46 @@ export function QuickEntrySheet({
   const transport = ["transport", "unload"].includes(draft.costType);
   const material = draft.costType === "material";
   const returning = draft.kind === "return";
-  const allowedPeople = ledger.people.filter((person) => !person.archivedAt);
+  const allowedPeople = ledger.people.filter(
+    (person) =>
+      !person.archivedAt &&
+      (cash
+        ? canRecordContactCash(ledger, person, {
+            account: draft.account,
+            contractId: draft.contractId,
+            amount: total || 1,
+            context:
+              draft.purpose === "advance" ? draft.advanceContext : "settlement",
+            refund: draft.kind === "refund",
+            workId: draft.workId || undefined,
+          })
+        : returning
+          ? canRecordContactReturn(ledger, person, {
+              account: draft.account,
+              contractId: draft.contractId,
+              workId: draft.workId || undefined,
+            })
+          : canRecordContactCost(person, {
+              account: labour
+                ? "labour"
+                : charge
+                  ? draft.account
+                  : material
+                    ? "materials"
+                    : "other",
+              costType: labour
+                ? "labour"
+                : charge
+                  ? draft.account === "materials"
+                    ? "material"
+                    : draft.costType === "transport"
+                      ? "transport"
+                      : "other"
+                  : draft.costType,
+              contractId: draft.contractId,
+              reimbursement: draft.payment === "worker",
+            })),
+  );
   const chooseType = (type: QuickDraft["costType"]) => {
     setError("");
     financialScopeChosen.current = true;
@@ -487,7 +546,10 @@ export function QuickEntrySheet({
     financialScopeChosen.current = true;
     jobScopeChosen.current = true;
     setError("");
-    setDraft((current) => changePaymentPurpose(current, purpose));
+    setDraft((current) => ({
+      ...changePaymentPurpose(current, purpose),
+      advanceContext: "advance",
+    }));
   };
   if (creatingWork)
     return (
@@ -547,20 +609,21 @@ export function QuickEntrySheet({
         : transport
           ? "গাড়িভাড়া দিই"
           : labour
-            ? "মিস্ত্রির টাকা"
+            ? "কর্মীর টাকা"
             : material
               ? "মাল কিনলাম"
               : "খরচ লিখি";
   return (
     <Frame
       title={t(title)}
+      className="transaction-page legacy-transaction-page"
       onClose={() => void requestClose()}
       footer={
-        <div className="save-bar">
-          <span>
-            {t(returning ? "ফেরতের দাম" : "এখন দিচ্ছি")}
+        <div className="transaction-submit">
+          <div>
+            <small>{t(returning ? "ফেরতের দাম" : "এখন দিচ্ছি")}</small>
             <strong>{money(returning ? total : paidNow)}</strong>
-          </span>
+          </div>
           <button
             className="primary-button"
             form={formId}
@@ -575,7 +638,14 @@ export function QuickEntrySheet({
     >
       <form
         id={formId}
-        className="entry-form-v3 entry-page-form"
+        className="entry-form-v3 entry-page-form transaction-form"
+        onInvalid={(event) => {
+          let parent = (event.target as HTMLElement).parentElement;
+          while (parent) {
+            if (parent instanceof HTMLDetailsElement) parent.open = true;
+            parent = parent.parentElement;
+          }
+        }}
         onSubmit={submit}
       >
         <FormError {...errorNotice} id={`${formId}-error`} />
@@ -589,7 +659,7 @@ export function QuickEntrySheet({
               {(
                 [
                   ["material", "মাল কেনা", PackageIcon],
-                  ["labour", "মিস্ত্রির টাকা", HardHatIcon],
+                  ["labour", "কর্মীর টাকা", HardHatIcon],
                   ["transport", "গাড়িভাড়া", TruckIcon],
                 ] as const
               ).map(([type, label, Icon]) => {
@@ -616,11 +686,11 @@ export function QuickEntrySheet({
               {t("মুছে রাখা নাম, খাতা বা কাজ আগে ফিরিয়ে আনুন।")}
             </p>
           ) : null}
-          <div className="entry-assignment">
+          <div className="entry-assignment transaction-card transaction-grid">
             <label>
-              {t("কাজের খাতা")}
+              {t("খাতা")}
               <AppSelect
-                aria-label={t("কাজের খাতা")}
+                aria-label={t("খাতা")}
                 aria-invalid={Boolean(error) && invalidField === "work"}
                 aria-describedby={
                   error && invalidField === "work"
@@ -645,7 +715,7 @@ export function QuickEntrySheet({
                     </option>
                   ))}
                 {canCreateWork ? (
-                  <option value="__new__">{t("+ নতুন খাতা খুলব")}</option>
+                  <option value="__new__">{t("+ নতুন খাতা বানান")}</option>
                 ) : null}
               </AppSelect>
             </label>
@@ -654,7 +724,7 @@ export function QuickEntrySheet({
                 cash || wage || charge
                   ? "কাকে দিচ্ছেন"
                   : labour
-                    ? "কোন মিস্ত্রি"
+                    ? "কোন কর্মী"
                     : transport
                       ? "গাড়ির লোক / শ্রমিক"
                       : material
@@ -702,8 +772,8 @@ export function QuickEntrySheet({
               <PlusIcon size={17} />
               {t(
                 ledger.works.some((work) => !work.archivedAt)
-                  ? "নতুন কাজের খাতা খুলব"
-                  : "আগে কাজের খাতা খুলুন",
+                  ? "নতুন খাতা বানান"
+                  : "আগে খাতা বানান",
               )}
             </button>
           ) : null}
@@ -713,7 +783,7 @@ export function QuickEntrySheet({
                 cash
                   ? "নাম"
                   : labour
-                    ? "মিস্ত্রির নাম"
+                    ? "কর্মীর নাম"
                     : transport
                       ? "নাম"
                       : material
@@ -751,6 +821,7 @@ export function QuickEntrySheet({
                         return {
                           ...current,
                           ...scope,
+                          milestoneId: "",
                           workId:
                             job?.scope === "work"
                               ? job.workId!
@@ -790,18 +861,48 @@ export function QuickEntrySheet({
               ) : null}
             </section>
           ) : null}
+          {!cash &&
+          draft.kind !== "return" &&
+          draft.contractId &&
+          ledger.milestones?.some(
+            (row) => row.contractId === draft.contractId,
+          ) ? (
+            <label>
+              {t("কাজের ধাপ")}
+              <AppSelect
+                aria-label={t("কাজের ধাপ")}
+                value={draft.milestoneId}
+                onChange={(event) => field("milestoneId", event.target.value)}
+              >
+                <option value="">{t("ধাপ ছাড়াই বিল")}</option>
+                {ledger.milestones
+                  .filter((row) => row.contractId === draft.contractId)
+                  .map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {formatDigits(row.title)} · {money(row.amount)}
+                    </option>
+                  ))}
+              </AppSelect>
+            </label>
+          ) : null}
           {draft.kind === "payment" ? (
             <div
-              className="entry-intent-options"
+              className="entry-intent-options transaction-choice"
               role="group"
               aria-label={t("টাকার কারণ")}
             >
               {!intent.hasJob ? (
                 <button
                   type="button"
-                  aria-pressed={["charge", "wage"].includes(draft.purpose)}
+                  aria-pressed={
+                    !legacyReceivable &&
+                    ["charge", "wage"].includes(draft.purpose)
+                  }
                   className={
-                    ["charge", "wage"].includes(draft.purpose) ? "selected" : ""
+                    !legacyReceivable &&
+                    ["charge", "wage"].includes(draft.purpose)
+                      ? "selected"
+                      : ""
                   }
                   onClick={() => choosePurpose("charge")}
                 >
@@ -811,8 +912,12 @@ export function QuickEntrySheet({
               {intent.canSettle ? (
                 <button
                   type="button"
-                  aria-pressed={draft.purpose === "settle"}
-                  className={draft.purpose === "settle" ? "selected" : ""}
+                  aria-pressed={!legacyReceivable && draft.purpose === "settle"}
+                  className={
+                    !legacyReceivable && draft.purpose === "settle"
+                      ? "selected"
+                      : ""
+                  }
                   onClick={() => choosePurpose("settle")}
                 >
                   {t("বাকি মেটাই")}
@@ -820,13 +925,37 @@ export function QuickEntrySheet({
               ) : null}
               <button
                 type="button"
-                aria-pressed={draft.purpose === "advance"}
-                className={draft.purpose === "advance" ? "selected" : ""}
+                aria-pressed={!legacyReceivable && draft.purpose === "advance"}
+                className={
+                  !legacyReceivable && draft.purpose === "advance"
+                    ? "selected"
+                    : ""
+                }
                 onClick={() => choosePurpose("advance")}
               >
                 {t("অগ্রিম")}
               </button>
             </div>
+          ) : null}
+          {draft.kind === "refund" ? (
+            <label>
+              {t("কোন টাকার ফেরত")}
+              <AppSelect
+                aria-label={t("কোন টাকার ফেরত")}
+                value={draft.refundContext}
+                onChange={(event) =>
+                  field(
+                    "refundContext",
+                    event.target.value as QuickDraft["refundContext"],
+                  )
+                }
+              >
+                <option value="unknown">{t("সম্পর্ক জানা নেই")}</option>
+                <option value="settlement">{t("বিলের জন্য দেওয়া টাকা")}</option>
+                <option value="advance">{t("অগ্রিম দেওয়া টাকা")}</option>
+                <option value="receivable">{t("ফেরত পাওয়ার টাকা")}</option>
+              </AppSelect>
+            </label>
           ) : null}
           {needsIntent ? (
             <p className="field-hint" role="status">
@@ -860,7 +989,7 @@ export function QuickEntrySheet({
           {(wage || charge) && draft.account === "labour" ? (
             <section className="entry-wage-basis">
               <div
-                className="entry-intent-options"
+                className="entry-intent-options transaction-choice"
                 role="group"
                 aria-label={t("মজুরির হিসাব")}
               >
@@ -920,44 +1049,27 @@ export function QuickEntrySheet({
             </section>
           ) : null}
           {cash || wage || charge ? (
-            <label className="entry-amount-label">
-              {t("কত টাকা")}
-              <div className="entry-amount-wrap">
-                <span>৳</span>
-                <MoneyInput
-                  autoFocus
-                  inputMode="decimal"
-                  aria-label={t("কত টাকা")}
-                  placeholder="0"
-                  value={
-                    wage && draft.wageBasis === "day"
-                      ? moneyInputValue(total)
-                      : draft.amount
-                  }
-                  readOnly={wage && draft.wageBasis === "day"}
-                  onChange={(e) => field("amount", e.target.value)}
-                />
-              </div>
-            </label>
+            <div className="transaction-card">
+              <TransactionAmount
+                label={t("কত টাকা")}
+                value={
+                  wage && draft.wageBasis === "day"
+                    ? moneyInputValue(total)
+                    : draft.amount
+                }
+                disabled={wage && draft.wageBasis === "day"}
+                onChange={(value) => field("amount", value)}
+              />
+            </div>
           ) : (
             <div className="purchase-lines-v3">
               {draft.rows.map((r, index) => (
-                <div className="purchase-line-v3" key={r.id}>
-                  <label className="entry-amount-label">
-                    {t("কত টাকা")}
-                    <div className="entry-amount-wrap">
-                      <span>৳</span>
-                      <MoneyInput
-                        autoFocus={!index}
-                        aria-label={t("কত টাকা")}
-                        value={r.amount}
-                        placeholder="0"
-                        onChange={(e) =>
-                          changeRow(r.id, { amount: e.target.value })
-                        }
-                      />
-                    </div>
-                  </label>
+                <div className="purchase-line-v3 transaction-card" key={r.id}>
+                  <TransactionAmount
+                    label={t("কত টাকা")}
+                    value={r.amount}
+                    onChange={(value) => changeRow(r.id, { amount: value })}
+                  />
                   <label>
                     {t(
                       labour
@@ -1019,108 +1131,92 @@ export function QuickEntrySheet({
                       {t(material ? "এই মাল বাদ দিন" : "এই খরচ বাদ দিন")}
                     </button>
                   ) : null}
-                  {!labour && r.unit && (material || transport) ? (
-                    <label>
-                      {t("পরিমাণ")} · {formatDigits(r.unit)}
-                      <NumericInput
-                        inputMode="decimal"
-                        aria-label={t("পরিমাণ")}
-                        value={r.quantity}
-                        onChange={(e) =>
-                          changeRow(r.id, {
-                            quantity: e.target.value,
-                          })
-                        }
-                      />
-                    </label>
-                  ) : null}
                   {material || transport ? (
-                    <details className="item-extra-v3">
-                      <summary>
-                        {t(
-                          transport
-                            ? "কিসের মাল এনেছেন"
-                            : "ব্র্যান্ড ও পরিমাণ লিখি",
-                        )}
-                        <CaretDownIcon size={15} />
-                      </summary>
-                      <section className="line-meta-v3">
-                        <div className="field-grid">
+                    <TransactionDetails
+                      summary={t(
+                        material ? "ব্র্যান্ড ও পরিমাণ" : "কিসের মাল এনেছেন",
+                      )}
+                      defaultOpen={
+                        material && Boolean(r.brand || r.quantity || r.unit)
+                      }
+                    >
+                      <section className="line-meta-v3 transaction-fields">
+                        {material ? (
                           <label>
-                            {t("মালের ধরন")}
-                            <AppSelect
-                              value={r.groupId}
-                              onChange={(e) =>
-                                changeRow(r.id, { groupId: e.target.value })
-                              }
-                            >
-                              <option value="">{t("এখন দরকার নেই")}</option>
-                              {groups.map((g) => (
-                                <option key={g.id} value={g.id}>
-                                  {g.name}
-                                </option>
-                              ))}
-                              <option value="__new__">{t("+ নতুন ধরন")}</option>
-                            </AppSelect>
-                          </label>
-                          {r.groupId === "__new__" ? (
-                            <label>
-                              {t("নতুন মালের ধরন")}
-                              <input
-                                value={r.groupName}
-                                onChange={(e) =>
-                                  changeRow(r.id, { groupName: e.target.value })
-                                }
-                              />
-                            </label>
-                          ) : (
-                            <label>
-                              {t("ব্র্যান্ড")}
-                              <input
-                                value={r.brand}
-                                placeholder={t("যেমন: Crown")}
-                                onChange={(e) =>
-                                  changeRow(r.id, { brand: e.target.value })
-                                }
-                              />
-                            </label>
-                          )}
-                          <label>
-                            {t("কোথায় ব্যবহার হবে")}
+                            {t("ব্র্যান্ড")}
                             <input
-                              value={r.usage}
-                              placeholder={t("যেমন: প্লাস্টারের বালু")}
+                              value={r.brand}
+                              placeholder={t("ইচ্ছা হলে লিখুন")}
                               onChange={(e) =>
-                                changeRow(r.id, { usage: e.target.value })
+                                changeRow(r.id, { brand: e.target.value })
                               }
                             />
                           </label>
-                          <label>
-                            {t("পরিমাণ ও একক")}
-                            <div className="inline-fields">
+                        ) : null}
+                        {material ? (
+                          <div className="transaction-grid">
+                            <label>
+                              {t("পরিমাণ")}
                               <NumericInput
-                                aria-label={t("পরিমাণ")}
                                 value={r.quantity}
                                 inputMode="decimal"
                                 onChange={(e) =>
-                                  changeRow(r.id, {
-                                    quantity: e.target.value,
-                                  })
+                                  changeRow(r.id, { quantity: e.target.value })
                                 }
                               />
+                            </label>
+                            <label>
+                              {t("একক")}
                               <input
-                                aria-label={t("একক")}
                                 value={r.unit}
                                 placeholder={t("বস্তা / ফুট")}
                                 onChange={(e) =>
                                   changeRow(r.id, { unit: e.target.value })
                                 }
                               />
-                            </div>
+                            </label>
+                          </div>
+                        ) : null}
+                        <label>
+                          {t("মালের ধরন")}
+                          <AppSelect
+                            value={r.groupId}
+                            onChange={(e) =>
+                              changeRow(r.id, { groupId: e.target.value })
+                            }
+                          >
+                            <option value="">{t("এখন দরকার নেই")}</option>
+                            {groups.map((g) => (
+                              <option key={g.id} value={g.id}>
+                                {g.name}
+                              </option>
+                            ))}
+                            <option value="__new__">{t("+ নতুন ধরন")}</option>
+                          </AppSelect>
+                        </label>
+                        {r.groupId === "__new__" ? (
+                          <label>
+                            {t("নতুন মালের ধরন")}
+                            <input
+                              value={r.groupName}
+                              onChange={(e) =>
+                                changeRow(r.id, { groupName: e.target.value })
+                              }
+                            />
                           </label>
-                        </div>
+                        ) : null}
+                        <label>
+                          {t("কোথায় ব্যবহার হবে")}
+                          <input
+                            value={r.usage}
+                            placeholder={t("যেমন: প্লাস্টারের বালু")}
+                            onChange={(e) =>
+                              changeRow(r.id, { usage: e.target.value })
+                            }
+                          />
+                        </label>
                       </section>
-                    </details>
+                    </TransactionDetails>
                   ) : null}
                 </div>
               ))}
@@ -1266,7 +1362,13 @@ export function QuickEntrySheet({
           ) : null}
           {!cash && !returning ? (
             <section className="payment-state-v3">
-              <span>{t("টাকা দিয়েছেন?")}</span>
+              <span>
+                {t(
+                  draft.payment === "worker"
+                    ? "কর্মী নিজের টাকা দিয়েছেন"
+                    : "টাকা দিয়েছেন?",
+                )}
+              </span>
               <div className="choice-chips">
                 {(["full", "partial", "due"] as const).map((p) => (
                   <button
@@ -1299,21 +1401,28 @@ export function QuickEntrySheet({
               ) : null}
             </section>
           ) : null}
-          {!returning && draft.kind !== "refund" && selectedPerson ? (
+          {!returning &&
+          !legacyReceivable &&
+          draft.kind !== "refund" &&
+          selectedPerson ? (
             agreement ? (
               <section className="entry-contract-progress">
                 <h3>{t("কাজের হিসাব")}</h3>
-                {agreement.adjustment !== 0 && intent.balance !== null ? (
+                {agreement.balanceAmbiguous ? (
+                  <p>{t("বাকি এখনও পরিষ্কার নয়")}</p>
+                ) : (
                   <EntryPaymentPreview
-                    previousBalance={intent.balance}
+                    previousBalance={intent.balance ?? 0}
                     currentCost={0}
                     payment={paidNow}
                   />
-                ) : (
-                  <BalanceProgress
-                    total={Math.max(agreement.agreed, agreement.billed)}
-                    paid={agreement.netPaid + paidNow}
-                  />
+                )}
+                {agreement.unearnedCommitment > 0 && (
+                  <p className="field-hint">
+                    {t("চুক্তির বাকি কাজ: {{amount}}", {
+                      amount: money(agreement.unearnedCommitment),
+                    })}
+                  </p>
                 )}
               </section>
             ) : prior?.balance === null ? (
@@ -1333,40 +1442,62 @@ export function QuickEntrySheet({
           ) : null}
           {cash ||
           (!returning && ["full", "partial"].includes(draft.payment)) ? (
-            <div className="payment-methods compact-methods">
-              {(["cash", "bkash", "bank"] as const).map((method) => (
-                <button
-                  type="button"
-                  key={method}
-                  className={draft.method === method ? "selected" : ""}
-                  aria-pressed={draft.method === method}
-                  onClick={() => field("method", method)}
-                >
-                  <PaymentIcon method={method} size={20} />
-                  <span>
-                    {t(
-                      method === "cash"
-                        ? "নগদ"
-                        : method === "bkash"
-                          ? "বিকাশ"
-                          : "ব্যাংক",
-                    )}
-                  </span>
-                </button>
+            <PaymentMethodField
+              label={draft.kind === "refund" ? t("কীভাবে পেয়েছেন") : undefined}
+              value={draft.method}
+              onChange={(method) => field("method", method)}
+            />
+          ) : null}
+          <TransactionDetails summary={t("ভাউচার, নোট ও তারিখ")}>
+            <div className="legacy-transaction-attachments">
+              <label className="attachment-button transaction-secondary">
+                <CameraIcon size={20} />
+                {t("ভাউচারের ছবি / PDF")}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  multiple
+                  onChange={(e) => {
+                    const incoming = Array.from(e.target.files ?? []);
+                    if (
+                      incoming.some((file) => file.size > 10 * 1024 * 1024) ||
+                      files.length + incoming.length > 20
+                    ) {
+                      setError(
+                        t(
+                          "প্রতিটি ভাউচার ১০ MB-এর মধ্যে রাখুন। সর্বোচ্চ ২০টি।",
+                        ),
+                      );
+                      return;
+                    }
+                    setFiles([
+                      ...files,
+                      ...incoming.map((file) => ({
+                        id: crypto.randomUUID(),
+                        entryId: draft.id,
+                        name: file.name,
+                        file,
+                      })),
+                    ]);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {files.map((f) => (
+                <div className="attachment-row" key={f.id}>
+                  <span>{formatDigits(f.name ?? t("ভাউচার"))}</span>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={t("বাদ দিন")}
+                    onClick={() => setFiles(files.filter((v) => v.id !== f.id))}
+                  >
+                    <TrashIcon size={17} />
+                  </button>
+                </div>
               ))}
             </div>
-          ) : null}
-          <button
-            type="button"
-            className="entry-more-toggle"
-            onClick={() => setMore(!more)}
-            aria-expanded={more}
-          >
-            {t(more ? "বাড়তি তথ্য বন্ধ করুন" : "আরও তথ্য যোগ করি")}
-            <CaretDownIcon size={17} />
-          </button>
-          {more ? (
-            <section className="entry-more-body">
+            <div className="entry-more-body">
               <div className="field-grid">
                 <label>
                   {t("তারিখ")}
@@ -1416,54 +1547,8 @@ export function QuickEntrySheet({
                   />
                 </label>
               ) : null}
-              <label className="attachment-button">
-                <CameraIcon size={20} />
-                {t("ভাউচারের ছবি / PDF")}
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,application/pdf"
-                  multiple
-                  onChange={(e) => {
-                    const incoming = Array.from(e.target.files ?? []);
-                    if (
-                      incoming.some((file) => file.size > 10 * 1024 * 1024) ||
-                      files.length + incoming.length > 20
-                    ) {
-                      setError(
-                        t(
-                          "প্রতিটি ভাউচার ১০ MB-এর মধ্যে রাখুন। সর্বোচ্চ ২০টি।",
-                        ),
-                      );
-                      return;
-                    }
-                    setFiles([
-                      ...files,
-                      ...incoming.map((file) => ({
-                        id: crypto.randomUUID(),
-                        entryId: draft.id,
-                        name: file.name,
-                        file,
-                      })),
-                    ]);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-              {files.map((f) => (
-                <div className="attachment-row" key={f.id}>
-                  <span>{formatDigits(f.name ?? t("ভাউচার"))}</span>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label={t("বাদ দিন")}
-                    onClick={() => setFiles(files.filter((v) => v.id !== f.id))}
-                  >
-                    <TrashIcon size={17} />
-                  </button>
-                </div>
-              ))}
-            </section>
-          ) : null}
+            </div>
+          </TransactionDetails>
         </fieldset>
       </form>
     </Frame>

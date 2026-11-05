@@ -83,11 +83,11 @@ function mount(initial: Ledger, path: string, child: ReactNode) {
     return (
       <MemoryRouter initialEntries={[path]}>
         <Routes>
-          <Route path="/works/:workId" element={child} />
-          <Route path="/people/:personId" element={child} />
-          <Route path="/jobs/:jobId" element={child} />
+          <Route path="/sectors/:workId" element={child} />
+          <Route path="/parties/:personId" element={child} />
+          <Route path="/works/:jobId" element={child} />
+          <Route path="/sectors" element={child} />
           <Route path="/works" element={child} />
-          <Route path="/jobs" element={child} />
           <Route path="/settings/removed" element={child} />
         </Routes>
       </MemoryRouter>
@@ -99,7 +99,7 @@ function mount(initial: Ledger, path: string, child: ReactNode) {
 it("requires DELETE for a notebook, keeps the subject visible, and restores without changing payments", async () => {
   const user = userEvent.setup(),
     initial = fixture();
-  mount(initial, "/works/door", <WorkPage />);
+  mount(initial, "/sectors/door", <WorkPage />);
   await user.click(screen.getByRole("button", { name: "খাতার আরও কাজ" }));
   await user.click(screen.getByRole("menuitem", { name: "মুছুন" }));
   const input = screen.getByRole("textbox"),
@@ -121,7 +121,7 @@ it("requires DELETE for a notebook, keeps the subject visible, and restores with
   expect(screen.getByText("তালিকা থেকে সরানো আছে")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "খরচ লিখি" })).toBeNull();
   expect(screen.queryByRole("button", { name: "টাকা দিলাম" })).toBeNull();
-  expect(state.go).toHaveBeenLastCalledWith("/works");
+  expect(state.go).toHaveBeenLastCalledWith("/sectors");
   await user.click(screen.getByRole("button", { name: "ফিরিয়ে আনুন" }));
   await waitFor(() =>
     expect(screen.queryByText("তালিকা থেকে সরানো আছে")).toBeNull(),
@@ -141,7 +141,7 @@ it.each(["worker", "shop", "driver", "other"] as const)(
     const initial = LedgerSchema.parse({
       people: [{ id: "person", name: "করিম ১২", kind }],
     });
-    mount(initial, "/people/person", <PersonPage />);
+    mount(initial, "/parties/person", <PersonPage />);
     await user.click(screen.getByRole("button", { name: "আরও" }));
     await user.click(screen.getByRole("menuitem", { name: "মুছুন" }));
     const input = screen.getByLabelText("নিশ্চিত করতে DELETE লিখুন");
@@ -162,7 +162,7 @@ it.each(["worker", "shop", "driver", "other"] as const)(
 it("uses DELETE for a job without changing its bill or payment history", async () => {
   const user = userEvent.setup(),
     initial = fixture();
-  mount(initial, "/jobs/job", <JobPage />);
+  mount(initial, "/works/job", <JobPage />);
   await user.click(screen.getByRole("button", { name: "কাজের আরও কাজ" }));
   await user.click(screen.getByRole("menuitem", { name: "মুছুন" }));
   expect(
@@ -180,7 +180,7 @@ it("uses DELETE for a job without changing its bill or payment history", async (
 
 it("requires a fresh DELETE when a subject is renamed while its confirmation is open", async () => {
   const user = userEvent.setup();
-  mount(fixture(), "/works/door", <WorkPage />);
+  mount(fixture(), "/sectors/door", <WorkPage />);
   await user.click(screen.getByRole("button", { name: "খাতার আরও কাজ" }));
   await user.click(screen.getByRole("menuitem", { name: "মুছুন" }));
   await user.type(screen.getByLabelText("নিশ্চিত করতে DELETE লিখুন"), "DELETE");
@@ -213,23 +213,23 @@ it("requires a fresh DELETE when a subject is renamed while its confirmation is 
 it("hides removed notebooks and jobs from lists while keeping their identity in history", () => {
   let ledger = setEntityRemoved(fixture(), "work", "door", true);
   ledger = setEntityRemoved(ledger, "contract", "job", true);
-  const works = mount(ledger, "/works", <WorksPage />);
+  const works = mount(ledger, "/sectors", <WorksPage />);
   expect(works.container.querySelector(".work-notebook-card")).toBeNull();
   works.unmount();
-  const jobs = mount(ledger, "/jobs", <JobsPage />);
+  const jobs = mount(ledger, "/works", <JobsPage />);
   expect(jobs.container.querySelector(".job-snap-card")).toBeNull();
   expect(ledger.entries[0].contractId).toBe("job");
 });
 
 it("blocks entry actions on an archived person and an archived job but keeps their amounts readable", () => {
   let ledger = setEntityRemoved(fixture(), "person", "worker", true);
-  const person = mount(ledger, "/people/worker", <PersonPage />);
+  const person = mount(ledger, "/parties/worker", <PersonPage />);
   expect(screen.getByText("তালিকা থেকে সরানো আছে")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "টাকা দিই" })).toBeNull();
   expect(screen.queryByRole("button", { name: "কাজ যোগ করি" })).toBeNull();
   person.unmount();
   ledger = setEntityRemoved(ledger, "contract", "job", true);
-  const job = mount(ledger, "/jobs/job", <JobPage />);
+  const job = mount(ledger, "/works/job", <JobPage />);
   expect(
     (screen.getByRole("button", { name: "টাকা দিই" }) as HTMLButtonElement)
       .disabled,

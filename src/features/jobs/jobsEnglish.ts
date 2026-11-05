@@ -1,4 +1,6 @@
 export const jobsEnglish: Record<string, string> = {
+  "আর দিতে হবে": "Still to pay",
+  "বিল হয়েছে {{amount}}": "Billed {{amount}}",
   "পরিমাণ ও দর অনুযায়ী": "Calculated from quantity and rate",
   "শেষে ঠিক করা টাকা": "Final agreed amount",
   "পরিমাণের হিসাব রাখি": "Use the calculated amount",
@@ -36,6 +38,8 @@ export const jobsEnglish: Record<string, string> = {
     "Payments for this work will appear here.",
   "মোট টাকা": "Total amount",
   "বেশি দিয়েছি": "Paid extra",
+  "আগে দেওয়া টাকা": "Money paid ahead",
+  "বাকি মেলানো বাকি": "Balance needs review",
   "ফেরত পেয়েছি": "Money returned",
   "পরিবর্তনের ইতিহাস": "Change history",
   "কাজ রাখা হয়েছে": "Work added",

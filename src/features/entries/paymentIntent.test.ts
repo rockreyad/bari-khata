@@ -96,7 +96,7 @@ describe("payment intent from confirmed balances", () => {
     expect(paymentPurpose(ledger, scope, "settle")).toBe("charge");
   });
 
-  it("reads a selected job's agreed amount and correction without inventing another bill", () => {
+  it("does not turn an agreed amount or paid correction into earned work", () => {
     const original = LedgerSchema.parse({
       ...fixture(),
       contracts: [
@@ -116,9 +116,9 @@ describe("payment intent from confirmed balances", () => {
     });
     const job = { ...scope, account: "labour" as const, contractId: "job" };
     expect(paymentIntent(original, job)).toMatchObject({
-      balance: 60000,
-      canSettle: true,
-      defaultPurpose: "settle",
+      balance: -40000,
+      canSettle: false,
+      defaultPurpose: "advance",
       hasJob: true,
     });
     const ledger = appendBalanceAdjustment(original, {
@@ -132,7 +132,7 @@ describe("payment intent from confirmed balances", () => {
       reason: "নমুনা কাজের টাকা মেলানো",
     });
     expect(paymentIntent(ledger, job)).toMatchObject({
-      balance: 0,
+      balance: -100000,
       canSettle: false,
       defaultPurpose: "advance",
       hasJob: true,
@@ -142,7 +142,7 @@ describe("payment intent from confirmed balances", () => {
     ).toHaveLength(0);
   });
 
-  it("keeps an ambiguous job account neutral until a person explicitly chooses", () => {
+  it("keeps an unlinked earned bill separate from the unearned agreement", () => {
     const original = LedgerSchema.parse({
       ...fixture(),
       contracts: [
@@ -171,13 +171,13 @@ describe("payment intent from confirmed balances", () => {
     });
     const state = paymentIntent(ledger, { ...scope, account: "labour" });
     expect(state).toMatchObject({
-      balance: null,
-      canSettle: false,
+      balance: 90000,
+      canSettle: true,
       defaultPurpose: "settle",
     });
     expect(
       paymentIntent(ledger, { ...scope, account: "labour", contractId: "job" }),
-    ).toMatchObject({ balance: 100000, canSettle: true });
+    ).toMatchObject({ balance: 0, canSettle: false });
   });
 
   it("does not turn an explicit material bill into a wage payment when choosing a worker", () => {
@@ -270,6 +270,21 @@ it("auto-selects only an outstanding sole job with no unallocated money or adjus
         allocations: [{ workId: "work", amount: 50000 }],
         paymentParts: [{ amount: 50000 }],
       },
+      {
+        id: "earned-bill",
+        kind: "expense",
+        account: "labour",
+        personId: "person",
+        contractId: "job",
+        lines: [
+          {
+            id: "earned-line",
+            workId: "work",
+            costType: "labour",
+            amount: 100000,
+          },
+        ],
+      },
     ],
   });
   const options = {
@@ -285,6 +300,7 @@ it("auto-selects only an outstanding sole job with no unallocated money or adjus
   const settled = LedgerSchema.parse({
     ...original,
     entries: [
+      ...original.entries.slice(1),
       {
         ...original.entries[0],
         allocations: [{ workId: "work", amount: 100000 }],

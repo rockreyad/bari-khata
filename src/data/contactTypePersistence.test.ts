@@ -1,3 +1,4 @@
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import { afterEach, expect, it } from "vitest";
 import { LedgerSchema } from "../domain/model";
@@ -78,13 +79,18 @@ it("retains the explicit type after description edits, IndexedDB reopening and b
   const restored = repository();
   await restored.ensure("real", LedgerSchema.parse({}));
   await restored.importBackup(copy, { replace: true });
-  expect((await restored.read())!.ledger).toEqual(saved);
+  expect((await restored.read())!.ledger).toEqual(
+    migrateArchitecture(saved).ledger,
+  );
   const corrupt = JSON.parse(copy);
+  delete corrupt.integrity;
   corrupt.ledger.people[0].contactType = "unknown";
   await expect(
     restored.importBackup(JSON.stringify(corrupt), { replace: true }),
   ).rejects.toThrow();
-  expect((await restored.read())!.ledger).toEqual(saved);
+  expect((await restored.read())!.ledger).toEqual(
+    migrateArchitecture(saved).ledger,
+  );
 });
 
 it("reads old backups without inventing a saved type and refuses to drop an existing selection", async () => {
@@ -92,6 +98,7 @@ it("reads old backups without inventing a saved type and refuses to drop an exis
   const ledger = fixture();
   await repo.ensure("real", ledger);
   const oldCopy = JSON.parse(await repo.exportBackup());
+  delete oldCopy.integrity;
   delete oldCopy.ledger.people[0].contactType;
   const empty = repository();
   await empty.ensure("real", LedgerSchema.parse({}));

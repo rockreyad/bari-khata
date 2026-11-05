@@ -28,6 +28,7 @@ const state = vi.hoisted(() => ({
   base: "",
   go: vi.fn(),
   detail: vi.fn(),
+  add: vi.fn(),
 }));
 vi.mock("../../app/NotebookProvider", async () => {
   const router =
@@ -38,7 +39,7 @@ vi.mock("../../app/NotebookProvider", async () => {
       const [, setParams] = router.useSearchParams();
       return {
         ledger: state.ledger as Ledger,
-        add: vi.fn(),
+        add: state.add,
         go: (path: string) => {
           state.go(path);
           navigate(`${state.base}${path}`);
@@ -70,6 +71,7 @@ afterEach(() => {
   localStorage.clear();
   state.go.mockClear();
   state.detail.mockClear();
+  state.add.mockClear();
   vi.unstubAllGlobals();
 });
 
@@ -149,7 +151,11 @@ function mount(
           <Route path={`${state.base}/dues`} element={<PayablesPage />} />
           <Route path={`${state.base}/ledger`} element={<LedgerPage />} />
           <Route
-            path={`${state.base}/people/:id`}
+            path={`${state.base}/write/payment`}
+            element={<p>Payment opened</p>}
+          />
+          <Route
+            path={`${state.base}/parties/:id`}
             element={<p>Account opened</p>}
           />
         </Routes>
@@ -160,8 +166,8 @@ function mount(
 }
 
 it.each([
-  ["bn", "দিতে বাকি", "কোথায় কত বাকি", "৳\u202f৩৪০", "এক নজরে"],
-  ["en", "Amount owed", "Where money is owed", "৳\u202f340", "Overview"],
+  ["bn", "দিতে বাকি", "কোথায় কত বাকি", "৳\u202f১৪০", "এক নজরে"],
+  ["en", "Amount owed", "Where money is owed", "৳\u202f140", "Overview"],
 ] as const)(
   "opens the complete %s due page and returns home with its back button",
   async (language, dueLabel, title, total, backLabel) => {
@@ -178,15 +184,14 @@ it.each([
     const page = screen.getByRole("region", { name: title });
     expect(page.querySelector(".home-dues-total dd")?.textContent).toBe(total);
     const rows = [...page.querySelectorAll(".home-dues-row")];
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(2);
     expect(
       rows.map(
         (row) => row.querySelector(".home-dues-copy strong")?.textContent,
       ),
-    ).toEqual(["নমুনা মিস্ত্রি", "নমুনা দোকান", "সিমেন্ট"]);
-    expect(rows[0].textContent).toContain("টাইলসের কাজ");
-    expect(rows[1].textContent).toContain("ছাদের কাজ");
-    expect(rows[2].textContent).toContain(
+    ).toEqual(["নমুনা দোকান", "সিমেন্ট"]);
+    expect(rows[0].textContent).toContain("ছাদের কাজ");
+    expect(rows[1].textContent).toContain(
       language === "bn" ? "নাম দেওয়া নেই" : "Name unknown",
     );
     expect(screen.getByTestId("route").textContent).toBe("/dues");
@@ -235,7 +240,7 @@ it.each(["", "/sample"])(
     const before = JSON.stringify(ledger);
     const user = userEvent.setup();
     const { container } = mount(ledger, "bn", `${base}/dues`);
-    await user.click(screen.getByRole("button", { name: /নমুনা দোকান/ }));
+    await user.click(screen.getByRole("button", { name: /^নমুনা দোকান/ }));
     expect(screen.getByTestId("route").textContent).toBe(
       `${base}/ledger?person=shop&order=oldest`,
     );
@@ -260,14 +265,10 @@ it.each(["", "/sample"])(
   },
 );
 
-it("opens a commitment-only owner in the labour account instead of an empty history", async () => {
-  const user = userEvent.setup();
+it("does not list an unearned agreement as a current due", () => {
   const ledger = fixture();
-  ledger.people.find((person) => person.id === "worker")!.kind = "other";
   mount(ledger, "bn", "/dues");
-  await user.click(screen.getByRole("button", { name: /নমুনা মিস্ত্রি/ }));
-  expect(state.go).toHaveBeenLastCalledWith("/people/worker?account=labour");
-  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByRole("button", { name: /নমুনা মিস্ত্রি/ })).toBeNull();
 });
 
 it("keeps the due page and pagination beneath an unnamed bill detail", async () => {
@@ -296,4 +297,30 @@ it("reopens from its URL and handles a settled ledger without showing a false du
   expect(container.querySelector(".home-overview-due")).toBeNull();
   await user.click(screen.getByRole("button", { name: "এক নজরে" }));
   expect(screen.getByTestId("route").textContent).toBe("/");
+});
+
+it("opens payment directly from an active worker's due without changing records", async () => {
+  const ledger = fixture(),
+    before = JSON.stringify(ledger),
+    user = userEvent.setup();
+  mount(ledger, "bn", "/dues");
+  await user.click(
+    screen.getByRole("button", { name: "টাকা দিই: নমুনা দোকান" }),
+  );
+  const url = new URL(state.go.mock.calls[0][0], "https://example.invalid");
+  expect(url.pathname).toBe("/write/payment");
+  expect(Object.fromEntries(url.searchParams)).toMatchObject({
+    person: "shop",
+    amount: "10000",
+    account: "materials",
+    contract: "none",
+    purpose: "settle",
+    balanceOnly: "1",
+    dueWork: "all",
+    dueAccount: "all",
+    back: "/dues",
+  });
+  expect(url.searchParams.has("bill")).toBe(false);
+  expect(state.add).not.toHaveBeenCalled();
+  expect(JSON.stringify(ledger)).toBe(before);
 });

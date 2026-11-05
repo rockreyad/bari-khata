@@ -8,7 +8,11 @@ import type {
 } from "./model.js";
 import { personSummary } from "./ledger.js";
 import { personKind } from "./contactKind.js";
-import { contactPresetFor } from "./contactTypes.js";
+import {
+  contactRoles,
+  contactPresets,
+  contactCanHaveAgreement,
+} from "./contactTypes.js";
 import { effectiveAccounts } from "./effectiveAccounts.js";
 import { reconciledTotals } from "./adjustmentMath.js";
 export { personKind } from "./contactKind.js";
@@ -29,7 +33,7 @@ export function availableContactActions(kind: PersonKind): ContactAction[] {
   return [...roleActions[kind]];
 }
 export function allowedContactActions(person: Person): ContactAction[] {
-  const available = availableContactActions(contactPresetFor(person).kind);
+  const available = availablePartyActions(person);
   return [
     ...new Set(
       (person.quickActions ?? available).filter((action) =>
@@ -38,15 +42,40 @@ export function allowedContactActions(person: Person): ContactAction[] {
     ),
   ];
 }
+export function availablePartyActions(person: Person): ContactAction[] {
+  const roles = contactRoles(person);
+  if (
+    person.roles?.length === 0 ||
+    person.roles?.includes("custom") ||
+    person.contactType === "custom"
+  )
+    return [...contactActionChoices];
+  return [
+    ...new Set<ContactAction>([
+      "payment",
+      ...roles.flatMap(
+        (role) =>
+          contactPresets.find((preset) => preset.id === role)?.actions ?? [],
+      ),
+    ]),
+  ];
+}
 export function canCreateContactJob(person: Person): boolean {
-  const kind = personKind(person);
-  return (
-    !person.archivedAt &&
-    (kind === "worker" || kind === "other") &&
-    contactPresetFor(person).agreement
-  );
+  return contactCanHaveAgreement(person);
 }
 export function defaultContactAccount(person: Person): Account {
+  if (person.roles !== undefined) {
+    const roles = contactRoles(person);
+    const preset =
+      contactPresets.find(
+        (item) => item.id === person.contactType && roles.includes(item.id),
+      ) ?? contactPresets.find((item) => item.id === roles[0]);
+    return preset?.kind === "shop"
+      ? "materials"
+      : preset?.kind === "worker"
+        ? "labour"
+        : "other";
+  }
   return personKind(person) === "worker"
     ? "labour"
     : personKind(person) === "driver"
@@ -65,6 +94,10 @@ export function contactAccountLedger(
   return {
     ...ledger,
     entries: own.filter((entry) => effective.get(entry.id) === account),
+    contracts:
+      account === "labour"
+        ? ledger.contracts.filter((row) => row.personId === person.id)
+        : [],
   };
 }
 export function sortContactEntries(
@@ -90,7 +123,6 @@ export function contactAccountSummary(
     ...summary,
     ...reconciledTotals(scoped, {
       personId: person.id,
-      account,
       ...(workId ? { workId } : {}),
     }),
     historicalCount: summary.entries.filter(
@@ -116,26 +148,8 @@ export function contactSummary(
   workId?: string,
 ) {
   const summary = personSummary(ledger, person.id, workId);
-  const accounts = (["materials", "labour", "other"] as const).map((account) =>
-    reconciledTotals(ledger, {
-      personId: person.id,
-      account,
-      ...(workId ? { workId } : {}),
-    }),
-  );
-  const payable = accounts.reduce(
-    (sum, account) => sum + account.reconciledPayable,
-    0,
-  );
-  const advance = accounts.reduce(
-    (sum, account) => sum + account.reconciledAdvance,
-    0,
-  );
   return {
     ...summary,
-    reconciledPayable: payable,
-    reconciledAdvance: advance,
-    reconciledBalance: payable,
     historicalCount: summary.entries.filter(
       (entry) => entry.balanceImpact === "historical",
     ).length,

@@ -56,7 +56,7 @@ function RouteProbe() {
 }
 function mount(
   path = "/login",
-  state: unknown = { from: "/works/door?tab=labour" },
+  state: unknown = { from: "/sectors/door?tab=labour" },
 ) {
   const success = vi.fn();
   return {
@@ -116,7 +116,7 @@ it.each([
     expect(api.request).toHaveBeenCalledExactlyOnceWith("+8801712345678");
     expect(screen.getByTestId("route").textContent).toBe("/login/pin");
     expect(screen.getByTestId("state").textContent).toBe(
-      '{"from":"/works/door?tab=labour"}',
+      '{"from":"/sectors/door?tab=labour"}',
     );
     expect(screen.getByRole("heading", { name: "PIN লিখুন" })).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByLabelText("প্রবেশের কোড"));
@@ -127,14 +127,14 @@ it.each([
 );
 it("returns a direct PIN URL to the number page and retains the destination without credentials", async () => {
   mount("/login/pin", {
-    from: "/jobs/example",
+    from: "/works/example",
     pin: "1318",
     phone: "01712345678",
   });
   await expectNumberRoute();
   expect(screen.getByTestId("route").textContent).toBe("/login");
   expect(screen.getByTestId("state").textContent).toBe(
-    '{"from":"/jobs/example"}',
+    '{"from":"/works/example"}',
   );
   expect(
     (screen.getByLabelText("ফোন নম্বর", { exact: true }) as HTMLInputElement)

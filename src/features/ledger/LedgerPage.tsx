@@ -349,7 +349,7 @@ export function LedgerPage() {
               </AppSelect>
             </label>
             <label>
-              {t("কাজের খাতা")}
+              {t("খাতা")}
               <AppSelect
                 value={work}
                 onChange={(e) => update("work", e.target.value)}

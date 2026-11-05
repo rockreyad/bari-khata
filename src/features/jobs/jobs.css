@@ -31,7 +31,7 @@
 .job-preview-track {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(230px, 29%);
+  grid-auto-columns: minmax(270px, 29%);
   overflow-x: auto;
   gap: 12px;
   padding: 2px 2px 9px;
@@ -47,10 +47,10 @@
   text-align: left;
   border: 1px solid var(--line);
   border-radius: 20px;
-  padding: 17px;
+  padding: 15px;
   min-width: 0;
   color: var(--text);
-  min-height: 184px;
+  min-height: 168px;
   background: var(--surface);
   box-shadow: 0 5px 20px color-mix(in srgb, var(--text) 3%, transparent);
   scroll-snap-align: start;
@@ -66,26 +66,17 @@
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
-.job-tile-heading {
+.job-card-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 13px;
-}
-.job-tile-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  color: var(--muted);
-  background: var(--surface-muted);
-}
-.job-tile-arrow {
-  color: var(--muted);
+  gap: 8px;
+  min-width: 0;
 }
 .job-tile-name {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -93,9 +84,20 @@
   -webkit-line-clamp: 2;
   line-clamp: 2;
   white-space: normal;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.5;
   font-weight: 650;
+}
+.job-card-heading > .job-status {
+  flex: none;
+  max-width: 45%;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .job-tile-worker {
   display: block;
@@ -108,26 +110,80 @@
 }
 .job-tile-amounts {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  min-width: 0;
   margin-top: auto;
-  padding-top: 18px;
+  padding-top: 14px;
 }
 .job-tile-amounts > span {
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 3px;
+}
+.job-tile-paid {
+  text-align: end;
 }
 .job-tile-amounts small {
   color: var(--muted);
   font-size: 11px;
+  line-height: 1.6;
   font-weight: 400;
 }
 .job-tile-amounts strong {
-  font-size: 16px;
+  min-width: 0;
+  font-size: 15px;
   line-height: 1.5;
-  font-weight: 650;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
   overflow-wrap: anywhere;
+}
+.job-card-balance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 10px;
+  min-width: 0;
+  min-height: 42px;
+  margin-top: 12px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: var(--surface-muted);
+  text-align: start;
+}
+.job-card-balance small {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  font-weight: 400;
+}
+.job-card-balance strong {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+  margin-inline-start: auto;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.5;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.job-card-balance.job-tile-settled {
+  justify-content: flex-start;
+}
+.job-card-balance.job-tile-settled strong {
+  max-width: 100%;
+  margin-inline-start: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: start;
 }
 .job-preview-empty {
   color: var(--muted);
@@ -275,12 +331,12 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .job-preview-track {
-    grid-auto-columns: minmax(215px, 42%);
+    grid-auto-columns: minmax(260px, 42%);
   }
 }
 @media (max-width: 500px) {
   .job-preview-track {
-    grid-auto-columns: minmax(215px, 77%);
+    grid-auto-columns: clamp(250px, calc(100vw - 110px), 300px);
   }
   .jobs-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -426,23 +482,6 @@
   background: var(--surface);
   border-color: var(--line);
 }
-.job-tile-balance {
-  text-align: right;
-}
-.job-tile-balance strong {
-  color: var(--text);
-}
-.job-payment-overpaid .job-tile-balance strong {
-  color: var(--text);
-}
-.job-tile-amounts > .job-tile-settled {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 12px;
-}
 .job-status-control {
   justify-self: start;
   min-height: 38px;
@@ -586,5 +625,51 @@
     gap: 5px;
     padding-inline: 9px;
     font-size: 11px;
+  }
+}
+
+.job-milestones {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.job-milestones > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 50px;
+  padding: 14px 18px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  list-style: none;
+}
+.job-milestones > summary::-webkit-details-marker {
+  display: none;
+}
+.job-milestones > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: inherit;
+}
+.job-milestones[open] > summary > svg {
+  transform: rotate(180deg);
+}
+.job-milestones > .agreement-milestones {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+@media (max-width: 480px) {
+  .job-summary-values,
+  .job-detail-money {
+    gap: 14px;
+  }
+  .job-detail-total > strong,
+  .job-detail-money dd {
+    font-size: 18px;
   }
 }

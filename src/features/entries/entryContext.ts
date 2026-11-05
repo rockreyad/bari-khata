@@ -195,6 +195,11 @@ export function entryContext(ledger: Ledger, options: AddOptions) {
     account,
     costType,
     contractId,
+    milestoneId:
+      ledger.milestones?.find(
+        (row) =>
+          row.id === options.milestoneId && row.contractId === contractId,
+      )?.id ?? "",
     date: todayDhaka(),
     payment: kind === "wage" ? "due" : "full",
     rows: [
@@ -257,6 +262,7 @@ export function entryContactChange(
     return {
       personId,
       contractId: "",
+      milestoneId: "",
       paymentPurposeId: keepFinancialScope ? draft.paymentPurposeId : "",
       paymentPurposeName: keepFinancialScope ? draft.paymentPurposeName : "",
     };
@@ -283,6 +289,7 @@ export function entryContactChange(
         : context.purpose,
     workId: keepFinancialScope ? draft.workId : context.workId,
     contractId: keepFinancialScope ? "" : context.contractId,
+    milestoneId: "",
     paymentPurposeId: keepFinancialScope ? draft.paymentPurposeId : "",
     paymentPurposeName: keepFinancialScope ? draft.paymentPurposeName : "",
   };
@@ -326,6 +333,7 @@ export function entryWorkChange(
   return {
     workId,
     contractId,
+    milestoneId: contractId === draft.contractId ? draft.milestoneId : "",
     purpose:
       draft.kind === "payment" &&
       !explicitScope &&
@@ -376,6 +384,7 @@ export function changeEntryType(
           : ("other" as const),
     personId: draft.personId,
     contractId: "",
+    milestoneId: "",
     paymentPurposeId: "",
     paymentPurposeName: "",
     payment: draft.payment === "worker" ? ("full" as const) : draft.payment,

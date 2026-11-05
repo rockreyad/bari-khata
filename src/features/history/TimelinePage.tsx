@@ -95,10 +95,10 @@ export function TimelinePage() {
   function open(event: TimelineEvent) {
     if (event.target.kind === "entry") detail(event.target.id);
     else if (event.target.kind === "work")
-      go(`/works/${encodeURIComponent(event.target.id)}?tab=activity`);
+      go(`/sectors/${encodeURIComponent(event.target.id)}?tab=activity`);
     else if (event.target.kind === "job")
-      go(`/jobs/${encodeURIComponent(event.target.id)}?tab=history`);
-    else go(`/people/${encodeURIComponent(event.target.id)}`);
+      go(`/works/${encodeURIComponent(event.target.id)}?tab=history`);
+    else go(`/parties/${encodeURIComponent(event.target.id)}`);
   }
   let previousDay = "";
   return (

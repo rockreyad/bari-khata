@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ContractSchema,
   ContractSnapshotSchema,
+  EntrySchema,
   LedgerSchema,
 } from "../../domain/model";
 import { appendBalanceAdjustment } from "../../domain/balanceAdjustments";
@@ -57,7 +58,7 @@ describe("preferred payment job", () => {
     ).toMatchObject({
       contractId: "ongoing",
       workId: "tiles",
-      purpose: "settle",
+      purpose: "advance",
       account: "labour",
     });
     expect(
@@ -209,7 +210,7 @@ describe("preferred payment job", () => {
     const blank = entryContext(ledger, { kind: "payment" });
     expect(entryContactChange(ledger, blank, "person")).toMatchObject({
       contractId: "ongoing",
-      purpose: "settle",
+      purpose: "advance",
       workId: "tiles",
     });
   });
@@ -219,7 +220,7 @@ describe("preferred payment job", () => {
     const fresh = entryContext(ledger, { kind: "payment", personId: "person" });
     expect(entryWorkChange(ledger, fresh, "paint")).toMatchObject({
       contractId: "completed",
-      purpose: "settle",
+      purpose: "advance",
       workId: "paint",
     });
     const other = { ...fresh, contractId: "", purpose: "charge" as const };
@@ -232,12 +233,29 @@ describe("preferred payment job", () => {
     ).toMatchObject({ contractId: "", purpose: "charge" });
     expect(
       entryWorkChange(ledger, { ...fresh, amount: "125" }, "paint"),
-    ).toMatchObject({ contractId: "", purpose: "settle" });
+    ).toMatchObject({ contractId: "", purpose: "advance" });
   });
 
   it("retains aggregate corrections and unassigned bills instead of silently narrowing their balance to a job", () => {
     const ledger = fixture();
     ledger.contracts = [ledger.contracts[1]];
+    ledger.entries.push(
+      EntrySchema.parse({
+        id: "earned-bill",
+        kind: "expense",
+        personId: "person",
+        account: "labour",
+        contractId: "ongoing",
+        lines: [
+          {
+            id: "earned-line",
+            workId: "tiles",
+            costType: "labour",
+            amount: 200000,
+          },
+        ],
+      }),
+    );
     const corrected = appendBalanceAdjustment(ledger, {
       target: "person",
       basis: "balance",

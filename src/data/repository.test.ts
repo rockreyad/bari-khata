@@ -59,7 +59,7 @@ describe("offline ledger persistence", () => {
     await expect(repo.read("real")).rejects.toThrow();
     await expect(repo.ensure("real", createEmptyLedger())).rejects.toThrow();
     expect(
-      (await repo.database.workspaces.get("real"))?.ledger.entries,
+      (await repo.database.workspaces.get("real"))?.ledger?.entries,
     ).toHaveLength(1);
   });
 

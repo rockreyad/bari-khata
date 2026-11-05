@@ -429,7 +429,7 @@ describe("compact phone popup boundaries", () => {
         >
           <Dialog.Portal>
             <Dialog.Content>
-              <Dialog.Title>কাজের খাতা</Dialog.Title>
+              <Dialog.Title>খাতা</Dialog.Title>
               <Dialog.Description>কাজের তথ্য</Dialog.Description>
               <AppDatePicker
                 aria-label="কাজ শুরুর তারিখ"
@@ -456,7 +456,7 @@ describe("compact phone popup boundaries", () => {
         screen.getByRole("button", { name: "শনিবার, ৫ ডিসেম্বর, ২০২৬" }),
       );
       expect(changed).toHaveBeenCalledExactlyOnceWith("2026-12-05");
-      expect(screen.getByRole("dialog", { name: "কাজের খাতা" })).not.toBeNull();
+      expect(screen.getByRole("dialog", { name: "খাতা" })).not.toBeNull();
       expect(parentClosed).not.toHaveBeenCalled();
       await waitFor(() => expect(document.activeElement).toBe(trigger));
     } finally {

@@ -6,17 +6,17 @@ describe("contextual job navigation", () => {
     "preserves person, notebook and list filters under %s",
     (base) => {
       for (const origin of [
-        "/people/worker?account=labour&work=door",
-        "/works/door?tab=labour",
-        "/jobs?person=worker&status=done&balance=due&q=দরজা",
-        "/people?q=মিস্ত্রি",
+        "/parties/worker?account=labour&work=door",
+        "/sectors/door?tab=labour",
+        "/works?person=worker&status=done&balance=due&q=দরজা",
+        "/parties?q=মিস্ত্রি",
         "/",
       ]) {
         const url = new URL(
           jobDetailUrl("job/one", `${base}${origin}`, base),
           "https://bari.invalid",
         );
-        expect(url.pathname).toBe("/jobs/job%2Fone");
+        expect(url.pathname).toBe("/works/job%2Fone");
         expect(jobReturn(url.searchParams.get("back"), base)).toBe(
           origin.includes("q=")
             ? `${new URL(origin, "https://bari.invalid").pathname}${new URL(origin, "https://bari.invalid").search}`
@@ -30,54 +30,54 @@ describe("contextual job navigation", () => {
     "https://outside.test/people/me",
     "//outside.test",
     "/\\outside.test/people/me",
-    "/jobs/job-one",
-    "/jobs/job-one/edit",
+    "/works/job-one",
+    "/works/job-one/edit",
     "/entries/new",
-    "/people/new",
-    "/people/new/",
-    "/people/worker/edit",
-    "/jobs/new",
+    "/parties/new",
+    "/parties/new/",
+    "/parties/worker/edit",
+    "/works/new",
     "/login",
-    "/sample/people/me",
-    "/works/door/../../login",
+    "/sample/parties/me",
+    "/sectors/door/../../login",
   ])("rejects unsafe or looping real origins %s", (origin) => {
-    expect(jobReturn(origin, "", "/people/worker")).toBe("/people/worker");
+    expect(jobReturn(origin, "", "/parties/worker")).toBe("/parties/worker");
   });
   it.each([
-    "/people/me",
+    "/parties/me",
     "/sample-other/people/me",
-    "/sample/jobs/job-one",
+    "/sample/works/job-one",
     "/sample/entries/new",
-    "/sample/people/new",
-    "/sample/people/worker/edit",
+    "/sample/parties/new",
+    "/sample/parties/worker/edit",
   ])("keeps demo account boundaries for %s", (origin) => {
-    expect(jobReturn(origin, "/sample", "/people/worker")).toBe(
-      "/people/worker",
+    expect(jobReturn(origin, "/sample", "/parties/worker")).toBe(
+      "/parties/worker",
     );
   });
   it("strips old overlays without dropping useful filters and survives reloading the detail URL", () => {
     const full = jobDetailUrl(
       "job-one",
-      "/sample/people/worker?work=door&_entry=old&_quick=1",
+      "/sample/parties/worker?work=door&_entry=old&_quick=1",
       "/sample",
     );
     const reloaded = new URL(full, "https://bari.invalid");
     reloaded.searchParams.set("tab", "history");
     expect(jobReturn(reloaded.searchParams.get("back"), "/sample")).toBe(
-      "/people/worker?work=door",
+      "/parties/worker?work=door",
     );
-    expect(jobReturn(null, "/sample")).toBe("/jobs");
+    expect(jobReturn(null, "/sample")).toBe("/works");
   });
   it.each(["", "/sample"])(
     "never creates a job-detail return to a person form under %s",
     (base) => {
-      for (const form of ["/people/new", "/people/worker/edit"]) {
+      for (const form of ["/parties/new", "/parties/worker/edit"]) {
         const url = new URL(
           jobDetailUrl("job-one", `${base}${form}`, base),
           "https://bari.invalid",
         );
-        expect(url.searchParams.get("back")).toBe(`${base}/jobs`);
-        expect(jobReturn(`${base}${form}`, base)).toBe("/jobs");
+        expect(url.searchParams.get("back")).toBe(`${base}/works`);
+        expect(jobReturn(`${base}${form}`, base)).toBe("/works");
       }
     },
   );

@@ -192,6 +192,21 @@ export function contactPresetFor(
   );
 }
 
+export function contactCanHaveAgreement(person: Person) {
+  if (person.archivedAt) return false;
+  if (person.roles === undefined)
+    return (
+      ["worker", "other"].includes(personKind(person)) &&
+      contactPresetFor(person).agreement
+    );
+  return (
+    person.roles.length === 0 ||
+    person.roles.some((role) =>
+      contactPresets.some((preset) => preset.id === role && preset.agreement),
+    )
+  );
+}
+
 export function preservesContactTypes(
   before: Pick<Ledger, "people">,
   after: Pick<Ledger, "people">,
@@ -220,4 +235,13 @@ export function contactPresetFrom(kind: PersonKind, description: string) {
       kind === "worker" ? preset.id === "custom" : preset.kind === kind,
     )!
   );
+}
+
+export function contactRoles(
+  person: Pick<Person, "kind" | "role" | "contactType"> &
+    Partial<Pick<Person, "name" | "roles">>,
+): ContactType[] {
+  return person.roles === undefined
+    ? [contactPresetFor(person).id]
+    : person.roles;
 }

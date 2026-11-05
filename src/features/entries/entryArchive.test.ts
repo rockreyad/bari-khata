@@ -126,7 +126,7 @@ describe("archived records in quick entry", () => {
     const before = structuredClone(ledger);
     expect(
       entryContext(ledger, { kind: "payment", personId: "worker" }),
-    ).toMatchObject({ workId: "door", contractId: "door-job" });
+    ).toMatchObject({ workId: "door", contractId: "" });
     expect(ledger).toEqual(before);
     expect(
       ledger.entries.find((entry) => entry.id === "roof-paid")?.contractId,
@@ -156,7 +156,7 @@ describe("archived records in quick entry", () => {
       }),
     ).toMatchObject({ workId: "door", contractId: "", purpose: "charge" });
   });
-  it("uses a sole active job rather than an archived job's notebook history", () => {
+  it("uses the active notebook without turning an unearned agreement into a payable job", () => {
     const ledger = setEntityRemoved(
       fixture(),
       "contract",
@@ -167,7 +167,7 @@ describe("archived records in quick entry", () => {
     );
     expect(
       entryContext(ledger, { kind: "payment", personId: "worker" }),
-    ).toMatchObject({ workId: "door", contractId: "door-job" });
+    ).toMatchObject({ workId: "door", contractId: "" });
   });
   it.each(["work", "person", "contract"] as const)(
     "hides a %s that was archived from applicable quick contracts",
@@ -398,7 +398,8 @@ describe("archived records in quick entry", () => {
     ).toHaveLength(2);
     expect(contractSummary(next, "door-job")).toMatchObject({
       netPaid: 70000,
-      remaining: 530000,
+      remaining: 0,
+      remainingCommitment: 530000,
     });
   });
   it("keeps active payments usable and preserves all historical money for unrelated archived records", () => {
@@ -437,7 +438,8 @@ describe("archived records in quick entry", () => {
     expect(summarize(next)).toMatchObject({ cost: 300000, paid: 195000 });
     expect(contractSummary(next, "door-job")).toMatchObject({
       netPaid: 70000,
-      remaining: 530000,
+      remaining: 0,
+      remainingCommitment: 530000,
     });
     expect(ledger).toEqual(before);
   });

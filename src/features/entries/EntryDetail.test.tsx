@@ -30,7 +30,12 @@ vi.mock("../../components/Sheet", () => ({
 }));
 afterEach(cleanup);
 vi.mock("../../data/repository", () => ({
-  createWorkspaceStorage: () => ({ getReceipt: vi.fn() }),
+  createWorkspaceStorage: () => ({
+    getReceipt: vi.fn(),
+    readDraft: async () => null,
+    saveDraft: async () => {},
+    removeDraft: async () => {},
+  }),
 }));
 vi.mock("../../context/LanguageProvider", () => ({
   useLanguageContext: () => ({
@@ -39,6 +44,7 @@ vi.mock("../../context/LanguageProvider", () => ({
         String(values[key] ?? ""),
       ),
     money: (amount: number) => `৳${amount / 100}`,
+    number: (value: number) => String(value),
     date: (value: string | null, options?: Intl.DateTimeFormatOptions) =>
       value
         ? new Intl.DateTimeFormat("en-BD", {

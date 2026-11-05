@@ -31,7 +31,7 @@ describe("contact identities and financial accounts", () => {
     { contactType: "supplier", kind: null, expected: false },
     { contactType: "transport", kind: null, expected: false },
   ])(
-    "allows a new job for $contactType with coarse kind $kind only when eligible",
+    "uses stored preset eligibility for $contactType with coarse kind $kind",
     ({ contactType, kind, expected }) => {
       const person = PersonSchema.parse({
         id: "person",
@@ -116,7 +116,7 @@ describe("contact identities and financial accounts", () => {
       expect(contactAccountSummary(ledger, person, "labour")).toMatchObject({
         reconciledNetPaid: 200000,
         reconciledPayable: 0,
-        reconciledAdvance: 0,
+        reconciledAdvance: 200000,
       });
       expect(contactSummary(ledger, person)).toMatchObject({
         cost: 50000,
@@ -124,11 +124,11 @@ describe("contact identities and financial accounts", () => {
         reconciledCost: 50000,
         reconciledNetPaid: 220000,
         reconciledPayable: 50000,
-        reconciledAdvance: 20000,
+        reconciledAdvance: 220000,
       });
       expect(contactSummary(ledger, person, "work")).toMatchObject({
         reconciledPayable: 50000,
-        reconciledAdvance: 20000,
+        reconciledAdvance: 220000,
       });
       expect(JSON.stringify(ledger.entries)).toBe(entries);
       expect(ledger.contracts).toEqual(original.contracts);

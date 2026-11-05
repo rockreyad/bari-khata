@@ -1,17 +1,28 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LedgerSchema } from "../../domain/model";
 import { QuickActionsSheet } from "./QuickActionsSheet";
-const state = vi.hoisted(() => ({ add: vi.fn() }));
+vi.mock("../write/LegacyEntryDrafts", () => ({
+  LegacyEntryDrafts: () => null,
+}));
+const state = vi.hoisted(() => ({
+  base: "",
+  add: vi.fn(),
+  go: vi.fn(),
+  entity: vi.fn(),
+}));
 vi.mock("../../app/NotebookProvider", () => ({
   useNotebook: () => ({
+    base: state.base,
     add: state.add,
-    entity: vi.fn(),
+    go: state.go,
+    entity: state.entity,
     close: vi.fn(),
     ledger: LedgerSchema.parse({
+      people: [{ id: "shop", name: "নমুনা দোকান", kind: "shop" }],
       works: [
         {
           id: "sand",
@@ -46,90 +57,115 @@ vi.mock("../../components/Sheet", () => ({
 }));
 afterEach(() => {
   cleanup();
+  state.base = "";
   state.add.mockClear();
+  state.go.mockClear();
+  state.entity.mockClear();
 });
-describe("configured notebook shortcuts", () => {
-  it("shows only chosen actions without unrelated counts and sends exact work/cost preset", async () => {
-    const user = userEvent.setup();
-    render(<QuickActionsSheet />);
-    const card = screen.getByText("বালু কেনা").closest("article")!;
-    expect(screen.queryByText("লুকানো")).toBeNull();
-    expect(screen.queryByText("সাধারণ")).toBeNull();
-    expect(
-      within(card).queryByRole("button", { name: "টাকা দিলাম" }),
-    ).toBeNull();
-    await user.click(within(card).getByRole("button", { name: "আনার খরচ" }));
-    expect(state.add).toHaveBeenCalledWith({
-      kind: "expense",
-      workId: "sand",
-      account: "other",
-      costType: "transport",
-    });
-    await user.click(within(card).getByRole("button", { name: "খরচ লিখি" }));
-    expect(state.add).toHaveBeenLastCalledWith({
-      kind: "expense",
-      workId: "sand",
-      account: "materials",
-      costType: "material",
-    });
-  });
+it("omits favorite notebook shortcuts even when saved notebooks configure them", () => {
+  const view = render(<QuickActionsSheet />);
+  expect(view.container.querySelector(".quick-sector-shortcuts")).toBeNull();
+  expect(view.container.querySelector(".entry-work-shortcuts")).toBeNull();
+  for (const name of [
+    "বালু কেনা",
+    "মিস্ত্রির খাতা",
+    "শ্রমিকের টাকা",
+    "দরজার সব কাজ",
+  ])
+    expect(screen.queryByText(name)).toBeNull();
+  expect(state.add).not.toHaveBeenCalled();
 });
 
-it("opens the labour preset as contextual payment without forcing earned wages or settlement", async () => {
-  render(<QuickActionsSheet />);
+it("offers notebook and worker creation without changing entity routes", async () => {
   const user = userEvent.setup();
-  const worker = screen.getByText("মিস্ত্রির খাতা").closest("article")!;
-  expect(within(worker).getAllByRole("button")).toHaveLength(1);
-  expect(
-    within(worker).queryByRole("button", { name: "মজুরির বিল" }),
-  ).toBeNull();
-  await user.click(
-    within(worker).getByRole("button", { name: "মিস্ত্রির টাকা" }),
-  );
-  expect(state.add).toHaveBeenLastCalledWith({
-    kind: "payment",
-    workId: "worker",
-    account: "labour",
-    costType: "labour",
-  });
-  const labourPayment = screen.getByText("শ্রমিকের টাকা").closest("article")!;
-  await user.click(
-    within(labourPayment).getByRole("button", { name: "টাকা দিলাম" }),
-  );
-  expect(state.add).toHaveBeenLastCalledWith({
-    kind: "payment",
-    workId: "worker-pay",
-    account: "labour",
-    costType: "labour",
-  });
+  render(<QuickActionsSheet />);
+  await user.click(screen.getByRole("button", { name: "নতুন খাতা বানান" }));
+  expect(state.entity).toHaveBeenLastCalledWith("work");
+  await user.click(screen.getByRole("button", { name: "নতুন কর্মী" }));
+  expect(state.entity).toHaveBeenLastCalledWith("person");
 });
 
-it("preserves material payment and purchase scopes beside a worker shortcut in a mixed notebook", async () => {
-  render(<QuickActionsSheet />);
+it("offers three homeowner tasks without a separate payment action in the drawer and preserves the selected payment intent", async () => {
   const user = userEvent.setup();
-  const card = screen.getByText("দরজার সব কাজ").closest("article")!;
-  expect(within(card).getAllByRole("button")).toHaveLength(4);
-  await user.click(
-    within(card).getByRole("button", { name: "মিস্ত্রির টাকা" }),
-  );
-  expect(state.add).toHaveBeenLastCalledWith({
-    kind: "payment",
-    workId: "mixed",
-    account: "labour",
-    costType: "labour",
-  });
-  await user.click(within(card).getByRole("button", { name: "টাকা দিলাম" }));
-  expect(state.add).toHaveBeenLastCalledWith({
-    kind: "payment",
-    workId: "mixed",
-    account: "materials",
-    costType: "material",
-  });
-  await user.click(within(card).getByRole("button", { name: "খরচ লিখি" }));
+  render(<QuickActionsSheet />);
+  await user.click(screen.getByRole("button", { name: /^মাল কিনেছি/ }));
   expect(state.add).toHaveBeenLastCalledWith({
     kind: "expense",
-    workId: "mixed",
-    account: "materials",
     costType: "material",
+    account: "materials",
   });
+  await user.click(screen.getByRole("button", { name: /^কাজের বিল/ }));
+  expect(state.add).toHaveBeenLastCalledWith({
+    kind: "expense",
+    purpose: "charge",
+    costType: "labour",
+    account: "labour",
+  });
+  expect(screen.queryByRole("button", { name: /^টাকা দিলাম/ })).toBeNull();
+  await user.click(screen.getByRole("button", { name: /^অগ্রিম বা বাকি/ }));
+  expect(screen.queryByRole("button", { name: /^মাল কিনেছি/ })).toBeNull();
+  await user.click(screen.getByRole("button", { name: /^অগ্রিম দিই/ }));
+  expect(state.add).toHaveBeenLastCalledWith({
+    kind: "payment",
+    purpose: "advance",
+  });
+  await user.click(screen.getByRole("button", { name: /^বাকি দেখি/ }));
+  expect(state.go).toHaveBeenLastCalledWith("/dues");
+  await user.click(screen.getByRole("button", { name: "সব কাজ" }));
+  expect(screen.getByRole("button", { name: /^মাল কিনেছি/ })).toBeDefined();
+});
+
+it("opens contextual advance and dues with the selected shop and notebook, preserving sample return", async () => {
+  state.base = "/sample";
+  const user = userEvent.setup();
+  render(
+    <QuickActionsSheet
+      partyPayment={{
+        personId: "shop",
+        workId: "sand",
+        account: "materials",
+        back: "/sample/parties/shop?work=sand",
+      }}
+    />,
+  );
+  expect(screen.getByText("নমুনা দোকান")).toBeDefined();
+  expect(screen.queryByRole("button", { name: /^মাল কিনেছি/ })).toBeNull();
+  await user.click(screen.getByRole("button", { name: /^অগ্রিম দিই/ }));
+  let url = new URL(state.go.mock.calls.at(-1)![0], "https://bari.invalid");
+  expect(url.pathname).toBe("/write/payment");
+  expect(Object.fromEntries(url.searchParams)).toEqual({
+    person: "shop",
+    work: "sand",
+    account: "materials",
+    purpose: "advance",
+    back: "/sample/parties/shop?work=sand",
+  });
+  await user.click(screen.getByRole("button", { name: /^বাকি দেখি/ }));
+  url = new URL(state.go.mock.calls.at(-1)![0], "https://bari.invalid");
+  expect(url.pathname).toBe("/dues");
+  expect(url.searchParams.get("person")).toBe("shop");
+  expect(url.searchParams.get("work")).toBe("sand");
+  expect(url.searchParams.has("purpose")).toBe(false);
+  expect(state.add).not.toHaveBeenCalled();
+});
+
+it("keeps advance defaults without hiding the shop's other outstanding notebooks", async () => {
+  const user = userEvent.setup();
+  render(
+    <QuickActionsSheet
+      partyPayment={{
+        personId: "shop",
+        workId: "sand",
+        account: "materials",
+        dueWork: "all",
+        dueAccount: "all",
+        back: "/parties/shop",
+      }}
+    />,
+  );
+  await user.click(screen.getByRole("button", { name: /^বাকি দেখি/ }));
+  const url = new URL(state.go.mock.calls.at(-1)![0], "https://bari.invalid");
+  expect(url.searchParams.get("person")).toBe("shop");
+  expect(url.searchParams.has("work")).toBe(false);
+  expect(url.searchParams.has("account")).toBe(false);
 });

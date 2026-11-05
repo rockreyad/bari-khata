@@ -18,7 +18,11 @@ import {
   PaymentPurposeSchema,
   type Ledger,
 } from "../../domain/model";
-import { canAssignContact } from "../../domain/contacts";
+import {
+  canRecordContactCash,
+  canRecordContactCost,
+  canRecordContactReturn,
+} from "../../domain/contactEntryPolicy";
 import { saveWorkChange } from "../../domain/workActivity";
 import { parseAmount } from "../../domain/ledger";
 
@@ -36,6 +40,10 @@ export const QuickDraftSchema = z.object({
     .enum(["expense", "payment", "refund", "return", "wage"])
     .default("expense"),
   purpose: z.enum(["settle", "advance", "wage", "charge"]).default("settle"),
+  advanceContext: z.enum(["advance", "receivable"]).default("advance"),
+  refundContext: z
+    .enum(["unknown", "settlement", "advance", "receivable"])
+    .default("unknown"),
   date: text(10),
   note: text(10000),
   amount: numericDraftText(),
@@ -51,6 +59,7 @@ export const QuickDraftSchema = z.object({
   paymentPurposeName: text(),
   paymentPurposeNewId: id(),
   contractId: id(),
+  milestoneId: id(),
   costType: z
     .enum(["material", "labour", "transport", "unload", "rental", "other"])
     .default("material"),
@@ -240,18 +249,42 @@ export function buildQuickEntry(
           : "other"
         : draft.account;
   const person = next.people.find((p) => p.id === personId);
-  if (
-    person &&
-    !canAssignContact(
-      person,
-      account,
-      [labour ? "labour" : draft.costType],
-      isCash,
-    )
-  )
-    throw new Error("person_kind");
   const contractId =
     account === "labour" && draft.contractId ? draft.contractId : null;
+  if (
+    person &&
+    !(isCash
+      ? canRecordContactCash(current, person, {
+          account,
+          contractId,
+          workId: draft.workId || undefined,
+          amount: positiveAmount(draft.amount),
+          context:
+            draft.purpose === "advance" ? draft.advanceContext : "settlement",
+          refund: draft.kind === "refund",
+        })
+      : draft.kind === "return"
+        ? canRecordContactReturn(current, person, {
+            account,
+            contractId,
+            workId: draft.workId || undefined,
+          })
+        : canRecordContactCost(person, {
+            account,
+            contractId,
+            costType: labour
+              ? "labour"
+              : charge
+                ? account === "materials"
+                  ? "material"
+                  : draft.costType === "transport"
+                    ? "transport"
+                    : "other"
+                : draft.costType,
+            reimbursement: draft.payment === "worker",
+          }))
+  )
+    throw new Error("contact_rules");
   if (
     contractId &&
     !next.contracts.some(
@@ -313,6 +346,16 @@ export function buildQuickEntry(
         id,
         kind,
         relatedEntryId,
+        ...(kind === "payment"
+          ? {
+              paymentContext:
+                draft.purpose === "advance"
+                  ? draft.advanceContext
+                  : "settlement",
+            }
+          : draft.refundContext !== "unknown"
+            ? { paymentContext: draft.refundContext }
+            : {}),
         allocations: [{ workId, amount }],
         paymentParts: [{ method: draft.method, amount }],
         receipts: isCash ? receipts : [],
@@ -385,12 +428,12 @@ export function buildQuickEntry(
           );
       }
       let itemId: string | null = null;
-      if (groupId) {
+      if (groupId || row.brand.trim()) {
         const match = next.items.find(
           (item) =>
             latinDigits(item.name) === latinDigits(row.label.trim()) &&
             latinDigits(item.brand) === latinDigits(row.brand.trim()) &&
-            item.materialGroupId === groupId &&
+            item.materialGroupId === (groupId || null) &&
             latinDigits(item.usage) === latinDigits(row.usage.trim()),
         );
         if (match) itemId = match.id;
@@ -401,7 +444,7 @@ export function buildQuickEntry(
               id: itemId,
               name: row.label.trim(),
               brand: row.brand.trim(),
-              materialGroupId: groupId,
+              materialGroupId: groupId || null,
               usage: row.usage.trim(),
               unit: row.unit.trim(),
             }),
@@ -447,8 +490,9 @@ export function buildQuickEntry(
           draft.rows.some((row) => !row.groupId))
           ? "needs_review"
           : "confirmed",
-      reviewReason: !draft.workId ? "কাজের খাতা পরে বেছে নিন।" : "",
+      reviewReason: !draft.workId ? "খাতা পরে বেছে নিন।" : "",
       id: draft.id,
+      ...(draft.milestoneId ? { milestoneId: draft.milestoneId } : {}),
       kind: draft.kind === "return" ? "expense_credit" : "expense",
       lines,
       receipts,

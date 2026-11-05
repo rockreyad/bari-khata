@@ -1,3 +1,4 @@
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import { afterEach, expect, it } from "vitest";
 import { LedgerDatabase } from "./database";
@@ -36,7 +37,15 @@ it("rehydrates old disk/backup status as unknown, then saves an audited status w
   const raw = legacyJobStatusLedger();
   const source = repository();
   await source.ensure("real", LedgerSchema.parse(raw));
-  await source.database.workspaces.update("real", { ledger: raw as Ledger });
+  for (const contract of raw.contracts) {
+    const record = await source.database.ledgerEntities
+      .where("[workspace+collection+id]")
+      .equals(["real", "contracts", contract.id])
+      .first();
+    await source.database.ledgerEntities.update(record!.key, {
+      value: contract,
+    });
+  }
   source.database.close();
   await source.database.open();
   const opened = (await source.read())!.ledger;
@@ -47,7 +56,9 @@ it("rehydrates old disk/backup status as unknown, then saves an audited status w
   const target = repository();
   await target.ensure("real", createEmptyLedger());
   await target.importBackup(JSON.stringify(backup), { replace: true });
-  expect(withoutJobStatus((await target.read())!.ledger)).toEqual(raw);
+  expect(withoutJobStatus((await target.read())!.ledger)).toEqual(
+    withoutJobStatus(migrateArchitecture(raw).ledger),
+  );
   const updated = done(opened);
   await source.save(updated);
   expect((await source.read())!.ledger).toEqual(updated);

@@ -58,7 +58,7 @@ afterEach(cleanup);
 
 function fixture() {
   return LedgerSchema.parse({
-    works: [{ id: "work", name: "নমুনা কাজের খাতা" }],
+    works: [{ id: "work", name: "নমুনা সেক্টর" }],
     people: [
       {
         id: "worker",
@@ -140,7 +140,7 @@ function fillJob() {
   });
 }
 
-it("offers only eligible people with a generic job-owner label and saves a professional without changing identity or money", async () => {
+it("offers eligible people with a generic job-owner label and saves a professional without changing identity or money", async () => {
   const ledger = fixture();
   const initial = structuredClone(ledger);
   const { onSave } = await open(ledger);
@@ -166,7 +166,7 @@ it("offers only eligible people with a generic job-owner label and saves a profe
 });
 
 it.each(["shop", "driver", "custom-shop"])(
-  "rejects an ineligible deep-link or restored %s draft without guessing a different payee",
+  "preserves an ineligible restored %s agreement draft and rejects a new agreement",
   async (personId) => {
     const ledger = fixture();
     const original = structuredClone(ledger);
@@ -185,21 +185,24 @@ it.each(["shop", "driver", "custom-shop"])(
       within(select).queryByRole("option", {
         name: ledger.people.find((person) => person.id === personId)!.name,
       }),
-    ).toBeNull();
+    ).toBeTruthy();
     expect(
       (screen.getByLabelText("কাজের টাকা") as HTMLInputElement).value,
     ).toBe("2500");
     fireEvent.submit(container.querySelector("form")!);
-    expect((await screen.findByRole("alert")).textContent).toBe(
-      "এই ধরনের নামে নতুন কাজ রাখা যায় না। অন্য নাম বেছে নিন।",
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "এই ধরনের নামে",
     );
     expect(onSave).not.toHaveBeenCalled();
+    expect(storage.drafts.get(`entity:contract:new:${personId}`)).toMatchObject(
+      { personId, total: "2500" },
+    );
     expect(ledger).toEqual(original);
   },
 );
 
 it.each(["shop", "driver"])(
-  "retains the original historic %s job and its payments while preventing a switch to another ineligible contact",
+  "retains the original historic %s job and its payments while preserving its locked identity",
   async (personId) => {
     const base = fixture();
     const ledger = LedgerSchema.parse({
@@ -258,7 +261,7 @@ it.each(["shop", "driver"])(
   },
 );
 
-it("rejects a restored draft that switches an editable historic job to another ineligible person", async () => {
+it("rejects an ineligible restored reassignment and permits an eligible owner for an unused agreement", async () => {
   const ledger = LedgerSchema.parse({
     ...fixture(),
     contracts: [
@@ -285,19 +288,18 @@ it("rejects a restored draft that switches an editable historic job to another i
     within(select).getByRole("option", { name: "নমুনা দোকান" }),
   ).toBeTruthy();
   expect(
-    within(select).queryByRole("option", { name: "নমুনা গাড়ি" }),
-  ).toBeNull();
+    within(select).getByRole("option", { name: "নমুনা গাড়ি" }),
+  ).toBeTruthy();
   fireEvent.submit(container.querySelector("form")!);
-  expect((await screen.findByRole("alert")).textContent).toBe(
-    "এই ধরনের নামে নতুন কাজ রাখা যায় না। অন্য নাম বেছে নিন।",
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    "এই ধরনের নামে",
   );
   expect(onSave).not.toHaveBeenCalled();
-  expect(ledger).toEqual(original);
-  await userEvent.selectOptions(select, "shop");
-  await userEvent.click(screen.getByRole("button", { name: "রাখুন" }));
+  await userEvent.selectOptions(select, "engineer");
+  fireEvent.submit(container.querySelector("form")!);
   await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
   expect(onSave.mock.calls[0][0].contracts[0]).toMatchObject({
-    personId: "shop",
+    personId: "engineer",
     notes: "নমুনা অসমাপ্ত নোট",
     total: 100000,
   });

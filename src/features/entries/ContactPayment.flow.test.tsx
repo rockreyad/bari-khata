@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { migrateArchitecture } from "../../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import type { InputHTMLAttributes, SelectHTMLAttributes } from "react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -236,14 +237,14 @@ it.each([
 
     context.ledger = saved;
     const profile = render(
-      <MemoryRouter initialEntries={["/people/helper"]}>
+      <MemoryRouter initialEntries={["/parties/helper"]}>
         <Routes>
-          <Route path="/people/:personId" element={<PersonPage />} />
+          <Route path="/parties/:personId" element={<PersonPage />} />
         </Routes>
       </MemoryRouter>,
     );
     expect(
-      profile.container.querySelector(".contact-summary-hero")?.textContent,
+      profile.getByRole("region", { name: "এই নামের মোট হিসাব" }).textContent,
     ).toContain(`৳${(paid + 10000) / 100}`);
     expect(profile.container.textContent).toContain("নমুনা মাল নামানো");
     const history = profile.container.querySelector(".contact-history")!;
@@ -304,7 +305,9 @@ it.each([
     const restore = new LedgerRepository(restoredDatabase);
     await restore.ensure("real", LedgerSchema.parse({}));
     await restore.importBackup(await repo.exportBackup(), { replace: true });
-    expect((await restore.read())!.ledger).toEqual(saved);
+    expect((await restore.read())!.ledger).toEqual(
+      migrateArchitecture(saved).ledger,
+    );
   },
 );
 

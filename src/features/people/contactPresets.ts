@@ -1,5 +1,6 @@
 export {
   contactPresets,
+  contactRoles,
   contactPresetFor,
   contactPresetFrom,
   type ContactPreset,

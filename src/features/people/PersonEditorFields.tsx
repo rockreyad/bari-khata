@@ -15,11 +15,17 @@ import { AppCombobox } from "../../components/ui/AppCombobox";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { MoneyInput } from "../../components/ui/MoneyInput";
 import { NumericInput } from "../../components/ui/NumericInput";
-import { contactPresets, type ContactPreset } from "./contactPresets";
+import {
+  contactPresets,
+  type ContactPreset,
+  type ContactType,
+} from "./contactPresets";
 import "./person-editor.css";
 
 export type PersonEditorValue = {
   contactKind: PersonKind;
+  roles?: ContactType[];
+  identityType?: "" | "person" | "organization";
   contactPresetId: string;
   name: string;
   role: string;
@@ -38,6 +44,7 @@ export function PersonEditorFields({
   value,
   ledger,
   editing,
+  agreementAllowed,
   allowedActions,
   selectedActions,
   notebookValue,
@@ -50,6 +57,7 @@ export function PersonEditorFields({
   value: PersonEditorValue;
   ledger: Ledger;
   editing: boolean;
+  agreementAllowed: boolean;
   allowedActions: ContactAction[];
   selectedActions: string[];
   notebookValue: string;
@@ -237,7 +245,7 @@ export function PersonEditorFields({
         </div>
       </details>
 
-      {!editing && (preset.agreement || hasAgreementAmount || agreementOpen) ? (
+      {!editing && (agreementAllowed || hasAgreementAmount || agreementOpen) ? (
         <details
           className="person-editor-disclosure"
           open={agreementOpen}
@@ -257,7 +265,7 @@ export function PersonEditorFields({
           </summary>
           <div className="person-editor-disclosure-body">
             <label>
-              {t("কাজের খাতা")}
+              {t("খাতা")}
               <AppSelect
                 value={notebookValue}
                 onChange={(event) => onNotebook(event.target.value)}
@@ -292,8 +300,8 @@ export function PersonEditorFields({
         <summary>
           <SlidersHorizontalIcon size={21} aria-hidden="true" />
           <span>
-            {t("পছন্দের বোতাম")}
-            <small>{t("যে কাজগুলো সামনে রাখতে চান")}</small>
+            {t("কোন হিসাব রাখবেন")}
+            <small>{t("এই কর্মীর জন্য চালু রাখুন")}</small>
           </span>
           <CaretDownIcon
             size={17}
@@ -305,7 +313,7 @@ export function PersonEditorFields({
           <div
             className="person-editor-action-options"
             role="group"
-            aria-label={t("এই নামে কোন বোতাম রাখবেন?")}
+            aria-label={t("কোন হিসাব রাখবেন")}
             aria-describedby={actionRuleId}
           >
             {contactActionChoices.map((action) => (
@@ -330,7 +338,7 @@ export function PersonEditorFields({
             ))}
           </div>
           <p id={actionRuleId}>
-            {t("সম্পর্কের সঙ্গে মেলে এমন বোতামই রাখা যাবে।")}
+            {t("বেছে রাখা কাজগুলোই এই কর্মীর হিসাবে পাওয়া যাবে।")}
           </p>
         </div>
       </details>

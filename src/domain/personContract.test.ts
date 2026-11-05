@@ -26,13 +26,13 @@ describe("optional contact agreement", () => {
     const ledger = LedgerSchema.parse({ works: [{ id: "work", name: "কাজ" }] });
     const shop = PersonSchema.parse({ id: "s", name: "দোকান", kind: "shop" });
     expect(savePersonWithContract(ledger, shop).contracts).toHaveLength(0);
-    expect(
+    expect(() =>
       savePersonWithContract(ledger, shop, {
         id: "c",
         workId: "work",
         amount: "10",
-      }).contracts[0],
-    ).toMatchObject({ personId: "s", total: 1000 });
+      }),
+    ).toThrow("এই ধরনের নামে");
     expect(ledger.people).toHaveLength(0);
   });
 
@@ -62,6 +62,7 @@ describe("optional contact agreement", () => {
       });
       const person = PersonSchema.parse({
         ...ledger.people[0],
+        roles: ["craftsperson"],
         role: "নমুনা নতুন পরিচয়",
       });
       const next = savePersonWithContract(ledger, person, {

@@ -129,11 +129,15 @@ export function sharedStatementCsv(
     ),
     row(
       t(isShop ? "বাকি" : "আর পাবেন"),
-      money(statement.totals.reconciledPayable ?? statement.totals.payable),
+      statement.totals.balanceAmbiguous
+        ? t("বাকি মেলানো বাকি")
+        : money(statement.totals.reconciledPayable ?? statement.totals.payable),
     ),
     row(
       t(isShop ? "ক্রেতা পাবেন" : "আপনার কাছে জমা"),
-      money(statement.totals.reconciledAdvance ?? statement.totals.advance),
+      statement.totals.balanceAmbiguous
+        ? t("বাকি মেলানো বাকি")
+        : money(statement.totals.reconciledAdvance ?? statement.totals.advance),
     ),
     ...(["paid", "cost", "balance"] as const).flatMap((basis) => {
       const correction = statement.totals[`${basis}Correction`] ?? 0;
@@ -150,7 +154,15 @@ export function sharedStatementCsv(
       row(t("চুক্তি"), formatDigits(contract.title || contract.workName)),
       row(t("চুক্তির মোট"), money(contract.total)),
       row(t(isShop ? "পরিশোধ" : "পেয়েছেন"), money(contract.netPaid)),
-      row(t("চুক্তির বাকি"), money(contract.remaining)),
+      row(
+        t("কাজের বিলের বাকি"),
+        statement.totals.balanceAmbiguous
+          ? t("বাকি মেলানো বাকি")
+          : money(contract.remaining),
+      ),
+      ...(contract.unearnedCommitment !== undefined
+        ? [row(t("এখনও বিল হয়নি"), money(contract.unearnedCommitment))]
+        : []),
     ]),
     "",
     row(

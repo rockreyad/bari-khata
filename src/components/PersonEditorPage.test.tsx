@@ -194,7 +194,7 @@ async function ready() {
 }
 async function preferences(user: ReturnType<typeof userEvent.setup>) {
   const summary = screen
-    .getByText("পছন্দের বাটন", { exact: true })
+    .getByText("কোন হিসাব রাখবেন", { exact: true })
     .closest("summary")!;
   const details = summary.closest("details")!;
   if (!details.open) await user.click(summary);
@@ -211,6 +211,12 @@ it("creates and reopens a shop with optional fields empty and an explicitly empt
   });
   const first = mount(initial, onSave, onClose);
   await ready();
+  expect(
+    screen.getByRole("heading", { level: 1, name: "নতুন কর্মী" }),
+  ).toBeTruthy();
+  expect(screen.queryByText("মানুষ বা প্রতিষ্ঠান", { exact: true })).toBeNull();
+  expect(screen.queryByLabelText("ব্যক্তি না প্রতিষ্ঠান")).toBeNull();
+  expect(screen.queryByText("একই নামে একাধিক সম্পর্ক রাখা যায়")).toBeNull();
   await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "supplier");
   await user.type(screen.getByLabelText("দোকানের নাম"), "নমুনা নতুন দোকান");
   const actions = await preferences(user);
@@ -243,6 +249,9 @@ it("creates and reopens a shop with optional fields empty and an explicitly empt
 
   const editing = mount(saved, onSave, onClose, shop.id);
   await ready();
+  expect(
+    screen.getByRole("heading", { level: 1, name: "কর্মীর তথ্য" }),
+  ).toBeTruthy();
   expect((screen.getByLabelText("দোকানের নাম") as HTMLInputElement).value).toBe(
     shop.name,
   );
@@ -338,7 +347,7 @@ it("keeps the explicitly selected type after saving and reopening a freely edite
   expect(updated.contracts).toEqual(initial.contracts);
 });
 
-it("uses an explicit unclassified type for shortcuts without rewriting a legacy shop's financial kind or records", async () => {
+it("lets an explicit custom type configure shortcuts without rewriting a legacy shop's financial kind or records", async () => {
   const base = fixture();
   const initial = LedgerSchema.parse({
     ...base,
@@ -393,8 +402,8 @@ it("uses an explicit unclassified type for shortcuts without rewriting a legacy 
   const actions = await preferences(user);
   for (const name of ["মাল কেনা", "মাল ফেরত", "আনার খরচ"]) {
     const button = actions.getByRole("button", { name }) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-    expect(button.getAttribute("aria-pressed")).toBe("false");
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute("aria-pressed")).toBe("true");
     await user.click(button);
     expect(button.getAttribute("aria-pressed")).toBe("false");
   }
@@ -408,9 +417,10 @@ it("uses an explicit unclassified type for shortcuts without rewriting a legacy 
   expect(person).toMatchObject({
     contactType: "custom",
     kind: "shop",
+    roles: ["custom"],
     quickActions: ["payment"],
   });
-  expect(defaultContactAccount(person)).toBe("materials");
+  expect(defaultContactAccount(person)).toBe("other");
   expect(saved.entries).toEqual(initial.entries);
   expect(saved.contracts).toEqual(initial.contracts);
 });
@@ -519,7 +529,11 @@ it.each([
     presetId: "transport",
     actions: ["টাকা দিলাম", "আনার খরচ"],
   },
-  { kind: "নিজের মতো", presetId: "", actions: ["টাকা দিলাম"] },
+  {
+    kind: "নিজের মতো",
+    presetId: "",
+    actions: ["টাকা দিলাম", "মাল কেনা", "মাল ফেরত", "আনার খরচ"],
+  },
 ])(
   "offers appropriate optional actions for $kind on the page",
   async ({ presetId, actions: allowed }) => {
@@ -582,5 +596,70 @@ it.each([
     await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
     expect(onSave).not.toHaveBeenCalled();
     expect((await repo.read())!.ledger).toEqual(ledger);
+  },
+);
+
+it.each([
+  {
+    roles: ["craftsperson", "supplier"] as const,
+    draftRoles: ["craftsperson"] as const,
+  },
+  { roles: ["supplier"] as const, draftRoles: ["supplier"] as const },
+])(
+  "keeps hidden identity and additional roles through stale drafts, primary changes and reopening ($roles)",
+  async ({ roles, draftRoles }) => {
+    const initial = fixture();
+    const worker = initial.people.find((person) => person.id === "worker")!;
+    worker.identityType = "person";
+    worker.contactType = "craftsperson";
+    worker.roles = [...roles];
+    const repo = await repository(initial);
+    await createWorkspaceStorage().saveDraft("entity:person:worker:any", {
+      id: "worker",
+      identityType: "organization",
+      roles: [...draftRoles],
+    });
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const onSave = vi.fn(async (ledger: Ledger) => {
+      await repo.save(ledger);
+    });
+    const first = mount(initial, onSave, onClose, "worker");
+    await ready();
+    expect(screen.queryByLabelText("ব্যক্তি না প্রতিষ্ঠান")).toBeNull();
+    expect(screen.queryByText("আরও কাজ বা সম্পর্ক")).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "দোকানদার" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "রাখুন" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    first.unmount();
+    repo.database.close();
+    await repo.database.open();
+    const saved = (await repo.read())!.ledger;
+    expect(saved.people.find((person) => person.id === "worker")).toMatchObject(
+      {
+        roles: [...roles],
+        identityType: "person",
+      },
+    );
+    const second = mount(saved, onSave, onClose, "worker");
+    await ready();
+    expect(screen.queryByText("আরও কাজ বা সম্পর্ক")).toBeNull();
+    await user.selectOptions(
+      screen.getByLabelText("কীভাবে যুক্ত"),
+      "professional",
+    );
+    await user.click(screen.getByRole("button", { name: "রাখুন" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
+    second.unmount();
+    const updated = (await repo.read())!.ledger;
+    expect(
+      updated.people.find((person) => person.id === "worker"),
+    ).toMatchObject({
+      contactType: "professional",
+      roles: ["supplier", "professional"],
+      identityType: "person",
+    });
+    expect(updated.entries).toEqual(initial.entries);
+    expect(updated.contracts).toEqual(initial.contracts);
   },
 );

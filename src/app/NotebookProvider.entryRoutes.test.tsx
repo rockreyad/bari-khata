@@ -71,6 +71,11 @@ function Commands() {
         Edit entry
       </button>
       <button onClick={notebook.close}>Close</button>
+      <button onClick={notebook.quick}>Quick actions</button>
+      <button onClick={() => notebook.entity("work")}>Create sector</button>
+      <button onClick={() => notebook.entity("work", "door")}>
+        Edit sector
+      </button>
       <button onClick={() => notebook.entity("person", undefined, "door")}>
         Create person
       </button>
@@ -98,12 +103,11 @@ const current = () =>
   );
 
 it("navigates from a filtered demo profile to an entry URL and back without losing the profile filter", () => {
-  const path = "/sample/people/shop?work=door&account=materials&order=oldest";
+  const path = "/sample/parties/shop?work=door&account=materials&order=oldest";
   mount(path);
   fireEvent.click(screen.getByRole("button", { name: "Add payment" }));
-  expect(current().pathname).toBe("/sample/entries/new");
+  expect(current().pathname).toBe("/sample/write/payment");
   expect(Object.fromEntries(current().searchParams)).toEqual({
-    kind: "payment",
     back: path,
     work: "door",
     person: "shop",
@@ -118,16 +122,16 @@ it("navigates from a filtered demo profile to an entry URL and back without losi
 });
 
 it("uses real contract create/edit paths and restores the filtered worker profile", () => {
-  const path = "/sample/people/worker?work=door&account=labour";
+  const path = "/sample/parties/worker?work=door&account=labour";
   mount(path);
   fireEvent.click(screen.getByRole("button", { name: "Create contract" }));
-  expect(current().pathname).toBe("/sample/jobs/new");
+  expect(current().pathname).toBe("/sample/works/new");
   expect(current().searchParams.get("work")).toBe("door");
   expect(current().searchParams.get("person")).toBe("worker");
   expect(current().searchParams.get("back")).toBe(path);
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
   fireEvent.click(screen.getByRole("button", { name: "Edit contract" }));
-  expect(current().pathname).toBe("/sample/jobs/agreement%2Fone/edit");
+  expect(current().pathname).toBe("/sample/works/agreement%2Fone/edit");
   expect(current().searchParams.get("back")).toBe(path);
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
   expect(`${current().pathname}${current().search}`).toBe(path);
@@ -136,10 +140,10 @@ it("uses real contract create/edit paths and restores the filtered worker profil
 it.each(["", "/sample"])(
   "opens person creation/edit pages and restores filtered context under %s",
   (base) => {
-    const path = `${base}/people?kind=shop&q=cement&work=door`;
+    const path = `${base}/parties?kind=shop&q=cement&work=door`;
     mount(path, base ? "demo" : "real");
     fireEvent.click(screen.getByRole("button", { name: "Create person" }));
-    expect(current().pathname).toBe(`${base}/people/new`);
+    expect(current().pathname).toBe(`${base}/parties/new`);
     expect(Object.fromEntries(current().searchParams)).toEqual({
       back: path,
       work: "door",
@@ -147,7 +151,7 @@ it.each(["", "/sample"])(
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(`${current().pathname}${current().search}`).toBe(path);
     fireEvent.click(screen.getByRole("button", { name: "Edit person" }));
-    expect(current().pathname).toBe(`${base}/people/shop%2Fone/edit`);
+    expect(current().pathname).toBe(`${base}/parties/shop%2Fone/edit`);
     expect(current().searchParams.get("back")).toBe(path);
     expect(current().searchParams.has("_entity")).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -156,27 +160,27 @@ it.each(["", "/sample"])(
 );
 
 it("keeps the original return when switching from a form to person editing", () => {
-  const back = "/sample/works/door?tab=labour";
+  const back = "/sample/sectors/door?tab=labour";
   mount(`/sample/entries/new?${new URLSearchParams({ back })}`);
   fireEvent.click(screen.getByRole("button", { name: "Edit person" }));
-  expect(current().pathname).toBe("/sample/people/shop%2Fone/edit");
+  expect(current().pathname).toBe("/sample/parties/shop%2Fone/edit");
   expect(current().searchParams.get("back")).toBe(back);
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
   expect(`${current().pathname}${current().search}`).toBe(back);
 });
 
 it("returns a direct person form to the people list and rejects unsafe or circular returns", () => {
-  let view = mount("/sample/people/new");
+  let view = mount("/sample/parties/new");
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
-  expect(current().pathname).toBe("/sample/people");
+  expect(current().pathname).toBe("/sample/parties");
   view.unmount();
   for (const back of [
-    "/sample/people/new",
-    "/sample/people/shop/edit",
-    "/people/shop",
+    "/sample/parties/new",
+    "/sample/parties/shop/edit",
+    "/parties/shop",
     "https://outside.test/people",
   ]) {
-    view = mount(`/sample/people/shop/edit?${new URLSearchParams({ back })}`);
+    view = mount(`/sample/parties/shop/edit?${new URLSearchParams({ back })}`);
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(current().pathname).toBe("/sample/");
     view.unmount();
@@ -198,7 +202,7 @@ it("strips the transaction-details dialog from an edit return without discarding
 });
 
 it("keeps the original return when an edit is opened from a new entry route", () => {
-  const back = "/sample/works/door?tab=labour";
+  const back = "/sample/sectors/door?tab=labour";
   const params = new URLSearchParams({ kind: "payment", back });
   mount(`/sample/entries/new?${params}`);
   fireEvent.click(screen.getByRole("button", { name: "Edit entry" }));
@@ -210,7 +214,7 @@ it("keeps the original return when an edit is opened from a new entry route", ()
 
 it.each([
   "https://outside.test/people/shop",
-  "/people/shop",
+  "/parties/shop",
   "/sample/entries/new",
   "/sample/login",
 ])("closes an entry with unsafe demo return %s at the demo home", (back) => {
@@ -220,36 +224,77 @@ it.each([
 });
 
 it("uses root account routes outside the demo and blocks navigation after the active owner changes", () => {
-  mount("/people/shop?work=door", "real");
+  mount("/parties/shop?work=door", "real");
   fireEvent.click(screen.getByRole("button", { name: "Add payment" }));
-  expect(current().pathname).toBe("/entries/new");
+  expect(current().pathname).toBe("/write/payment");
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
-  expect(current().pathname).toBe("/people/shop");
+  expect(current().pathname).toBe("/parties/shop");
   state.owner = "owner-two";
   fireEvent.click(screen.getByRole("button", { name: "Add payment" }));
   fireEvent.click(screen.getByRole("button", { name: "Create contract" }));
   fireEvent.click(screen.getByRole("button", { name: "Create person" }));
   fireEvent.click(screen.getByRole("button", { name: "Edit person" }));
   expect(`${current().pathname}${current().search}`).toBe(
-    "/people/shop?work=door",
+    "/parties/shop?work=door",
   );
 });
 
 it("does not open an entry after leaving the demo surface", () => {
-  mount("/sample/people/shop");
+  mount("/sample/parties/shop");
   window.history.replaceState({}, "", "/login");
   fireEvent.click(screen.getByRole("button", { name: "Add payment" }));
-  expect(current().pathname).toBe("/sample/people/shop");
+  expect(current().pathname).toBe("/sample/parties/shop");
   fireEvent.click(screen.getByRole("button", { name: "Create person" }));
-  expect(current().pathname).toBe("/sample/people/shop");
+  expect(current().pathname).toBe("/sample/parties/shop");
 });
 
 it("returns a job edit to its history tab instead of leaving the form frame active", () => {
-  const path = "/sample/jobs/agreement%2Fone?tab=history";
+  const path = "/sample/works/agreement%2Fone?tab=history";
   mount(path);
   fireEvent.click(screen.getByRole("button", { name: "Edit contract" }));
-  expect(current().pathname).toBe("/sample/jobs/agreement%2Fone/edit");
+  expect(current().pathname).toBe("/sample/works/agreement%2Fone/edit");
   expect(current().searchParams.get("back")).toBe(path);
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
   expect(`${current().pathname}${current().search}`).toBe(path);
+});
+
+it.each(["", "/sample"])(
+  "opens the quick sheet in place and retains underlying party/sector filters under %s",
+  (base) => {
+    const path = `${base}/parties/shop?work=door&account=materials&q=cement`;
+    mount(path, base ? "demo" : "real");
+    fireEvent.click(screen.getByRole("button", { name: "Quick actions" }));
+    expect(current().pathname).toBe(`${base}/parties/shop`);
+    expect(Object.fromEntries(current().searchParams)).toEqual({
+      work: "door",
+      account: "materials",
+      q: "cement",
+      _quick: "1",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(`${current().pathname}${current().search}`).toBe(path);
+  },
+);
+it.each(["", "/sample"])(
+  "uses addressable sector create/edit routes and preserves the original list filters under %s",
+  (base) => {
+    const path = `${base}/sectors?status=done&q=door`;
+    mount(path, base ? "demo" : "real");
+    fireEvent.click(screen.getByRole("button", { name: "Create sector" }));
+    expect(current().pathname).toBe(`${base}/sectors/new`);
+    expect(current().searchParams.get("back")).toBe(path);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(`${current().pathname}${current().search}`).toBe(path);
+    fireEvent.click(screen.getByRole("button", { name: "Edit sector" }));
+    expect(current().pathname).toBe(`${base}/sectors/door/edit`);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(`${current().pathname}${current().search}`).toBe(path);
+  },
+);
+
+it("closes the legacy direct write chooser to its safe canonical return rather than reopening the sheet", () => {
+  const back = "/sample/parties/shop?work=door";
+  mount(`/sample/write?${new URLSearchParams({ back })}`);
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(`${current().pathname}${current().search}`).toBe(back);
 });

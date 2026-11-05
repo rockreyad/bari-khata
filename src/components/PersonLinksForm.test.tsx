@@ -26,7 +26,7 @@ afterEach(async () => {
   localStorage.clear();
 });
 
-it("creates and edits one worker in multiple notebooks, retaining draft choices and saved fields through reopening", async () => {
+it("creates and edits one worker in multiple sectors, retaining draft choices and saved fields through reopening", async () => {
   owner = crypto.randomUUID();
   setActiveOwner(owner);
   const repo = getScopedRepository("real");
@@ -88,6 +88,8 @@ it("creates and edits one worker in multiple notebooks, retaining draft choices 
     name: "মোরশেদ",
     kind: "worker",
     role: "ইঞ্জিনিয়ার",
+    contactType: "professional",
+    roles: ["professional"],
     workIds: ["bathroom", "electric"],
   });
   expect(saved.entries).toEqual([]);
@@ -136,6 +138,8 @@ it("creates and edits one worker in multiple notebooks, retaining draft choices 
   expect((await repo.read())!.ledger.people[0]).toMatchObject({
     kind: "worker",
     role: "ডিলার",
+    contactType: "professional",
+    roles: ["professional"],
     workIds: ["bathroom"],
   });
   expect(

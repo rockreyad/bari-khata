@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import { Blob as NodeBlob } from "node:buffer";
 import type { SelectHTMLAttributes } from "react";
@@ -159,7 +160,7 @@ it.each([
       );
     if (work !== "general")
       fireEvent.change(
-        screen.getByRole("combobox", { name: "কোন কাজের হিসাব" }),
+        screen.getByRole("combobox", { name: "কোন খাতার হিসাব" }),
         { target: { value: work } },
       );
     await user.click(screen.getByRole("button", { name: "সংরক্ষণ করুন" }));
@@ -201,7 +202,9 @@ it.each([
     const target = new LedgerRepository(targetDatabase);
     await target.ensure("real", LedgerSchema.parse({}));
     await target.importBackup(backup, { replace: true });
-    expect((await target.read())!.ledger).toEqual(saved);
+    expect((await target.read())!.ledger).toEqual(
+      migrateArchitecture(saved).ledger,
+    );
     expect(await (await target.getReceipt("receipt"))!.blob.text()).toBe(
       "bill",
     );
@@ -218,7 +221,7 @@ it.each([
     expect(
       (
         screen.getByRole("combobox", {
-          name: "কোন কাজের হিসাব",
+          name: "কোন খাতার হিসাব",
         }) as HTMLSelectElement
       ).value,
     ).toBe(work);

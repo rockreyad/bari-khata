@@ -1,4 +1,7 @@
 export const peopleEnglish: Record<string, string> = {
+  "আর দিতে হবে": "Still to pay",
+  "মোটের সংশোধন": "Total adjustment",
+  "জানা বাকি {{amount}}": "Known remaining {{amount}}",
   "ধরন: {{kind}}": "Type: {{kind}}",
   "পরিচয়: {{role}}": "Description: {{role}}",
   "ধরনের বাছাই মুছুন": "Clear type filter",

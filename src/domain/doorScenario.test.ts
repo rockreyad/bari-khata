@@ -1,3 +1,4 @@
+import { migrateArchitecture } from "./architectureMigration";
 import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import { LedgerDatabase } from "../data/database";
@@ -211,7 +212,7 @@ describe("a homeowner's complete door-work ledger", () => {
     );
     try {
       const repository = new LedgerRepository(source);
-      const ledger = doorLedger();
+      const ledger = migrateArchitecture(doorLedger()).ledger;
       await repository.ensure("real", createEmptyLedger());
       await repository.save(ledger);
       source.close();

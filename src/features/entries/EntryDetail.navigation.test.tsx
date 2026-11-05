@@ -15,7 +15,12 @@ import { EntryDetail } from "./EntryDetail";
 const { notebook } = vi.hoisted(() => ({ notebook: vi.fn() }));
 vi.mock("../../app/NotebookProvider", () => ({ useNotebook: notebook }));
 vi.mock("../../data/repository", () => ({
-  createWorkspaceStorage: () => ({ getReceipt: vi.fn() }),
+  createWorkspaceStorage: () => ({
+    getReceipt: vi.fn(),
+    readDraft: async () => null,
+    saveDraft: async () => {},
+    removeDraft: async () => {},
+  }),
 }));
 vi.mock("../../components/Sheet", () => ({
   Sheet: ({ children, footer }: { children: ReactNode; footer: ReactNode }) => (
@@ -44,6 +49,7 @@ vi.mock("../../context/LanguageProvider", () => ({
   useLanguageContext: () => ({
     t: (text: string) => text,
     money: (value: number) => `৳${value / 100}`,
+    number: (value: number) => String(value),
     date: (value: string | null) => value || "তারিখ দেওয়া নেই",
     language: "bn",
     formatDigits: (value: string | number) => String(value),
@@ -61,7 +67,7 @@ describe("entry detail navigation", () => {
             id: "normal",
             kind: "expense",
             reviewStatus: "needs_review",
-            reviewReason: "কাজের খাতা পরে বেছে নিন।",
+            reviewReason: "খাতা পরে বেছে নিন।",
             lines: [
               {
                 id: "line",
@@ -293,9 +299,9 @@ describe("entry detail navigation", () => {
     });
     render(<EntryDetail id="bill" />);
     fireEvent.click(screen.getByRole("button", { name: "বাবুল ইলেকট্রনিক্স" }));
-    expect(go).toHaveBeenLastCalledWith("/people/shop?account=materials");
+    expect(go).toHaveBeenLastCalledWith("/parties/shop?account=materials");
     fireEvent.click(screen.getByRole("button", { name: "বিদ্যুতের কাজ" }));
-    expect(go).toHaveBeenLastCalledWith("/works/electric");
+    expect(go).toHaveBeenLastCalledWith("/sectors/electric");
     fireEvent.click(screen.getByRole("button", { name: "এই নামের সব হিসাব" }));
     expect(go).toHaveBeenLastCalledWith(
       "/ledger?person=shop&account=materials&order=oldest",

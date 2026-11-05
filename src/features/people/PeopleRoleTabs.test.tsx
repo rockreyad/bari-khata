@@ -165,7 +165,7 @@ function CurrentRoute() {
     </output>
   );
 }
-function mount(path = "/people") {
+function mount(path = "/parties") {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <PeoplePage />
@@ -175,7 +175,7 @@ function mount(path = "/people") {
 }
 const current = () =>
   new URL(
-    screen.getByTestId("route").textContent ?? "/people",
+    screen.getByTestId("route").textContent ?? "/parties",
     "https://bari.invalid",
   );
 const tabs = () => within(screen.getByRole("group", { name: "ধরন অনুযায়ী" }));
@@ -193,7 +193,7 @@ const ready = () =>
 
 it("shows stable relationship types rather than free descriptions and preserves legacy broad-kind links", async () => {
   const before = JSON.stringify(state.ledger);
-  const view = mount("/people?type=worker");
+  const view = mount("/parties?type=worker");
   await ready();
   for (const type of types)
     expect(tabs().getByRole("button", { name: type.label })).toBeTruthy();
@@ -251,7 +251,7 @@ it("keeps the tab and its filter consistent for a legacy name-inferred shop with
 
 it("combines a type with search and payable filters and clears a legacy description filter on selection", async () => {
   mount(
-    `/people?${new URLSearchParams({ type: "worker", role: "উপ ঠিকাদার", status: "due" })}`,
+    `/parties?${new URLSearchParams({ type: "worker", role: "উপ ঠিকাদার", status: "due" })}`,
   );
   await ready();
   const user = userEvent.setup();
@@ -280,7 +280,7 @@ it("combines a type with search and payable filters and clears a legacy descript
 });
 
 it("keeps old role-link filtering visible without converting its text into a type", async () => {
-  mount(`/people?${new URLSearchParams({ role: "  গোপন পরিচয়  " })}`);
+  mount(`/parties?${new URLSearchParams({ role: "  গোপন পরিচয়  " })}`);
   await ready();
   expect(tabs().queryByRole("button", { name: "গোপন পরিচয়" })).toBeNull();
   expect(names()).toEqual(["ধরন বাছা হয়নি নাম"]);
@@ -357,7 +357,7 @@ it("leaves old role-tab preferences untouched and makes a hidden selected type c
   const old = { version: 1, keys: ["উপ ঠিকাদার"] };
   await storage.saveDraft(legacyPreferenceKey, old);
   await storage.saveDraft(preferenceKey, { version: 1, keys: ["supplier"] });
-  mount("/people?contactType=professional");
+  mount("/parties?contactType=professional");
   await ready();
   expect(
     tabs().queryByRole("button", { name: "ইঞ্জিনিয়ার / পরামর্শক" }),
