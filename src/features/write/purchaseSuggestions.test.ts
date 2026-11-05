@@ -116,7 +116,59 @@ it("uses an uncatalogued purchase without inventing a brand or category", () => 
   ]);
 });
 
-it("ignores cancelled, unreviewed and non-material records, and tolerates unusable historical quantity", () => {
+it("offers unclassified legacy purchase metadata only as an explicit choice without changing its review or finances", () => {
+  const ledger = LedgerSchema.parse({
+    works: [{ id: "roof", name: "নমুনা ছাদ" }],
+    items: [
+      { id: "legacy-cement", name: "সিমেন্ট", brand: "Crown", unit: "বস্তা" },
+    ],
+    entries: [
+      {
+        id: "legacy",
+        kind: "expense",
+        reviewStatus: "needs_review",
+        reviewReason: "মালের ধরন দেওয়া নেই",
+        lines: [
+          {
+            id: "legacy-line",
+            workId: "roof",
+            label: "সিমেন্ট",
+            itemId: "legacy-cement",
+            quantity: "12",
+            unit: "বস্তা",
+            amount: 888888,
+          },
+        ],
+      },
+    ],
+  });
+  const before = structuredClone(ledger);
+  const choice = purchaseSuggestions(ledger).find(
+    (row) => row.quantity === "12",
+  )!;
+  expect(choice).toMatchObject({
+    value: "সিমেন্ট",
+    brand: "Crown",
+    quantity: "12",
+    unit: "বস্তা",
+    groupId: "",
+    groupName: "",
+  });
+  for (const field of [
+    "amount",
+    "reviewStatus",
+    "reviewReason",
+    "date",
+    "personId",
+    "workId",
+    "payment",
+  ])
+    expect(choice).not.toHaveProperty(field);
+  expect(ledger).toEqual(before);
+  expect(ledger.entries[0].reviewStatus).toBe("needs_review");
+});
+
+it("ignores cancelled and non-material records, and tolerates unusable historical quantity", () => {
   const ledger = fixture();
   const source = ledger.entries[0];
   const changed = LedgerSchema.parse({
@@ -127,12 +179,6 @@ it("ignores cancelled, unreviewed and non-material records, and tolerates unusab
         ...source,
         id: "cancelled",
         voided: true,
-        lines: [{ ...source.lines[0], itemId: null }],
-      },
-      {
-        ...source,
-        id: "unreviewed",
-        reviewStatus: "needs_review",
         lines: [{ ...source.lines[0], itemId: null }],
       },
       {

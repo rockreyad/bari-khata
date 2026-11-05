@@ -27,12 +27,7 @@ export function purchaseSuggestions(ledger: Ledger, workId = "") {
     ledger.materialGroups.map((group) => [group.id, group.name]),
   );
   const history = ledger.entries
-    .filter(
-      (entry) =>
-        entry.kind === "expense" &&
-        !entry.voided &&
-        entry.reviewStatus === "confirmed",
-    )
+    .filter((entry) => entry.kind === "expense" && !entry.voided)
     .flatMap((entry) =>
       entry.lines
         .filter(
