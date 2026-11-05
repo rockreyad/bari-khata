@@ -41,7 +41,7 @@ const base = () =>
     ],
   });
 describe("entry context", () => {
-  it("clears a prior worker agreement when choosing a new or unnamed person", () => {
+  it("clears a prior worker agreement while preserving the globally chosen payment reason", () => {
     const ledger = base();
     const saved = entryContext(ledger, { kind: "payment", personId: "worker" });
     saved.contractId = "old-contract";
@@ -50,7 +50,7 @@ describe("entry context", () => {
       expect(entryContactChange(ledger, saved, id)).toMatchObject({
         personId: id,
         contractId: "",
-        paymentPurposeId: "",
+        paymentPurposeId: "old-purpose",
       });
   });
   it("upgrades only an untouched blank row in an older context draft without discarding draft identity", () => {
@@ -142,7 +142,7 @@ describe("entry context", () => {
       account: "labour",
       costType: "labour",
       workId: "other",
-      contractId: "contract",
+      contractId: "",
     });
     ledger.contracts.push({
       ...ledger.contracts[0],
@@ -237,7 +237,7 @@ it("prefills a requested worker job and keeps wrong-person or incompatible noteb
     account: "labour",
     workId: "other",
     contractId: "specific-job",
-    purpose: "settle",
+    purpose: "advance",
   });
   expect(
     entryContext(ledger, {
@@ -301,4 +301,48 @@ it("does not assign a new unlinked job to another job's notebook just because th
       contractId: "old",
     }),
   ).toMatchObject({ contractId: "old", workId: "plaster" });
+});
+
+it("carries only the selected agreement's milestone into a wage bill context", () => {
+  const ledger = LedgerSchema.parse({
+    ...base(),
+    contracts: [
+      { id: "job", personId: "worker", workId: "other", total: 100000 },
+    ],
+    milestones: [
+      { id: "stage", contractId: "job", title: "নমুনা ধাপ", amount: 40000 },
+    ],
+  });
+  const context = entryContext(ledger, {
+    kind: "wage",
+    personId: "worker",
+    workId: "other",
+    contractId: "job",
+    milestoneId: "stage",
+  });
+  expect(context.milestoneId).toBe("stage");
+  const saved = buildQuickEntry(ledger, {
+    ...context,
+    amount: "200",
+    payment: "partial",
+    paid: "50",
+  });
+  expect(saved.entries).toHaveLength(2);
+  expect(saved.entries[0]).toMatchObject({
+    kind: "expense",
+    milestoneId: "stage",
+    contractId: "job",
+  });
+  expect(saved.entries[1]).toMatchObject({
+    kind: "payment",
+    contractId: "job",
+  });
+  expect(saved.entries[1].milestoneId).toBeUndefined();
+  expect(
+    entryContext(ledger, {
+      kind: "wage",
+      personId: "shop",
+      milestoneId: "stage",
+    }).milestoneId,
+  ).toBe("");
 });

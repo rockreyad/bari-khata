@@ -2,6 +2,13 @@
   color: var(--muted);
   font-size: 12px;
 }
+.adjustment-account-select {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
 .adjustment-extra summary {
   cursor: pointer;
   padding-block: 6px;

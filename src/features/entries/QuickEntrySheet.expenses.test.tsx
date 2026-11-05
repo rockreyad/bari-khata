@@ -125,7 +125,7 @@ it("shows a previous uncatalogued material in the real suggestion picker and fil
   expect((screen.getByLabelText("কী কিনলেন") as HTMLInputElement).value).toBe(
     "সিমেন্ট",
   );
-  expect(screen.getByText("বস্তা", { exact: false })).toBeTruthy();
+  expect(screen.getByLabelText("একক").closest("details")?.open).toBe(true);
   expect((screen.getByLabelText("একক") as HTMLInputElement).value).toBe(
     "বস্তা",
   );

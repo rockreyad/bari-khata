@@ -133,7 +133,7 @@ export const v2English: Record<string, string> = {
     "The amount will be owed to the worker. Use Pay dues to reimburse them later. Any extra becomes an advance.",
   "দোকান থেকে টাকা পেলেন?": "Did the shop return any money?",
   "এখন ফেরত পাওয়া টাকা": "Refund received now",
-  "খালি রাখলে আগে বাকি কমবে। বাড়তি মূল্য দোকানে জমা থাকবে; নগদ ফেরত পেলে এখানে লিখুন।":
+  "খালি রাখলে আগে বাকি কমবে। বাড়তি মূল্য দোকানে জমা থাকবে; ক্যাশ ফেরত পেলে এখানে লিখুন।":
     "If left blank, this reduces dues first. Any excess remains credit at the shop. Enter money here when you receive a refund.",
   "বাড়তি তথ্য বন্ধ করি": "Hide extra details",
   "তারিখ, নোট ও ভাউচার": "Date, note and vouchers",

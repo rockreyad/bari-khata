@@ -1,5 +1,11 @@
 export const sharedEnglish: Record<string, string> = {
-  "লিংকের খবর পাওয়া যায়নি। আবার চেষ্টা করুন।": "Could not check the link. Try again.",
+  "বাকি মেলানো বাকি": "Balance needs review",
+  "পুরোনো চুক্তির ছাড় আর কাজের বিল আলাদা করে মেলানো বাকি। এখন বাকি বা জমার চূড়ান্ত অঙ্ক দেখানো হচ্ছে না।":
+    "An earlier agreement correction needs to be separated from earned bills. A final due or credit is not shown yet.",
+  "কাজের বিলের বাকি": "Earned bill due",
+  "এখনও বিল হয়নি": "Work not yet billed",
+  "লিংকের খবর পাওয়া যায়নি। আবার চেষ্টা করুন।":
+    "Could not check the link. Try again.",
   "ফাইল পাঠাতে চাইলে": "Send as a file",
   "এখনকার হিসাবের কপি": "A copy of the current statement",
   "ফাইলে আমার নোটও রাখি": "Include my notes in the file",

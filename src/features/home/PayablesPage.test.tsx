@@ -215,3 +215,168 @@ it("returns to the notebook overview from a directly opened dues page", async ()
   await user.click(screen.getByRole("button", { name: "Overview" }));
   expect(notebook.go).toHaveBeenCalledExactlyOnceWith("/");
 });
+
+function partyFixture() {
+  return LedgerSchema.parse({
+    architectureVersion: 2,
+    milestones: [],
+    paymentAllocations: [],
+    works: [
+      { id: "roof", name: "নমুনা ছাদ" },
+      { id: "wall", name: "নমুনা দেয়াল" },
+    ],
+    people: [
+      { id: "person", name: "নমুনা কর্মী", roles: ["supplier"] },
+      { id: "other", name: "অন্য কর্মী", roles: ["supplier"] },
+    ],
+    entries: [
+      ...[
+        ["first", 10000],
+        ["second", 20000],
+      ].map(([id, amount]) => ({
+        id,
+        kind: "expense",
+        personId: "person",
+        account: "materials",
+        date: "2026-11-01",
+        lines: [
+          {
+            id: `${id}-line`,
+            workId: "roof",
+            amount,
+            label: `নমুনা ${id}`,
+            costType: "material",
+          },
+        ],
+      })),
+      {
+        id: "old-cash",
+        kind: "payment",
+        personId: "person",
+        account: "materials",
+        paymentContext: "settlement",
+        allocations: [{ workId: "roof", amount: 10000 }],
+        paymentParts: [{ amount: 10000 }],
+      },
+      {
+        id: "other-bill",
+        kind: "expense",
+        personId: "other",
+        lines: [
+          {
+            id: "other-line",
+            workId: "wall",
+            amount: 50000,
+            label: "অন্য কর্মীর বিল",
+          },
+        ],
+      },
+    ],
+  });
+}
+it("shows only the requested worker's neutral balance when old cash is not linked to specific bills", () => {
+  const view = mount(partyFixture(), "/dues?person=person");
+  expect(view.rows()).toHaveLength(1);
+  expect(view.total()).toBe("৳\u202f200");
+  expect(screen.queryByText("নমুনা first")).toBeNull();
+  expect(screen.queryByText("নমুনা second")).toBeNull();
+  expect(screen.queryByText("অন্য কর্মীর বিল")).toBeNull();
+  expect(view.rows()[0].textContent).toContain("200");
+});
+it("prefills a particular bill payment with its capped amount, source scope and sample return context", async () => {
+  const user = userEvent.setup();
+  const ledger = partyFixture();
+  ledger.paymentAllocations = [
+    {
+      id: "known",
+      paymentId: "old-cash",
+      billId: "first",
+      workId: "roof",
+      amount: 10000,
+      createdAt: "2026-11-01T00:00:00Z",
+    },
+  ];
+  mount(ledger, "/sample/dues?person=person&keep=1");
+  await user.click(screen.getByRole("button", { name: "Pay: নমুনা second" }));
+  const url = new URL(notebook.go.mock.calls[0][0], "https://example.invalid");
+  expect(url.pathname).toBe("/write/payment");
+  expect(Object.fromEntries(url.searchParams)).toMatchObject({
+    person: "person",
+    bill: "second",
+    account: "materials",
+    contract: "none",
+    work: "roof",
+    amount: "20000",
+    purpose: "settle",
+    back: "/sample/dues?person=person&keep=1",
+  });
+  expect(notebook.detail).not.toHaveBeenCalled();
+});
+it("keeps an invalid person query isolated instead of displaying everyone's dues", () => {
+  const view = mount(partyFixture(), "/dues?person=missing");
+  expect(view.rows()).toHaveLength(0);
+  expect(screen.getByRole("heading").textContent).toContain("not found");
+  expect(screen.queryByText("নমুনা first")).toBeNull();
+  expect(screen.queryByText("অন্য কর্মীর বিল")).toBeNull();
+});
+it("applies the requested worker and notebook filters together without crossing their work scopes", () => {
+  const ledger = partyFixture();
+  ledger.entries.push(
+    ...LedgerSchema.parse({
+      ...ledger,
+      entries: [
+        {
+          id: "wall-bill",
+          kind: "expense",
+          personId: "person",
+          lines: [
+            {
+              id: "wall-line",
+              workId: "wall",
+              amount: 5000,
+              label: "নমুনা দেয়ালের বিল",
+            },
+          ],
+        },
+      ],
+    }).entries,
+  );
+  const view = mount(ledger, "/dues?person=person&work=wall");
+  expect(view.rows()).toHaveLength(1);
+  expect(view.total()).toBe("৳\u202f50");
+  expect(screen.getByText("নমুনা দেয়ালের বিল")).toBeTruthy();
+  expect(screen.queryByText("নমুনা first")).toBeNull();
+});
+it("opens related dues instead of guessing a multi-bill global settlement", async () => {
+  const user = userEvent.setup();
+  const ledger = partyFixture();
+  ledger.entries = ledger.entries.filter((entry) => entry.id !== "old-cash");
+  mount(ledger, "/sample/dues?keep=1");
+  await user.click(screen.getByRole("button", { name: "Pay নমুনা কর্মী" }));
+  expect(notebook.go).toHaveBeenCalledExactlyOnceWith("/dues?person=person");
+});
+it("directly prefills a global payment only when there is one canonical due item", async () => {
+  const user = userEvent.setup();
+  const ledger = partyFixture();
+  ledger.entries = ledger.entries.filter((entry) => entry.id !== "second");
+  ledger.entries.find(
+    (entry) => entry.id === "old-cash",
+  )!.allocations[0].amount = 4000;
+  ledger.entries.find(
+    (entry) => entry.id === "old-cash",
+  )!.paymentParts[0].amount = 4000;
+  mount(ledger, "/sample/dues?keep=1");
+  await user.click(screen.getByRole("button", { name: "Pay নমুনা কর্মী" }));
+  const url = new URL(notebook.go.mock.calls[0][0], "https://example.invalid");
+  expect(Object.fromEntries(url.searchParams)).toMatchObject({
+    person: "person",
+    balanceOnly: "1",
+    amount: "6000",
+    account: "materials",
+    contract: "none",
+    dueWork: "all",
+    dueAccount: "all",
+    purpose: "settle",
+    back: "/sample/dues?keep=1",
+  });
+});

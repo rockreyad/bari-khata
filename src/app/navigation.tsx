@@ -16,12 +16,14 @@ export function notebookSectionActive(
   if (section === "/") return path === "/" || path === "/dues";
   const aliases =
     section === "/reports"
-      ? [section, "/materials"]
+      ? [section, "/materials", "/more"]
       : section === "/ledger"
-        ? [section, "/review"]
-        : section === "/people"
-          ? [section, "/jobs"]
-          : [section];
+        ? [section, "/review", "/history", "/timeline"]
+        : section === "/parties"
+          ? [section, "/people"]
+          : section === "/works"
+            ? [section, "/jobs", "/contracts"]
+            : [section];
   return aliases.some(
     (prefix) => path === prefix || path.startsWith(`${prefix}/`),
   );

@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { effectiveAccounts } from "../../domain/effectiveAccounts";
+import { cashSummary } from "../../domain/cashSummary";
 import { CashReport } from "./CashReport";
+import { reportMode } from "./reportMode";
 import { useSearchParams } from "react-router";
 import {
   ArrowRightIcon,
@@ -45,13 +47,11 @@ export type AnalyticsPageProps = {
 };
 export function AnalyticsPage(props: AnalyticsPageProps) {
   const [params] = useSearchParams();
-  const detail =
-    props.initialGroupId ||
-    params.get("mode") === "cost" ||
-    ["section", "group", "item", "brand", "usage", "type"].some((key) =>
-      params.has(key),
-    );
-  return detail ? <CostAnalyticsPage {...props} /> : <CashReport {...props} />;
+  return reportMode(params, props.initialGroupId) === "cost" ? (
+    <CostAnalyticsPage {...props} />
+  ) : (
+    <CashReport {...props} />
+  );
 }
 const queryKeys: Record<keyof AnalyticsFilters, string> = {
   groupId: "group",
@@ -168,15 +168,27 @@ function CostAnalyticsPage({
     !filters.query &&
     filters.review === "all" &&
     filters.dates === "all";
-  const costCorrection = completeCorrectionScope
-    ? reportAdjustments(ledger, {
-        workId: filters.workId,
-        personId: filters.personId,
-        account: account ?? sectionAccount ?? undefined,
-        from: filters.from,
-        to: filters.to,
-      }).costCorrection
-    : 0;
+  const financialScope = {
+    workId: filters.workId,
+    personId: filters.personId,
+    account: account ?? sectionAccount ?? undefined,
+    from: filters.from,
+    to: filters.to,
+  };
+  const corrections = completeCorrectionScope
+    ? reportAdjustments(ledger, financialScope)
+    : null;
+  const costCorrection = corrections?.costCorrection ?? 0;
+  const labourPayments =
+    section === "labour" && completeCorrectionScope
+      ? cashSummary(ledger, {
+          ...financialScope,
+          personId:
+            filters.personId === "__unknown__"
+              ? "__anonymous__"
+              : filters.personId,
+        })
+      : null;
   const breakdown = useMemo(
     () => breakdownRows(rows, dimension),
     [rows, dimension],
@@ -200,6 +212,15 @@ function CostAnalyticsPage({
       selectedSection.some((row) => row.entry.personId === person.id),
   );
   const work = ledger.works.find((w) => w.id === filters.workId);
+  function showPayments() {
+    const next = new URLSearchParams({ mode: "cash" });
+    for (const key of ["work", "person", "from", "to", "q"])
+      if (params.get(key)) next.set(key, params.get(key)!);
+    if (next.get("person") === "__unknown__")
+      next.set("person", "__anonymous__");
+    if (cashAccount) next.set("account", cashAccount);
+    setParams(next);
+  }
   function update(change: Partial<AnalyticsFilters>, reset = false) {
     const next = reset
       ? { ...emptyFilters, ...change }
@@ -310,7 +331,7 @@ function CostAnalyticsPage({
           ? t("{{name}} — কোথায় কত", { name: group.name })
           : t("মালের খরচ")
         : section === "labour"
-          ? t("মজুরির হিসাব")
+          ? t("মজুরির বিল")
           : section === "transport"
             ? t("আনা ও নামানোর খরচ")
             : t("অন্য খরচ");
@@ -371,25 +392,18 @@ function CostAnalyticsPage({
           <DownloadSimpleIcon size={21} />
         </button>
       </header>
-      <button
-        className="text-button"
-        onClick={() => {
-          const next = new URLSearchParams();
-          for (const key of ["work", "person", "from", "to"])
-            if (params.get(key)) next.set(key, params.get(key)!);
-          if (cashAccount) next.set("account", cashAccount);
-          setParams(next);
-        }}
-      >
-        {t(
-          cashAccount === "other"
-            ? "অন্য খাতে দেওয়া টাকার হিসাব দেখি"
-            : cashAccount
-              ? "টাকা দেওয়ার হিসাব দেখি"
-              : "সব ধরনের টাকা দেওয়ার হিসাব দেখি",
-        )}
-        <ArrowRightIcon size={16} />
-      </button>
+      {!labourPayments ? (
+        <button className="text-button" onClick={showPayments}>
+          {t(
+            cashAccount === "other"
+              ? "অন্য খাতে দেওয়া টাকার হিসাব দেখি"
+              : cashAccount
+                ? "টাকা দেওয়ার হিসাব দেখি"
+                : "সব ধরনের টাকা দেওয়ার হিসাব দেখি",
+          )}
+          <ArrowRightIcon size={16} />
+        </button>
+      ) : null}
       <div
         className="report-section-tabs"
         role="tablist"
@@ -471,6 +485,32 @@ function CostAnalyticsPage({
           {section === "material" ? ` · ${t("মালের দাম")}` : ""}
         </small>
         {totals.returns ? <p>{t("ফেরত ও সমন্বয় বাদ দেওয়া হয়েছে।")}</p> : null}
+        {labourPayments ? (
+          <div className="report-paid-summary">
+            <button
+              type="button"
+              onClick={showPayments}
+              aria-label={t("টাকা দেওয়ার হিসাব দেখি")}
+            >
+              <span>{t("মোট দিয়েছি")}</span>
+              <strong>{money(labourPayments.netPaid)}</strong>
+              <ArrowRightIcon size={18} aria-hidden="true" />
+            </button>
+            {labourPayments.refunds > 0 ? (
+              <small>
+                {t("ফেরত পাওয়া {{amount}} বাদ দিয়ে", {
+                  amount: money(labourPayments.refunds),
+                })}
+              </small>
+            ) : null}
+            {corrections?.paidCorrection ? (
+              <small>
+                {t("সমন্বয়")} · {t("মোট দিয়েছি")}:{" "}
+                {money(corrections.paidCorrection)}
+              </small>
+            ) : null}
+          </div>
+        ) : null}
       </section>
       <section className="report-breakdown">
         <div className="report-breakdown-heading">
@@ -516,7 +556,13 @@ function CostAnalyticsPage({
             ))}
           </div>
         ) : (
-          <p className="report-no-results">{t("এই বাছাইয়ে কোনো খরচ নেই।")}</p>
+          <p className="report-no-results">
+            {t(
+              section === "labour"
+                ? "এই বাছাইয়ে মজুরির বিল নেই।"
+                : "এই বাছাইয়ে কোনো খরচ নেই।",
+            )}
+          </p>
         )}
       </section>
       <section className="report-history">
@@ -570,7 +616,7 @@ function CostAnalyticsPage({
         >
           <div className="history-filter-form">
             <label>
-              {t("কাজের খাতা")}
+              {t("খাতা")}
               <AppSelect
                 value={filters.workId}
                 onChange={(e) => update({ workId: e.target.value })}

@@ -5,15 +5,17 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import {
   entryReturn,
-  entryUrl,
   contractUrl,
   personUrl,
   isEntryPage,
   isPersonFormPage,
+  isSectorFormPage,
+  sectorUrl,
 } from "./entryRoutes";
 import { useLedger } from "../data/useLedger";
 import { getActiveOwner } from "../data/database";
 import { useLanguageContext } from "../context/LanguageProvider";
+import { houseWriteUrl } from "./houseRoutes";
 
 export function NotebookProvider({
   mode,
@@ -76,12 +78,19 @@ export function NotebookProvider({
     if (!currentScope()) return;
     const currentParams = new URLSearchParams(location.search);
     if (
-      isEntryPage(location.pathname) &&
+      (isEntryPage(location.pathname) ||
+        /\/write\/?$/.test(location.pathname)) &&
       !["_entity", "_entry", "_quick"].some((key) => currentParams.has(key))
     ) {
       const fallback = isPersonFormPage(location.pathname)
-        ? `${base}/people`
-        : `${base}/`;
+        ? `${base}/parties`
+        : isSectorFormPage(location.pathname)
+          ? `${base}/sectors`
+          : /\/(?:works|jobs|contracts)\/(?:new|[^/]+\/edit)\/?$/.test(
+                location.pathname,
+              )
+            ? `${base}/works`
+            : `${base}/`;
       navigate(entryReturn(currentParams.get("back") ?? fallback, base), {
         replace: true,
       });
@@ -122,14 +131,15 @@ export function NotebookProvider({
       setSearch((previous) => {
         const next = new URLSearchParams(previous);
         [
-          "_entry",
+          "_add",
           "_entity",
           "_edit",
-          "_add",
+          "_entry",
           "_work",
           "_person",
           "_account",
           "_type",
+          "_purpose",
         ].forEach((key) => next.delete(key));
         next.set("_quick", "1");
         return next;
@@ -140,14 +150,14 @@ export function NotebookProvider({
       const previous = isEntryPage(location.pathname)
         ? (new URLSearchParams(location.search).get("back") ?? `${base}/`)
         : `${location.pathname}${location.search}`;
-      navigate(entryUrl(base, options, previous));
+      navigate(houseWriteUrl(base, options, previous));
     },
     entity: (kind, id, workId, personId) => {
       if (!currentScope()) return;
       if (kind === "person") {
         const previous = isEntryPage(location.pathname)
           ? (new URLSearchParams(location.search).get("back") ??
-            `${base}/people`)
+            `${base}/parties`)
           : `${location.pathname}${location.search}`;
         navigate(personUrl(base, id, workId, personId, previous));
         return;
@@ -159,30 +169,19 @@ export function NotebookProvider({
             id,
             workId,
             personId,
-            `${location.pathname}${location.search}`,
+            isEntryPage(location.pathname)
+              ? (new URLSearchParams(location.search).get("back") ??
+                  `${base}/works`)
+              : `${location.pathname}${location.search}`,
           ),
         );
         return;
       }
-      setSearch((previous) => {
-        const next = new URLSearchParams(previous);
-        [
-          "_entry",
-          "_add",
-          "_edit",
-          "_work",
-          "_person",
-          "_account",
-          "_type",
-          "_purpose",
-          "_quick",
-        ].forEach((key) => next.delete(key));
-        next.set("_entity", kind);
-        if (id) next.set("_edit", id);
-        if (workId) next.set("_work", workId);
-        if (personId) next.set("_person", personId);
-        return next;
-      });
+      const previous = isEntryPage(location.pathname)
+        ? (new URLSearchParams(location.search).get("back") ??
+          `${base}/sectors`)
+        : `${location.pathname}${location.search}`;
+      navigate(sectorUrl(base, id, previous));
     },
     detail: (id) => {
       if (!currentScope()) return;

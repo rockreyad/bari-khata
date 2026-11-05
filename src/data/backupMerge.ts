@@ -4,6 +4,10 @@ import {
   type Entry,
   type Ledger,
 } from "../domain/model";
+import {
+  migrateArchitecture,
+  preservesArchitecture,
+} from "../domain/architectureMigration.js";
 import { preservesBalanceAdjustments } from "../domain/adjustmentHistory.js";
 
 const collections = [
@@ -14,6 +18,8 @@ const collections = [
   "paymentPurposes",
   "contracts",
   "entries",
+  "milestones",
+  "paymentAllocations",
 ] as const;
 export type BackupCollection = (typeof collections)[number] | "project";
 export type BackupDecision = "current" | "backup";
@@ -60,8 +66,8 @@ export function planBackupMerge(
   decisions: BackupDecisions = {},
   at = new Date().toISOString(),
 ) {
-  const current = LedgerSchema.parse(currentValue);
-  const incoming = LedgerSchema.parse(incomingValue);
+  const current = migrateArchitecture(currentValue).ledger;
+  const incoming = migrateArchitecture(incomingValue).ledger;
   if (current.isDemo !== incoming.isDemo)
     throw new Error("workspace_mode_mismatch");
   let added = 0;
@@ -72,11 +78,11 @@ export function planBackupMerge(
   const candidate = structuredClone(current);
   let historyConflict = false;
   for (const collection of collections) {
-    const records = current[collection] as { id: string }[];
+    const records = (current[collection] ?? []) as { id: string }[];
     const existing = new Map(records.map((record) => [record.id, record]));
     const replacements = new Map<string, unknown>();
     const additions: unknown[] = [];
-    for (const record of incoming[collection]) {
+    for (const record of incoming[collection] ?? []) {
       const previous = existing.get(record.id);
       if (!previous) {
         additions.push(record);
@@ -94,15 +100,33 @@ export function planBackupMerge(
             ? record.name
             : "title" in record
               ? record.title
-              : record.lines
-                  .map((line) => line.label)
-                  .filter(Boolean)
-                  .join(", ") ||
-                record.note ||
-                record.date ||
-                record.id;
+              : "lines" in record
+                ? record.lines
+                    .map((line) => line.label)
+                    .filter(Boolean)
+                    .join(", ") ||
+                  record.note ||
+                  record.date ||
+                  record.id
+                : record.id;
         differences.push({ key, collection, id: record.id, label });
         if (decisions[key] === "backup") {
+          if (collection === "people") {
+            const original = incomingValue.people.find(
+              (person) => person.id === record.id,
+            );
+            const oldPerson = current.people.find(
+              (person) => person.id === record.id,
+            );
+            if (
+              currentValue.people.find((person) => person.id === record.id)
+                ?.roles &&
+              !original?.roles &&
+              JSON.stringify(oldPerson?.roles) !==
+                JSON.stringify((record as Ledger["people"][number]).roles)
+            )
+              historyConflict = true;
+          }
           let replacement = record;
           if (collection === "entries") {
             const oldEntry = previous as Entry;
@@ -149,7 +173,7 @@ export function planBackupMerge(
     });
   }
   if (!equal(current.project, incoming.project)) {
-    if (!collections.some((collection) => current[collection].length)) {
+    if (!collections.some((collection) => current[collection]?.length ?? 0)) {
       candidate.project = incoming.project;
     } else {
       differences.push({
@@ -168,7 +192,11 @@ export function planBackupMerge(
     (difference) => !decisions[difference.key],
   );
   const parsed = LedgerSchema.safeParse(candidate);
-  if (parsed.success && !preservesBalanceAdjustments(current, parsed.data))
+  if (
+    parsed.success &&
+    (!preservesBalanceAdjustments(current, parsed.data) ||
+      !preservesArchitecture(current, parsed.data))
+  )
     historyConflict = true;
   return {
     ledger: !historyConflict && parsed.success ? parsed.data : null,
@@ -183,5 +211,8 @@ export function planBackupMerge(
 }
 
 export function sameBackupLedger(left: Ledger, right: Ledger) {
-  return equal(LedgerSchema.parse(left), LedgerSchema.parse(right));
+  return equal(
+    migrateArchitecture(left).ledger,
+    migrateArchitecture(right).ledger,
+  );
 }

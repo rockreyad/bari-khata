@@ -128,7 +128,7 @@ const valueLabels: Record<string, string> = {
   paid: "পুরো টাকা দেওয়া হয়েছে",
   partial: "কিছু টাকা দেওয়া হয়েছে",
   unpaid: "এখন টাকা দেওয়া হয়নি",
-  cash: "নগদ",
+  cash: "ক্যাশ",
   bkash: "বিকাশ",
   bank: "ব্যাংক",
   worker: "মিস্ত্রি",

@@ -10,8 +10,9 @@ export type AddOptions = {
   editId?: string;
   account?: Account;
   costType?: CostType;
-  purpose?: "settle" | "advance" | "wage";
+  purpose?: "settle" | "advance" | "wage" | "charge";
   contractId?: string;
+  milestoneId?: string;
 };
 export type NotebookContextValue = {
   ledger: Ledger;

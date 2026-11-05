@@ -37,46 +37,60 @@ vi.mock("../../context/LanguageProvider", () => ({
   }),
 }));
 
-const preferenceKey = "view:people-role-tabs:v1";
+const preferenceKey = "view:people-type-tabs:v1";
+const legacyPreferenceKey = "view:people-role-tabs:v1";
 const storage = createWorkspaceStorage("demo");
-const roles = [
-  "রাজমিস্ত্রি",
-  "ইঞ্জিনিয়ার",
-  "ডিলার",
-  "রংমিস্ত্রি",
-  "গাড়িচালক",
-  "ঠিকাদার",
-  "সহকারী",
+const types = [
+  { id: "supplier", label: "দোকানদার", kind: "shop" },
+  { id: "craftsperson", label: "মিস্ত্রি / কারিগর", kind: "worker" },
+  { id: "labour", label: "শ্রমিক", kind: "worker" },
+  { id: "contractor", label: "ঠিকাদার", kind: "worker" },
+  { id: "professional", label: "ইঞ্জিনিয়ার / পরামর্শক", kind: "worker" },
+  { id: "transport", label: "গাড়ি / পরিবহন", kind: "driver" },
+  { id: "service", label: "অন্যান্য সেবা", kind: "worker" },
+  { id: "custom", label: "ধরন বাছা হয়নি", kind: "other" },
 ];
 
 function fixture() {
-  const people = roles.flatMap((role, index) =>
-    Array.from({ length: 7 - index }, (_, personIndex) => ({
-      id: `person-${index}-${personIndex}`,
-      name:
-        personIndex === 0 && index < 2
-          ? `রহিম ${role}`
-          : `${role} নাম ${personIndex + 1}`,
-      kind:
-        index === 2
-          ? "shop"
-          : index === 4
-            ? "driver"
-            : index === 6
-              ? "other"
-              : "worker",
-      role: index === 1 && personIndex === 1 ? "  ইঞ্জিনিয়ার   " : role,
-    })),
-  );
   return LedgerSchema.parse({
     works: [{ id: "work", name: "নমুনা খাতা" }],
     people: [
-      ...people,
-      { id: "blank", name: "পরিচয় ছাড়া নাম", kind: "worker", role: "" },
+      ...types.map((type) => ({
+        id: type.id,
+        name:
+          type.id === "craftsperson"
+            ? "রহিম কারিগর"
+            : type.id === "professional"
+              ? "রহিম পরামর্শক"
+              : `${type.label} নাম`,
+        kind: type.kind,
+        contactType: type.id,
+        role:
+          type.id === "professional"
+            ? "উপ ঠিকাদার"
+            : type.id === "custom"
+              ? "গোপন পরিচয়"
+              : "নিজের লেখা পরিচয়",
+      })),
+      {
+        id: "second-craft",
+        name: "আরেক কারিগর",
+        kind: "worker",
+        contactType: "craftsperson",
+        role: "কারেন্টের মিস্ত্রি",
+      },
+      {
+        id: "second-pro",
+        name: "আরেক পরামর্শক",
+        kind: "worker",
+        contactType: "professional",
+        role: "রাজমিস্ত্রি",
+      },
       {
         id: "archived",
         name: "মুছে রাখা নাম",
         kind: "worker",
+        contactType: "professional",
         role: "পুরোনো পরিচয়",
         archivedAt: "2026-11-04T00:00:00Z",
         removalHistory: [
@@ -84,14 +98,14 @@ function fixture() {
         ],
       },
     ],
-    entries: [0, 1].map((index) => ({
-      id: `bill-${index}`,
+    entries: ["craftsperson", "professional"].map((personId) => ({
+      id: `bill-${personId}`,
       kind: "expense",
       account: "labour",
-      personId: `person-${index}-0`,
+      personId,
       lines: [
         {
-          id: `line-${index}`,
+          id: `line-${personId}`,
           workId: "work",
           label: "মজুরি",
           costType: "labour",
@@ -117,6 +131,7 @@ beforeAll(() => {
 });
 beforeEach(async () => {
   await storage.removeDraft(preferenceKey);
+  await storage.removeDraft(legacyPreferenceKey);
   state.ledger = fixture();
   state.go.mockClear();
   state.entity.mockClear();
@@ -138,6 +153,7 @@ beforeEach(async () => {
 afterEach(async () => {
   cleanup();
   await storage.removeDraft(preferenceKey);
+  await storage.removeDraft(legacyPreferenceKey);
   vi.unstubAllGlobals();
 });
 function CurrentRoute() {
@@ -149,7 +165,7 @@ function CurrentRoute() {
     </output>
   );
 }
-function mount(path = "/people") {
+function mount(path = "/parties") {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <PeoplePage />
@@ -159,10 +175,10 @@ function mount(path = "/people") {
 }
 const current = () =>
   new URL(
-    screen.getByTestId("route").textContent ?? "/people",
+    screen.getByTestId("route").textContent ?? "/parties",
     "https://bari.invalid",
   );
-const tabs = () => within(screen.getByRole("group", { name: "পরিচয় অনুযায়ী" }));
+const tabs = () => within(screen.getByRole("group", { name: "ধরন অনুযায়ী" }));
 const names = () =>
   [...document.querySelectorAll(".contact-row-name > strong")].map(
     (name) => name.textContent,
@@ -175,58 +191,85 @@ const ready = () =>
     ).toBe(false),
   );
 
-it("uses existing exact roles instead of broad worker kinds and keeps legacy type filtering visible and clearable", async () => {
+it("shows stable relationship types rather than free descriptions and preserves legacy broad-kind links", async () => {
   const before = JSON.stringify(state.ledger);
-  let view = mount("/people?type=worker");
+  const view = mount("/parties?type=worker");
   await ready();
-  for (const role of roles.slice(0, 6))
-    expect(tabs().getByRole("button", { name: role })).toBeTruthy();
-  expect(tabs().getAllByRole("button")).toHaveLength(7);
-  expect(tabs().queryByRole("button", { name: "মিস্ত্রি" })).toBeNull();
-  expect(tabs().queryByRole("button", { name: "সহকারী" })).toBeNull();
+  for (const type of types)
+    expect(tabs().getByRole("button", { name: type.label })).toBeTruthy();
+  expect(tabs().getAllByRole("button")).toHaveLength(9);
+  expect(tabs().queryByRole("button", { name: "উপ ঠিকাদার" })).toBeNull();
+  expect(
+    tabs().queryByRole("button", { name: "কারেন্টের মিস্ত্রি" }),
+  ).toBeNull();
   expect(screen.getByText("ধরন: মিস্ত্রি")).toBeTruthy();
-  expect(names()).toHaveLength(20);
+  expect(names()).toHaveLength(7);
   await userEvent
     .setup()
     .click(screen.getByRole("button", { name: "ধরনের বাছাই মুছুন" }));
   expect(current().searchParams.has("type")).toBe(false);
-  expect(names()).toHaveLength(29);
+  expect(names()).toHaveLength(10);
   view.unmount();
-  view = mount("/people?type=worker");
+  mount();
   await ready();
-  const user = userEvent.setup();
-  await user.click(tabs().getByRole("button", { name: "ইঞ্জিনিয়ার" }));
-  expect(current().searchParams.has("type")).toBe(false);
-  expect(current().searchParams.get("role")).toBe("ইঞ্জিনিয়ার");
-  expect(names()).toHaveLength(6);
-  expect(names()).toContain("ইঞ্জিনিয়ার নাম 2");
-  expect(names()).not.toContain("রহিম রাজমিস্ত্রি");
-  await user.click(tabs().getByRole("button", { name: "সবাই" }));
-  expect(current().searchParams.has("role")).toBe(false);
-  expect(current().searchParams.has("type")).toBe(false);
-  expect(names()).toHaveLength(29);
+  await userEvent
+    .setup()
+    .click(tabs().getByRole("button", { name: "ইঞ্জিনিয়ার / পরামর্শক" }));
+  expect(current().searchParams.get("contactType")).toBe("professional");
+  expect(names()).toEqual(
+    expect.arrayContaining(["রহিম পরামর্শক", "আরেক পরামর্শক"]),
+  );
+  expect(names()).toHaveLength(2);
   expect(JSON.stringify(state.ledger)).toBe(before);
   expect(state.save).not.toHaveBeenCalled();
 });
 
-it("composes role choices with the existing search and payable filters without restoring the legacy type", async () => {
-  mount("/people?type=worker&status=due");
+it("keeps the tab and its filter consistent for a legacy name-inferred shop without an explicit kind", async () => {
+  state.ledger = LedgerSchema.parse({
+    people: [
+      {
+        id: "legacy-shop",
+        name: "মিতালী ট্রেডার্স",
+        kind: null,
+        role: "সিমেন্ট ও ইট",
+      },
+      { id: "unclassified", name: "পরিচিতজন", role: "নিজের কাজ" },
+    ],
+  });
+  const before = JSON.stringify(state.ledger);
+  mount();
+  await ready();
+  const user = userEvent.setup();
+  expect(tabs().getByRole("button", { name: "দোকানদার" })).toBeTruthy();
+  expect(tabs().queryByRole("button", { name: "সিমেন্ট ও ইট" })).toBeNull();
+  await user.click(tabs().getByRole("button", { name: "দোকানদার" }));
+  expect(names()).toEqual(["মিতালী ট্রেডার্স"]);
+  expect(current().searchParams.get("contactType")).toBe("supplier");
+  expect(JSON.stringify(state.ledger)).toBe(before);
+  expect(state.save).not.toHaveBeenCalled();
+});
+
+it("combines a type with search and payable filters and clears a legacy description filter on selection", async () => {
+  mount(
+    `/parties?${new URLSearchParams({ type: "worker", role: "উপ ঠিকাদার", status: "due" })}`,
+  );
   await ready();
   const user = userEvent.setup();
   await user.type(
     screen.getByRole("textbox", { name: "নাম বা নম্বর খুঁজুন" }),
     "রহিম",
   );
-  expect(names()).toHaveLength(2);
-  await user.click(tabs().getByRole("button", { name: "রাজমিস্ত্রি" }));
-  expect(names()).toEqual(["রহিম রাজমিস্ত্রি"]);
-  await user.click(tabs().getByRole("button", { name: "ইঞ্জিনিয়ার" }));
-  expect(names()).toEqual(["রহিম ইঞ্জিনিয়ার"]);
+  await user.click(tabs().getByRole("button", { name: "মিস্ত্রি / কারিগর" }));
+  expect(names()).toEqual(["রহিম কারিগর"]);
   expect(Object.fromEntries(current().searchParams)).toEqual({
     status: "due",
     q: "রহিম",
-    role: "ইঞ্জিনিয়ার",
+    contactType: "craftsperson",
   });
+  await user.click(
+    tabs().getByRole("button", { name: "ইঞ্জিনিয়ার / পরামর্শক" }),
+  );
+  expect(names()).toEqual(["রহিম পরামর্শক"]);
   await user.click(tabs().getByRole("button", { name: "সবাই" }));
   expect(names()).toHaveLength(2);
   expect(Object.fromEntries(current().searchParams)).toEqual({
@@ -236,67 +279,55 @@ it("composes role choices with the existing search and payable filters without r
   expect(state.save).not.toHaveBeenCalled();
 });
 
-it("clears both role and legacy type together when everyone is chosen while retaining search and balance context", async () => {
-  mount(
-    `/people?${new URLSearchParams({ role: "রাজমিস্ত্রি", type: "shop", q: "রহিম", status: "due" })}`,
-  );
+it("keeps old role-link filtering visible without converting its text into a type", async () => {
+  mount(`/parties?${new URLSearchParams({ role: "  গোপন পরিচয়  " })}`);
   await ready();
-  expect(names()).toEqual(["রহিম রাজমিস্ত্রি"]);
-  await userEvent.setup().click(tabs().getByRole("button", { name: "সবাই" }));
-  expect(Object.fromEntries(current().searchParams)).toEqual({
-    q: "রহিম",
-    status: "due",
-  });
-  expect(names()).toHaveLength(2);
-  expect(state.save).not.toHaveBeenCalled();
+  expect(tabs().queryByRole("button", { name: "গোপন পরিচয়" })).toBeNull();
+  expect(names()).toEqual(["ধরন বাছা হয়নি নাম"]);
+  expect(screen.getByText("পরিচয়: গোপন পরিচয়")).toBeTruthy();
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "পরিচয়ের বাছাই মুছুন" }));
+  expect(current().searchParams.has("role")).toBe(false);
+  expect(names()).toHaveLength(10);
+  expect(await storage.readDraft(preferenceKey)).toBeNull();
 });
 
-it("limits the picker to six existing roles, permits replacing a selected tab and restores the choice from IndexedDB", async () => {
+it("saves chosen type tabs and restores their stable ids from IndexedDB without changing the ledger", async () => {
   const before = JSON.stringify(state.ledger);
   const view = mount();
   await ready();
   const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: "ট্যাব সাজাই" }));
-  const dialog = screen.getByRole("dialog", { name: "ট্যাব সাজাই" });
-  const picker = within(dialog);
-  expect(picker.getAllByRole("checkbox")).toHaveLength(7);
-  expect(picker.getAllByRole("checkbox", { checked: true })).toHaveLength(6);
+  const picker = within(screen.getByRole("dialog", { name: "ট্যাব সাজাই" }));
+  expect(picker.getAllByRole("checkbox")).toHaveLength(8);
+  expect(picker.getAllByRole("checkbox", { checked: true })).toHaveLength(8);
   expect(picker.queryByRole("checkbox", { name: "পুরোনো পরিচয়" })).toBeNull();
-  const alternate = picker.getByRole("checkbox", {
-    name: "সহকারী",
-  }) as HTMLInputElement;
-  expect(alternate.disabled).toBe(true);
-  await user.click(picker.getByRole("checkbox", { name: "ঠিকাদার" }));
-  expect(alternate.disabled).toBe(false);
-  await user.click(alternate);
-  expect(picker.getAllByRole("checkbox", { checked: true })).toHaveLength(6);
-  expect(
-    (picker.getByRole("checkbox", { name: "ঠিকাদার" }) as HTMLInputElement)
-      .disabled,
-  ).toBe(true);
-  for (const selected of picker.getAllByRole("checkbox", { checked: true }))
-    expect((selected as HTMLInputElement).disabled).toBe(false);
+  for (const type of types.filter(
+    (type) => !["supplier", "professional"].includes(type.id),
+  )) {
+    await user.click(picker.getByRole("checkbox", { name: type.label }));
+  }
   await user.click(picker.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  expect(tabs().getByRole("button", { name: "সহকারী" })).toBeTruthy();
-  expect(tabs().queryByRole("button", { name: "ঠিকাদার" })).toBeNull();
-  const stored = await storage.readDraft<{ version: number; keys: string[] }>(
-    preferenceKey,
-  );
-  expect(stored?.version).toBe(1);
-  expect(stored?.keys).toHaveLength(6);
-  expect(stored?.keys).toContain("সহকারী".normalize("NFKC"));
-  expect(stored?.keys).not.toContain("ঠিকাদার".normalize("NFKC"));
+  expect(tabs().getAllByRole("button")).toHaveLength(3);
+  expect(await storage.readDraft(preferenceKey)).toEqual({
+    version: 1,
+    keys: ["supplier", "professional"],
+  });
   view.unmount();
   mount();
-  await screen.findByRole("button", { name: "সহকারী" });
   await ready();
-  expect(tabs().queryByRole("button", { name: "ঠিকাদার" })).toBeNull();
+  expect(
+    tabs()
+      .getAllByRole("button")
+      .map((button) => button.textContent),
+  ).toEqual(["সবাই", "দোকানদার", "ইঞ্জিনিয়ার / পরামর্শক"]);
   expect(JSON.stringify(state.ledger)).toBe(before);
   expect(state.save).not.toHaveBeenCalled();
 });
 
-it("cancels draft tab choices without persisting or offering a new occupation input", async () => {
+it("cancels draft choices, searches type labels and never offers a new identity input", async () => {
   const before = JSON.stringify(state.ledger);
   mount();
   await ready();
@@ -304,32 +335,39 @@ it("cancels draft tab choices without persisting or offering a new occupation in
   await user.click(screen.getByRole("button", { name: "ট্যাব সাজাই" }));
   const picker = within(screen.getByRole("dialog", { name: "ট্যাব সাজাই" }));
   await user.click(picker.getByRole("checkbox", { name: "ঠিকাদার" }));
-  await user.click(picker.getByRole("checkbox", { name: "সহকারী" }));
-  const search = picker.getByRole("searchbox", { name: "পরিচয় খুঁজুন" });
-  expect(search.getAttribute("placeholder")).toBe("পরিচয় খুঁজুন");
-  expect(picker.getAllByRole("searchbox")).toHaveLength(1);
+  const search = picker.getByRole("searchbox", { name: "ধরন খুঁজুন" });
+  await user.type(search, "পরামর্শক");
+  expect(picker.getAllByRole("checkbox")).toHaveLength(1);
+  expect(
+    picker.getByRole("checkbox", { name: "ইঞ্জিনিয়ার / পরামর্শক" }),
+  ).toBeTruthy();
   expect(picker.queryAllByRole("textbox")).toHaveLength(0);
+  await user.clear(search);
   await user.type(search, "একেবারে নতুন পরিচয়");
   expect(picker.queryAllByRole("checkbox")).toHaveLength(0);
   expect(picker.queryByRole("button", { name: /নতুন|যোগ/ })).toBeNull();
   await user.click(picker.getByRole("button", { name: "বাতিল" }));
   expect(screen.queryByRole("dialog")).toBeNull();
-  expect(tabs().getByRole("button", { name: "ঠিকাদার" })).toBeTruthy();
-  expect(tabs().queryByRole("button", { name: "সহকারী" })).toBeNull();
+  expect(tabs().getAllByRole("button")).toHaveLength(9);
   expect(await storage.readDraft(preferenceKey)).toBeNull();
   expect(JSON.stringify(state.ledger)).toBe(before);
-  expect(state.save).not.toHaveBeenCalled();
 });
 
-it("keeps a hidden role URL filter visible as a removable chip without changing preferred tabs", async () => {
-  mount(`/people?${new URLSearchParams({ role: "  সহকারী  " })}`);
+it("leaves old role-tab preferences untouched and makes a hidden selected type clearable", async () => {
+  const old = { version: 1, keys: ["উপ ঠিকাদার"] };
+  await storage.saveDraft(legacyPreferenceKey, old);
+  await storage.saveDraft(preferenceKey, { version: 1, keys: ["supplier"] });
+  mount("/parties?contactType=professional");
   await ready();
-  expect(tabs().queryByRole("button", { name: "সহকারী" })).toBeNull();
-  expect(names()).toEqual(["সহকারী নাম 1"]);
+  expect(
+    tabs().queryByRole("button", { name: "ইঞ্জিনিয়ার / পরামর্শক" }),
+  ).toBeNull();
+  expect(names()).toHaveLength(2);
+  expect(screen.getByText("ধরন: ইঞ্জিনিয়ার / পরামর্শক")).toBeTruthy();
   await userEvent
     .setup()
-    .click(screen.getByRole("button", { name: "পরিচয়ের বাছাই মুছুন" }));
-  expect(current().searchParams.has("role")).toBe(false);
-  expect(names()).toHaveLength(29);
-  expect(await storage.readDraft(preferenceKey)).toBeNull();
+    .click(screen.getByRole("button", { name: "ধরনের বাছাই মুছুন" }));
+  expect(current().searchParams.has("contactType")).toBe(false);
+  expect(names()).toHaveLength(10);
+  expect(await storage.readDraft(legacyPreferenceKey)).toEqual(old);
 });

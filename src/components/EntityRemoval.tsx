@@ -50,7 +50,11 @@ export function useEntityRemoval(
       notify(t(remove ? "তালিকা থেকে সরানো হয়েছে" : "আবার তালিকায় রাখা হয়েছে"));
       if (remove)
         go(
-          kind === "work" ? "/works" : kind === "person" ? "/people" : "/jobs",
+          kind === "work"
+            ? "/sectors"
+            : kind === "person"
+              ? "/parties"
+              : "/works",
         );
     } catch {
       if (mounted.current) setError(t("কাজটি হয়নি। আবার চেষ্টা করুন।"));

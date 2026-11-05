@@ -46,9 +46,15 @@ import { v2English } from "./v2English";
 import { authEnglish } from "../features/auth/authEnglish";
 import { settingsEnglish } from "../features/settings/settingsEnglish";
 import { peopleEnglish } from "../features/people/peopleEnglish";
+import { contactPresetsEnglish } from "../features/people/contactPresetsEnglish";
 import { reviewEnglish } from "../features/import/reviewEnglish";
 import { analyticsEnglish } from "../features/analytics/analyticsEnglish";
 import { formEnglish } from "./formEnglish";
+import { architectureEnglish } from "./architectureEnglish";
+import { houseWriteEnglish } from "../features/write/houseWriteEnglish";
+import { houseCostEnglish } from "../features/write/houseCostEnglish";
+import { entityNavigationEnglish } from "./entityNavigationEnglish";
+import { transactionEnglish } from "../components/transactionEnglish";
 import { appEnglish } from "./appEnglish";
 import {
   applyTheme,
@@ -58,6 +64,8 @@ import {
 } from "../lib/preferences";
 
 const english: Record<string, string> = {
+  ...houseWriteEnglish,
+  ...architectureEnglish,
   ...entryFlowEnglish,
   ...v21EntryEnglish,
   ...jobsEnglish,
@@ -91,6 +99,7 @@ const english: Record<string, string> = {
   ...phoneAuthEnglish,
   ...settingsEnglish,
   ...peopleEnglish,
+  ...contactPresetsEnglish,
   ...v2English,
   ...formEnglish,
   ...appEnglish,
@@ -181,6 +190,9 @@ const english: Record<string, string> = {
   আলো: "Light",
   অন্ধকার: "Dark",
   "ফোনের মতো": "Use device setting",
+  ...houseCostEnglish,
+  ...transactionEnglish,
+  ...entityNavigationEnglish,
 };
 
 export function LanguageProvider({ children }: { children: ReactNode }) {

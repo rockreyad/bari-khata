@@ -158,7 +158,7 @@ export const formEnglish: Record<string, string> = {
   তারিখ: "Date",
   "তারিখ জানা নেই": "Date unknown",
   দেয়াল: "Walls",
-  নগদ: "Cash",
+  ক্যাশ: "Cash",
   "নতুন কাজের খাতা": "New work notebook",
   "নতুন নাম লিখব": "Add a new name",
   "নতুন ব্যক্তি বা দোকান": "New person or shop",

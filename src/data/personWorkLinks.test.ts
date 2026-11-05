@@ -1,3 +1,4 @@
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import { afterEach, expect, it } from "vitest";
 import { LedgerSchema } from "../domain/model";
@@ -42,7 +43,9 @@ it("keeps custom role and multiple notebooks through IndexedDB reopen and backup
   const restored = repository();
   await restored.ensure("real", LedgerSchema.parse({}));
   await restored.importBackup(backup, { replace: true });
-  expect((await restored.read())?.ledger.people[0]).toEqual(ledger.people[0]);
+  expect((await restored.read())?.ledger.people[0]).toEqual(
+    migrateArchitecture(ledger).ledger.people[0],
+  );
   expect((await restored.read())?.ledger.entries).toEqual([]);
   expect((await restored.read())?.ledger.contracts).toEqual([]);
 
@@ -51,7 +54,9 @@ it("keeps custom role and multiple notebooks through IndexedDB reopen and backup
   await expect(
     restored.importBackup(JSON.stringify(corrupt), { replace: true }),
   ).rejects.toThrow();
-  expect((await restored.read())?.ledger.people[0]).toEqual(ledger.people[0]);
+  expect((await restored.read())?.ledger.people[0]).toEqual(
+    migrateArchitecture(ledger).ledger.people[0],
+  );
 });
 
 it("rejects silently omitted links on local save and old backups, while allowing explicit clearing", async () => {
@@ -63,6 +68,7 @@ it("rejects silently omitted links on local save and old backups, while allowing
     "person_work_links_would_be_lost",
   );
   const backup = JSON.parse(await repo.exportBackup());
+  delete backup.integrity;
   delete backup.ledger.people[0].workIds;
   await expect(
     repo.importBackup(JSON.stringify(backup), { replace: true }),
@@ -101,6 +107,7 @@ it("keeps notebook links during reviewed backup merging and requires explicit cl
   const current = fixture();
   await repo.ensure("real", current);
   const copy = JSON.parse(await repo.exportBackup());
+  delete copy.integrity;
   delete copy.ledger.people[0].workIds;
   const options = {
     expectedLedger: current,

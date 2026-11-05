@@ -1,4 +1,27 @@
 export const peopleEnglish: Record<string, string> = {
+  "আর দিতে হবে": "Still to pay",
+  "মোটের সংশোধন": "Total adjustment",
+  "জানা বাকি {{amount}}": "Known remaining {{amount}}",
+  "ধরন: {{kind}}": "Type: {{kind}}",
+  "পরিচয়: {{role}}": "Description: {{role}}",
+  "ধরনের বাছাই মুছুন": "Clear type filter",
+  "পরিচয়ের বাছাই মুছুন": "Clear description filter",
+  "ধরন অনুযায়ী": "By type",
+  "ধরন অনুযায়ী বাছাই": "Filter by type",
+  "ধরন বাছা হয়নি": "Type not selected",
+  "আগে যোগ করা নামগুলোর ধরন থেকে বেছে নিন।":
+    "Choose from the types of contacts already added.",
+  "সবাই-এর পাশে সর্বোচ্চ {{count}}টি ধরন রাখতে পারবেন।":
+    "Keep up to {{count}} types beside Everyone.",
+  "ধরন খুঁজুন": "Search types",
+  "এই ধরনের কোনো নাম যোগ করা নেই।": "No contacts have this type.",
+  "নাম যোগ করার সময় কীভাবে যুক্ত বেছে নিলে এখানে পাওয়া যাবে।":
+    "Choose a relationship when adding a contact to find its type here.",
+  "অন্য ধরন রাখতে আগে একটি সরিয়ে নিন।":
+    "Remove one type before adding another.",
+  "সব হিসাব": "All accounts",
+  "পরিচয় বদলালেও আগের বিল ও দেওয়া টাকার হিসাব বদলাবে না।":
+    "Changing the contact type keeps existing bills and payments unchanged.",
   "পরিচয় / কী কাজ করেন": "Role / occupation",
   "যেমন: সুইপার, লেবার, ঠিকাদার, ডিলার বা ইঞ্জিনিয়ার":
     "For example: cleaner, labourer, contractor, dealer or engineer",
@@ -75,7 +98,7 @@ export const peopleEnglish: Record<string, string> = {
   "মানুষ ও দোকানে ফিরি": "Back to people and shops",
   "এই নামের খাতা": "Contact account",
   "তথ্য বদলাই": "Edit details",
-  "নগদ, বিকাশ বা ব্যাংক": "Cash, bKash or bank",
+  "ক্যাশ, বিকাশ বা ব্যাংক": "Cash, bKash or bank",
   "কেনা বা খরচ লিখি": "Add a purchase",
   "মাল, গাড়িভাড়া বা অন্য খরচ": "Materials, transport or other costs",
   "মাল ফেরত দিই": "Return materials",
@@ -166,4 +189,11 @@ export const peopleEnglish: Record<string, string> = {
     "Old records are included. Unclear payments have not been treated as a payable or advance.",
   "এটি শুধু এই নামের হিসাবের কপি। এখানে কোনো তথ্য বদলানো যায় না।":
     "This is a read-only copy of this contact’s account.",
+  "কোন হিসাবের কপি": "Which account to share",
+  "কোন হিসাব মেলাব": "Which account to reconcile",
+  "হিসাব বেছে নিন": "Choose an account",
+  "যে হিসাবের কপি পাঠাবেন, সেটি বেছে নিন।":
+    "Choose the account you want to share.",
+  "যে হিসাবের মোট মেলাবেন, সেটি বেছে নিন।":
+    "Choose the account total you want to reconcile.",
 };

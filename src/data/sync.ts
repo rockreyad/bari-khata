@@ -6,10 +6,12 @@ import {
 import { z } from "zod";
 import { AUTH_STORAGE_KEY, lockAccount } from "./authSession";
 import type { Ledger } from "../domain/model";
+import { preservesArchitecture } from "../domain/architectureMigration";
 import { preservesRemovalHistory } from "../domain/entityDeletion";
 import { preservesContractHistory } from "../domain/contracts";
 import { preservesWorkHistory } from "../domain/workActivity";
 import { preservesPersonWorkLinks } from "../domain/personWorkLinks";
+import { preservesContactTypes } from "../domain/contactTypes";
 import { preservesMcpProvenance } from "../domain/mcpProvenance.js";
 import { preservesBalanceAdjustments } from "../domain/adjustmentHistory.js";
 import {
@@ -184,6 +186,20 @@ export function createTransport(
   };
 }
 
+function isEmptyArchitecture(ledger: Ledger) {
+  return ![
+    ledger.works,
+    ledger.people,
+    ledger.items,
+    ledger.materialGroups,
+    ledger.paymentPurposes,
+    ledger.contracts,
+    ledger.entries,
+    ledger.milestones ?? [],
+    ledger.paymentAllocations ?? [],
+  ].some((records) => records.length);
+}
+
 async function recordConflict(
   repo: LedgerRepository,
   transport: CloudTransport,
@@ -220,6 +236,11 @@ export async function synchronizeWorkspace(
   if (!frozen) {
     const cloud = await transport.load();
     if (cloud.document?.isDemo) throw new Error("workspace_mode_mismatch");
+    if (cloud.revision < row.cloudRevision) {
+      if (!cloud.document) throw new Error("cloud_revision_regressed");
+      await recordConflict(repo, transport, cloud);
+      return { status: "conflict" };
+    }
     if (cloud.revision !== row.cloudRevision) {
       if (row.pending || (row.generation > 0 && row.cloudRevision === 0)) {
         await recordConflict(repo, transport, cloud);
@@ -228,9 +249,12 @@ export async function synchronizeWorkspace(
       if (cloud.document) {
         const document = validateLedger(cloud.document);
         if (
+          (!isEmptyArchitecture(row.ledger) &&
+            !preservesArchitecture(row.ledger, document)) ||
           !preservesContractHistory(row.ledger, document) ||
           !preservesWorkHistory(row.ledger, document) ||
           !preservesPersonWorkLinks(row.ledger, document) ||
+          !preservesContactTypes(row.ledger, document) ||
           !preservesMcpProvenance(row.ledger, document) ||
           !preservesBalanceAdjustments(row.ledger, document) ||
           !preservesRemovalHistory(row.ledger, document)
@@ -240,15 +264,27 @@ export async function synchronizeWorkspace(
         }
         await repo.database.transaction(
           "rw",
-          repo.database.workspaces,
+          [
+            ...repo.database.workspaceTables(),
+            repo.database.migrations,
+            repo.database.receipts,
+          ],
           async () => {
             const current = await repo.read("real");
             if (!current) throw new Error("workspace_missing");
             if (current.generation !== row!.generation || current.pending)
               throw new Error("local_changed_during_sync");
-            await repo.database.workspaces.put({
+            const migration = await repo.recordIncomingMigration(
+              document,
+              current,
+              "cloud",
+              String(cloud.revision),
+            );
+            await repo.writeWorkspace({
               ...current,
-              ledger: document,
+              ledger: migration.ledger,
+              generation: current.generation + (migration.changed ? 1 : 0),
+              pending: migration.changed,
               ownerId: transport.ownerId,
               cloudRevision: cloud.revision,
               lastSyncedAt: cloud.updatedAt,
@@ -265,8 +301,7 @@ export async function synchronizeWorkspace(
     if (!frozen) {
       frozen = await repo.database.transaction(
         "rw",
-        repo.database.workspaces,
-        repo.database.outbox,
+        [...repo.database.workspaceTables(), repo.database.outbox],
         async () => {
           const current = await repo.read("real");
           if (!current?.pending) return undefined;
@@ -294,13 +329,15 @@ export async function synchronizeWorkspace(
     const sent = frozen;
     await repo.database.transaction(
       "rw",
-      repo.database.workspaces,
-      repo.database.outbox,
-      repo.database.conflicts,
+      [
+        ...repo.database.workspaceTables(),
+        repo.database.outbox,
+        repo.database.conflicts,
+      ],
       async () => {
         const current = await repo.read("real");
         if (!current) throw new Error("workspace_missing");
-        await repo.database.workspaces.put({
+        await repo.writeWorkspace({
           ...current,
           cloudRevision: response.revision,
           ownerId: transport.ownerId,
@@ -316,6 +353,11 @@ export async function synchronizeWorkspace(
 
   let latest = (await repo.read("real"))!;
   const confirmed = await transport.load();
+  if (confirmed.revision < latest.cloudRevision) {
+    if (!confirmed.document) throw new Error("cloud_revision_regressed");
+    await recordConflict(repo, transport, confirmed);
+    return { status: "conflict" };
+  }
   if (confirmed.revision !== latest.cloudRevision) {
     if (latest.pending) {
       await recordConflict(repo, transport, confirmed);
@@ -325,9 +367,12 @@ export async function synchronizeWorkspace(
       throw new Error("invalid_cloud_document");
     const document = validateLedger(confirmed.document);
     if (
+      (!isEmptyArchitecture(latest.ledger) &&
+        !preservesArchitecture(latest.ledger, document)) ||
       !preservesContractHistory(latest.ledger, document) ||
       !preservesWorkHistory(latest.ledger, document) ||
       !preservesPersonWorkLinks(latest.ledger, document) ||
+      !preservesContactTypes(latest.ledger, document) ||
       !preservesMcpProvenance(latest.ledger, document) ||
       !preservesBalanceAdjustments(latest.ledger, document) ||
       !preservesRemovalHistory(latest.ledger, document)
@@ -338,14 +383,26 @@ export async function synchronizeWorkspace(
     const generation = latest.generation;
     await repo.database.transaction(
       "rw",
-      repo.database.workspaces,
+      [
+        ...repo.database.workspaceTables(),
+        repo.database.migrations,
+        repo.database.receipts,
+      ],
       async () => {
         const current = await repo.read("real");
         if (!current || current.generation !== generation || current.pending)
           throw new Error("local_changed_during_sync");
-        await repo.database.workspaces.put({
+        const migration = await repo.recordIncomingMigration(
+          document,
+          current,
+          "cloud",
+          String(confirmed.revision),
+        );
+        await repo.writeWorkspace({
           ...current,
-          ledger: document,
+          ledger: migration.ledger,
+          generation: current.generation + (migration.changed ? 1 : 0),
+          pending: migration.changed,
           cloudRevision: confirmed.revision,
           ownerId: transport.ownerId,
           lastSyncedAt: confirmed.updatedAt,
@@ -354,6 +411,7 @@ export async function synchronizeWorkspace(
       },
     );
     latest = (await repo.read("real"))!;
+    if (latest.pending) return synchronizeWorkspace(transport, repo);
   }
   if (!latest.ownerId)
     await repo.database.workspaces.update("real", {
@@ -444,11 +502,14 @@ export async function resolveCloudConflict(
   if (db.ownerId !== session.user.id) throw new Error("owner_mismatch");
   await db.transaction(
     "rw",
-    db.workspaces,
-    db.conflicts,
-    db.outbox,
-    db.recoveries,
-    db.receipts,
+    [
+      ...db.workspaceTables(),
+      db.conflicts,
+      db.outbox,
+      db.recoveries,
+      db.receipts,
+      db.migrations,
+    ],
     async () => {
       const conflict = await db.conflicts.get("real");
       const current = await repository.read("real");
@@ -470,15 +531,23 @@ export async function resolveCloudConflict(
           reason: "cloud-conflict",
           createdAt: new Date().toISOString(),
         });
-      await db.workspaces.put({
+      const incoming =
+        choice === "use-cloud"
+          ? await repository.recordIncomingMigration(
+              validateLedger(conflict.ledger),
+              current,
+              "cloud",
+              String(conflict.revision),
+            )
+          : null;
+      if (incoming && !preservesArchitecture(current.ledger, incoming.ledger))
+        throw new Error("architecture_data_would_be_lost");
+      await repository.writeWorkspace({
         ...current,
-        ledger:
-          choice === "use-cloud"
-            ? validateLedger(conflict.ledger)
-            : current.ledger,
+        ledger: incoming?.ledger ?? current.ledger,
         cloudRevision: conflict.revision,
         ownerId: session.user.id,
-        pending: choice === "keep-local",
+        pending: choice === "keep-local" || Boolean(incoming?.changed),
         generation: current.generation + 1,
         updatedAt: new Date().toISOString(),
       });

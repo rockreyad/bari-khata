@@ -166,8 +166,16 @@ function scopesForDiff(before: Ledger, after: Ledger) {
     canonical(before.people) !== canonical(after.people)
   )
     scopes.push("entities:write");
-  if (canonical(before.contracts) !== canonical(after.contracts))
+  if (
+    canonical(before.contracts) !== canonical(after.contracts) ||
+    canonical(before.milestones ?? []) !== canonical(after.milestones ?? [])
+  )
     scopes.push("contracts:write");
+  if (
+    canonical(before.paymentAllocations ?? []) !==
+    canonical(after.paymentAllocations ?? [])
+  )
+    scopes.push("entries:update");
   if (
     ["items", "materialGroups", "paymentPurposes"].some(
       (key) =>

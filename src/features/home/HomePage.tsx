@@ -20,7 +20,7 @@ import { WorkCard } from "../works/WorksPages";
 import { orderedWorks } from "../works/workOverview";
 import "./home-summary.css";
 export function HomePage() {
-  const { ledger, add, go, detail } = useNotebook();
+  const { ledger, add, quick, go, detail } = useNotebook();
   const { t, money, number, formatDigits } = useLanguageContext();
   const s = summarize(ledger);
   const paid = cashSummary(ledger);
@@ -110,7 +110,11 @@ export function HomePage() {
                 {t("ফেরত পাওয়া টাকা বাদ দিয়ে")}
               </p>
             ) : null}
-            {s.reconciledPayable > 0 ? (
+            {s.balanceAmbiguous ? (
+              <p className="home-overview-refund-note" role="status">
+                {t("বাকির হিসাব যাচাই বাকি")}
+              </p>
+            ) : s.reconciledPayable > 0 ? (
               <button
                 type="button"
                 className="home-overview-due"
@@ -123,7 +127,7 @@ export function HomePage() {
             ) : null}
           </div>
           <div className="home-overview-actions">
-            <button className="home-overview-add" onClick={() => add()}>
+            <button className="home-overview-add" onClick={quick}>
               <PlusIcon size={20} aria-hidden="true" />
               {t("খরচ লিখি")}
             </button>
@@ -200,8 +204,8 @@ export function HomePage() {
       </section>
       <section>
         <div className="section-heading">
-          <h2>{t("কাজের খাতা")}</h2>
-          <button className="text-button" onClick={() => go("/works")}>
+          <h2>{t("চলমান খাতা")}</h2>
+          <button className="text-button" onClick={() => go("/sectors")}>
             {t("সব খাতা")}
             <ArrowRightIcon size={16} />
           </button>
@@ -213,17 +217,17 @@ export function HomePage() {
                 key={work.id}
                 work={work}
                 ledger={ledger}
-                onOpen={() => go(`/works/${work.id}`)}
+                onOpen={() => go(`/sectors/${work.id}`)}
               />
             ))}
           </div>
         ) : (
-          <button className="empty-panel" onClick={() => go("/works")}>
+          <button className="empty-panel" onClick={() => go("/sectors")}>
             <PlusIcon size={28} />
             {t(
               ledger.works.some((work) => !work.archivedAt)
-                ? "এখন কোনো কাজ চলছে না। সব খাতা দেখুন"
-                : "কাজের খাতা খুলুন",
+                ? "এখন কোনো খাতায় কাজ চলছে না।"
+                : "নতুন খাতা বানান",
             )}
           </button>
         )}

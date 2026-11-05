@@ -14,6 +14,7 @@ import { latinDigits } from "../lib/numerals";
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -36,9 +37,17 @@ import { savePersonWithContract } from "../domain/personContract";
 import { saveWorkChange } from "../domain/workActivity";
 import {
   allowedContactActions,
+  availablePartyActions,
+  canCreateContactJob,
   personKind,
-  roleActions,
 } from "../domain/contacts";
+import {
+  contactPresets,
+  contactPresetFor,
+  contactPresetFrom,
+  contactRoles,
+} from "../features/people/contactPresets";
+import { ContactTypeSchema } from "../domain/contactTypes";
 import { parseAmount } from "../domain/ledger";
 import { Sheet } from "./Sheet";
 import { WorkMark, workIconChoices, workColorChoices } from "./ui/Icons";
@@ -69,7 +78,10 @@ const DraftSchema = z.object({
   status: z.enum(["planned", "ongoing", "done"]).default("planned"),
   startedOn: z.string().nullable().default(null),
   completedOn: z.string().nullable().default(null),
-  contactKind: z.enum(["worker", "shop", "driver", "other"]).default("shop"),
+  contactKind: z.enum(["worker", "shop", "driver", "other"]).default("other"),
+  contactPresetId: z.string().max(100).default("custom"),
+  roles: z.array(ContactTypeSchema).max(8).optional(),
+  identityType: z.enum(["", "person", "organization"]).default(""),
   quickActions: z.array(z.string()).nullable().default(null),
   role: z.string().default(""),
   personWorkIds: z.array(z.string()).max(10000).default([]),
@@ -94,16 +106,6 @@ const DraftSchema = z.object({
   personContractAmount: numericDraftText(),
 });
 type Draft = z.infer<typeof DraftSchema>;
-const roleSuggestions = [
-  "সুইপার",
-  "লেবার",
-  "ঠিকাদার",
-  "ডিলার",
-  "ইঞ্জিনিয়ার",
-  "রাজমিস্ত্রি",
-  "ইলেকট্রিক মিস্ত্রি",
-  "প্লাম্বার",
-] as const;
 const workActionNames = {
   expense: "খরচ লিখি",
   payment: "টাকা দিলাম",
@@ -146,6 +148,8 @@ function initial(
         ...d,
         ...person,
         contactKind: personKind(person),
+        contactPresetId: contactPresetFor(person).id,
+        roles: contactRoles(person),
         personWorkIds: person.workIds ?? [],
       });
   }
@@ -179,18 +183,6 @@ export function EntitySheet({
 }: EntitySheetProps) {
   const { t, money, formatDigits } = useLanguageContext();
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode]);
-  const personRoleChoices = useMemo(
-    () =>
-      kind === "person"
-        ? [
-            ...roleSuggestions.map((role) => ({ value: t(role) })),
-            ...ledger.people
-              .filter((person) => person.role.trim())
-              .map((person) => ({ value: person.role })),
-          ]
-        : [],
-    [kind, ledger.people, t],
-  );
   const originalContract =
     kind === "contract"
       ? ledger.contracts.find((contract) => contract.id === editId)
@@ -210,6 +202,16 @@ export function EntitySheet({
       draft.workId !== (originalContract.workId ?? "")),
   );
   const notebookValue = draft.scope === "work" ? draft.workId : "";
+  const contractPersonRuleId = useId();
+  const selectedContractPerson = ledger.people.find(
+    (person) => person.id === draft.personId,
+  );
+  const ineligibleContractPerson = Boolean(
+    kind === "contract" &&
+    selectedContractPerson &&
+    !canCreateContactJob(selectedContractPerson) &&
+    selectedContractPerson.id !== originalContract?.personId,
+  );
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [, setError, errorNotice] = useFormError();
@@ -283,6 +285,16 @@ export function EntitySheet({
               )
             )
           ) {
+            if (
+              kind === "person" &&
+              typeof value === "object" &&
+              !("contactPresetId" in value) &&
+              ("contactKind" in value || "role" in value)
+            )
+              parsed.data.contactPresetId = contactPresetFrom(
+                parsed.data.contactKind,
+                parsed.data.role,
+              ).id;
             latest.current = parsed.data;
             setDraft(parsed.data);
             setNotice(t("আগের লেখা ফিরিয়ে আনা হয়েছে।"));
@@ -338,28 +350,50 @@ export function EntitySheet({
     draft.basis === "fixed" || draft.totalOverridden
       ? amount(draft.total)
       : calculatedTotal;
+  const personPreset = contactPresets.find(
+    (preset) => preset.id === draft.contactPresetId,
+  );
+  const storedPerson =
+    kind === "person" && editId
+      ? ledger.people.find((person) => person.id === editId)
+      : undefined;
+  const storedOtherRoles =
+    storedPerson?.roles?.filter(
+      (role) => role !== contactPresetFor(storedPerson).id,
+    ) ?? [];
+  const personRoles =
+    draft.roles === undefined && !storedOtherRoles.length
+      ? undefined
+      : [...new Set([...(draft.roles ?? []), ...storedOtherRoles])];
+  const personRules = PersonSchema.parse({
+    id: draft.id,
+    name: draft.name || "new",
+    kind: draft.contactKind,
+    contactType: personPreset?.id,
+    roles: personRoles,
+  });
   const allowed =
     kind === "person"
-      ? roleActions[draft.contactKind]
+      ? availablePartyActions(personRules)
       : Object.keys(workActionNames);
-  const selected =
+  const personAgreementAllowed = canCreateContactJob(personRules);
+  const hasPersonAgreement =
+    personAgreementAllowed || Boolean(draft.personContractAmount.trim());
+  const selected = (
     draft.quickActions ??
     (kind === "person"
-      ? allowedContactActions(
-          PersonSchema.parse({
-            id: draft.id,
-            name: draft.name || "new",
-            kind: draft.contactKind,
-          }),
-        )
-      : ["expense", "payment"]);
-  const toggle = (action: string) =>
+      ? allowedContactActions(personRules)
+      : ["expense", "payment"])
+  ).filter((action) => allowed.includes(action));
+  const toggle = (action: string) => {
+    if (!allowed.includes(action)) return;
     field(
       "quickActions",
       selected.includes(action)
         ? selected.filter((a) => a !== action)
         : [...selected, action],
     );
+  };
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (lock.current || !ready) return;
@@ -368,9 +402,7 @@ export function EntitySheet({
     setError("");
     try {
       if (identityMismatch)
-        throw new Error(
-          t("এই কাজে হিসাব আছে। মিস্ত্রি ও খাতা বদলানো যাবে না।"),
-        );
+        throw new Error(t("এই কাজে হিসাব আছে। কর্মী ও খাতা বদলানো যাবে না।"));
       let next = structuredClone(ledger);
       if (kind !== "contract" && !draft.name.trim())
         throw new Error(t("নাম লিখুন।"));
@@ -403,6 +435,11 @@ export function EntitySheet({
           role: draft.role.trim(),
           workIds: draft.personWorkIds,
           kind: draft.contactKind,
+          contactType: personPreset?.id ?? previous?.contactType,
+          roles: personRoles,
+          identityType: previous
+            ? previous.identityType
+            : draft.identityType || undefined,
           quickActions:
             draft.quickActions === null
               ? null
@@ -412,7 +449,7 @@ export function EntitySheet({
         });
         if (
           !editId &&
-          draft.contactKind === "worker" &&
+          hasPersonAgreement &&
           draft.personContractAmount.trim() &&
           !amount(draft.personContractAmount)
         )
@@ -428,7 +465,7 @@ export function EntitySheet({
         next = savePersonWithContract(
           next,
           person,
-          !editId && draft.contactKind === "worker"
+          !editId && hasPersonAgreement
             ? {
                 id: draft.personContractId || `contract-${draft.id}`,
                 workId: notebookValue || null,
@@ -442,15 +479,15 @@ export function EntitySheet({
         if (!total) throw new Error(t("কাজের সঠিক টাকা লিখুন।"));
         let personId = draft.personId;
         if (personId === "__new__") {
-          if (!draft.newPersonName.trim())
-            throw new Error(t("মিস্ত্রির নাম লিখুন।"));
+          if (!draft.newPersonName.trim()) throw new Error(t("নাম লিখুন।"));
           personId = draft.newPersonId;
           next.people.push(
             PersonSchema.parse({
               id: personId,
               name: draft.newPersonName.trim(),
-              kind: "worker",
-              role: t("মিস্ত্রি"),
+              kind: "other",
+              contactType: "custom",
+              role: "",
             }),
           );
         }
@@ -464,14 +501,13 @@ export function EntitySheet({
             ))
         )
           throw new Error(t("মুছে রাখা নাম, খাতা বা কাজ আগে ফিরিয়ে আনুন।"));
-        if (!next.people.some((p) => p.id === personId))
-          throw new Error(t("মিস্ত্রির নাম বেছে নিন।"));
+        const person = next.people.find((p) => p.id === personId);
+        if (!person) throw new Error(t("কাজের জন্য নাম বেছে নিন।"));
         const previous = next.contracts.find((c) => c.id === editId);
-        if (
-          (!previous || previous.personId !== personId) &&
-          personKind(next.people.find((p) => p.id === personId)!) !== "worker"
-        )
-          throw new Error(t("মজুরির দর রাখতে মিস্ত্রির নাম বেছে নিন।"));
+        if (!canCreateContactJob(person) && previous?.personId !== person.id)
+          throw new Error(
+            t("এই ধরনের নামে নতুন কাজ রাখা যায় না। অন্য নাম বেছে নিন।"),
+          );
         const contract = ContractSchema.parse({
           id: draft.id,
           ...previous,
@@ -555,7 +591,7 @@ export function EntitySheet({
     (!originalPerson || originalPerson.archivedAt)
   )
     return (
-      <Frame title={t("নামের তথ্য")} onClose={() => void close()}>
+      <Frame title={t("কর্মীর তথ্য")} onClose={() => void close()}>
         <FormError {...errorNotice} className="form-error" />
         <p className="entity-notice" role="status">
           {t(
@@ -573,7 +609,7 @@ export function EntitySheet({
             className: "person-editor-page",
             subtitle: editId
               ? formatDigits(originalPerson?.name ?? "")
-              : t("মানুষ ও দোকান"),
+              : undefined,
             busy: saving,
           }
         : {})}
@@ -581,11 +617,11 @@ export function EntitySheet({
         kind === "work"
           ? editId
             ? "খাতার তথ্য"
-            : "কাজের খাতা খুলব"
+            : "নতুন খাতা বানান"
           : kind === "person"
             ? editId
-              ? "তথ্য বদলাই"
-              : "নাম যোগ করি"
+              ? "কর্মীর তথ্য"
+              : "নতুন কর্মী"
             : editId
               ? "কাজ বদলাই"
               : "নতুন কাজ",
@@ -620,12 +656,12 @@ export function EntitySheet({
               <div className="work-preview">
                 <WorkMark icon={draft.icon} color={draft.color} size={29} />
                 <div>
-                  <strong>{draft.name || t("আপনার কাজের খাতা")}</strong>
+                  <strong>{draft.name || t("আপনার খাতা")}</strong>
                   <span>{t("যেভাবে চিনতে সুবিধা হয়, সেভাবে সাজান।")}</span>
                 </div>
               </div>
               <label>
-                {t("কাজের নাম")}
+                {t("খাতার নাম")}
                 <input
                   autoFocus
                   placeholder={t("যেমন: বাথরুমের কাজ")}
@@ -761,7 +797,7 @@ export function EntitySheet({
               value={draft}
               ledger={ledger}
               editing={Boolean(editId)}
-              roleChoices={personRoleChoices}
+              agreementAllowed={personAgreementAllowed}
               allowedActions={allowed as ContactAction[]}
               selectedActions={selected}
               notebookValue={notebookValue}
@@ -769,12 +805,26 @@ export function EntitySheet({
                 setError("");
                 setDraft((current) => ({ ...current, ...patch }));
               }}
-              onKind={(contactKind) => {
+              onPreset={(preset) => {
                 setError("");
                 setDraft((current) =>
-                  current.contactKind === contactKind
+                  current.contactPresetId === preset.id
                     ? current
-                    : { ...current, contactKind, quickActions: null },
+                    : {
+                        ...current,
+                        contactPresetId: preset.id,
+                        contactKind: preset.kind,
+                        roles: [
+                          ...new Set([
+                            ...(current.roles ?? []).filter(
+                              (role) => role !== current.contactPresetId,
+                            ),
+                            ...(preset.id === "custom" ? [] : [preset.id]),
+                          ]),
+                        ],
+                        role: t(preset.role),
+                        quickActions: [...preset.actions],
+                      },
                 );
               }}
               onNotebook={chooseNotebook}
@@ -792,20 +842,18 @@ export function EntitySheet({
             <>
               {identityMismatch ? (
                 <div className="entity-notice" role="alert">
-                  <p>
-                    {t("এই কাজে হিসাব আছে। মিস্ত্রি ও খাতা বদলানো যাবে না।")}
-                  </p>
+                  <p>{t("এই কাজে হিসাব আছে। কর্মী ও খাতা বদলানো যাবে না।")}</p>
                   <button
                     type="button"
                     className="secondary-button"
                     onClick={restoreIdentity}
                   >
-                    {t("আগের মিস্ত্রি ও খাতা রাখি")}
+                    {t("আগের কর্মী ও খাতা রাখি")}
                   </button>
                 </div>
               ) : identityLocked ? (
                 <p className="field-hint">
-                  {t("এই কাজে হিসাব আছে। মিস্ত্রি ও খাতা বদলানো যাবে না।")}
+                  {t("এই কাজে হিসাব আছে। কর্মী ও খাতা বদলানো যাবে না।")}
                 </p>
               ) : null}
               <label>
@@ -839,7 +887,7 @@ export function EntitySheet({
                 </AppSelect>
               </label>
               <label>
-                {t("কাজের খাতা")}
+                {t("খাতা")}
                 <AppSelect
                   value={notebookValue}
                   onChange={(event) => chooseNotebook(event.target.value)}
@@ -860,8 +908,13 @@ export function EntitySheet({
                 </AppSelect>
               </label>
               <label>
-                {t("মিস্ত্রি")}
+                {t("কার কাজ")}
                 <AppSelect
+                  aria-label={t("কার কাজ")}
+                  aria-invalid={ineligibleContractPerson || undefined}
+                  aria-describedby={
+                    ineligibleContractPerson ? contractPersonRuleId : undefined
+                  }
                   value={draft.personId}
                   onChange={(e) => {
                     if (!identityLocked) field("personId", e.target.value);
@@ -873,12 +926,9 @@ export function EntitySheet({
                   {ledger.people
                     .filter(
                       (person) =>
-                        !person.archivedAt ||
-                        (Boolean(editId) && person.id === draft.personId),
-                    )
-                    .filter(
-                      (p) =>
-                        personKind(p) === "worker" || p.id === draft.personId,
+                        canCreateContactJob(person) ||
+                        person.id === originalContract?.personId ||
+                        person.id === draft.personId,
                     )
                     .map((p) => (
                       <option key={p.id} value={p.id}>
@@ -888,9 +938,18 @@ export function EntitySheet({
                   <option value="__new__">{t("+ নাম লিখব")}</option>
                 </AppSelect>
               </label>
+              {ineligibleContractPerson ? (
+                <p
+                  id={contractPersonRuleId}
+                  className="field-hint"
+                  role="status"
+                >
+                  {t("এই ধরনের নামে নতুন কাজ রাখা যায় না। অন্য নাম বেছে নিন।")}
+                </p>
+              ) : null}
               {draft.personId === "__new__" ? (
                 <label>
-                  {t("মিস্ত্রির নাম")}
+                  {t("নাম")}
                   <input
                     value={draft.newPersonName}
                     onChange={(e) => field("newPersonName", e.target.value)}

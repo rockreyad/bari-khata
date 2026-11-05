@@ -301,10 +301,9 @@ export function workBalances(ledger: Ledger, workId: string): WorkBalances {
     scopedOutstanding: ambiguous ? null : Number(scopedOutstanding),
     totalOutstanding:
       ambiguous || sharedCommitments.length ? null : Number(scopedOutstanding),
-    reconciledPayable:
-      ambiguous || reconciled.balanceAmbiguous
-        ? null
-        : reconciled.reconciledPayable,
+    reconciledPayable: reconciled.balanceAmbiguous
+      ? null
+      : reconciled.reconciledPayable,
     byAccount: {
       materials: Number(byAccount.materials),
       labour: ambiguous ? null : Number(byAccount.labour),

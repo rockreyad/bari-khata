@@ -1,0 +1,252 @@
+.house-write-page .entry-page-footer .primary-button {
+  min-height: 52px;
+}
+.house-form .text-button {
+  justify-self: start;
+  min-height: 44px;
+}
+.house-payment-preview {
+  font-size: 13px;
+}
+.house-payment-balance {
+  margin: -10px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.house-payment-outcome {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px 16px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.house-payment-outcome strong {
+  font-weight: 600;
+}
+.house-payment-outcome span {
+  font-size: 12px;
+}
+.house-payment-question {
+  display: grid;
+  gap: 10px;
+  padding-inline: 4px;
+  min-width: 0;
+}
+.house-payment-question p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.house-payment-advance {
+  justify-self: start;
+  border-style: solid;
+  text-align: start;
+}
+.house-payment-advance[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 var(--accent);
+}
+.house-preview-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.house-preview-heading h2 {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--muted);
+  margin: 0;
+}
+.house-payment-preview dl {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.house-payment-preview dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: baseline;
+}
+.house-payment-preview dt {
+  color: var(--muted);
+}
+.house-payment-preview dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.house-payment-preview .house-result {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin-top: 4px;
+}
+.house-payment-preview .house-result dt {
+  color: var(--text);
+}
+.house-payment-preview .house-result dd {
+  font-size: 23px;
+}
+.house-allocation-preview {
+  margin: 0 0 16px;
+  padding: 0 0 16px;
+  list-style: none;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
+}
+.house-allocation-preview li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.house-allocation-preview li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.house-allocation-preview small,
+.house-allocation-edit small {
+  display: block;
+  color: var(--muted);
+  margin-top: 3px;
+  font-size: 12px;
+}
+.house-allocation-preview strong {
+  white-space: nowrap;
+  font-weight: 500;
+}
+.house-allocation-edit {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.house-allocation-edit label {
+  grid-template-columns: minmax(0, 1fr) minmax(90px, 140px);
+  align-items: center;
+}
+.house-form .house-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 400;
+  min-height: 44px;
+  color: var(--text);
+  line-height: 1.7;
+}
+.house-check input {
+  margin-top: 3px;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+.house-attachments {
+  min-width: 0;
+}
+.house-attachments .house-attachment-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 14px 18px;
+  border: 1px dashed var(--control-border, var(--line));
+  border-radius: 18px;
+  color: var(--accent-strong);
+  background: var(--surface);
+  cursor: pointer;
+  overflow: hidden;
+}
+.house-attachment-button > span {
+  font-size: 13px;
+  font-weight: 550;
+}
+.house-attachment-button small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  margin-top: 3px;
+}
+.house-attachment-button input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.house-attachment-button:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.house-attachments ul {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.house-attachments li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 14px;
+}
+.house-attachments li > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: var(--muted);
+}
+.house-attachments .icon-button {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.house-attachment-preview {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+.house-attachment-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.house-legacy-notice {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+  padding-top: 12px;
+}
+.house-legacy-notice p {
+  color: var(--muted);
+  line-height: 1.8;
+  margin: 0 0 12px;
+}
+.house-payment-scope > p {
+  margin: 0;
+}

@@ -59,6 +59,8 @@ export const SharedStatementSchema = z.object({
     actualPaid: SafeAmount.optional(),
     actualRefunds: SafeAmount.optional(),
     actualNetPaid: SafeAmount.optional(),
+    balanceAmbiguous: z.boolean().optional(),
+    earnedPayable: SafeAmount.nullable().optional(),
   }),
   counts: z
     .object({
@@ -77,6 +79,8 @@ export const SharedStatementSchema = z.object({
         total: SafeAmount.refine((value) => value >= 0),
         netPaid: SafeAmount,
         remaining: SafeAmount.refine((value) => value >= 0),
+        remainingCommitment: NonnegativeAmount.optional(),
+        unearnedCommitment: NonnegativeAmount.optional(),
       }),
     )
     .max(10000)

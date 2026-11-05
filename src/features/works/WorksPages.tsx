@@ -173,12 +173,19 @@ export function WorksPage() {
   return (
     <div className="page-flow works-directory">
       <header className="page-heading works-directory-heading">
-        <h1>{t("কাজের খাতা")}</h1>
+        <h1>{t("খাতা")}</h1>
         <button className="primary-button" onClick={() => entity("work")}>
           <PlusIcon size={19} />
-          {t("নতুন খাতা")}
+          {t("নতুন খাতা বানান")}
         </button>
       </header>
+      <button
+        type="button"
+        className="text-button"
+        onClick={() => go("/works")}
+      >
+        {t("সব কাজ")}
+      </button>
       <section className="works-directory-tools">
         <label className="works-search">
           <MagnifyingGlassIcon size={20} aria-hidden="true" />
@@ -264,7 +271,7 @@ export function WorksPage() {
             key={work.id}
             work={work}
             ledger={ledger}
-            onOpen={() => go(`/works/${work.id}`)}
+            onOpen={() => go(`/sectors/${work.id}`)}
           />
         ))}
       </div>
@@ -387,7 +394,7 @@ export function WorkPage() {
     return (
       <div className="empty-panel">
         <h2>{t("খাতা পাওয়া যায়নি")}</h2>
-        <button onClick={() => go("/works")}>{t("সব খাতা")}</button>
+        <button onClick={() => go("/sectors")}>{t("সব খাতা")}</button>
       </div>
     );
   const s = summarize(ledger, work.id);
@@ -490,9 +497,9 @@ export function WorkPage() {
               : String(value ?? t("লেখা নেই"));
   return (
     <div className="page-flow work-page-v3">
-      <button className="back-link" onClick={() => go("/works")}>
+      <button className="back-link" onClick={() => go("/sectors")}>
         <ArrowLeftIcon size={17} />
-        {t("কাজের খাতা")}
+        {t("খাতা")}
       </button>
       <header className="page-heading">
         <div className="work-title">
@@ -594,7 +601,7 @@ export function WorkPage() {
                       go(
                         jobDetailUrl(
                           job.id,
-                          `${base}/works/${encodeURIComponent(work.id)}?${params}`,
+                          `${base}/sectors/${encodeURIComponent(work.id)}?${params}`,
                           base,
                         ),
                       )

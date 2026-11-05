@@ -157,7 +157,7 @@ it.each(["/settings/account", "/settings/account/password"])(
 );
 
 it("preserves the requested page when a session expires without explicit sign-out", async () => {
-  const path = "/works/door?tab=labour";
+  const path = "/sectors/door?tab=labour";
   window.history.replaceState({}, "", path);
   render(<App />);
   await screen.findByRole("button", { name: "Sign out" });

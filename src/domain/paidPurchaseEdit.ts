@@ -6,6 +6,7 @@ import {
   type Ledger,
 } from "./model";
 import { entryTotal, replaceExpenseAndSettlements } from "./ledger";
+import { allocatePayment } from "./partyLedger";
 
 type EntryCore = Entry["revisions"][number]["before"];
 
@@ -167,7 +168,31 @@ export function replacePaidPurchase(
     replacementBill.balanceImpact !== "normal"
   )
     throw new Error("paid_purchase_not_eligible");
-  const candidate = replaceExpenseAndSettlements(current, replacementBill);
+  const pairedAllocations = (current.paymentAllocations ?? []).filter(
+    (row) =>
+      !row.cancelledAt &&
+      (row.paymentId === payment.id || row.billId === originalBill.id),
+  );
+  if (
+    pairedAllocations.some(
+      (row) => row.paymentId !== payment.id || row.billId !== originalBill.id,
+    )
+  )
+    throw new Error("paid_purchase_allocations_need_review");
+  const at = new Date().toISOString();
+  const beforeEdit = validateLedger({
+    ...current,
+    paymentAllocations: current.paymentAllocations?.map((row) =>
+      pairedAllocations.some((paired) => paired.id === row.id)
+        ? {
+            ...row,
+            cancelledAt: at,
+            cancellationReason: "কেনাকাটার অঙ্ক বদলানোয় আগের মিল বদলেছি",
+          }
+        : row,
+    ),
+  });
+  const candidate = replaceExpenseAndSettlements(beforeEdit, replacementBill);
   const bill = candidate.entries.find((entry) => entry.id === originalBill.id)!;
   const mappedPayment = candidate.entries.find(
     (entry) => entry.id === payment.id,
@@ -184,14 +209,13 @@ export function replacePaidPurchase(
   const cashChanged = !sameCore(payment, nextPayment);
   const billChanged = !sameCore(originalBill, bill);
   if (!cashChanged && !billChanged) return current;
-  const at = new Date().toISOString();
   const revise = (before: Entry, after: Entry): Entry => ({
     ...after,
     updatedAt: at,
     revisions: [...before.revisions, { at, before: core(before) }],
   });
   // A matching bill snapshot also records an explicit repair of previously mismatched cash.
-  return validateLedger({
+  const updated = validateLedger({
     ...candidate,
     entries: candidate.entries.map((entry) =>
       entry.id === bill.id
@@ -203,4 +227,9 @@ export function replacePaidPurchase(
           : entry,
     ),
   });
+  return pairedAllocations.length
+    ? allocatePayment(updated, payment.id, [
+        { billId: bill.id, workId, amount: total },
+      ])
+    : updated;
 }

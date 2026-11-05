@@ -133,7 +133,7 @@ const jobFields: Record<string, string> = {
   basis: "হিসাবের ধরন",
   title: "নাম",
   status: "অবস্থা",
-  workId: "কাজের খাতা",
+  workId: "খাতা",
   personId: "মিস্ত্রি",
   scope: "কাজের পরিধি",
   agreedOn: "চুক্তির তারিখ",

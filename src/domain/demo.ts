@@ -3,6 +3,9 @@ import { validateLedger, type Entry, type Ledger } from "./model";
 export function createEmptyLedger(): Ledger {
   return validateLedger({
     schemaVersion: 1,
+    architectureVersion: 2,
+    milestones: [],
+    paymentAllocations: [],
     isDemo: false,
     project: { id: "my-home", name: "আমার বাড়ি", currency: "BDT" },
     works: [],
@@ -241,6 +244,9 @@ export function createDemoLedger(): Ledger {
   );
   return validateLedger({
     schemaVersion: 1,
+    architectureVersion: 2,
+    milestones: [],
+    paymentAllocations: [],
     isDemo: true,
     project: { id: "demo-home", name: "নমুনা বাড়ি", currency: "BDT" },
     works: [
@@ -278,19 +284,51 @@ export function createDemoLedger(): Ledger {
       },
     ],
     people: [
-      { id: "tile-worker", name: "করিম মিস্ত্রি", role: "টাইলস মিস্ত্রি" },
+      {
+        id: "tile-worker",
+        name: "করিম মিস্ত্রি",
+        role: "টাইলস মিস্ত্রি",
+        kind: "worker",
+        contactType: "craftsperson",
+        roles: ["craftsperson"],
+        workIds: ["tiles"],
+      },
       {
         id: "plaster-worker",
         name: "রহিম মিস্ত্রি",
         role: "পলেস্তারার মিস্ত্রি",
+        kind: "worker",
+        contactType: "craftsperson",
+        roles: ["craftsperson"],
+        workIds: ["plaster"],
       },
       {
         id: "electric-worker",
         name: "সোহেল মিস্ত্রি",
         role: "বিদ্যুতের মিস্ত্রি",
+        kind: "worker",
+        contactType: "craftsperson",
+        roles: ["craftsperson"],
+        workIds: ["electric"],
       },
-      { id: "shop", name: "টাইলসের দোকান", role: "মালের দোকান" },
-      { id: "driver", name: "গাড়িচালক", role: "মাল আনা" },
+      {
+        id: "shop",
+        name: "টাইলসের দোকান",
+        role: "মালের দোকান",
+        kind: "shop",
+        contactType: "supplier",
+        roles: ["supplier"],
+        workIds: ["tiles"],
+      },
+      {
+        id: "driver",
+        name: "গাড়িচালক",
+        role: "মাল আনা",
+        kind: "driver",
+        contactType: "transport",
+        roles: ["transport"],
+        workIds: ["tiles"],
+      },
     ],
     items: [
       { id: "tile", name: "টাইলস", unit: "বর্গফুট", aliases: ["Tiles"] },

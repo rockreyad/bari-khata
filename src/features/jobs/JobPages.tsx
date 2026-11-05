@@ -42,6 +42,7 @@ import {
   type JobStatus,
 } from "./jobView";
 import "./jobs.css";
+import { AgreementMilestones } from "./AgreementMilestones";
 
 export function JobsPage() {
   const { ledger, go, entity, base } = useNotebook();
@@ -120,13 +121,20 @@ export function JobsPage() {
   const jobs = scoped.filter(
     (job) =>
       (status === "all" || jobStatusKey(job) === status) &&
-      (balance === "all" || balances.get(job.id)?.state === balance),
+      (balance === "all" ||
+        (balances.get(job.id)?.commitmentValid &&
+          balances.get(job.id)?.commitmentState === balance)),
   );
   const counts = scoped.reduce(
     (result, job) => ({
       all: result.all + 1,
       ongoing: result.ongoing + Number(job.status === "ongoing"),
-      due: result.due + Number(balances.get(job.id)?.state === "due"),
+      due:
+        result.due +
+        Number(
+          balances.get(job.id)?.commitmentValid &&
+            balances.get(job.id)?.commitmentState === "due",
+        ),
     }),
     { all: 0, ongoing: 0, due: 0 },
   );
@@ -173,7 +181,7 @@ export function JobsPage() {
     <div className="jobs-page page-flow">
       <header className="page-heading jobs-heading">
         <div>
-          <p className="eyebrow">{t("মিস্ত্রির কাজের হিসাব")}</p>
+          <p className="eyebrow">{t("কাজের হিসাব")}</p>
           <h1>{t("কাজ")}</h1>
         </div>
         <button
@@ -279,13 +287,13 @@ export function JobsPage() {
           <button
             type="button"
             className="jobs-people-toggle"
-            aria-label={t("মিস্ত্রি ও খাতা")}
+            aria-label={t("কর্মী ও খাতা")}
             aria-expanded={peopleFiltersOpen}
             aria-controls="jobs-people-filters"
             onClick={() => setPeopleDisclosure(!peopleFiltersOpen)}
           >
             <FunnelSimpleIcon size={17} />
-            {t("মিস্ত্রি ও খাতা")}
+            {t("কর্মী ও খাতা")}
             {personId || workId ? (
               <span className="jobs-filter-count" aria-hidden="true">
                 {number(Number(Boolean(personId)) + Number(Boolean(workId)))}
@@ -297,13 +305,13 @@ export function JobsPage() {
         {peopleFiltersOpen ? (
           <div className="jobs-filters" id="jobs-people-filters">
             <label>
-              <span>{t("মিস্ত্রি")}</span>
+              <span>{t("কর্মী")}</span>
               <AppSelect
-                aria-label={t("মিস্ত্রি")}
+                aria-label={t("কর্মী")}
                 value={personId}
                 onChange={(event) => update("person", event.target.value)}
               >
-                <option value="">{t("সবাই")}</option>
+                <option value="">{t("সব কর্মী")}</option>
                 {ledger.people
                   .filter(
                     (person) =>
@@ -318,9 +326,9 @@ export function JobsPage() {
               </AppSelect>
             </label>
             <label>
-              <span>{t("কাজের খাতা")}</span>
+              <span>{t("খাতা")}</span>
               <AppSelect
-                aria-label={t("কাজের খাতা")}
+                aria-label={t("খাতা")}
                 value={workId}
                 onChange={(event) => update("work", event.target.value)}
               >
@@ -502,7 +510,7 @@ export function JobPage() {
             jobReturn(
               params.get("back"),
               base,
-              `/people/${encodeURIComponent(job.personId)}`,
+              `/parties/${encodeURIComponent(job.personId)}`,
             ),
             { replace: true },
           )
@@ -518,7 +526,7 @@ export function JobPage() {
             <button
               type="button"
               className="text-button job-worker-link"
-              onClick={() => go(`/people/${encodeURIComponent(worker.id)}`)}
+              onClick={() => go(`/parties/${encodeURIComponent(worker.id)}`)}
             >
               {formatDigits(worker.name)}
               <ArrowRightIcon size={14} />
@@ -665,6 +673,17 @@ export function JobPage() {
         <WalletIcon size={21} weight="duotone" />
         {t("টাকা দিই")}
       </button>
+      <details className="job-milestones">
+        <summary>
+          {t("কাজের ধাপ")}
+          <CaretDownIcon size={17} aria-hidden="true" />
+        </summary>
+        <AgreementMilestones
+          key={job.id}
+          contractId={job.id}
+          archived={removal.archived || Boolean(worker?.archivedAt)}
+        />
+      </details>
       <div
         className="job-detail-tabs"
         role="tablist"

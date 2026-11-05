@@ -1,3 +1,4 @@
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import { afterEach, expect, it } from "vitest";
 import { LedgerSchema } from "../domain/model";
@@ -20,7 +21,7 @@ afterEach(async () => {
   for (const database of databases.splice(0)) await database.delete();
 });
 
-it("keeps a driver's scoped correction and the excluded bills through save, reopen and backup restore", async () => {
+it("keeps all charges in a driver's selected account through save, reopen and backup restore", async () => {
   const repo = repository();
   const original = LedgerSchema.parse({
     works: [{ id: "door", name: "দরজা" }],
@@ -81,13 +82,13 @@ it("keeps a driver's scoped correction and the excluded bills through save, reop
     account: "other",
     workId: "door",
   } as const;
-  expect(readBalanceAdjustmentScope(original, scope).value).toBe(60000);
+  expect(readBalanceAdjustmentScope(original, scope).value).toBe(210000);
   const adjusted = appendBalanceAdjustment(
     original,
     {
       ...scope,
-      expectedBefore: 60000,
-      after: 30000,
+      expectedBefore: 210000,
+      after: 180000,
       reason: "গাড়িভাড়া মিলিয়েছি",
     },
     "2026-11-04T08:00:00.000Z",
@@ -98,7 +99,7 @@ it("keeps a driver's scoped correction and the excluded bills through save, reop
   await repo.database.open();
   const saved = (await repo.read())!.ledger;
   expect(saved.entries.slice(0, 4)).toEqual(original.entries);
-  expect(readBalanceAdjustmentScope(saved, scope).value).toBe(30000);
+  expect(readBalanceAdjustmentScope(saved, scope).value).toBe(180000);
   const summary = contactAccountSummary(
     saved,
     saved.people[0],
@@ -106,104 +107,115 @@ it("keeps a driver's scoped correction and the excluded bills through save, reop
     "door",
   );
   expect(summary).toMatchObject({
-    reconciledCost: 100000,
-    actualNetPaid: 40000,
-    reconciledPayable: 30000,
+    reconciledCost: 300000,
+    actualNetPaid: 90000,
+    reconciledPayable: 180000,
   });
-  expect(summary.entries.map((entry) => entry.id)).not.toContain("unload");
+  expect(summary.entries.map((entry) => entry.id)).toEqual([
+    "trip",
+    "trip-paid",
+    "unload",
+    "unload-paid",
+    saved.entries.at(-1)!.id,
+  ]);
   expect(
     contactStatement(saved, saved.people[0], {
       account: "other",
       workId: "door",
     }).totals.reconciledPayable,
-  ).toBe(30000);
+  ).toBe(180000);
   const restored = repository();
   await restored.ensure("real", LedgerSchema.parse({}));
   await restored.importBackup(await repo.exportBackup(), { replace: true });
-  expect((await restored.read())!.ledger).toEqual(saved);
+  expect((await restored.read())!.ledger).toEqual(
+    migrateArchitecture(saved).ledger,
+  );
 });
 
-it("does not rewrite old adjustment amounts or history when a contact becomes a driver", async () => {
-  const source = LedgerSchema.parse({
-    works: [{ id: "door", name: "দরজা" }],
-    people: [{ id: "driver", name: "রনি", kind: "other" }],
-    entries: [
-      {
-        id: "trip",
-        kind: "expense",
-        personId: "driver",
-        account: "other",
-        lines: [
-          {
-            id: "trip-line",
-            workId: "door",
-            costType: "transport",
-            amount: 100000,
-          },
-        ],
-      },
-      {
-        id: "unload",
-        kind: "expense",
-        personId: "driver",
-        account: "other",
-        lines: [
-          {
-            id: "unload-line",
-            workId: "door",
-            costType: "unload",
-            amount: 200000,
-          },
-        ],
-      },
-    ],
-  });
-  const scope = {
-    target: "person",
-    basis: "balance",
-    personId: "driver",
-    account: "other",
-    workId: "door",
-  } as const;
-  const corrected = appendBalanceAdjustment(
-    source,
-    {
-      ...scope,
-      expectedBefore: 300000,
-      after: 280000,
-      reason: "আগের পরিচয়ের হিসাব",
-    },
-    "2026-11-04T08:00:00.000Z",
-  );
-  const repo = repository();
-  await repo.ensure("real", corrected);
-  await repo.save({
-    ...corrected,
-    people: corrected.people.map((person) => ({
-      ...person,
-      kind: "driver" as const,
-    })),
-  });
-  const changed = (await repo.read())!.ledger;
-  expect(changed.entries).toEqual(corrected.entries);
-  expect(readBalanceAdjustmentScope(changed, scope).value).toBe(80000);
-  await repo.save(
-    appendBalanceAdjustment(
-      changed,
+it.each(["driver", "shop", "worker"] as const)(
+  "does not rewrite old adjustment amounts or history when a contact becomes a %s",
+  async (kind) => {
+    const source = LedgerSchema.parse({
+      works: [{ id: "door", name: "দরজা" }],
+      people: [{ id: "driver", name: "রনি", kind: "other" }],
+      entries: [
+        {
+          id: "trip",
+          kind: "expense",
+          personId: "driver",
+          account: "other",
+          lines: [
+            {
+              id: "trip-line",
+              workId: "door",
+              costType: "transport",
+              amount: 100000,
+            },
+          ],
+        },
+        {
+          id: "unload",
+          kind: "expense",
+          personId: "driver",
+          account: "other",
+          lines: [
+            {
+              id: "unload-line",
+              workId: "door",
+              costType: "unload",
+              amount: 200000,
+            },
+          ],
+        },
+      ],
+    });
+    const scope = {
+      target: "person",
+      basis: "balance",
+      personId: "driver",
+      account: "other",
+      workId: "door",
+    } as const;
+    const corrected = appendBalanceAdjustment(
+      source,
       {
         ...scope,
-        expectedBefore: 80000,
-        after: 70000,
-        reason: "নতুন গাড়িভাড়ার হিসাব",
+        expectedBefore: 300000,
+        after: 280000,
+        reason: "আগের পরিচয়ের হিসাব",
       },
-      "2026-11-04T09:00:00.000Z",
-    ),
-  );
-  repo.database.close();
-  await repo.database.open();
-  const saved = (await repo.read())!.ledger;
-  expect(saved.entries.slice(0, corrected.entries.length)).toEqual(
-    corrected.entries,
-  );
-  expect(readBalanceAdjustmentScope(saved, scope).value).toBe(70000);
-});
+      "2026-11-04T08:00:00.000Z",
+    );
+    const repo = repository();
+    await repo.ensure("real", corrected);
+    await repo.save({
+      ...corrected,
+      people: corrected.people.map((person) => ({
+        ...person,
+        kind,
+      })),
+    });
+    const changed = (await repo.read())!.ledger;
+    expect(changed.entries).toEqual(corrected.entries);
+    expect(readBalanceAdjustmentScope(changed, scope).value).toBe(280000);
+    await repo.save(
+      appendBalanceAdjustment(
+        changed,
+        {
+          ...scope,
+          expectedBefore: 280000,
+          after: 270000,
+          reason: "নতুন গাড়িভাড়ার হিসাব",
+        },
+        "2026-11-04T09:00:00.000Z",
+      ),
+    );
+    repo.database.close();
+    await repo.database.open();
+    const saved = (await repo.read())!.ledger;
+    expect(saved.entries.slice(0, corrected.entries.length)).toEqual(
+      corrected.entries,
+    );
+    expect(readBalanceAdjustmentScope(saved, scope).value).toBe(270000);
+  },
+);

@@ -1,27 +1,35 @@
 import type { Person } from "../../domain/model";
 import { normalizeLabel } from "../../lib/normalizeLabel";
+import { contactRoles, contactPresets } from "./contactPresets";
 
-export const MAX_PEOPLE_ROLE_TABS = 6;
+export const MAX_PEOPLE_ROLE_TABS = 8;
 export type PeopleRole = { key: string; label: string; count: number };
 
 export const roleKey = (value: string) => normalizeLabel(value);
 
 export function peopleRoles(
-  people: readonly Pick<Person, "role" | "archivedAt">[],
+  people: readonly (Pick<
+    Person,
+    "role" | "kind" | "contactType" | "archivedAt"
+  > &
+    Partial<Pick<Person, "name" | "roles">>)[],
 ): PeopleRole[] {
   const roles = new Map<string, PeopleRole>();
   for (const person of people) {
     if (person.archivedAt) continue;
-    const label = person.role.replace(/\s+/g, " ").trim();
-    const key = roleKey(label);
-    if (!key) continue;
-    const existing = roles.get(key);
-    if (existing) existing.count++;
-    else roles.set(key, { key, label, count: 1 });
+    const assigned = contactRoles(person);
+    for (const key of assigned.length ? assigned : ["custom"]) {
+      const preset = contactPresets.find((preset) => preset.id === key)!;
+      const label = key === "custom" ? "ধরন বাছা হয়নি" : preset.label;
+      const existing = roles.get(key);
+      if (existing) existing.count++;
+      else roles.set(key, { key, label, count: 1 });
+    }
   }
-  return [...roles.values()].sort(
-    (a, b) => b.count - a.count || a.label.localeCompare(b.label, "bn"),
-  );
+  return contactPresets.flatMap((preset) => {
+    const type = roles.get(preset.id);
+    return type ? [type] : [];
+  });
 }
 
 export function visibleRoleTabs(
@@ -33,7 +41,7 @@ export function visibleRoleTabs(
   const seen = new Set<string>();
   const visible: PeopleRole[] = [];
   for (const value of selectedKeys) {
-    const key = roleKey(value);
+    const key = value;
     if (seen.has(key)) continue;
     seen.add(key);
     const role = available.get(key);

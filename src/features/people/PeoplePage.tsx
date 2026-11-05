@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import { useSearchParams } from "react-router";
 import {
   ArrowRightIcon,
@@ -12,20 +12,24 @@ import {
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { AppMenu } from "../../components/ui/AppMenu";
-import { contactAccountSummary, personKind } from "../../domain/contacts";
+import { contactSummary, personKind } from "../../domain/contacts";
+import { contactCommitmentSummary } from "../../domain/contactCommitments";
 import { matchesContact } from "./people";
 import { PersonMark, kindLabels } from "./ContactIdentity";
 import { PeopleRoleTabs } from "./PeopleRoleTabs";
 import { peopleRoles, roleKey, visibleRoleTabs } from "./peopleRoles";
 import { usePeopleRoleTabs } from "./usePeopleRoleTabs";
+import { contactRoles, contactPresets } from "./contactPresets";
 import "./people.css";
 export function PeoplePage() {
   const { ledger, entity, go, mode } = useNotebook();
   const { t, money, formatDigits } = useLanguageContext();
+  const scopeId = useId();
   const [params, setParams] = useSearchParams();
   const query = params.get("q") ?? "";
   const rawRole = (params.get("role") ?? "").slice(0, 4000);
   const activeRole = roleKey(rawRole);
+  const activeType = (params.get("contactType") ?? "").slice(0, 100);
   const rawKind = params.get("type") ?? "all";
   const kind =
     !activeRole && ["worker", "shop", "driver", "other"].includes(rawKind)
@@ -36,30 +40,48 @@ export function PeoplePage() {
   const roles = useMemo(() => peopleRoles(ledger.people), [ledger.people]);
   const preferences = usePeopleRoleTabs(mode);
   const visibleTabs = visibleRoleTabs(roles, preferences.keys);
-  const hiddenRole =
-    activeRole && !visibleTabs.some((role) => role.key === activeRole)
-      ? (roles.find((role) => role.key === activeRole)?.label ?? rawRole.trim())
+  const hiddenType =
+    activeType && !visibleTabs.some((type) => type.key === activeType)
+      ? (roles.find((type) => type.key === activeType)?.label ??
+        contactPresets.find((type) => type.id === activeType)?.label ??
+        activeType)
       : "";
   const rows = useMemo(
     () =>
       ledger.people
         .filter((person) => !person.archivedAt)
-        .map((person) => ({
-          person,
-          summary: contactAccountSummary(ledger, person),
-        })),
+        .map((person) => {
+          const summary = contactSummary(ledger, person);
+          const commitments = ledger.contracts.some(
+            (contract) => contract.personId === person.id,
+          )
+            ? contactCommitmentSummary(ledger, person.id)
+            : null;
+          return {
+            person,
+            summary,
+            remaining: commitments?.remaining ?? summary.reconciledPayable,
+            extra: commitments?.extra ?? summary.reconciledAdvance,
+            valid: commitments?.valid ?? !summary.balanceAmbiguous,
+            needsReview: commitments
+              ? !commitments.valid || commitments.balanceAmbiguous
+              : summary.balanceAmbiguous,
+          };
+        }),
     [ledger],
   );
   const shown = rows
     .filter(
-      ({ person, summary }) =>
+      ({ person, remaining, extra, valid }) =>
         matchesContact(person, query) &&
         (kind === "all" || personKind(person) === kind) &&
+        (!activeType ||
+          (contactRoles(person).length
+            ? contactRoles(person).includes(activeType as never)
+            : activeType === "custom")) &&
         (!activeRole || roleKey(person.role) === activeRole) &&
         (status === "all" ||
-          (status === "due"
-            ? summary.reconciledPayable > 0
-            : summary.reconciledAdvance > 0)),
+          (status === "due" ? valid && remaining > 0 : valid && extra > 0)),
     )
     .sort(
       (a, b) =>
@@ -76,36 +98,64 @@ export function PeoplePage() {
       },
       { replace: true },
     );
-  const selectRole = (role: string) =>
+  const selectType = (type: string) =>
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
         next.delete("type");
-        if (role)
-          next.set(
-            "role",
-            roles.find((item) => item.key === role)?.label ?? role,
-          );
-        else next.delete("role");
+        next.delete("role");
+        if (type) next.set("contactType", type);
+        else next.delete("contactType");
         return next;
       },
       { replace: true },
     );
+  const scopes = [
+    ...(kind !== "all"
+      ? [
+          {
+            key: "type",
+            label: t("ধরন: {{kind}}", { kind: t(kindLabels[kind]) }),
+            clear: t("ধরনের বাছাই মুছুন"),
+          },
+        ]
+      : []),
+    ...(activeRole
+      ? [
+          {
+            key: "role",
+            label: t("পরিচয়: {{role}}", { role: formatDigits(rawRole.trim()) }),
+            clear: t("পরিচয়ের বাছাই মুছুন"),
+          },
+        ]
+      : []),
+    ...(hiddenType
+      ? [
+          {
+            key: "contactType",
+            label: t("ধরন: {{kind}}", {
+              kind: t(activeType === "custom" ? "ধরন বাছা হয়নি" : hiddenType),
+            }),
+            clear: t("ধরনের বাছাই মুছুন"),
+          },
+        ]
+      : []),
+  ];
   return (
     <div className="contacts-page">
       <header className="page-heading">
         <div>
-          <h1>{t("মানুষ ও দোকান")}</h1>
+          <h1>{t("কর্মী")}</h1>
           <p>{t("কাকে কত দিয়েছি, এক নজরে।")}</p>
         </div>
         <button className="primary-button" onClick={() => entity("person")}>
           <PlusIcon size={19} />
-          {t("নাম যোগ করি")}
+          {t("নতুন কর্মী")}
         </button>
       </header>
-      <button className="people-jobs-link" onClick={() => go("/jobs")}>
+      <button className="people-jobs-link" onClick={() => go("/works")}>
         <HardHatIcon size={21} weight="duotone" />
-        <span>{t("মিস্ত্রির সব কাজ")}</span>
+        <span>{t("সব কাজ")}</span>
         <ArrowRightIcon size={18} />
       </button>
       <div className="contacts-search">
@@ -151,47 +201,39 @@ export function PeoplePage() {
       <PeopleRoleTabs
         roles={roles}
         selectedKeys={preferences.keys}
-        activeRole={activeRole}
-        allActive={!activeRole && kind === "all"}
+        activeRole={activeType}
+        allActive={!activeRole && !activeType && kind === "all"}
         ready={preferences.ready}
         saving={preferences.saving}
         error={preferences.error}
-        onSelect={selectRole}
+        onSelect={selectType}
         onSave={preferences.saveKeys}
         onRetry={preferences.retry}
       />
-      {kind !== "all" || hiddenRole ? (
-        <div className="people-active-scope">
-          <span>
-            {kind !== "all"
-              ? t("ধরন: {{kind}}", { kind: t(kindLabels[kind]) })
-              : t("পরিচয়: {{role}}", { role: formatDigits(hiddenRole) })}
-          </span>
+      {scopes.map((scope) => (
+        <div className="people-active-scope" key={scope.key}>
+          <span id={`${scopeId}-${scope.key}`}>{scope.label}</span>
           <button
             type="button"
-            aria-label={t(
-              kind !== "all" ? "ধরনের বাছাই মুছুন" : "পরিচয়ের বাছাই মুছুন",
-            )}
-            onClick={() => selectRole("")}
+            aria-label={scope.clear}
+            aria-describedby={`${scopeId}-${scope.key}`}
+            onClick={() => filter(scope.key, "")}
           >
             <XIcon size={17} aria-hidden="true" />
           </button>
         </div>
-      ) : null}
+      ))}
       {shown.length ? (
-        <section
-          className="contacts-list"
-          aria-label={t("মানুষ ও দোকানের তালিকা")}
-        >
+        <section className="contacts-list" aria-label={t("কর্মীর তালিকা")}>
           <div className="contacts-list-caption">
             <span>{t("নাম")}</span>
             <span>{t("টাকা দিয়েছি")}</span>
           </div>
-          {shown.map(({ person, summary }) => (
+          {shown.map(({ person, summary, remaining, valid, needsReview }) => (
             <button
               className="contact-row"
               key={person.id}
-              onClick={() => go(`/people/${encodeURIComponent(person.id)}`)}
+              onClick={() => go(`/parties/${encodeURIComponent(person.id)}`)}
             >
               <PersonMark person={person} />
               <span className="contact-row-name">
@@ -215,12 +257,18 @@ export function PeoplePage() {
                     </span>
                   )}
                 </strong>
-                {summary.reconciledPayable > 0 ? (
+                {valid && remaining > 0 ? (
                   <small className="contact-due">
-                    {t("বাকি {{amount}}", {
-                      amount: money(summary.reconciledPayable),
-                    })}
+                    {t(
+                      needsReview ? "জানা বাকি {{amount}}" : "বাকি {{amount}}",
+                      {
+                        amount: money(remaining),
+                      },
+                    )}
                   </small>
+                ) : null}
+                {needsReview ? (
+                  <small className="contact-due">{t("যাচাই বাকি")}</small>
                 ) : null}
               </span>
               <ArrowRightIcon className="contact-row-chevron" size={16} />

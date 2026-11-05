@@ -53,7 +53,7 @@ const auditLabels: Partial<Record<EntryChangeField, string>> = {
   paymentPurposeId: "কিসের টাকা",
   provenance: "যে সহকারী লিখেছে",
   amount: "টাকার পরিমাণ",
-  workId: "কাজের খাতা",
+  workId: "খাতা",
   label: "মালের নাম",
   itemId: "মালের নাম",
   materialGroupId: "মালের ধরন",
@@ -175,8 +175,17 @@ export function EntryDetail({ id }: { id: string }) {
           ? "মজুরির বিল"
           : "খরচ"
       : kind;
-  const relatedBill = ledger.entries.find(
-    (row) => row.id === entry.relatedEntryId,
+  const relatedBillIds = new Set(
+    entry.relatedEntryId ? [entry.relatedEntryId] : [],
+  );
+  if (entry.kind === "payment") {
+    for (const allocation of ledger.paymentAllocations ?? []) {
+      if (allocation.paymentId === entry.id && !allocation.cancelledAt)
+        relatedBillIds.add(allocation.billId);
+    }
+  }
+  const relatedBills = ledger.entries.filter((row) =>
+    relatedBillIds.has(row.id),
   );
   const showNote =
     entry.note &&
@@ -432,7 +441,7 @@ export function EntryDetail({ id }: { id: string }) {
                       label: t("ব্যক্তি বা দোকানের পাতা"),
                       onSelect: () =>
                         go(
-                          `/people/${encodeURIComponent(person.id)}?account=${entry.account}`,
+                          `/parties/${encodeURIComponent(person.id)}?account=${entry.account}`,
                         ),
                     },
                     {
@@ -524,7 +533,7 @@ export function EntryDetail({ id }: { id: string }) {
                 </strong>
               </div>
               <div>
-                <span>{t("কাজের খাতা")}</span>
+                <span>{t("খাতা")}</span>
                 <strong>
                   {adjustment.workId
                     ? fieldText("workId", adjustment.workId)
@@ -543,7 +552,7 @@ export function EntryDetail({ id }: { id: string }) {
             aria-label={formatDigits(person.name)}
             onClick={() =>
               go(
-                `/people/${encodeURIComponent(person.id)}?account=${entry.account}`,
+                `/parties/${encodeURIComponent(person.id)}?account=${entry.account}`,
               )
             }
           >
@@ -586,7 +595,7 @@ export function EntryDetail({ id }: { id: string }) {
                       <button
                         className="detail-entity-link-v4"
                         onClick={() =>
-                          go(`/works/${encodeURIComponent(line.workId)}`)
+                          go(`/sectors/${encodeURIComponent(line.workId)}`)
                         }
                       >
                         {formatDigits(
@@ -631,7 +640,7 @@ export function EntryDetail({ id }: { id: string }) {
                 <button
                   className="detail-entity-link-v4"
                   onClick={() =>
-                    go(`/works/${encodeURIComponent(part.workId)}`)
+                    go(`/sectors/${encodeURIComponent(part.workId)}`)
                   }
                 >
                   {formatDigits(
@@ -731,8 +740,9 @@ export function EntryDetail({ id }: { id: string }) {
             </div>
           </details>
         ) : null}
-        {relatedBill ? (
+        {relatedBills.map((relatedBill) => (
           <button
+            key={relatedBill.id}
             className="entry-related-bill-v5"
             aria-label={`${t("মূল বিল")}: ${formatDigits(relatedBill.lines[0]?.label || t("খরচ"))}`}
             onClick={() => detail(relatedBill.id)}
@@ -746,7 +756,7 @@ export function EntryDetail({ id }: { id: string }) {
             </span>
             <ArrowRightIcon size={16} />
           </button>
-        ) : null}
+        ))}
         {entry.receipts.length ? (
           <details className="detail-fold" open>
             <summary>

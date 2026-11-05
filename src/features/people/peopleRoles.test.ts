@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PersonSchema } from "../../domain/model";
 import {
   MAX_PEOPLE_ROLE_TABS,
   peopleRoles,
@@ -6,130 +7,213 @@ import {
   visibleRoleTabs,
 } from "./peopleRoles";
 
-const person = (role: string, archivedAt: string | null = null) => ({
-  role,
-  archivedAt,
-});
-const keys = (roles: ReturnType<typeof peopleRoles>) =>
-  roles.map((role) => role.key);
+const people = [
+  {
+    id: "shop",
+    name: "মালের দোকান",
+    kind: "shop",
+    contactType: "supplier",
+    role: "সিমেন্ট",
+  },
+  {
+    id: "mason",
+    name: "মিস্ত্রি",
+    kind: "worker",
+    contactType: "craftsperson",
+    role: "রাজমিস্ত্রি",
+  },
+  {
+    id: "labour",
+    name: "শ্রমিক",
+    kind: "worker",
+    contactType: "labour",
+    role: "মাটি কাটা",
+  },
+  {
+    id: "contractor",
+    name: "ঠিকাদার",
+    kind: "worker",
+    contactType: "contractor",
+    role: "উপ ঠিকাদার",
+  },
+  {
+    id: "engineer",
+    name: "পরামর্শক",
+    kind: "worker",
+    contactType: "professional",
+    role: "মাপজোক",
+  },
+  {
+    id: "driver",
+    name: "গাড়ি",
+    kind: "driver",
+    contactType: "transport",
+    role: "মাল আনা",
+  },
+  {
+    id: "service",
+    name: "সেবা",
+    kind: "worker",
+    contactType: "service",
+    role: "পরিষ্কার",
+  },
+  {
+    id: "unclassified",
+    name: "নাম",
+    kind: "other",
+    contactType: "custom",
+    role: "নিজের লেখা পরিচয়",
+  },
+].map((person) => PersonSchema.parse(person));
+const expectedKeys = [
+  "supplier",
+  "craftsperson",
+  "labour",
+  "contractor",
+  "professional",
+  "transport",
+  "service",
+  "custom",
+];
+const keys = (tabs: ReturnType<typeof peopleRoles>) =>
+  tabs.map((tab) => tab.key);
 
-describe("existing contact roles", () => {
-  it("canonicalizes case, whitespace, Unicode width and Bengali digits", () => {
+describe("contact type tabs", () => {
+  it("retains canonical role matching only for legacy links", () => {
     expect(roleKey("  Ｄｅａｌｅｒ\t  ১  ")).toBe("dealer 1");
     expect(roleKey("DEALER 1")).toBe("dealer 1");
     expect(roleKey("\n\t ")).toBe("");
   });
 
-  it("counts exact canonical matches while preserving the first display spelling", () => {
-    const people = [
-      person("  Ｄｅａｌｅｒ\t১ "),
-      person("dealer 1"),
-      person("DEALER   ১"),
-      person("Dealer"),
-      person("Dealer 10"),
-      person("Cement Dealer 1"),
-    ];
-    const before = structuredClone(people);
-    const roles = peopleRoles(people);
-    expect(roles[0]).toEqual({
-      key: "dealer 1",
-      label: "Ｄｅａｌｅｒ ১",
-      count: 3,
+  it("groups different descriptions by their saved type in a stable type order", () => {
+    const source = [...people].reverse();
+    source.push(
+      PersonSchema.parse({
+        ...people[4],
+        id: "other-engineer",
+        role: "অন্য কাজে সাহায্য",
+      }),
+    );
+    const before = structuredClone(source);
+    const tabs = peopleRoles(source);
+    expect(keys(tabs)).toEqual(expectedKeys);
+    expect(tabs.find((tab) => tab.key === "professional")).toEqual({
+      key: "professional",
+      label: "ইঞ্জিনিয়ার / পরামর্শক",
+      count: 2,
     });
-    expect(roles).toHaveLength(4);
-    expect(roles.find((role) => role.key === "dealer")?.count).toBe(1);
-    expect(roles.find((role) => role.key === "dealer 10")?.count).toBe(1);
-    expect(roles.find((role) => role.key === "cement dealer 1")?.count).toBe(1);
-    expect(people).toEqual(before);
+    expect(tabs.find((tab) => tab.key === "custom")?.label).toBe(
+      "ধরন বাছা হয়নি",
+    );
+    expect(tabs.map((tab) => tab.label)).not.toContain("মাপজোক");
+    expect(source).toEqual(before);
   });
 
-  it("excludes archived and blank roles without falling back to contact kind or name", () => {
-    const people = [
-      { ...person(""), kind: "shop", name: "দোকান" },
-      { ...person(" \n\t"), kind: "worker", name: "মিস্ত্রি" },
-      { ...person("ইঞ্জিনিয়ার"), kind: "worker", name: "নমুনা" },
-      person("সিমেন্ট ডিলার", "2026-11-04T00:00:00Z"),
-      person("ইঞ্জিনিয়ার", "2026-11-04T00:00:00Z"),
+  it("keeps saved type when the role is blank or looks like another type and excludes archived names", () => {
+    const source = [
+      PersonSchema.parse({ ...people[4], role: "রাজমিস্ত্রি" }),
+      PersonSchema.parse({ ...people[4], id: "blank", role: "" }),
+      PersonSchema.parse({
+        ...people[1],
+        archivedAt: "2026-11-05T00:00:00Z",
+        removalHistory: [
+          { id: "removed", at: "2026-11-05T00:00:00Z", archived: true },
+        ],
+      }),
     ];
-    expect(peopleRoles(people)).toEqual([
-      { key: "ইঞ্জিনিয়ার", label: "ইঞ্জিনিয়ার", count: 1 },
+    expect(peopleRoles(source)).toEqual([
+      { key: "professional", label: "ইঞ্জিনিয়ার / পরামর্শক", count: 2 },
     ]);
   });
 
-  it("sorts by frequency, then label, without limiting the available chooser roles", () => {
-    const people = [
-      person("Z role"),
-      person("B role"),
-      person("A role"),
-      person("Popular"),
-      person(" popular "),
-      ...Array.from({ length: 7 }, (_, index) => person(`Role ${index}`)),
+  it("classifies old descriptions conservatively without rewriting people", () => {
+    const source = [
+      PersonSchema.parse({
+        id: "shop",
+        name: "দোকান",
+        kind: "shop",
+        role: "রড বিক্রি",
+      }),
+      PersonSchema.parse({
+        id: "engineer",
+        name: "পরামর্শক",
+        kind: "worker",
+        role: "ইঞ্জিনিয়ার",
+      }),
+      PersonSchema.parse({
+        id: "other",
+        name: "নাম",
+        kind: "worker",
+        role: "নিজের মতো অপরিচিত কাজ",
+      }),
+      PersonSchema.parse({
+        id: "legacy-shop",
+        name: "মিতালী ট্রেডার্স",
+        kind: null,
+        role: "সিমেন্ট ও ইট",
+      }),
     ];
-    const roles = peopleRoles(people);
-    expect(roles[0]).toEqual({ key: "popular", label: "Popular", count: 2 });
-    expect(keys(roles).slice(1, 3)).toEqual(["a role", "b role"]);
-    expect(roles).toHaveLength(11);
-    expect(peopleRoles(people)).toEqual(roles);
+    const before = structuredClone(source);
+    expect(keys(peopleRoles(source))).toEqual([
+      "supplier",
+      "professional",
+      "custom",
+    ]);
+    expect(
+      peopleRoles(source).find((type) => type.key === "supplier")?.count,
+    ).toBe(2);
+    expect(source).toEqual(before);
   });
 });
 
-describe("visible role tabs", () => {
-  const roles = peopleRoles(
-    Array.from({ length: 8 }, (_, index) => person(`Role ${index + 1}`)),
-  );
+it("counts the same stable identity in every explicit role and keeps a role-free identity unclassified", () => {
+  const source = [
+    PersonSchema.parse({ ...people[0], roles: ["supplier", "professional"] }),
+    PersonSchema.parse({ ...people[1], roles: [] }),
+  ];
+  expect(peopleRoles(source)).toEqual([
+    { key: "supplier", label: "দোকানদার", count: 1 },
+    { key: "professional", label: "ইঞ্জিনিয়ার / পরামর্শক", count: 1 },
+    { key: "custom", label: "ধরন বাছা হয়নি", count: 1 },
+  ]);
+});
 
-  it("defaults to the first six existing roles without changing the chooser list", () => {
-    const before = structuredClone(roles);
-    expect(MAX_PEOPLE_ROLE_TABS).toBe(6);
-    expect(visibleRoleTabs(roles, null)).toEqual(roles.slice(0, 6));
-    expect(roles).toEqual(before);
+describe("visible type tabs", () => {
+  const tabs = peopleRoles(people);
+
+  it("shows all eight existing types by default without changing available choices", () => {
+    const before = structuredClone(tabs);
+    expect(MAX_PEOPLE_ROLE_TABS).toBe(8);
+    expect(visibleRoleTabs(tabs, null)).toEqual(tabs);
+    expect(tabs).toEqual(before);
     expect(visibleRoleTabs([], null)).toEqual([]);
   });
 
-  it("preserves explicit order, skips unavailable keys and keeps normalized matches unique", () => {
-    const selected = [
-      "stale role",
-      "ROLE ৮",
-      "role 2",
-      "role 8",
-      "role",
-      "role 20",
-      "role 1",
+  it("preserves explicit stable-id order and skips stale or repeated keys", () => {
+    const chosen = [
+      "old description",
+      "service",
+      "supplier",
+      "service",
+      "professional",
     ];
-    const before = [...selected];
-    expect(keys(visibleRoleTabs(roles, selected))).toEqual([
-      "role 8",
-      "role 2",
-      "role 1",
+    const before = [...chosen];
+    expect(keys(visibleRoleTabs(tabs, chosen))).toEqual([
+      "service",
+      "supplier",
+      "professional",
     ]);
-    expect(selected).toEqual(before);
+    expect(chosen).toEqual(before);
   });
 
-  it("caps available selections at six after skipping stale and duplicate keys", () => {
-    const selected = [
-      "stale",
-      "role 8",
-      "role 8",
-      "role 7",
-      "role 6",
-      "role 5",
-      "role 4",
-      "role 3",
-      "role 2",
-      "role 1",
-    ];
-    expect(keys(visibleRoleTabs(roles, selected))).toEqual([
-      "role 8",
-      "role 7",
-      "role 6",
-      "role 5",
-      "role 4",
-      "role 3",
-    ]);
-  });
-
-  it("keeps intentional no-tabs and stale-only preferences empty without silently restoring defaults", () => {
-    expect(visibleRoleTabs(roles, [])).toEqual([]);
-    expect(visibleRoleTabs(roles, ["removed role"])).toEqual([]);
+  it("keeps intentional no-tabs and removed-only preferences empty", () => {
+    expect(visibleRoleTabs(tabs, [])).toEqual([]);
+    expect(visibleRoleTabs(tabs, ["রাজমিস্ত্রি"])).toEqual([]);
+    expect(
+      visibleRoleTabs(
+        tabs.filter((tab) => tab.key !== "supplier"),
+        ["supplier"],
+      ),
+    ).toEqual([]);
   });
 });

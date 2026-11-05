@@ -19,17 +19,24 @@ import { SpendingChart } from "../../components/ui/SpendingChart";
 import { AppMenu } from "../../components/ui/AppMenu";
 import {
   allowedContactActions,
-  contactAccountSummary,
-  defaultContactAccount,
+  canCreateContactJob,
+  contactAccountLedger,
+  contactSummary,
+  contactPaymentAccount,
   personKind,
   sortContactEntries,
 } from "../../domain/contacts";
+import {
+  contactEntryPolicy,
+  getContactEntryDefaults,
+} from "../../domain/contactEntryPolicy";
+import { AccountSchema, type Account } from "../../domain/model";
 import { contractAppliesToWork } from "../../domain/contracts";
 import { personSummary } from "../../domain/ledger";
+import { contactCommitmentSummary } from "../../domain/contactCommitments";
+import { partyLedger } from "../../domain/partyLedger";
 import { JobPreview } from "../jobs/JobPreview";
-import { jobBalanceTotals } from "../jobs/jobView";
-import type { Account } from "../../domain/model";
-import { PersonMark, kindLabels, accountLabels } from "./ContactIdentity";
+import { PersonMark, kindLabels } from "./ContactIdentity";
 import { StatementSheet } from "./StatementSheet";
 import { phoneLink } from "./people";
 import { PersonNotebooks } from "./PersonNotebooks";
@@ -48,22 +55,29 @@ export function PersonPage() {
   const person = ledger.people.find((record) => record.id === (id ?? personId));
   const removal = useEntityRemoval("person", id ?? personId);
   const kind = person ? personKind(person) : "other";
-  const defaultAccount = person ? defaultContactAccount(person) : "materials";
-  const rawAccount = params.get("account");
-  const account: Account =
-    rawAccount && ["materials", "labour", "other"].includes(rawAccount)
-      ? (rawAccount as Account)
-      : defaultAccount;
+  const account = useMemo(
+    () => (person ? partyLedger(ledger, person.id) : null),
+    [ledger, person],
+  );
+  const defaultAccount = person
+    ? contactPaymentAccount(ledger, person)
+    : "materials";
   const workId = ledger.works.some((work) => work.id === params.get("work"))
     ? params.get("work")!
     : "";
   const full = params.get("view") === "history";
   const summary = useMemo(
+    () => (person ? contactSummary(ledger, person, workId || undefined) : null),
+    [ledger, person, workId],
+  );
+  const commitments = useMemo(
     () =>
       person
-        ? contactAccountSummary(ledger, person, account, workId || undefined)
+        ? contactCommitmentSummary(ledger, person.id, {
+            workId: workId || undefined,
+          })
         : null,
-    [ledger, person, account, workId],
+    [ledger, person, workId],
   );
   const entries = useMemo(
     () => sortContactEntries(summary?.entries ?? [], false),
@@ -87,16 +101,16 @@ export function PersonPage() {
     return (
       <div className="empty-panel">
         <h1>{t("এই নামটি খাতায় নেই")}</h1>
-        <button className="secondary-button" onClick={() => go("/people")}>
-          {t("মানুষ ও দোকানে ফিরি")}
+        <button className="secondary-button" onClick={() => go("/parties")}>
+          {t("কর্মীর তালিকায় ফিরি")}
         </button>
       </div>
     );
   if (full) {
     const scoped = new URLSearchParams(params);
     scoped.delete("view");
+    scoped.delete("account");
     scoped.set("person", person.id);
-    scoped.set("account", account);
     if (!scoped.has("order")) scoped.set("order", "oldest");
     return (
       <Navigate replace to={`${base ?? ""}/ledger?${scoped.toString()}`} />
@@ -104,136 +118,234 @@ export function PersonPage() {
   }
   const historyQuery = new URLSearchParams({
     person: person.id,
-    account,
     order: "oldest",
   });
   if (workId) historyQuery.set("work", workId);
   const fullHistoryPath = `/ledger?${historyQuery.toString()}`;
   const href = phoneLink(person.phone);
   const actions = removal.archived ? [] : allowedContactActions(person);
-  const otherAccounts = (["materials", "labour", "other"] as Account[]).filter(
-    (value) =>
-      value !== account &&
-      ledger.entries.some(
-        (entry) => entry.personId === person.id && entry.account === value,
-      ),
-  );
-  const addPayment = () =>
-    add({
-      kind: "payment",
-      personId: person.id,
+  const entryDefaults = (account: Account) =>
+    getContactEntryDefaults(ledger, person, {
       workId: workId || undefined,
-      account: defaultAccount,
+      account,
     });
-  const addPurchase = () =>
+  const addPayment = () => {
+    const policy = contactEntryPolicy(person);
+    const chargeType =
+      kind !== "shop" &&
+      (kind === "worker" || policy.defaultAccount === "labour")
+        ? (policy.chargeCostTypes.find((type) => type === "labour") ??
+          policy.chargeCostTypes[0])
+        : kind === "driver"
+          ? (policy.chargeCostTypes.find((type) => type === "transport") ??
+            policy.chargeCostTypes[0])
+          : undefined;
+    const defaults = getContactEntryDefaults(ledger, person, {
+      workId: workId || undefined,
+      account: chargeType
+        ? chargeType === "labour"
+          ? "labour"
+          : "other"
+        : defaultAccount,
+      contractId: params.get("contract") ?? undefined,
+    });
+    const query = new URLSearchParams({
+      person: person.id,
+      account: defaults.account,
+      back: `${base ?? ""}/parties/${encodeURIComponent(person.id)}${params.size ? `?${params}` : ""}`,
+      purpose: chargeType ? "charge" : "party-payment",
+    });
+    if (defaults.workId) query.set("work", defaults.workId);
+    const contract = ledger.contracts.find(
+      (row) => row.id === defaults.contractId,
+    );
+    if (
+      defaults.account === "labour" &&
+      contract &&
+      (!defaults.workId || contractAppliesToWork(contract, defaults.workId))
+    )
+      query.set("contract", contract.id);
+    if (chargeType) {
+      query.set("type", chargeType);
+      query.set("paid", "yes");
+    } else {
+      query.set("dueWork", workId || "all");
+      query.set(
+        "dueAccount",
+        AccountSchema.safeParse(params.get("account")).data ?? "all",
+      );
+    }
+    go(`${chargeType ? "/write/charge" : "/write"}?${query}`);
+  };
+  const addPurchase = () => {
+    const defaults = entryDefaults("materials");
     add({
       kind: "expense",
       personId: person.id,
-      workId: workId || undefined,
-      account: "materials",
+      workId: defaults.workId || undefined,
+      account: defaults.account,
       costType: "material",
     });
-  const addTransport = () =>
+  };
+  const addTransport = () => {
+    const defaults = entryDefaults("other");
     add({
       kind: "expense",
       personId: person.id,
-      workId: workId || undefined,
-      account: "other",
+      workId: defaults.workId || undefined,
+      account: defaults.account,
       costType: "transport",
     });
-  const addReturn = () =>
+  };
+  const addReturn = () => {
+    const defaults = entryDefaults("materials");
     add({
       kind: "return",
       personId: person.id,
-      workId: workId || undefined,
-      account: "materials",
+      workId: defaults.workId || undefined,
+      account: defaults.account,
     });
-  const personContracts =
-    account === "labour"
-      ? ledger.contracts.filter(
-          (c) =>
-            c.personId === person.id &&
-            (!workId || contractAppliesToWork(c, workId)),
-        )
-      : [];
-  const uncontractedAdvance =
-    !workId && summary.owedCorrection !== 0 && summary.reconciledAdvance > 0
+  };
+  const personContracts = ledger.contracts.filter(
+    (c) =>
+      c.personId === person.id && (!workId || contractAppliesToWork(c, workId)),
+  );
+  const commitmentOverview = personContracts.length ? commitments : null;
+  const remainingKnown = commitmentOverview
+    ? commitmentOverview.valid
+    : !summary.balanceAmbiguous;
+  const balanceNeedsReview =
+    !remainingKnown ||
+    (commitmentOverview?.balanceAmbiguous ?? summary.balanceAmbiguous);
+  const remaining = commitmentOverview?.remaining ?? summary.reconciledPayable;
+  const prominentRemaining = Boolean(
+    commitmentOverview && remainingKnown && remaining > 0,
+  );
+  const correctionEffect = remainingKnown
+    ? (commitmentOverview?.correctionEffect ?? 0)
+    : 0;
+  const receivable = !workId
+    ? (account?.receivable ?? 0)
+    : (account?.payments ?? [])
+        .filter((payment) => payment.context === "receivable")
+        .reduce(
+          (sum, payment) =>
+            sum +
+            payment.works
+              .filter((work) => work.workId === workId)
+              .reduce((sum, work) => sum + work.available, 0),
+          0,
+        );
+  const uncontractedCredit = summary.balanceAmbiguous
+    ? 0
+    : !workId && summary.owedCorrection !== 0 && summary.reconciledAdvance > 0
       ? summary.reconciledAdvance
       : personContracts.length
         ? personSummary(
             {
               ...ledger,
+              contracts: [],
               entries: summary.entries.filter((entry) => !entry.contractId),
             },
             person.id,
             workId || undefined,
           ).advance
         : summary.reconciledAdvance;
-  const jobTotals = jobBalanceTotals(ledger, personContracts);
-  const hasJobs = personContracts.some((job) => !job.archivedAt);
-  const isPurchase = account === "materials";
+  const advanceCash = (["materials", "labour", "other"] as const).reduce(
+    (total, currentAccount) => {
+      const available = (account?.payments ?? [])
+        .filter(
+          (payment) =>
+            !payment.entry.contractId &&
+            payment.entry.account === currentAccount &&
+            (payment.context === "advance" || !payment.context),
+        )
+        .reduce(
+          (sum, payment) =>
+            sum +
+            (workId
+              ? (payment.works.find((work) => work.workId === workId)
+                  ?.available ?? 0)
+              : payment.available),
+          0,
+        );
+      if (!available) return total;
+      const scoped = contactAccountLedger(ledger, person, currentAccount);
+      const credit = personSummary(
+        {
+          ...scoped,
+          contracts: [],
+          entries: scoped.entries.filter((entry) => !entry.contractId),
+        },
+        person.id,
+        workId || undefined,
+      ).advance;
+      return total + Math.min(credit, available);
+    },
+    0,
+  );
+  const uncontractedAdvance =
+    summary.owedCorrection !== 0
+      ? uncontractedCredit
+      : Math.min(uncontractedCredit, advanceCash);
   const costMetric =
+    !commitmentOverview &&
     (summary.reconciledCost !== 0 || summary.costCorrection !== 0) &&
     summary.reconciledCost !== summary.reconciledNetPaid
       ? {
-          label: isPurchase
-            ? "মালের দাম"
-            : account === "labour"
-              ? "কাজের মজুরি"
-              : "অন্য খরচ",
+          label: "মাল ও কাজের খরচ",
           amount: summary.reconciledCost,
         }
       : null;
   const metrics = [
-    ...((summary.balanceAmbiguous
-      ? summary.payable
-      : summary.reconciledPayable) > 0
+    ...(!prominentRemaining && remainingKnown && remaining > 0
       ? [
           {
-            label: summary.balanceAmbiguous ? "বিলের বাকি" : "দিতে বাকি",
-            amount: summary.balanceAmbiguous
-              ? summary.payable
-              : summary.reconciledPayable,
+            label: "দিতে বাকি",
+            amount: remaining,
             tone: "contact-due",
           },
         ]
       : []),
+    ...(receivable > 0
+      ? [{ label: "ফেরত পাব", amount: receivable, tone: "contact-credit" }]
+      : []),
   ];
   if (
+    !commitmentOverview &&
     kind === "shop" &&
     summary.confirmedCost > 0 &&
-    summary.reconciledAdvance > 0
+    summary.reconciledAdvance > 0 &&
+    !summary.balanceAmbiguous
   )
     metrics.push({
       label: summary.owedCorrection !== 0 ? "আমার জমা" : "অগ্রিম",
       amount: summary.reconciledAdvance,
       tone: "contact-credit",
     });
-  const showJobDetails =
-    hasJobs &&
-    (!jobTotals.valid ||
-      summary.balanceAmbiguous ||
-      (workId &&
-        personContracts.some(
-          (job) => job.scope === "house" && !job.archivedAt,
-        )) ||
-      jobTotals.extra > 0 ||
-      jobTotals.remaining !==
-        (metrics.find((metric) => metric.tone === "contact-due")?.amount ?? 0));
+  const displayedAdvance = commitmentOverview
+    ? remainingKnown
+      ? commitmentOverview.extra
+      : 0
+    : uncontractedAdvance;
   const showAdvanceDetails =
-    uncontractedAdvance > 0 && (kind !== "shop" || summary.confirmedCost <= 0);
-  const showMainActions =
-    account === defaultAccount &&
-    actions.some((action) =>
-      ["payment", "purchase", "transport", "return"].includes(action),
-    );
+    displayedAdvance > 0 &&
+    (Boolean(commitmentOverview) ||
+      kind !== "shop" ||
+      summary.confirmedCost <= 0);
+  const showMainActions = actions.some((action) =>
+    ["payment", "purchase", "transport", "return"].includes(action),
+  );
   const menu = [
     {
       label: t("তথ্য ও বোতাম বদলাই"),
       onSelect: () => entity("person", person.id),
       disabled: removal.archived,
     },
-    { label: t("হিসাবের কপি পাঠাই"), onSelect: () => setShareOpen(true) },
+    {
+      label: t("হিসাবের কপি পাঠাই"),
+      onSelect: () => setShareOpen(true),
+    },
     ...(!removal.archived
       ? [
           {
@@ -242,19 +354,14 @@ export function PersonPage() {
           },
         ]
       : []),
-    ...otherAccounts.map((value) => ({
-      label: t(accountLabels[value]),
-      onSelect: () => filter("account", value),
-      separatorBefore: true,
-    })),
     removal.menuItem,
   ];
   return (
     <div className="contacts-page contact-detail-page">
-      <nav className="contact-navigation" aria-label={t("মানুষ ও দোকান")}>
-        <button className="back-link" onClick={() => go("/people")}>
+      <nav className="contact-navigation" aria-label={t("কর্মী")}>
+        <button className="back-link" onClick={() => go("/parties")}>
           <ArrowLeftIcon size={18} />
-          {t("মানুষ ও দোকান")}
+          {t("কর্মী")}
         </button>
         <div className="contact-navigation-actions">
           {href ? (
@@ -301,13 +408,22 @@ export function PersonPage() {
         aria-label={t("এই নামের মোট হিসাব")}
       >
         <div
-          className={`contact-summary-top ${metrics.length ? "has-balance" : ""}`}
+          className={`contact-summary-top ${metrics.length ? "has-balance" : ""} ${prominentRemaining ? "has-remaining" : ""}`}
         >
           <div className="contact-summary-hero">
             <span>{t("মোট টাকা দিয়েছি")}</span>
             <strong>{money(summary.reconciledNetPaid)}</strong>
             {summary.refunds > 0 ? <small>{t("ফেরত বাদে")}</small> : null}
+            {balanceNeedsReview ? (
+              <small role="status">{t("বাকির হিসাব যাচাই বাকি")}</small>
+            ) : null}
           </div>
+          {prominentRemaining ? (
+            <div className="contact-remaining-hero">
+              <span>{t(balanceNeedsReview ? "জানা বাকি" : "আর দিতে হবে")}</span>
+              <strong>{money(remaining)}</strong>
+            </div>
+          ) : null}
           {metrics.length ? (
             <dl className="contact-summary-metrics">
               {metrics.map((metric) => (
@@ -319,14 +435,6 @@ export function PersonPage() {
             </dl>
           ) : null}
         </div>
-        {account !== defaultAccount ? (
-          <div className="contact-account-note">
-            <span>{t(accountLabels[account])}</span>
-            <button onClick={() => filter("account", "")}>
-              {t("মূল হিসাবে ফিরি")}
-            </button>
-          </div>
-        ) : null}
         {showMainActions ? (
           <div
             className={`contact-main-actions ${kind === "shop" ? "contact-shop-actions" : ""}`}
@@ -346,12 +454,23 @@ export function PersonPage() {
                     />
                   </button>
                 ) : null}
-                {actions.includes("payment") || actions.includes("return") ? (
+                {actions.includes("payment") ||
+                actions.includes("transport") ||
+                actions.includes("return") ? (
                   <div className="contact-shop-secondary">
                     {actions.includes("payment") ? (
                       <button className="secondary-button" onClick={addPayment}>
                         <WalletIcon size={18} />
                         {t("টাকা দিই")}
+                      </button>
+                    ) : null}
+                    {actions.includes("transport") ? (
+                      <button
+                        className="secondary-button"
+                        onClick={addTransport}
+                      >
+                        <TruckIcon size={18} />
+                        {t("আনার খরচ লিখি")}
                       </button>
                     ) : null}
                     {actions.includes("return") ? (
@@ -403,11 +522,26 @@ export function PersonPage() {
                     {t("আনার খরচ লিখি")}
                   </button>
                 ) : null}
+                {actions.includes("return") ? (
+                  <button
+                    className={
+                      actions.some((action) =>
+                        ["payment", "purchase", "transport"].includes(action),
+                      )
+                        ? "secondary-button"
+                        : "primary-button"
+                    }
+                    onClick={addReturn}
+                  >
+                    <ArrowUUpLeftIcon size={19} />
+                    {t("মাল ফেরত দিই")}
+                  </button>
+                ) : null}
               </>
             )}
           </div>
         ) : null}
-        {showAdvanceDetails || costMetric || showJobDetails ? (
+        {showAdvanceDetails || costMetric || correctionEffect !== 0 ? (
           <details className="contact-reconciliation">
             <summary>
               {t("আরও হিসাব")}
@@ -417,10 +551,20 @@ export function PersonPage() {
               <dl>
                 <dt>
                   {t(
-                    summary.owedCorrection !== 0 ? "আমার জমা" : "অগ্রিম দিয়েছি",
+                    commitmentOverview
+                      ? "বেশি দিয়েছি"
+                      : summary.owedCorrection !== 0
+                        ? "আমার জমা"
+                        : "অগ্রিম দিয়েছি",
                   )}
                 </dt>
-                <dd>{money(uncontractedAdvance)}</dd>
+                <dd>{money(displayedAdvance)}</dd>
+              </dl>
+            ) : null}
+            {correctionEffect !== 0 ? (
+              <dl className="contact-total-correction">
+                <dt>{t("মোটের সংশোধন")}</dt>
+                <dd>{money(correctionEffect)}</dd>
               </dl>
             ) : null}
             {costMetric ? (
@@ -428,32 +572,6 @@ export function PersonPage() {
                 <dt>{t(costMetric.label)}</dt>
                 <dd>{money(costMetric.amount)}</dd>
               </dl>
-            ) : null}
-            {showJobDetails ? (
-              <div className="contact-job-totals">
-                <h2>{t("সব কাজ মিলিয়ে")}</h2>
-                {jobTotals.valid ? (
-                  <dl>
-                    <div>
-                      <dt>{t("চুক্তির অবশিষ্ট")}</dt>
-                      <dd className="contact-due">
-                        {money(jobTotals.remaining)}
-                      </dd>
-                    </div>
-                    {jobTotals.extra > 0 ? (
-                      <div>
-                        <dt>{t("বেশি দিয়েছি")}</dt>
-                        <dd className="contact-credit">
-                          {money(jobTotals.extra)}
-                        </dd>
-                      </div>
-                    ) : null}
-                  </dl>
-                ) : (
-                  <p>{t("টাকার অঙ্ক বেশি হয়েছে।")}</p>
-                )}
-                <small>{t("কাজের মোট দর থেকে দেওয়া টাকা বাদে")}</small>
-              </div>
             ) : null}
           </details>
         ) : null}
@@ -468,12 +586,12 @@ export function PersonPage() {
           presentation="embedded"
         />
       </div>
-      {kind === "worker" && account === "labour" ? (
+      {canCreateContactJob(person) || personContracts.length > 0 ? (
         <JobPreview
           ledger={ledger}
           contracts={personContracts}
           personId={person.id}
-          allowCreate={!removal.archived}
+          allowCreate={canCreateContactJob(person)}
           workId={workId || undefined}
         />
       ) : null}
@@ -488,7 +606,7 @@ export function PersonPage() {
         <div className="contact-history-heading">
           <div>
             <h2>{t("শেষ ৫টি লেনদেন")}</h2>
-            <p>{t(accountLabels[account])}</p>
+            <p>{t("সব হিসাব")}</p>
           </div>
           <button className="text-button" onClick={() => go(fullHistoryPath)}>
             {t("পুরো হিসাব")}
@@ -509,7 +627,6 @@ export function PersonPage() {
       {shareOpen ? (
         <StatementSheet
           person={person}
-          account={account}
           workId={workId || undefined}
           onClose={() => setShareOpen(false)}
         />
@@ -519,7 +636,6 @@ export function PersonPage() {
           target={{
             target: "person",
             id: person.id,
-            account,
             workId: workId || null,
           }}
           name={person.name}

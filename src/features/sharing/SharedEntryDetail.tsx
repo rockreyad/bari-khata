@@ -25,7 +25,7 @@ const kinds = {
   adjustment: "হিসাবের সমন্বয়",
 };
 const methods = {
-  cash: "নগদ",
+  cash: "ক্যাশ",
   bkash: "বিকাশ",
   bank: "ব্যাংক",
   other: "অন্য মাধ্যমে",

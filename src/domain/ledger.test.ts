@@ -133,7 +133,8 @@ describe("construction ledger", () => {
     const summary = contractSummary(createDemoLedger(), "tiles-contract");
     expect(summary.agreed).toBe(12540000);
     expect(summary.paid).toBe(4500000);
-    expect(summary.remaining).toBe(8040000);
+    expect(summary.remaining).toBe(1500000);
+    expect(summary.remainingCommitment).toBe(8040000);
     expect(summary.billed).toBe(6000000);
     expect(summary.payable).toBe(1500000);
   });

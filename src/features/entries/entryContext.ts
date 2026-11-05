@@ -1,9 +1,15 @@
 import type { AddOptions } from "../../app/NotebookProvider";
 import type { CostType, Ledger } from "../../domain/model";
-import { defaultContactAccount, personKind } from "../../domain/contacts";
+import { contactPaymentAccount, personKind } from "../../domain/contacts";
 import { QuickDraftSchema, quickWageAmount } from "./quickEntry";
 import { applicableContracts } from "../../domain/contracts";
 import { moneyInputValue } from "../../lib/numericFields";
+import {
+  hasPaymentWriting,
+  inferPaymentJob,
+  paymentPurpose,
+  preferredPaymentJob,
+} from "./paymentIntent";
 export { partyAccountBalance } from "../../domain/ledger";
 export function applicableQuickContracts(
   ledger: Ledger,
@@ -25,26 +31,29 @@ const normalize = (value: string) =>
   value.normalize("NFKC").trim().toLocaleLowerCase();
 export function entryContext(ledger: Ledger, options: AddOptions) {
   const person = ledger.people.find((p) => p.id === options.personId);
-  const kind =
-    person &&
-    personKind(person) === "worker" &&
-    (!options.kind || options.kind === "expense")
-      ? "payment"
-      : (options.kind ?? "expense");
+  const kind = options.kind ?? "expense";
   const account =
     kind === "wage"
       ? "labour"
       : (options.account ??
-        (person ? defaultContactAccount(person) : "materials"));
+        (options.costType
+          ? options.costType === "labour"
+            ? "labour"
+            : options.costType === "material"
+              ? "materials"
+              : "other"
+          : person
+            ? contactPaymentAccount(ledger, person)
+            : "materials"));
   const costType =
     (kind === "wage" ? "labour" : options.costType) ??
     (account === "labour"
       ? "labour"
-      : person && personKind(person) === "driver"
-        ? "transport"
-        : account === "other"
-          ? "other"
-          : "material");
+      : account === "materials"
+        ? "material"
+        : person && personKind(person) === "driver"
+          ? "transport"
+          : "other");
   const requestedJob = ledger.contracts.find(
     (contract) =>
       !contract.archivedAt &&
@@ -52,9 +61,29 @@ export function entryContext(ledger: Ledger, options: AddOptions) {
       contract.personId === person?.id &&
       account === "labour",
   );
+  const defaultJob =
+    person &&
+    kind === "payment" &&
+    options.contractId === undefined &&
+    options.purpose !== "charge" &&
+    options.purpose !== "wage"
+      ? preferredPaymentJob(
+          ledger,
+          person.id,
+          account,
+          options.workId !== undefined
+            ? applicableQuickContracts(ledger, person.id, options.workId)
+            : ledger.contracts,
+          false,
+        )
+      : undefined;
   let workId =
     options.workId ??
-    (requestedJob?.scope === "work" ? (requestedJob.workId ?? "") : "");
+    (requestedJob?.scope === "work"
+      ? (requestedJob.workId ?? "")
+      : defaultJob?.scope === "work"
+        ? (defaultJob.workId ?? "")
+        : "");
   if (!workId && person) {
     const contracts = ledger.contracts.filter(
       (c) =>
@@ -63,6 +92,7 @@ export function entryContext(ledger: Ledger, options: AddOptions) {
         (!requestedJob || c.id === requestedJob.id),
     );
     const works = new Set([
+      ...(person.workIds ?? []),
       ...contracts.flatMap((c) =>
         c.scope === "work" && c.workId ? [c.workId] : [],
       ),
@@ -127,7 +157,7 @@ export function entryContext(ledger: Ledger, options: AddOptions) {
   );
   const contractId =
     account === "labour"
-      ? options.contractId
+      ? options.contractId !== undefined
         ? (requestedContract?.id ??
           (ledger.contracts.some(
             (job) =>
@@ -137,8 +167,12 @@ export function entryContext(ledger: Ledger, options: AddOptions) {
           )
             ? options.contractId
             : ""))
-        : contracts.length === 1
-          ? contracts[0].id
+        : kind === "payment" &&
+            person &&
+            options.purpose !== "charge" &&
+            options.purpose !== "wage"
+          ? (preferredPaymentJob(ledger, person!.id, account, contracts)?.id ??
+            "")
           : ""
       : "";
   return QuickDraftSchema.parse({
@@ -149,18 +183,23 @@ export function entryContext(ledger: Ledger, options: AddOptions) {
     paymentPurposeNewId: crypto.randomUUID(),
     kind,
     purpose:
-      options.purpose ??
-      (kind === "payment" &&
-      person &&
-      personKind(person) === "worker" &&
-      !contracts.length
-        ? "wage"
-        : "settle"),
+      kind === "payment"
+        ? paymentPurpose(
+            ledger,
+            { personId: person?.id ?? "", account, contractId },
+            options.purpose,
+          )
+        : (options.purpose ?? "settle"),
     workId,
     personId: person?.id ?? "",
     account,
     costType,
     contractId,
+    milestoneId:
+      ledger.milestones?.find(
+        (row) =>
+          row.id === options.milestoneId && row.contractId === contractId,
+      )?.id ?? "",
     date: todayDhaka(),
     payment: kind === "wage" ? "due" : "full",
     rows: [
@@ -214,35 +253,45 @@ export function entryContactChange(
   ledger: Ledger,
   draft: ReturnType<typeof entryContext>,
   personId: string,
+  explicitFinancialScope = false,
 ) {
   if (personId === draft.personId) return { personId };
+  const keepFinancialScope = explicitFinancialScope || hasPaymentWriting(draft);
   const person = ledger.people.find((p) => p.id === personId);
   if (!person)
     return {
       personId,
       contractId: "",
-      paymentPurposeId: "",
-      paymentPurposeName: "",
+      milestoneId: "",
+      paymentPurposeId: keepFinancialScope ? draft.paymentPurposeId : "",
+      paymentPurposeName: keepFinancialScope ? draft.paymentPurposeName : "",
     };
   const context = entryContext(ledger, {
     kind: draft.kind,
     workId: draft.workId || undefined,
     personId,
+    ...(draft.kind !== "payment" || keepFinancialScope
+      ? { account: draft.account, costType: draft.costType }
+      : {}),
   });
   return {
     personId,
     kind: context.kind,
-    payment: context.payment,
+    payment: keepFinancialScope ? draft.payment : context.payment,
     amount:
       draft.amount.trim() ||
       (draft.rows.length === 1 ? draft.rows[0].amount : ""),
     account: context.account,
     costType: context.costType,
-    purpose: context.purpose,
-    workId: context.workId,
-    contractId: context.contractId,
-    paymentPurposeId: "",
-    paymentPurposeName: "",
+    purpose:
+      keepFinancialScope || draft.purpose === "advance"
+        ? draft.purpose
+        : context.purpose,
+    workId: keepFinancialScope ? draft.workId : context.workId,
+    contractId: keepFinancialScope ? "" : context.contractId,
+    milestoneId: "",
+    paymentPurposeId: keepFinancialScope ? draft.paymentPurposeId : "",
+    paymentPurposeName: keepFinancialScope ? draft.paymentPurposeName : "",
   };
 }
 
@@ -250,26 +299,47 @@ export function entryWorkChange(
   ledger: Ledger,
   draft: ReturnType<typeof entryContext>,
   workId: string,
+  explicitScope = false,
 ) {
   const contracts = applicableQuickContracts(
     ledger,
     draft.personId,
     workId || undefined,
   );
+  const canDefaultJob =
+    draft.kind === "payment" &&
+    !explicitScope &&
+    !hasPaymentWriting(draft) &&
+    draft.purpose !== "wage";
   const chosen =
     contracts.find((contract) => contract.id === draft.contractId) ??
-    (contracts.length === 1 ? contracts[0] : undefined);
-  const person = ledger.people.find((record) => record.id === draft.personId);
+    (canDefaultJob
+      ? preferredPaymentJob(ledger, draft.personId, draft.account, contracts)
+      : draft.kind !== "payment" &&
+          !explicitScope &&
+          contracts.length === 1 &&
+          inferPaymentJob(
+            ledger,
+            draft.personId,
+            draft.account,
+            contracts[0].id,
+          )
+        ? contracts[0]
+        : undefined);
+  const contractId =
+    draft.account === "labour" && (draft.purpose !== "charge" || canDefaultJob)
+      ? (chosen?.id ?? "")
+      : "";
   return {
     workId,
-    contractId: draft.account === "labour" ? (chosen?.id ?? "") : "",
+    contractId,
+    milestoneId: contractId === draft.contractId ? draft.milestoneId : "",
     purpose:
-      draft.kind === "payment" && person && personKind(person) === "worker"
-        ? draft.purpose === "advance"
-          ? "advance"
-          : chosen
-            ? "settle"
-            : "wage"
+      draft.kind === "payment" &&
+      !explicitScope &&
+      !hasPaymentWriting(draft) &&
+      draft.purpose !== "advance"
+        ? paymentPurpose(ledger, { ...draft, contractId })
         : draft.purpose,
   };
 }
@@ -285,15 +355,26 @@ export function changeEntryType(
       (draft.kind === "payment" && draft.account === "labour"));
   if (draft.costType === costType && !leavingWorker) return draft;
   const kind = leavingWorker ? ("expense" as const) : draft.kind;
+  const account =
+    costType === "labour"
+      ? "labour"
+      : costType === "material"
+        ? "materials"
+        : "other";
   const context = entryContext(ledger, {
     kind,
+    personId: draft.personId || undefined,
     workId: draft.workId || undefined,
     costType,
+    account,
   });
   return {
     ...draft,
     kind,
-    purpose: "settle" as const,
+    purpose:
+      kind === "payment" && draft.purpose === "wage"
+        ? ("charge" as const)
+        : draft.purpose,
     costType,
     account:
       costType === "labour"
@@ -301,8 +382,9 @@ export function changeEntryType(
         : costType === "material"
           ? ("materials" as const)
           : ("other" as const),
-    personId: "",
+    personId: draft.personId,
     contractId: "",
+    milestoneId: "",
     paymentPurposeId: "",
     paymentPurposeName: "",
     payment: draft.payment === "worker" ? ("full" as const) : draft.payment,

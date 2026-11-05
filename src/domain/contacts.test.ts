@@ -5,14 +5,138 @@ import { appendBalanceAdjustment } from "./balanceAdjustments";
 import { contactStatement } from "../features/people/statement";
 import {
   allowedContactActions,
+  availableContactActions,
+  canCreateContactJob,
   contactAccountSummary,
+  contactSummary,
   defaultContactAccount,
   personKind,
 } from "./contacts";
 
-describe("role-aware contact accounts", () => {
+describe("contact identities and financial accounts", () => {
+  it.each([
+    { contactType: "supplier", kind: "shop", expected: false },
+    { contactType: "transport", kind: "driver", expected: false },
+    { contactType: "craftsperson", kind: "worker", expected: true },
+    { contactType: "labour", kind: "worker", expected: true },
+    { contactType: "contractor", kind: "worker", expected: true },
+    { contactType: "professional", kind: "worker", expected: true },
+    { contactType: "professional", kind: "other", expected: true },
+    { contactType: "service", kind: "other", expected: true },
+    { contactType: "custom", kind: "other", expected: true },
+    { contactType: "custom", kind: "worker", expected: true },
+    { contactType: "custom", kind: "shop", expected: false },
+    { contactType: "custom", kind: "driver", expected: false },
+    { contactType: "professional", kind: null, expected: true },
+    { contactType: "supplier", kind: null, expected: false },
+    { contactType: "transport", kind: null, expected: false },
+  ])(
+    "uses stored preset eligibility for $contactType with coarse kind $kind",
+    ({ contactType, kind, expected }) => {
+      const person = PersonSchema.parse({
+        id: "person",
+        name: "নমুনা নাম",
+        role: "নিজের মতো পরিচয়",
+        kind,
+        contactType,
+      });
+      const original = structuredClone(person);
+      expect(canCreateContactJob(person)).toBe(expected);
+      expect(
+        canCreateContactJob({ ...person, role: "মাল বিক্রির পরিচয়" }),
+      ).toBe(expected);
+      expect(
+        canCreateContactJob({
+          ...person,
+          archivedAt: "2026-11-05T00:00:00Z",
+        }),
+      ).toBe(false);
+      expect(person).toEqual(original);
+    },
+  );
+
+  it("adds each account's reconciled balance without offsetting different accounts or reviving settled job debt", () => {
+    const original = LedgerSchema.parse({
+      works: [{ id: "work", name: "নমুনা কাজ" }],
+      people: [{ id: "person", name: "নমুনা ব্যক্তি", kind: "worker" }],
+      contracts: [
+        { id: "first", personId: "person", workId: "work", total: 100000 },
+        { id: "second", personId: "person", workId: "work", total: 100000 },
+      ],
+      entries: [
+        {
+          id: "first-paid",
+          kind: "payment",
+          account: "labour",
+          personId: "person",
+          contractId: "first",
+          allocations: [{ workId: "work", amount: 130000 }],
+          paymentParts: [{ amount: 130000 }],
+        },
+        {
+          id: "second-paid",
+          kind: "payment",
+          account: "labour",
+          personId: "person",
+          contractId: "second",
+          allocations: [{ workId: "work", amount: 70000 }],
+          paymentParts: [{ amount: 70000 }],
+        },
+        {
+          id: "material",
+          kind: "expense",
+          account: "materials",
+          personId: "person",
+          lines: [
+            {
+              id: "material-line",
+              workId: "work",
+              costType: "material",
+              amount: 50000,
+            },
+          ],
+        },
+        {
+          id: "other-advance",
+          kind: "payment",
+          account: "other",
+          personId: "person",
+          allocations: [{ workId: "work", amount: 20000 }],
+          paymentParts: [{ amount: 20000 }],
+        },
+      ],
+    });
+    const entries = JSON.stringify(original.entries);
+    for (const kind of ["worker", "shop", "driver", "other"] as const) {
+      const ledger = LedgerSchema.parse({
+        ...original,
+        people: [{ ...original.people[0], kind }],
+      });
+      const person = ledger.people[0];
+      expect(contactAccountSummary(ledger, person, "labour")).toMatchObject({
+        reconciledNetPaid: 200000,
+        reconciledPayable: 0,
+        reconciledAdvance: 200000,
+      });
+      expect(contactSummary(ledger, person)).toMatchObject({
+        cost: 50000,
+        netPaid: 220000,
+        reconciledCost: 50000,
+        reconciledNetPaid: 220000,
+        reconciledPayable: 50000,
+        reconciledAdvance: 220000,
+      });
+      expect(contactSummary(ledger, person, "work")).toMatchObject({
+        reconciledPayable: 50000,
+        reconciledAdvance: 220000,
+      });
+      expect(JSON.stringify(ledger.entries)).toBe(entries);
+      expect(ledger.contracts).toEqual(original.contracts);
+    }
+  });
+
   it.each(["cost", "paid", "balance"] as const)(
-    "keeps a driver's %s correction, profile and exported totals within the same transport scope",
+    "keeps a driver's %s correction, profile and exported totals in the whole selected account",
     (basis) => {
       const source = LedgerSchema.parse({
         works: [
@@ -93,8 +217,8 @@ describe("role-aware contact accounts", () => {
         ],
       });
       const before =
-        basis === "paid" ? 30000 : basis === "cost" ? 100000 : 70000;
-      const after = basis === "paid" ? 50000 : before - 20000;
+        basis === "paid" ? 80000 : basis === "cost" ? 300000 : 220000;
+      const after = basis === "paid" ? 100000 : before - 20000;
       const ledger = appendBalanceAdjustment(
         source,
         {
@@ -119,16 +243,18 @@ describe("role-aware contact accounts", () => {
         "trip",
         "trip-paid",
         "refund",
+        "unload",
+        "unload-paid",
         ledger.entries.at(-1)!.id,
       ]);
       expect(summary).toMatchObject({
-        cost: 100000,
-        paid: 40000,
+        cost: 300000,
+        paid: 90000,
         refunds: 10000,
-        netPaid: 30000,
-        reconciledCost: basis === "cost" ? after : 100000,
-        reconciledNetPaid: basis === "paid" ? after : 30000,
-        reconciledPayable: 50000,
+        netPaid: 80000,
+        reconciledCost: basis === "cost" ? after : 300000,
+        reconciledNetPaid: basis === "paid" ? after : 80000,
+        reconciledPayable: 200000,
         reconciledAdvance: 0,
       });
       expect(copy.totals).toMatchObject({
@@ -137,7 +263,7 @@ describe("role-aware contact accounts", () => {
         reconciledPayable: summary.reconciledPayable,
         reconciledAdvance: summary.reconciledAdvance,
       });
-      expect(copy.rows).toHaveLength(4);
+      expect(copy.rows).toHaveLength(6);
       expect(
         contactAccountSummary(ledger, person, "other", "roof"),
       ).toMatchObject({
@@ -166,7 +292,7 @@ describe("role-aware contact accounts", () => {
       ),
     ).toBe("other");
   });
-  it("allows only useful chosen shortcuts, including intentionally hiding them all", () => {
+  it("keeps chosen shortcuts within the current relationship, including hiding them all", () => {
     const worker = PersonSchema.parse({
       id: "w",
       name: "রহিম",
@@ -188,7 +314,46 @@ describe("role-aware contact accounts", () => {
     const driver = PersonSchema.parse({ id: "d", name: "রনি", kind: "driver" });
     expect(defaultContactAccount(driver)).toBe("other");
     expect(allowedContactActions(driver)).toEqual(["payment", "transport"]);
+    const other = PersonSchema.parse({
+      id: "o",
+      name: "নমুনা ব্যক্তি",
+      kind: "other",
+    });
+    expect(allowedContactActions(other)).toEqual(["payment"]);
+    expect(defaultContactAccount(other)).toBe("other");
   });
+  it.each([
+    ["worker", ["payment"], ["payment"]],
+    [
+      "shop",
+      ["payment", "purchase", "return"],
+      ["purchase", "return", "payment"],
+    ],
+    ["driver", ["payment", "transport"], ["transport", "payment"]],
+    ["other", ["payment"], ["payment"]],
+  ] as const)(
+    "filters legacy incompatible %s shortcuts while preserving valid preference order",
+    (kind, defaults, selected) => {
+      const person = PersonSchema.parse({
+        id: "person",
+        name: "নমুনা নাম",
+        kind,
+        quickActions: ["purchase", "transport", "return", "payment"],
+      });
+      const before = JSON.stringify(person);
+      Object.freeze(person.quickActions);
+      Object.freeze(person);
+      expect(availableContactActions(kind)).toEqual(defaults);
+      expect(allowedContactActions({ ...person, quickActions: null })).toEqual(
+        defaults,
+      );
+      expect(allowedContactActions(person)).toEqual(selected);
+      expect(allowedContactActions({ ...person, quickActions: [] })).toEqual(
+        [],
+      );
+      expect(JSON.stringify(person)).toBe(before);
+    },
+  );
   it("never mixes a worker's old material voucher into the wage balance", () => {
     const ledger = LedgerSchema.parse({
       works: [{ id: "work", name: "কাজ" }],

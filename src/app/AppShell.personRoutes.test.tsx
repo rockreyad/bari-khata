@@ -154,8 +154,8 @@ it.each([
 ] as const)(
   "opens a single standalone person form under %s for %s with reloadable draft context",
   async (base, id) => {
-    const back = `${base}/people?kind=shop&q=cement`;
-    const path = `${base}/people/${id ? `${id}/edit` : "new"}?${new URLSearchParams({ work: "door", person: "legacy-default", back })}`;
+    const back = `${base}/parties?kind=shop&q=cement`;
+    const path = `${base}/parties/${id ? `${id}/edit` : "new"}?${new URLSearchParams({ work: "door", person: "legacy-default", back })}`;
     const { container } = mount(path);
     await screen.findByTestId("person-form");
     expect(screen.getAllByTestId("person-form")).toHaveLength(1);
@@ -196,7 +196,7 @@ it.each(["", "/sample"])(
       `${cleanBack}&_entity=person&_edit=shop&_work=door&_person=legacy-default&_entry=old&_quick=1`,
     );
     await screen.findByTestId("person-form");
-    expect(current().pathname).toBe(`${base}/people/shop/edit`);
+    expect(current().pathname).toBe(`${base}/parties/shop/edit`);
     expect(Object.fromEntries(current().searchParams)).toEqual({
       back: cleanBack,
       work: "door",
@@ -216,12 +216,12 @@ it.each(["", "/sample"])(
 );
 
 it("cleans a legacy person request already on a form while retaining its original return", async () => {
-  const back = "/sample/works/door?tab=labour";
+  const back = "/sample/sectors/door?tab=labour";
   mount(
-    `/sample/people/new?${new URLSearchParams({ back, _entity: "person", _edit: "shop", _work: "door" })}`,
+    `/sample/parties/new?${new URLSearchParams({ back, _entity: "person", _edit: "shop", _work: "door" })}`,
   );
   await screen.findByTestId("person-form");
-  expect(current().pathname).toBe("/sample/people/shop/edit");
+  expect(current().pathname).toBe("/sample/parties/shop/edit");
   expect(current().searchParams.get("back")).toBe(back);
   expect(current().searchParams.has("_entity")).toBe(false);
   expect(state.forms.every((form) => form.presentation === "page")).toBe(true);

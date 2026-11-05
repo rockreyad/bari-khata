@@ -1,3 +1,5 @@
+import { legacyArchitectureFixture } from "../domain/testing/legacyArchitecture";
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it } from "vitest";
 import { createEmptyLedger } from "../domain/demo";
@@ -244,5 +246,46 @@ it.each(["initial", "confirmed"] as const)(
       (await repo.database.conflicts.get("real"))?.ledger.contracts[0].activity,
     ).toEqual([]);
     expect(cloud.writes()).toBe(1);
+  },
+);
+
+it.each(["initial", "confirmed"] as const)(
+  "keeps newer local financial records when a restored cloud revision regresses during %s pull",
+  async (phase) => {
+    const repo = await makeRepository();
+    const current = migrateArchitecture(legacyArchitectureFixture()).ledger;
+    const row = (await repo.read())!;
+    await repo.writeWorkspace({
+      ...row,
+      ledger: current,
+      cloudRevision: 4,
+      pending: false,
+    });
+    const old = structuredClone(current);
+    old.entries[0].lines[0].amount = 9000;
+    let loads = 0,
+      saves = 0;
+    const result = await synchronizeWorkspace(
+      {
+        ownerId: "owner-one",
+        load: async () => {
+          loads++;
+          return phase === "confirmed" && loads === 1
+            ? { revision: 4, document: current, updatedAt: null }
+            : { revision: 3, document: old, updatedAt: null };
+        },
+        save: async () => {
+          saves++;
+          throw new Error("unexpected write");
+        },
+      },
+      repo,
+    );
+    expect(result.status).toBe("conflict");
+    expect(saves).toBe(0);
+    expect((await repo.read())!.ledger).toEqual(current);
+    expect((await repo.read())!.cloudRevision).toBe(4);
+    expect((await repo.database.conflicts.get("real"))?.revision).toBe(3);
+    expect((await repo.database.conflicts.get("real"))?.ledger).toEqual(old);
   },
 );

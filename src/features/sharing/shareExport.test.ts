@@ -39,6 +39,20 @@ const first = () =>
     ],
   });
 describe("shared statement export", () => {
+  it("marks unclear legacy balances as pending review in the exported copy", () => {
+    const source = first();
+    const statement = SharedStatementSchema.parse({
+      ...source,
+      totals: { ...source.totals, balanceAmbiguous: true, earnedPayable: null },
+    });
+    const csv = sharedStatementCsv(statement, {
+      t: (key) => key,
+      money: (value) => `money:${value}`,
+      date: (value) => value ?? "",
+    });
+    expect(csv).toContain('"বাকি","বাকি মেলানো বাকি"');
+    expect(csv).not.toContain('"বাকি","money:6300000"');
+  });
   it("matches the shop ledger captions while preserving bills, payments and signed returns", () => {
     const source = first();
     const statement = SharedStatementSchema.parse({

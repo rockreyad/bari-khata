@@ -25,19 +25,25 @@ import { EntitySheet } from "../../components/EntitySheet";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { MoneyInput } from "../../components/ui/MoneyInput";
-import { FormError, useFormError } from "../../components/ui/FormError";
 import {
-  personKind,
-  defaultContactAccount,
-  contactAccountLedger,
-} from "../../domain/contacts";
+  TransactionAmount,
+  TransactionDetails,
+} from "../../components/TransactionFields";
+import { FormError, useFormError } from "../../components/ui/FormError";
+import { personKind } from "../../domain/contacts";
+import {
+  canRecordContactCash,
+  canRecordContactCost,
+  canRecordContactReturn,
+} from "../../domain/contactEntryPolicy";
 import { Sheet } from "../../components/Sheet";
 import { EntryFrame } from "../../components/EntryFrame";
-import { BalanceProgress } from "../../components/ui/BalanceProgress";
 import { EntryPaymentPreview } from "./EntryPaymentPreview";
+import { entryPaymentBalance } from "./entryPaymentBalance";
 import { moneyInputValue } from "../../lib/numericFields";
 import "./entry-page.css";
-import { PaymentIcon } from "../../components/ui/Icons";
+import "./legacy-transaction.css";
+import { PaymentMethodField } from "../../components/PaymentMethodField";
 import {
   createWorkspaceStorage,
   type ReceiptInput,
@@ -55,12 +61,32 @@ import {
   changeEntryType,
   restoreEntryContext,
   applicableQuickContracts,
-  partyAccountBalance,
 } from "./entryContext";
 import { defaultTaxonomy } from "../../domain/importWallet";
 import { parseAmount, contractSummary } from "../../domain/ledger";
 import { contractAppliesToWork } from "../../domain/contracts";
 import { getActiveOwner } from "../../data/database";
+import {
+  changePaymentPurpose,
+  hasPaymentWriting,
+  paymentIntent,
+  paymentPurpose,
+  paymentScopeChange,
+} from "./paymentIntent";
+const draftFingerprint = (value: {
+  draft: QuickDraft;
+  files: ReceiptInput[];
+}) =>
+  JSON.stringify([
+    value.draft,
+    value.files.map(({ id, entryId, name, file }) => [
+      id,
+      entryId,
+      name,
+      file.type,
+      file.size,
+    ]),
+  ]);
 const row = () => ({
   id: crypto.randomUUID(),
   label: "",
@@ -85,9 +111,11 @@ const costNames = {
 export function QuickEntrySheet({
   options,
   presentation = "sheet",
+  resumeDraftKey,
 }: {
   options: AddOptions;
   presentation?: "sheet" | "page";
+  resumeDraftKey?: string;
 }) {
   const { ledger, mode, save, close, notify } = useNotebook();
   const { t, money, formatDigits } = useLanguageContext();
@@ -95,10 +123,12 @@ export function QuickEntrySheet({
   const baseDraftKey = `quick-v2:${options.kind ?? "expense"}:${options.workId ?? "all"}:${options.personId ?? "all"}${options.costType ? `:${options.costType}` : ""}`;
   const legacyKey = `${baseDraftKey}${options.purpose ? `:${options.purpose}` : ""}`;
   const accountDraftKey = `${legacyKey}${options.account ? `:account=${options.account}` : ""}`;
-  const key = `${accountDraftKey}${options.contractId ? `:job=${options.contractId}` : ""}`;
+  const key =
+    resumeDraftKey?.startsWith("quick-v2:") && resumeDraftKey.length <= 1500
+      ? resumeDraftKey
+      : `${accountDraftKey}${options.contractId ? `:job=${options.contractId}` : ""}${options.milestoneId ? `:milestone=${options.milestoneId}` : ""}`;
   const [draft, setDraft] = useState(() => entryContext(ledger, options));
   const [ready, setReady] = useState(false);
-  const [more, setMore] = useState(false);
   const [creatingWork, setCreatingWork] = useState(false);
   const [files, setFiles] = useState<ReceiptInput[]>([]);
   const [error, setError, errorNotice] = useFormError();
@@ -107,11 +137,19 @@ export function QuickEntrySheet({
   const locked = useRef(false);
   const mounted = useRef(false);
   const hydrated = useRef(false);
+  const financialScopeChosen = useRef(
+    Boolean(options.account || options.costType || options.purpose),
+  );
+  const jobScopeChosen = useRef(
+    options.contractId !== undefined || Boolean(options.purpose),
+  );
   const owner = useRef(getActiveOwner());
   const queue = useRef(Promise.resolve());
   const latest = useRef({ draft, files });
   latest.current = { draft, files };
   const finished = useRef(false);
+  const hydratedKeys = useRef(new Set([key]));
+  const hydratedSources = useRef(new Map<string, string>());
   const queueDraft = useCallback(
     (value: { draft: QuickDraft; files: ReceiptInput[] }) => {
       const next = queue.current
@@ -142,11 +180,16 @@ export function QuickEntrySheet({
         const context = entryContext(ledger, options);
         if (
           (!options.account || parsed.draft.account === context.account) &&
-          (!options.purpose || parsed.draft.purpose === context.purpose) &&
+          (!options.purpose || parsed.draft.purpose === options.purpose) &&
           (!options.contractId ||
-            parsed.draft.contractId === context.contractId)
-        )
+            parsed.draft.contractId === context.contractId) &&
+          (!options.milestoneId ||
+            parsed.draft.milestoneId === context.milestoneId)
+        ) {
+          hydratedKeys.current.add(candidate);
+          hydratedSources.current.set(candidate, draftFingerprint(parsed));
           return old;
+        }
       }
       return null;
     })()
@@ -154,7 +197,12 @@ export function QuickEntrySheet({
         if (!active) return;
         if (value !== null) {
           const parsed = QuickSavedDraftSchema.parse(value);
-          if (!ledger.entries.some((entry) => entry.id === parsed.draft.id)) {
+          const draftIds = [
+            parsed.draft.id,
+            parsed.draft.paymentId,
+            parsed.draft.refundId,
+          ].filter(Boolean);
+          if (!ledger.entries.some((entry) => draftIds.includes(entry.id))) {
             const restored = restoreEntryContext(
               {
                 ...parsed.draft,
@@ -167,6 +215,8 @@ export function QuickEntrySheet({
               },
               draft,
             );
+            financialScopeChosen.current = true;
+            jobScopeChosen.current = true;
             latest.current = { draft: restored, files: parsed.files };
             setDraft(restored);
             setFiles(parsed.files);
@@ -214,15 +264,17 @@ export function QuickEntrySheet({
         ? { paymentPurposeId: "", paymentPurposeName: "" }
         : {}),
       ...(name === "personId"
-        ? entryContactChange(ledger, d, String(value))
+        ? entryContactChange(
+            ledger,
+            d,
+            String(value),
+            financialScopeChosen.current,
+          )
         : name === "workId"
-          ? entryWorkChange(ledger, d, String(value))
+          ? entryWorkChange(ledger, d, String(value), jobScopeChosen.current)
           : name === "personId" || (name === "account" && value !== "labour")
-            ? { contractId: "" }
+            ? { contractId: "", milestoneId: "" }
             : {}),
-      ...(name === "personId" && options.purpose
-        ? { purpose: options.purpose }
-        : {}),
     }));
   };
   const changeRow = (id: string, change: Partial<QuickDraft["rows"][number]>) =>
@@ -244,11 +296,13 @@ export function QuickEntrySheet({
   const wage =
     draft.kind === "wage" ||
     (draft.kind === "payment" && draft.purpose === "wage");
-  const cash = draft.kind === "refund" || (draft.kind === "payment" && !wage);
+  const charge = draft.kind === "payment" && draft.purpose === "charge";
+  const cash =
+    draft.kind === "refund" || (draft.kind === "payment" && !wage && !charge);
   let total = 0;
   try {
     total =
-      cash || wage
+      cash || wage || charge
         ? wage
           ? quickWageAmount(draft)
           : parseAmount(draft.amount)
@@ -292,6 +346,10 @@ export function QuickEntrySheet({
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (locked.current || !ready || finished.current) return;
+    if (needsIntent) {
+      setError(t(intentMessage));
+      return;
+    }
     locked.current = true;
     setSaving(true);
     setError("");
@@ -317,12 +375,30 @@ export function QuickEntrySheet({
             size: file.size,
           })),
           t("সাধারণ খরচ"),
+          t(
+            draft.account === "labour"
+              ? "মজুরি"
+              : draft.account === "materials"
+                ? "মালের দাম"
+                : "কাজের বিল",
+          ),
         );
       }, files);
       finished.current = true;
       await queue.current.catch(() => {});
       try {
-        await storage.removeDraft(key);
+        for (const draftKey of hydratedKeys.current) {
+          const stored = await storage.readDraft<unknown>(draftKey);
+          const parsed = QuickSavedDraftSchema.safeParse(stored);
+          if (
+            parsed.success &&
+            (draftFingerprint(parsed.data) ===
+              draftFingerprint({ draft, files }) ||
+              hydratedSources.current.get(draftKey) ===
+                draftFingerprint(parsed.data))
+          )
+            await storage.removeDraft(draftKey);
+        }
       } catch {
         if (mounted.current && sameOwner())
           notify(t("হিসাব রাখা হয়েছে। অসমাপ্ত লেখার পুরোনো কপি পরে সরবে।"));
@@ -341,7 +417,7 @@ export function QuickEntrySheet({
                 : code === "date"
                   ? "সঠিক তারিখ বেছে নিন।"
                   : code === "work"
-                    ? "কোন কাজের খাতার টাকা, তা বেছে নিন।"
+                    ? "কোন খাতার টাকা, তা বেছে নিন।"
                     : code === "group"
                       ? "নতুন মালের ধরনটির নাম লিখুন।"
                       : code === "account_changed" ||
@@ -355,8 +431,9 @@ export function QuickEntrySheet({
                               ? "মজুরির কাজ ও ব্যক্তির সঙ্গে নির্ধারিত দর মিলছে না।"
                               : code === "removed_entity"
                                 ? "মুছে রাখা নাম, খাতা বা কাজ আগে ফিরিয়ে আনুন।"
-                                : code === "person_kind"
-                                  ? "মালের জন্য দোকান আর মজুরির জন্য মিস্ত্রির নাম বেছে নিন।"
+                                : code === "person_kind" ||
+                                    code === "contact_rules"
+                                  ? "এই নামের নিয়মে এই হিসাব রাখা যাবে না। ধরন বা নাম বদলান।"
                                   : "সঠিক টাকা ও প্রয়োজনীয় তথ্য দিন। হিসাব রাখা যায়নি।",
           ),
         );
@@ -394,27 +471,85 @@ export function QuickEntrySheet({
     removedJob ||
     ledger.works.find((work) => work.id === draft.workId)?.archivedAt;
   const selectedKind = selectedPerson ? personKind(selectedPerson) : null;
-  const canCreateWork = selectedKind !== "shop";
-  const labour = wage || (!cash && draft.costType === "labour");
+  const canCreateWork = true;
+  const intent = paymentIntent(ledger, draft);
+  const legacyReceivable =
+    draft.kind === "payment" && draft.advanceContext === "receivable";
+  const needsIntent =
+    draft.kind === "payment" &&
+    (legacyReceivable ||
+      (draft.purpose === "settle" && !intent.canSettle) ||
+      (draft.purpose === "wage" && draft.account !== "labour") ||
+      (intent.hasJob && ["charge", "wage"].includes(draft.purpose)));
+  const intentMessage = legacyReceivable
+    ? "টাকা দেওয়ার ধরন বেছে নিন।"
+    : draft.purpose === "wage" && draft.account !== "labour"
+      ? "নতুন বিল নাকি শুধু টাকা দেওয়া, বেছে নিন।"
+      : intent.balance === null
+        ? "বাকি নিশ্চিত নয়। কাজ বেছে নিন, বা নতুন বিল কিংবা অগ্রিম বেছে নিন।"
+        : intent.hasJob
+          ? "এই কাজের বিল আবার লিখতে হবে না। টাকা দেওয়ার ধরন বেছে নিন।"
+          : "এখন বাকি নেই। নতুন বিল নাকি অগ্রিম, বেছে নিন।";
+  const labour =
+    wage ||
+    (!cash &&
+      (charge ? draft.account === "labour" : draft.costType === "labour"));
   const transport = ["transport", "unload"].includes(draft.costType);
   const material = draft.costType === "material";
   const returning = draft.kind === "return";
-  const allowedPeople = ledger.people
-    .filter((p) => !p.archivedAt)
-    .filter((p) =>
-      cash || draft.kind === "wage"
-        ? true
-        : labour
-          ? personKind(p) === "worker" || personKind(p) === "other"
-          : transport
-            ? draft.costType === "transport"
-              ? personKind(p) === "driver" || personKind(p) === "other"
-              : personKind(p) === "other"
-            : personKind(p) === "shop" || personKind(p) === "other",
-    );
+  const allowedPeople = ledger.people.filter(
+    (person) =>
+      !person.archivedAt &&
+      (cash
+        ? canRecordContactCash(ledger, person, {
+            account: draft.account,
+            contractId: draft.contractId,
+            amount: total || 1,
+            context:
+              draft.purpose === "advance" ? draft.advanceContext : "settlement",
+            refund: draft.kind === "refund",
+            workId: draft.workId || undefined,
+          })
+        : returning
+          ? canRecordContactReturn(ledger, person, {
+              account: draft.account,
+              contractId: draft.contractId,
+              workId: draft.workId || undefined,
+            })
+          : canRecordContactCost(person, {
+              account: labour
+                ? "labour"
+                : charge
+                  ? draft.account
+                  : material
+                    ? "materials"
+                    : "other",
+              costType: labour
+                ? "labour"
+                : charge
+                  ? draft.account === "materials"
+                    ? "material"
+                    : draft.costType === "transport"
+                      ? "transport"
+                      : "other"
+                  : draft.costType,
+              contractId: draft.contractId,
+              reimbursement: draft.payment === "worker",
+            })),
+  );
   const chooseType = (type: QuickDraft["costType"]) => {
     setError("");
+    financialScopeChosen.current = true;
     setDraft((current) => changeEntryType(ledger, current, type));
+  };
+  const choosePurpose = (purpose: "charge" | "settle" | "advance") => {
+    financialScopeChosen.current = true;
+    jobScopeChosen.current = true;
+    setError("");
+    setDraft((current) => ({
+      ...changePaymentPurpose(current, purpose),
+      advanceContext: "advance",
+    }));
   };
   if (creatingWork)
     return (
@@ -455,9 +590,9 @@ export function QuickEntrySheet({
           })()
         : 0;
   const prior = selectedPerson
-    ? partyAccountBalance(
-        contactAccountLedger(ledger, selectedPerson, draft.account),
-        selectedPerson.id,
+    ? entryPaymentBalance(
+        ledger,
+        selectedPerson,
         draft.account,
         draft.contractId || null,
       )
@@ -474,25 +609,26 @@ export function QuickEntrySheet({
         : transport
           ? "গাড়িভাড়া দিই"
           : labour
-            ? "মিস্ত্রির টাকা"
+            ? "কর্মীর টাকা"
             : material
               ? "মাল কিনলাম"
               : "খরচ লিখি";
   return (
     <Frame
       title={t(title)}
+      className="transaction-page legacy-transaction-page"
       onClose={() => void requestClose()}
       footer={
-        <div className="save-bar">
-          <span>
-            {t(returning ? "ফেরতের দাম" : "এখন দিচ্ছি")}
+        <div className="transaction-submit">
+          <div>
+            <small>{t(returning ? "ফেরতের দাম" : "এখন দিচ্ছি")}</small>
             <strong>{money(returning ? total : paidNow)}</strong>
-          </span>
+          </div>
           <button
             className="primary-button"
             form={formId}
             type="submit"
-            disabled={saving || !ready}
+            disabled={saving || !ready || needsIntent}
           >
             <CheckIcon size={19} />
             {t(saving ? "রাখছি…" : "রাখুন")}
@@ -502,15 +638,19 @@ export function QuickEntrySheet({
     >
       <form
         id={formId}
-        className="entry-form-v3 entry-page-form"
+        className="entry-form-v3 entry-page-form transaction-form"
+        onInvalid={(event) => {
+          let parent = (event.target as HTMLElement).parentElement;
+          while (parent) {
+            if (parent instanceof HTMLDetailsElement) parent.open = true;
+            parent = parent.parentElement;
+          }
+        }}
         onSubmit={submit}
       >
         <FormError {...errorNotice} id={`${formId}-error`} />
         <fieldset disabled={saving || !ready} className="entry-fields-v3">
-          {!cash &&
-          !returning &&
-          draft.kind !== "wage" &&
-          !["shop", "worker", "driver"].includes(selectedKind ?? "") ? (
+          {!cash && !charge && !returning && draft.kind !== "wage" ? (
             <div
               className="expense-sections"
               role="group"
@@ -519,7 +659,7 @@ export function QuickEntrySheet({
               {(
                 [
                   ["material", "মাল কেনা", PackageIcon],
-                  ["labour", "মিস্ত্রির টাকা", HardHatIcon],
+                  ["labour", "কর্মীর টাকা", HardHatIcon],
                   ["transport", "গাড়িভাড়া", TruckIcon],
                 ] as const
               ).map(([type, label, Icon]) => {
@@ -546,11 +686,11 @@ export function QuickEntrySheet({
               {t("মুছে রাখা নাম, খাতা বা কাজ আগে ফিরিয়ে আনুন।")}
             </p>
           ) : null}
-          <div className="entry-assignment">
+          <div className="entry-assignment transaction-card transaction-grid">
             <label>
-              {t("কাজের খাতা")}
+              {t("খাতা")}
               <AppSelect
-                aria-label={t("কাজের খাতা")}
+                aria-label={t("খাতা")}
                 aria-invalid={Boolean(error) && invalidField === "work"}
                 aria-describedby={
                   error && invalidField === "work"
@@ -575,16 +715,16 @@ export function QuickEntrySheet({
                     </option>
                   ))}
                 {canCreateWork ? (
-                  <option value="__new__">{t("+ নতুন খাতা খুলব")}</option>
+                  <option value="__new__">{t("+ নতুন খাতা বানান")}</option>
                 ) : null}
               </AppSelect>
             </label>
             <label>
               {t(
-                cash || wage
+                cash || wage || charge
                   ? "কাকে দিচ্ছেন"
                   : labour
-                    ? "কোন মিস্ত্রি"
+                    ? "কোন কর্মী"
                     : transport
                       ? "গাড়ির লোক / শ্রমিক"
                       : material
@@ -632,8 +772,8 @@ export function QuickEntrySheet({
               <PlusIcon size={17} />
               {t(
                 ledger.works.some((work) => !work.archivedAt)
-                  ? "নতুন কাজের খাতা খুলব"
-                  : "আগে কাজের খাতা খুলুন",
+                  ? "নতুন খাতা বানান"
+                  : "আগে খাতা বানান",
               )}
             </button>
           ) : null}
@@ -643,7 +783,7 @@ export function QuickEntrySheet({
                 cash
                   ? "নাম"
                   : labour
-                    ? "মিস্ত্রির নাম"
+                    ? "কর্মীর নাম"
                     : transport
                       ? "নাম"
                       : material
@@ -656,7 +796,7 @@ export function QuickEntrySheet({
               />
             </label>
           ) : null}
-          {(selectedKind === "worker" ||
+          {((selectedKind === "worker" && draft.account === "labour") ||
             (draft.kind === "payment" && draft.account === "labour")) &&
           !returning ? (
             <section className="entry-worker-flow">
@@ -670,18 +810,35 @@ export function QuickEntrySheet({
                       const job = contracts.find(
                         (job) => job.id === e.target.value,
                       );
-                      setDraft((current) => ({
-                        ...current,
-                        personId: job?.personId ?? current.personId,
-                        workId:
-                          job?.scope === "work" ? job.workId! : current.workId,
-                        contractId: job?.id ?? "",
-                        kind: "payment",
-                        purpose: "settle",
-                        account: "labour",
-                        costType: "labour",
-                        payment: "full",
-                      }));
+                      financialScopeChosen.current = true;
+                      jobScopeChosen.current = true;
+                      setDraft((current) => {
+                        const scope = {
+                          personId: job?.personId ?? current.personId,
+                          account: "labour" as const,
+                          contractId: job?.id ?? "",
+                        };
+                        return {
+                          ...current,
+                          ...scope,
+                          milestoneId: "",
+                          workId:
+                            job?.scope === "work"
+                              ? job.workId!
+                              : current.workId,
+                          kind: "payment",
+                          purpose: hasPaymentWriting(current)
+                            ? current.purpose
+                            : paymentPurpose(
+                                ledger,
+                                scope,
+                                current.purpose === "advance"
+                                  ? "advance"
+                                  : undefined,
+                              ),
+                          costType: "labour",
+                        };
+                      });
                     }}
                   >
                     <option value="">{t("অন্য কাজ")}</option>
@@ -702,78 +859,108 @@ export function QuickEntrySheet({
                   </AppSelect>
                 </label>
               ) : null}
-              {selectedKind === "worker" &&
-              !draft.contractId &&
-              !options.purpose ? (
-                <div
-                  className="entry-intent-options"
-                  role="group"
-                  aria-label={t("কিসের টাকা")}
-                >
-                  {(
-                    [
-                      ["wage", "কাজের টাকা"],
-                      ["settle", "আগের বাকি"],
-                      ["advance", "অগ্রিম"],
-                    ] as const
-                  ).map(([purpose, label]) => (
-                    <button
-                      key={purpose}
-                      type="button"
-                      aria-pressed={
-                        draft.purpose === purpose ||
-                        (draft.kind === "wage" && purpose === "wage")
-                      }
-                      className={
-                        draft.purpose === purpose ||
-                        (draft.kind === "wage" && purpose === "wage")
-                          ? "selected"
-                          : ""
-                      }
-                      onClick={() =>
-                        setDraft((current) => ({
-                          ...current,
-                          kind: "payment",
-                          purpose,
-                          payment: "full",
-                          account: "labour",
-                          costType: "labour",
-                        }))
-                      }
-                    >
-                      {t(label)}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
             </section>
           ) : null}
-          {cash &&
-          draft.account !== "labour" &&
-          draft.kind !== "refund" &&
-          !["worker", "shop"].includes(selectedKind ?? "") ? (
+          {!cash &&
+          draft.kind !== "return" &&
+          draft.contractId &&
+          ledger.milestones?.some(
+            (row) => row.contractId === draft.contractId,
+          ) ? (
+            <label>
+              {t("কাজের ধাপ")}
+              <AppSelect
+                aria-label={t("কাজের ধাপ")}
+                value={draft.milestoneId}
+                onChange={(event) => field("milestoneId", event.target.value)}
+              >
+                <option value="">{t("ধাপ ছাড়াই বিল")}</option>
+                {ledger.milestones
+                  .filter((row) => row.contractId === draft.contractId)
+                  .map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {formatDigits(row.title)} · {money(row.amount)}
+                    </option>
+                  ))}
+              </AppSelect>
+            </label>
+          ) : null}
+          {draft.kind === "payment" ? (
             <div
-              className="entry-intent-options"
+              className="entry-intent-options transaction-choice"
               role="group"
               aria-label={t("টাকার কারণ")}
             >
-              {(
-                [
-                  ["settle", "বাকি মেটাই"],
-                  ["advance", "অগ্রিম"],
-                ] as const
-              ).map(([purpose, label]) => (
+              {!intent.hasJob ? (
                 <button
-                  key={purpose}
                   type="button"
-                  aria-pressed={draft.purpose === purpose}
-                  className={draft.purpose === purpose ? "selected" : ""}
-                  onClick={() => field("purpose", purpose)}
+                  aria-pressed={
+                    !legacyReceivable &&
+                    ["charge", "wage"].includes(draft.purpose)
+                  }
+                  className={
+                    !legacyReceivable &&
+                    ["charge", "wage"].includes(draft.purpose)
+                      ? "selected"
+                      : ""
+                  }
+                  onClick={() => choosePurpose("charge")}
                 >
-                  {t(label)}
+                  {t("নতুন বিল ও টাকা")}
                 </button>
-              ))}
+              ) : null}
+              {intent.canSettle ? (
+                <button
+                  type="button"
+                  aria-pressed={!legacyReceivable && draft.purpose === "settle"}
+                  className={
+                    !legacyReceivable && draft.purpose === "settle"
+                      ? "selected"
+                      : ""
+                  }
+                  onClick={() => choosePurpose("settle")}
+                >
+                  {t("বাকি মেটাই")}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                aria-pressed={!legacyReceivable && draft.purpose === "advance"}
+                className={
+                  !legacyReceivable && draft.purpose === "advance"
+                    ? "selected"
+                    : ""
+                }
+                onClick={() => choosePurpose("advance")}
+              >
+                {t("অগ্রিম")}
+              </button>
             </div>
+          ) : null}
+          {draft.kind === "refund" ? (
+            <label>
+              {t("কোন টাকার ফেরত")}
+              <AppSelect
+                aria-label={t("কোন টাকার ফেরত")}
+                value={draft.refundContext}
+                onChange={(event) =>
+                  field(
+                    "refundContext",
+                    event.target.value as QuickDraft["refundContext"],
+                  )
+                }
+              >
+                <option value="unknown">{t("সম্পর্ক জানা নেই")}</option>
+                <option value="settlement">{t("বিলের জন্য দেওয়া টাকা")}</option>
+                <option value="advance">{t("অগ্রিম দেওয়া টাকা")}</option>
+                <option value="receivable">{t("ফেরত পাওয়ার টাকা")}</option>
+              </AppSelect>
+            </label>
+          ) : null}
+          {needsIntent ? (
+            <p className="field-hint" role="status">
+              {t(intentMessage)}
+            </p>
           ) : null}
           {transport && !cash && selectedKind !== "driver" ? (
             <div
@@ -799,10 +986,10 @@ export function QuickEntrySheet({
               </button>
             </div>
           ) : null}
-          {wage && selectedKind === "worker" ? (
+          {(wage || charge) && draft.account === "labour" ? (
             <section className="entry-wage-basis">
               <div
-                className="entry-intent-options"
+                className="entry-intent-options transaction-choice"
                 role="group"
                 aria-label={t("মজুরির হিসাব")}
               >
@@ -817,7 +1004,23 @@ export function QuickEntrySheet({
                     key={basis}
                     className={draft.wageBasis === basis ? "selected" : ""}
                     aria-pressed={draft.wageBasis === basis}
-                    onClick={() => field("wageBasis", basis)}
+                    onClick={() => {
+                      financialScopeChosen.current = true;
+                      setDraft((current) => ({
+                        ...current,
+                        wageBasis: basis,
+                        purpose:
+                          current.kind === "payment"
+                            ? basis === "day"
+                              ? "wage"
+                              : "charge"
+                            : current.purpose,
+                        amount:
+                          basis === "total" && current.wageBasis === "day"
+                            ? moneyInputValue(quickWageAmount(current))
+                            : current.amount,
+                      }));
+                    }}
                   >
                     {t(label)}
                   </button>
@@ -845,45 +1048,28 @@ export function QuickEntrySheet({
               ) : null}
             </section>
           ) : null}
-          {cash || wage ? (
-            <label className="entry-amount-label">
-              {t("কত টাকা")}
-              <div className="entry-amount-wrap">
-                <span>৳</span>
-                <MoneyInput
-                  autoFocus
-                  inputMode="decimal"
-                  aria-label={t("কত টাকা")}
-                  placeholder="0"
-                  value={
-                    wage && draft.wageBasis === "day"
-                      ? moneyInputValue(total)
-                      : draft.amount
-                  }
-                  readOnly={wage && draft.wageBasis === "day"}
-                  onChange={(e) => field("amount", e.target.value)}
-                />
-              </div>
-            </label>
+          {cash || wage || charge ? (
+            <div className="transaction-card">
+              <TransactionAmount
+                label={t("কত টাকা")}
+                value={
+                  wage && draft.wageBasis === "day"
+                    ? moneyInputValue(total)
+                    : draft.amount
+                }
+                disabled={wage && draft.wageBasis === "day"}
+                onChange={(value) => field("amount", value)}
+              />
+            </div>
           ) : (
             <div className="purchase-lines-v3">
               {draft.rows.map((r, index) => (
-                <div className="purchase-line-v3" key={r.id}>
-                  <label className="entry-amount-label">
-                    {t("কত টাকা")}
-                    <div className="entry-amount-wrap">
-                      <span>৳</span>
-                      <MoneyInput
-                        autoFocus={!index}
-                        aria-label={t("কত টাকা")}
-                        value={r.amount}
-                        placeholder="0"
-                        onChange={(e) =>
-                          changeRow(r.id, { amount: e.target.value })
-                        }
-                      />
-                    </div>
-                  </label>
+                <div className="purchase-line-v3 transaction-card" key={r.id}>
+                  <TransactionAmount
+                    label={t("কত টাকা")}
+                    value={r.amount}
+                    onChange={(value) => changeRow(r.id, { amount: value })}
+                  />
                   <label>
                     {t(
                       labour
@@ -945,115 +1131,99 @@ export function QuickEntrySheet({
                       {t(material ? "এই মাল বাদ দিন" : "এই খরচ বাদ দিন")}
                     </button>
                   ) : null}
-                  {!labour && r.unit && (material || transport) ? (
-                    <label>
-                      {t("পরিমাণ")} · {formatDigits(r.unit)}
-                      <NumericInput
-                        inputMode="decimal"
-                        aria-label={t("পরিমাণ")}
-                        value={r.quantity}
-                        onChange={(e) =>
-                          changeRow(r.id, {
-                            quantity: e.target.value,
-                          })
-                        }
-                      />
-                    </label>
-                  ) : null}
                   {material || transport ? (
-                    <details className="item-extra-v3">
-                      <summary>
-                        {t(
-                          transport
-                            ? "কিসের মাল এনেছেন"
-                            : "ব্র্যান্ড ও পরিমাণ লিখি",
-                        )}
-                        <CaretDownIcon size={15} />
-                      </summary>
-                      <section className="line-meta-v3">
-                        <div className="field-grid">
+                    <TransactionDetails
+                      summary={t(
+                        material ? "ব্র্যান্ড ও পরিমাণ" : "কিসের মাল এনেছেন",
+                      )}
+                      defaultOpen={
+                        material && Boolean(r.brand || r.quantity || r.unit)
+                      }
+                    >
+                      <section className="line-meta-v3 transaction-fields">
+                        {material ? (
                           <label>
-                            {t("মালের ধরন")}
-                            <AppSelect
-                              value={r.groupId}
-                              onChange={(e) =>
-                                changeRow(r.id, { groupId: e.target.value })
-                              }
-                            >
-                              <option value="">{t("এখন দরকার নেই")}</option>
-                              {groups.map((g) => (
-                                <option key={g.id} value={g.id}>
-                                  {g.name}
-                                </option>
-                              ))}
-                              <option value="__new__">{t("+ নতুন ধরন")}</option>
-                            </AppSelect>
-                          </label>
-                          {r.groupId === "__new__" ? (
-                            <label>
-                              {t("নতুন মালের ধরন")}
-                              <input
-                                value={r.groupName}
-                                onChange={(e) =>
-                                  changeRow(r.id, { groupName: e.target.value })
-                                }
-                              />
-                            </label>
-                          ) : (
-                            <label>
-                              {t("ব্র্যান্ড")}
-                              <input
-                                value={r.brand}
-                                placeholder={t("যেমন: Crown")}
-                                onChange={(e) =>
-                                  changeRow(r.id, { brand: e.target.value })
-                                }
-                              />
-                            </label>
-                          )}
-                          <label>
-                            {t("কোথায় ব্যবহার হবে")}
+                            {t("ব্র্যান্ড")}
                             <input
-                              value={r.usage}
-                              placeholder={t("যেমন: প্লাস্টারের বালু")}
+                              value={r.brand}
+                              placeholder={t("ইচ্ছা হলে লিখুন")}
                               onChange={(e) =>
-                                changeRow(r.id, { usage: e.target.value })
+                                changeRow(r.id, { brand: e.target.value })
                               }
                             />
                           </label>
-                          <label>
-                            {t("পরিমাণ ও একক")}
-                            <div className="inline-fields">
+                        ) : null}
+                        {material ? (
+                          <div className="transaction-grid">
+                            <label>
+                              {t("পরিমাণ")}
                               <NumericInput
-                                aria-label={t("পরিমাণ")}
                                 value={r.quantity}
                                 inputMode="decimal"
                                 onChange={(e) =>
-                                  changeRow(r.id, {
-                                    quantity: e.target.value,
-                                  })
+                                  changeRow(r.id, { quantity: e.target.value })
                                 }
                               />
+                            </label>
+                            <label>
+                              {t("একক")}
                               <input
-                                aria-label={t("একক")}
                                 value={r.unit}
                                 placeholder={t("বস্তা / ফুট")}
                                 onChange={(e) =>
                                   changeRow(r.id, { unit: e.target.value })
                                 }
                               />
-                            </div>
+                            </label>
+                          </div>
+                        ) : null}
+                        <label>
+                          {t("মালের ধরন")}
+                          <AppSelect
+                            value={r.groupId}
+                            onChange={(e) =>
+                              changeRow(r.id, { groupId: e.target.value })
+                            }
+                          >
+                            <option value="">{t("এখন দরকার নেই")}</option>
+                            {groups.map((g) => (
+                              <option key={g.id} value={g.id}>
+                                {g.name}
+                              </option>
+                            ))}
+                            <option value="__new__">{t("+ নতুন ধরন")}</option>
+                          </AppSelect>
+                        </label>
+                        {r.groupId === "__new__" ? (
+                          <label>
+                            {t("নতুন মালের ধরন")}
+                            <input
+                              value={r.groupName}
+                              onChange={(e) =>
+                                changeRow(r.id, { groupName: e.target.value })
+                              }
+                            />
                           </label>
-                        </div>
+                        ) : null}
+                        <label>
+                          {t("কোথায় ব্যবহার হবে")}
+                          <input
+                            value={r.usage}
+                            placeholder={t("যেমন: প্লাস্টারের বালু")}
+                            onChange={(e) =>
+                              changeRow(r.id, { usage: e.target.value })
+                            }
+                          />
+                        </label>
                       </section>
-                    </details>
+                    </TransactionDetails>
                   ) : null}
                 </div>
               ))}
             </div>
           )}
 
-          {!cash && !wage && !labour && !transport ? (
+          {!cash && !wage && !charge && !labour && !transport ? (
             <button
               className="text-button add-line-v3"
               type="button"
@@ -1063,7 +1233,7 @@ export function QuickEntrySheet({
               {t(material ? "আরেকটি মাল" : "আরেকটি খরচ")}
             </button>
           ) : null}
-          {cash ? (
+          {cash || charge || wage ? (
             <section className="cash-purpose-v3">
               <details
                 className="entry-cash-reason"
@@ -1075,127 +1245,130 @@ export function QuickEntrySheet({
               >
                 <summary>
                   {t("কারণ লিখি")}
-                  <CaretDownIcon size={16} />
+                  <CaretDownIcon size={16} aria-hidden="true" />
                 </summary>
-                <label>
-                  {t("কিসের টাকা")}
-                  <AppSelect
-                    value={draft.paymentPurposeId || draft.account}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      const custom = ledger.paymentPurposes.find(
-                        (p) => p.id === value,
-                      );
-                      setDraft((d) => ({
-                        ...d,
-                        paymentPurposeId: custom
-                          ? custom.id
-                          : value === "__new__"
-                            ? value
-                            : "",
-                        paymentPurposeName: "",
-                        account:
-                          custom?.account ??
-                          (["materials", "labour", "other"].includes(value)
-                            ? (value as QuickDraft["account"])
-                            : d.account),
-                        contractId:
-                          custom && custom.account !== "labour"
-                            ? ""
-                            : d.contractId,
-                      }));
-                    }}
-                  >
-                    {!selectedKind ||
-                    selectedKind === "other" ||
-                    selectedKind === "shop" ? (
+                <div className="entry-cash-reason-body">
+                  <label>
+                    {t("কিসের টাকা")}
+                    <AppSelect
+                      value={draft.paymentPurposeId || draft.account}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        const custom = ledger.paymentPurposes.find(
+                          (p) => p.id === value,
+                        );
+                        financialScopeChosen.current = true;
+                        setDraft((d) => {
+                          const account =
+                            custom?.account ??
+                            (["materials", "labour", "other"].includes(value)
+                              ? (value as QuickDraft["account"])
+                              : d.account);
+                          return paymentScopeChange(ledger, d, {
+                            paymentPurposeId: custom
+                              ? custom.id
+                              : value === "__new__"
+                                ? value
+                                : "",
+                            paymentPurposeName: "",
+                            account,
+                            kind:
+                              d.kind === "wage" && account !== "labour"
+                                ? "payment"
+                                : d.kind,
+                            contractId:
+                              account === "labour" ? d.contractId : "",
+                            costType:
+                              account === d.account
+                                ? d.costType
+                                : account === "labour"
+                                  ? "labour"
+                                  : account === "materials"
+                                    ? "material"
+                                    : "other",
+                          });
+                        });
+                      }}
+                    >
                       <option value="materials">{t("মালের টাকা")}</option>
-                    ) : null}
-                    {!selectedKind ||
-                    selectedKind === "other" ||
-                    selectedKind === "worker" ? (
                       <option value="labour">{t("মজুরি")}</option>
-                    ) : null}
-                    {!selectedKind ||
-                    selectedKind === "other" ||
-                    selectedKind === "driver" ? (
                       <option value="other">{t("গাড়িভাড়া / অন্য খরচ")}</option>
-                    ) : null}
-                    {ledger.paymentPurposes
-                      .filter(
-                        (p) =>
-                          !selectedKind ||
-                          selectedKind === "other" ||
-                          p.account === defaultContactAccount(selectedPerson!),
-                      )
-                      .map((p) => (
+                      {ledger.paymentPurposes.map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.name}
                         </option>
                       ))}
-                    <option value="__new__">{t("+ নতুন কারণ লিখি")}</option>
-                  </AppSelect>
-                </label>
-                {draft.paymentPurposeId === "__new__" ? (
-                  <div className="field-grid payment-purpose-create">
-                    <label>
-                      {t("কিসের টাকা লিখুন")}
-                      <input
-                        value={draft.paymentPurposeName}
-                        maxLength={200}
-                        placeholder={t("যেমন: মাল নামানোর টাকা")}
-                        onChange={(e) =>
-                          field("paymentPurposeName", e.target.value)
-                        }
-                      />
-                    </label>
-                    {!selectedKind || selectedKind === "other" ? (
+                      <option value="__new__">{t("+ নতুন কারণ লিখি")}</option>
+                    </AppSelect>
+                  </label>
+                  {draft.paymentPurposeId === "__new__" ? (
+                    <div className="payment-purpose-create">
+                      <label>
+                        {t("কিসের টাকা লিখুন")}
+                        <input
+                          value={draft.paymentPurposeName}
+                          maxLength={200}
+                          aria-describedby={`${formId}-purpose-hint`}
+                          placeholder={t("যেমন: মাল নামানোর টাকা")}
+                          onChange={(e) =>
+                            field("paymentPurposeName", e.target.value)
+                          }
+                        />
+                      </label>
                       <label>
                         {t("কোন হিসাবের অংশ")}
                         <AppSelect
                           value={draft.account}
-                          onChange={(e) =>
-                            setDraft((d) => ({
-                              ...d,
-                              account: e.target.value as QuickDraft["account"],
-                              contractId: "",
-                            }))
-                          }
+                          onChange={(e) => {
+                            financialScopeChosen.current = true;
+                            setDraft((d) =>
+                              paymentScopeChange(ledger, d, {
+                                account: e.target
+                                  .value as QuickDraft["account"],
+                                kind:
+                                  d.kind === "wage" &&
+                                  e.target.value !== "labour"
+                                    ? "payment"
+                                    : d.kind,
+                                contractId:
+                                  e.target.value === "labour"
+                                    ? d.contractId
+                                    : "",
+                                costType:
+                                  e.target.value === "labour"
+                                    ? "labour"
+                                    : e.target.value === "materials"
+                                      ? "material"
+                                      : "other",
+                              }),
+                            );
+                          }}
                         >
                           <option value="materials">{t("মালের টাকা")}</option>
                           <option value="labour">{t("মজুরি")}</option>
                           <option value="other">{t("অন্য খরচ")}</option>
                         </AppSelect>
                       </label>
-                    ) : (
-                      <p className="account-label">
+                      <p className="field-hint" id={`${formId}-purpose-hint`}>
                         {t(
-                          selectedKind === "worker"
-                            ? "এটি মজুরির টাকা"
-                            : selectedKind === "shop"
-                              ? "এটি মালের টাকা"
-                              : "এটি আনার খরচের টাকা",
+                          "টাকা রাখার সঙ্গে এই কারণও রাখা হবে। পরের বার তালিকায় পাবেন।",
                         )}
                       </p>
-                    )}
-                    <p className="field-hint">
-                      {t(
-                        "টাকা রাখার সঙ্গে এই কারণও রাখা হবে। পরের বার তালিকায় পাবেন।",
-                      )}
-                    </p>
-                  </div>
-                ) : null}
+                    </div>
+                  ) : null}
+                </div>
               </details>
             </section>
-          ) : !cash &&
-            !returning &&
-            !(
-              selectedKind === "worker" &&
-              draft.kind === "payment" &&
-              draft.purpose === "wage"
-            ) ? (
+          ) : null}
+          {!cash && !returning ? (
             <section className="payment-state-v3">
-              <span>{t("টাকা দিয়েছেন?")}</span>
+              <span>
+                {t(
+                  draft.payment === "worker"
+                    ? "কর্মী নিজের টাকা দিয়েছেন"
+                    : "টাকা দিয়েছেন?",
+                )}
+              </span>
               <div className="choice-chips">
                 {(["full", "partial", "due"] as const).map((p) => (
                   <button
@@ -1228,18 +1401,40 @@ export function QuickEntrySheet({
               ) : null}
             </section>
           ) : null}
-          {!returning && draft.kind !== "refund" && selectedPerson ? (
+          {!returning &&
+          !legacyReceivable &&
+          draft.kind !== "refund" &&
+          selectedPerson ? (
             agreement ? (
               <section className="entry-contract-progress">
                 <h3>{t("কাজের হিসাব")}</h3>
-                <BalanceProgress
-                  total={agreement.agreed}
-                  paid={agreement.netPaid + paidNow}
-                />
+                {agreement.balanceAmbiguous ? (
+                  <p>{t("বাকি এখনও পরিষ্কার নয়")}</p>
+                ) : (
+                  <EntryPaymentPreview
+                    previousBalance={intent.balance ?? 0}
+                    currentCost={0}
+                    payment={paidNow}
+                  />
+                )}
+                {agreement.unearnedCommitment > 0 && (
+                  <p className="field-hint">
+                    {t("চুক্তির বাকি কাজ: {{amount}}", {
+                      amount: money(agreement.unearnedCommitment),
+                    })}
+                  </p>
+                )}
               </section>
+            ) : prior?.balance === null ? (
+              <p className="form-hint" role="status">
+                {t(
+                  "কিছু মজুরির বিল কোন কাজের, তা মেলানো নেই। কাজ বেছে নিয়ে হিসাব দেখুন।",
+                )}
+              </p>
             ) : prior && (prior.balance !== 0 || total > 0 || paidNow > 0) ? (
               <EntryPaymentPreview
                 previousBalance={prior.balance}
+                acrossJobs={prior.acrossJobs}
                 currentCost={cash ? 0 : total}
                 payment={paidNow}
               />
@@ -1247,90 +1442,15 @@ export function QuickEntrySheet({
           ) : null}
           {cash ||
           (!returning && ["full", "partial"].includes(draft.payment)) ? (
-            <div className="payment-methods compact-methods">
-              {(["cash", "bkash", "bank"] as const).map((method) => (
-                <button
-                  type="button"
-                  key={method}
-                  className={draft.method === method ? "selected" : ""}
-                  aria-pressed={draft.method === method}
-                  onClick={() => field("method", method)}
-                >
-                  <PaymentIcon method={method} size={20} />
-                  <span>
-                    {t(
-                      method === "cash"
-                        ? "নগদ"
-                        : method === "bkash"
-                          ? "বিকাশ"
-                          : "ব্যাংক",
-                    )}
-                  </span>
-                </button>
-              ))}
-            </div>
+            <PaymentMethodField
+              label={draft.kind === "refund" ? t("কীভাবে পেয়েছেন") : undefined}
+              value={draft.method}
+              onChange={(method) => field("method", method)}
+            />
           ) : null}
-          <button
-            type="button"
-            className="entry-more-toggle"
-            onClick={() => setMore(!more)}
-            aria-expanded={more}
-          >
-            {t(more ? "বাড়তি তথ্য বন্ধ করুন" : "আরও তথ্য যোগ করি")}
-            <CaretDownIcon size={17} />
-          </button>
-          {more ? (
-            <section className="entry-more-body">
-              <div className="field-grid">
-                <label>
-                  {t("তারিখ")}
-                  <AppDatePicker
-                    required
-                    value={draft.date}
-                    onChange={(e) => field("date", e.target.value)}
-                  />
-                </label>
-                {!cash &&
-                !labour &&
-                !returning &&
-                (!selectedKind || selectedKind === "other") ? (
-                  <label>
-                    {t("খরচের ধরন")}
-                    <AppSelect
-                      value={draft.costType}
-                      onChange={(e) =>
-                        chooseType(e.target.value as QuickDraft["costType"])
-                      }
-                    >
-                      {Object.entries(costNames).map(([id, label]) => (
-                        <option key={id} value={id}>
-                          {t(label)}
-                        </option>
-                      ))}
-                    </AppSelect>
-                  </label>
-                ) : null}
-              </div>
-              <label>
-                {t("নোট")}
-                <textarea
-                  rows={2}
-                  value={draft.note}
-                  onChange={(e) => field("note", e.target.value)}
-                />
-              </label>
-              {returning ? (
-                <label>
-                  {t("নগদ টাকা ফেরত পেলে লিখুন")}
-                  <MoneyInput
-                    aria-label={t("নগদ টাকা ফেরত পেলে লিখুন")}
-                    value={draft.refund}
-                    placeholder="0"
-                    onChange={(e) => field("refund", e.target.value)}
-                  />
-                </label>
-              ) : null}
-              <label className="attachment-button">
+          <TransactionDetails summary={t("ভাউচার, নোট ও তারিখ")}>
+            <div className="legacy-transaction-attachments">
+              <label className="attachment-button transaction-secondary">
                 <CameraIcon size={20} />
                 {t("ভাউচারের ছবি / PDF")}
                 <input
@@ -1376,8 +1496,59 @@ export function QuickEntrySheet({
                   </button>
                 </div>
               ))}
-            </section>
-          ) : null}
+            </div>
+            <div className="entry-more-body">
+              <div className="field-grid">
+                <label>
+                  {t("তারিখ")}
+                  <AppDatePicker
+                    required
+                    value={draft.date}
+                    onChange={(e) => field("date", e.target.value)}
+                  />
+                </label>
+                {!cash &&
+                !labour &&
+                !returning &&
+                (!selectedKind || selectedKind === "other") ? (
+                  <label>
+                    {t("খরচের ধরন")}
+                    <AppSelect
+                      value={draft.costType}
+                      onChange={(e) =>
+                        chooseType(e.target.value as QuickDraft["costType"])
+                      }
+                    >
+                      {Object.entries(costNames).map(([id, label]) => (
+                        <option key={id} value={id}>
+                          {t(label)}
+                        </option>
+                      ))}
+                    </AppSelect>
+                  </label>
+                ) : null}
+              </div>
+              <label>
+                {t("নোট")}
+                <textarea
+                  rows={2}
+                  value={draft.note}
+                  onChange={(e) => field("note", e.target.value)}
+                />
+              </label>
+              {returning ? (
+                <label>
+                  {t("ক্যাশ ফেরত পেলে লিখুন")}
+                  <MoneyInput
+                    aria-label={t("ক্যাশ ফেরত পেলে লিখুন")}
+                    value={draft.refund}
+                    placeholder="0"
+                    onChange={(e) => field("refund", e.target.value)}
+                  />
+                </label>
+              ) : null}
+            </div>
+          </TransactionDetails>
         </fieldset>
       </form>
     </Frame>

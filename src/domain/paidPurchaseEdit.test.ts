@@ -14,12 +14,18 @@ import {
   personSummary,
   replaceEntry,
   replaceExpenseAndSettlements,
+  setEntryVoided,
 } from "./ledger";
 import {
   fullyPaidPurchasePayment,
   paidPurchasePayment,
   replacePaidPurchase,
 } from "./paidPurchaseEdit";
+import {
+  allocatePayment,
+  partyLedger,
+  preservesPaymentAllocationHistory,
+} from "./partyLedger";
 
 const createdAt = "2026-11-04T01:00:00.000Z";
 function fixture(payment: "full" | "partial" = "full", anonymous = false) {
@@ -79,6 +85,100 @@ const totals = (ledger: Ledger) => {
 afterEach(() => vi.useRealTimers());
 
 describe("automatic correction of a fully paid purchase", () => {
+  it("atomically replaces a new paid purchase's exact allocation when both its price and cash are corrected", () => {
+    const confirmed = fixture();
+    confirmed.entries = confirmed.entries.map((entry) => ({
+      ...entry,
+      reviewStatus: "confirmed" as const,
+    }));
+    const original = allocatePayment(confirmed, "paid", [
+      { billId: "bill", workId: "roof", amount: 100000 },
+    ]);
+    const before = structuredClone(original);
+    const corrected = replacePaidPurchase(
+      original,
+      price(original, 60000),
+      paid(original),
+    );
+    expect(totals(corrected)).toEqual({
+      cost: 60000,
+      paid: 60000,
+      due: 0,
+      credit: 0,
+    });
+    expect(corrected.paymentAllocations).toHaveLength(2);
+    expect(corrected.paymentAllocations![0].cancelledAt).toBeTruthy();
+    expect(corrected.paymentAllocations![1]).toMatchObject({
+      paymentId: "paid",
+      billId: "bill",
+      amount: 60000,
+    });
+    expect(preservesPaymentAllocationHistory(original, corrected)).toBe(true);
+    expect(partyLedger(corrected, "shop")).toMatchObject({
+      billOutstanding: 0,
+      allocated: 60000,
+    });
+    expect(bill(corrected).revisions.at(-1)?.before.lines[0].amount).toBe(
+      100000,
+    );
+    expect(
+      paid(corrected).revisions.at(-1)?.before.paymentParts[0].amount,
+    ).toBe(100000);
+    expect(original).toEqual(before);
+  });
+  it("cancels only the matching allocation when a source event is voided and preserves actual cash independently", () => {
+    const confirmed = fixture();
+    confirmed.entries = confirmed.entries.map((entry) => ({
+      ...entry,
+      reviewStatus: "confirmed" as const,
+    }));
+    const original = allocatePayment(confirmed, "paid", [
+      { billId: "bill", amount: 100000 },
+    ]);
+    const voidBill = setEntryVoided(original, "bill", true);
+    expect(totals(voidBill)).toEqual({
+      cost: 0,
+      paid: 100000,
+      due: 0,
+      credit: 100000,
+    });
+    expect(voidBill.paymentAllocations![0].cancelledAt).toBeTruthy();
+    expect(preservesPaymentAllocationHistory(original, voidBill)).toBe(true);
+    const restored = setEntryVoided(voidBill, "bill", false);
+    expect(totals(restored)).toEqual({
+      cost: 100000,
+      paid: 100000,
+      due: 0,
+      credit: 0,
+    });
+    expect(restored.paymentAllocations![0].cancelledAt).toBeTruthy();
+  });
+  it("corrects a partially paid bill below its cash without silently changing the money actually paid", () => {
+    const confirmed = fixture("partial");
+    confirmed.entries = confirmed.entries.map((entry) => ({
+      ...entry,
+      reviewStatus: "confirmed" as const,
+    }));
+    const original = allocatePayment(confirmed, "paid", [
+      { billId: "bill", amount: 40000 },
+    ]);
+    const next = replaceExpenseAndSettlements(original, price(original, 30000));
+    expect(totals(next)).toEqual({
+      cost: 30000,
+      paid: 40000,
+      due: 0,
+      credit: 10000,
+    });
+    expect(partyLedger(next, "shop")).toMatchObject({
+      allocated: 30000,
+      billOutstanding: 0,
+      unallocatedCash: 10000,
+    });
+    expect(preservesPaymentAllocationHistory(original, next)).toBe(true);
+    expect(next.paymentAllocations![0].cancelledAt).toBeTruthy();
+    expect(paid(next).revisions).toHaveLength(0);
+    expect(bill(next).revisions.at(-1)?.before.lines[0].amount).toBe(100000);
+  });
   it("keeps a genuinely full co-created purchase eligible through repeated corrections", () => {
     const original = fixture();
     expect(fullyPaidPurchasePayment(original, "bill")).toEqual(paid(original));

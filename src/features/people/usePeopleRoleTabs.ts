@@ -3,14 +3,11 @@ import { z } from "zod";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { getActiveOwner, type WorkspaceMode } from "../../data/database";
 import { createWorkspaceStorage } from "../../data/repository";
-import { MAX_PEOPLE_ROLE_TABS, roleKey } from "./peopleRoles";
+import { MAX_PEOPLE_ROLE_TABS } from "./peopleRoles";
+import { ContactTypeSchema } from "../../domain/contactTypes";
 
-const preferenceKey = "view:people-role-tabs:v1";
-const KeySchema = z
-  .string()
-  .max(4000)
-  .transform(roleKey)
-  .pipe(z.string().min(1).max(4000));
+const preferenceKey = "view:people-type-tabs:v1";
+const KeySchema = ContactTypeSchema;
 const KeysSchema = z
   .array(KeySchema)
   .max(MAX_PEOPLE_ROLE_TABS)

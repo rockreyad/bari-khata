@@ -251,7 +251,7 @@ it("opens an accessible read-only detail with notes and exact methods without fe
   expect(screen.queryByText("টাকা পেয়েছেন")).toBeNull();
   expect(screen.getByText("বিকাশ")).toBeTruthy();
   expect(screen.getByText("৳70")).toBeTruthy();
-  expect(screen.getByText("নগদ")).toBeTruthy();
+  expect(screen.getByText("ক্যাশ")).toBeTruthy();
   expect(screen.getByText("৳30")).toBeTruthy();
   expect(screen.getByText("নমুনা বিবরণ")).toBeTruthy();
   expect(mocked.detail).toHaveBeenCalledWith(token, "sample-entry", 7, {
@@ -357,7 +357,7 @@ it("shows payment history inside a bill and opens its note in the same sheet bef
   render(<SharedEntryDetail {...props()} />);
   await screen.findByRole("heading", { name: "টাকা দেওয়ার হিসাব" });
   expect(screen.getByText("৳40")).toBeTruthy();
-  expect(screen.getByText("নগদ")).toBeTruthy();
+  expect(screen.getByText("ক্যাশ")).toBeTruthy();
   const billSignal = mocked.detail.mock.calls[0][3].signal as AbortSignal;
   await userEvent.click(
     screen.getByRole("button", {

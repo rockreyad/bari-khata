@@ -1,3 +1,4 @@
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import { afterEach, expect, it } from "vitest";
 import { LedgerDatabase } from "./database";
@@ -54,7 +55,9 @@ it("keeps removed identities, money and recovery history after reopening Indexed
   const target = repository();
   await target.ensure("real", LedgerSchema.parse({}));
   await target.importBackup(await source.exportBackup(), { replace: true });
-  expect((await target.read())!.ledger.people[0]).toEqual(removed.people[0]);
+  expect((await target.read())!.ledger.people[0]).toEqual(
+    migrateArchitecture(removed).ledger.people[0],
+  );
   const snapshot = await source.read();
   const outbox = await source.database.outbox.toArray();
   await expect(

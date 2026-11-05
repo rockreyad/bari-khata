@@ -1,11 +1,14 @@
 import { useMemo } from "react";
 import { ArrowLeftIcon, CaretRightIcon } from "@phosphor-icons/react";
-import { useSearchParams } from "react-router";
+import { useLocation, useSearchParams } from "react-router";
 import { useNotebook } from "../../app/NotebookProvider";
+import { contactEntryPolicy } from "../../domain/contactEntryPolicy";
 import { LoadMore } from "../../components/ui/LoadMore";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { payableBreakdown, type PayableRow } from "./payableBreakdown";
 import "./payables.css";
+import { PartyDues } from "./PartyDues";
+import { partyDueItems, partyDuePaymentUrl } from "./partyDueItems";
 
 const PAGE_SIZE = 30;
 
@@ -13,6 +16,7 @@ export function PayablesPage() {
   const { ledger, go, detail } = useNotebook();
   const { t, money, formatDigits } = useLanguageContext();
   const [params, setParams] = useSearchParams();
+  const location = useLocation();
   const { total, rows, people, works, entries } = useMemo(
     () => ({
       ...payableBreakdown(ledger),
@@ -40,10 +44,18 @@ export function PayablesPage() {
       go(
         hasEntries
           ? `/ledger?${new URLSearchParams({ person: personId, order: "oldest" })}`
-          : `/people/${encodeURIComponent(personId)}?account=labour`,
+          : `/parties/${encodeURIComponent(personId)}?account=labour`,
       );
     } else if (row.entryId) detail(row.entryId);
   };
+  const payPerson = (personId: string) => {
+    const due = partyDueItems(ledger, personId);
+    const back = location.pathname + location.search + location.hash;
+    if (due.length === 1) go(partyDuePaymentUrl(due[0], back));
+    else go(`/dues?${new URLSearchParams({ person: personId })}`);
+  };
+  if (params.has("person"))
+    return <PartyDues personId={params.get("person") ?? ""} />;
   return (
     <div className="home-dues-page page-flow">
       <header className="home-dues-heading">
@@ -100,6 +112,20 @@ export function PayablesPage() {
                     </strong>
                     <CaretRightIcon size={16} aria-hidden="true" />
                   </button>
+                  {person &&
+                    !person.archivedAt &&
+                    contactEntryPolicy(person).payment && (
+                      <button
+                        type="button"
+                        className="home-dues-pay"
+                        aria-label={t("টাকা দিই: {{name}}", {
+                          name: person.name,
+                        })}
+                        onClick={() => payPerson(person.id)}
+                      >
+                        {t("টাকা দিই")}
+                      </button>
+                    )}
                 </li>
               );
             })}

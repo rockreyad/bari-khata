@@ -1,3 +1,4 @@
+import { migrateArchitecture } from "./architectureMigration";
 import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import { LedgerDatabase } from "../data/database";
@@ -137,7 +138,7 @@ describe("numeric storage and the homeowner's totals", () => {
       await restored.ensure("real", createEmptyLedger());
       await restored.importBackup(backup, { replace: true });
       const ledger = (await restored.read("real"))!.ledger;
-      expect(ledger).toEqual(original);
+      expect(ledger).toEqual(migrateArchitecture(original).ledger);
       expect(summarize(ledger).cost).toBe(16300);
       for (const formattedAmount of ["16200", "১৬২০০"]) {
         const corrupt = JSON.parse(backup);
@@ -145,7 +146,9 @@ describe("numeric storage and the homeowner's totals", () => {
         await expect(
           restored.importBackup(JSON.stringify(corrupt), { replace: true }),
         ).rejects.toThrow();
-        expect((await restored.read("real"))!.ledger).toEqual(original);
+        expect((await restored.read("real"))!.ledger).toEqual(
+          migrateArchitecture(original).ledger,
+        );
       }
     } finally {
       await database.delete();

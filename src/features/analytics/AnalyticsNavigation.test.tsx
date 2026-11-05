@@ -1,9 +1,25 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
+import type { ReactNode, SelectHTMLAttributes } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
 import { LedgerSchema } from "../../domain/model";
 import { AnalyticsPage } from "./AnalyticsPage";
+
+vi.mock("../../components/ui/AppSelect", () => ({
+  AppSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => (
+    <select {...props} />
+  ),
+}));
+
+vi.mock("../../components/Sheet", () => ({
+  Sheet: ({ children, footer }: { children: ReactNode; footer: ReactNode }) => (
+    <section>
+      {children}
+      {footer}
+    </section>
+  ),
+}));
 
 vi.mock("../../context/LanguageProvider", () => ({
   useLanguageContext: () => ({
@@ -84,6 +100,7 @@ it.each([
         new URLSearchParams(screen.getByTestId("route").textContent ?? ""),
       ),
     ).toEqual({
+      mode: "cash",
       work: "work",
       person: "person",
       from: "2026-11-01",
@@ -96,6 +113,223 @@ it.each([
     expect(container.querySelectorAll(".history-payment")).toHaveLength(1);
   },
 );
+
+it("shows recorded wages even when no separate labour bill was written", () => {
+  const before = structuredClone(ledger);
+  const { container } = open("labour");
+  expect(container.querySelector(".report-total > span")?.textContent).toBe(
+    "মজুরির বিল",
+  );
+  expect(container.querySelector(".report-total > strong")?.textContent).toBe(
+    "৳0",
+  );
+  expect(
+    container.querySelector(".report-paid-summary > button > strong")
+      ?.textContent,
+  ).toBe("৳700");
+  expect(screen.getByText("এই বাছাইয়ে মজুরির বিল নেই।")).toBeTruthy();
+  expect(screen.queryByText("এই বাছাইয়ে কোনো খরচ নেই।")).toBeNull();
+  expect(container.querySelectorAll(".history-expense")).toHaveLength(0);
+  expect(ledger).toEqual(before);
+});
+
+it("keeps the search and worker scope when opening paid wages", () => {
+  const { container } = open("labour");
+  fireEvent.change(screen.getByRole("textbox", { name: "রিপোর্টে খুঁজুন" }), {
+    target: { value: "নমুনা খাতা" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "টাকা দেওয়ার হিসাব দেখি" }),
+  );
+  expect(
+    Object.fromEntries(
+      new URLSearchParams(screen.getByTestId("route").textContent ?? ""),
+    ),
+  ).toEqual({
+    mode: "cash",
+    work: "work",
+    person: "person",
+    from: "2026-11-01",
+    to: "2026-11-03",
+    q: "নমুনা খাতা",
+    account: "labour",
+  });
+  expect(container.querySelector(".report-total > strong")?.textContent).toBe(
+    "৳700",
+  );
+});
+
+it("keeps scoped labour bills separate from split cash and refunds", () => {
+  const mixed = LedgerSchema.parse({
+    works: ledger.works,
+    people: ledger.people,
+    entries: [
+      {
+        id: "bill",
+        kind: "expense",
+        account: "labour",
+        personId: "person",
+        date: "2026-11-02",
+        lines: [
+          {
+            id: "work-line",
+            workId: "work",
+            costType: "labour",
+            label: "নমুনা মজুরি",
+            amount: 600000,
+          },
+          {
+            id: "elsewhere-line",
+            workId: "elsewhere",
+            costType: "labour",
+            label: "অন্য খাতার মজুরি",
+            amount: 400000,
+          },
+        ],
+      },
+      {
+        id: "split-payment",
+        kind: "payment",
+        relatedEntryId: "bill",
+        account: "labour",
+        personId: "person",
+        date: "2026-11-02",
+        paymentParts: [{ method: "bank", amount: 700000 }],
+        allocations: [
+          { workId: "work", amount: 300000 },
+          { workId: "elsewhere", amount: 400000 },
+        ],
+      },
+      {
+        id: "split-refund",
+        kind: "refund",
+        account: "labour",
+        personId: "person",
+        date: "2026-11-03",
+        paymentParts: [{ amount: 50000 }],
+        allocations: [
+          { workId: "work", amount: 20000 },
+          { workId: "elsewhere", amount: 30000 },
+        ],
+      },
+      ...ledger.entries.filter((entry) => entry.id !== "wage"),
+      {
+        ...ledger.entries[0],
+        id: "voided-payment",
+        voided: true,
+      },
+      {
+        ...ledger.entries[0],
+        id: "historical-payment",
+        balanceImpact: "historical",
+      },
+    ],
+  });
+  const before = structuredClone(mixed);
+  const onEntry = vi.fn();
+  const { container } = render(
+    <MemoryRouter
+      initialEntries={[
+        "/reports?mode=cost&section=labour&work=work&person=person&from=2026-11-01&to=2026-11-03",
+      ]}
+    >
+      <AnalyticsPage ledger={mixed} onEntry={onEntry} />
+      <CurrentRoute />
+    </MemoryRouter>,
+  );
+  expect(container.querySelector(".report-total > strong")?.textContent).toBe(
+    "৳6000",
+  );
+  expect(
+    container.querySelector(".report-paid-summary > button > strong")
+      ?.textContent,
+  ).toBe("৳2800");
+  expect(screen.getByText("ফেরত পাওয়া ৳200 বাদ দিয়ে")).toBeTruthy();
+  expect(container.querySelectorAll(".history-expense")).toHaveLength(1);
+  expect(container.querySelectorAll(".history-payment")).toHaveLength(0);
+
+  fireEvent.click(
+    screen.getByRole("button", { name: "টাকা দেওয়ার হিসাব দেখি" }),
+  );
+  expect(container.querySelector(".report-total > strong")?.textContent).toBe(
+    "৳2800",
+  );
+  expect(container.querySelectorAll(".history-row")).toHaveLength(2);
+  expect(container.querySelectorAll(".history-expense")).toHaveLength(0);
+  expect(
+    container.querySelector(".history-payment .history-row-amount")
+      ?.textContent,
+  ).toBe("৳3000");
+  expect(
+    container.querySelector(".history-refund .history-row-amount")?.textContent,
+  ).toBe("৳-200");
+  fireEvent.click(
+    container.querySelector<HTMLButtonElement>(".history-payment")!,
+  );
+  expect(onEntry).toHaveBeenCalledWith("split-payment");
+  expect(mixed).toEqual(before);
+});
+
+it.each([
+  ["section=labour&type=material", "", "৳700"],
+  ["section=labour&type=labour&account=materials", "", "৳2000"],
+  ["type=labour", "cement", "৳700"],
+])(
+  "honours explicit cash mode with stale %s and initial group %s",
+  (stale, initialGroupId, amount) => {
+    const { container } = render(
+      <MemoryRouter
+        initialEntries={[
+          `/reports?mode=cash&${stale}&work=work&person=person&from=2026-11-01&to=2026-11-03`,
+        ]}
+      >
+        <AnalyticsPage ledger={ledger} initialGroupId={initialGroupId} />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole("heading", { name: "টাকা কোথায় দিলাম" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", { name: "মাল ও কাজের দাম" }),
+    ).toBeNull();
+    expect(container.querySelector(".report-total > strong")?.textContent).toBe(
+      amount,
+    );
+    expect(container.querySelectorAll(".history-payment")).toHaveLength(1);
+  },
+);
+
+it("clears legacy category hints when choosing all payment accounts", () => {
+  const { container } = render(
+    <MemoryRouter
+      initialEntries={[
+        "/reports?mode=cash&section=labour&type=labour&work=work&person=person&from=2026-11-01&to=2026-11-03",
+      ]}
+    >
+      <AnalyticsPage ledger={ledger} />
+      <CurrentRoute />
+    </MemoryRouter>,
+  );
+  expect(container.querySelector(".report-total > strong")?.textContent).toBe(
+    "৳700",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "হিসাব বেছে দেখুন" }));
+  fireEvent.change(screen.getByLabelText("কিসের টাকা"), {
+    target: { value: "" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "হিসাব দেখুন" }));
+  const params = new URLSearchParams(
+    screen.getByTestId("route").textContent ?? "",
+  );
+  expect(params.get("mode")).toBe("cash");
+  expect(params.has("section")).toBe(false);
+  expect(params.has("type")).toBe(false);
+  expect(params.has("account")).toBe(false);
+  expect(container.querySelector(".report-total > strong")?.textContent).toBe(
+    "৳2800",
+  );
+  expect(container.querySelectorAll(".history-payment")).toHaveLength(3);
+});
 
 it.each(["transport", "other"])(
   "labels %s payments as all accounts rather than inventing a cash category",

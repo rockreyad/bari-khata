@@ -72,7 +72,7 @@ export const v3English: Record<string, string> = {
   "তারিখ, বিবরণ ও পছন্দের বোতাম": "Dates, description and shortcuts",
   দিয়েছি: "Paid",
   "দোকানের নাম": "Shop name",
-  "নগদ টাকা ফেরত পেলে লিখুন": "Enter any cash refund received",
+  "ক্যাশ ফেরত পেলে লিখুন": "Enter any cash refund received",
   "না দিলেও হবে": "Optional",
   "নাম না দিলেও হবে": "Name is optional",
   "নাম যোগ করব": "Add a contact",

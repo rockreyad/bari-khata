@@ -1,4 +1,4 @@
-import { latinDigits } from "./numerals";
+import { latinDigits } from "./numerals.js";
 
 export const normalizeLabel = (value: string) =>
   latinDigits(value.normalize("NFKC"))

@@ -28,6 +28,10 @@
   box-shadow: none;
   min-width: 0;
 }
+.history-search input[type="search"]::-webkit-search-cancel-button,
+.history-search input[type="search"]::-webkit-search-decoration {
+  appearance: none;
+}
 .history-clear {
   padding: 4px;
   display: grid;

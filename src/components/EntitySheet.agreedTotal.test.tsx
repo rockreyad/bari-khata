@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import type { InputHTMLAttributes, SelectHTMLAttributes } from "react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -14,7 +15,7 @@ import { LanguageProvider } from "../context/LanguageProvider";
 import {
   getAccountDatabase,
   setActiveOwner,
-  type LedgerDatabase,
+  LedgerDatabase,
 } from "../data/database";
 import { LedgerRepository } from "../data/repository";
 import { LedgerSchema, type Ledger } from "../domain/model";
@@ -39,6 +40,129 @@ afterEach(async () => {
   setActiveOwner(null);
   for (const database of databases.splice(0)) await database.delete();
   localStorage.clear();
+});
+
+it("keeps an edited professional description and its preset draft through IndexedDB reopen and backup without creating money events", async () => {
+  savePreferences({ language: "bn" });
+  const owner = crypto.randomUUID();
+  setActiveOwner(owner);
+  const database = getAccountDatabase(owner);
+  databases.push(database);
+  const repository = new LedgerRepository(database);
+  const original = LedgerSchema.parse({
+    works: [{ id: "work", name: "নমুনা কাজ" }],
+    people: [{ id: "existing", name: "নমুনা সরবরাহকারী", kind: "shop" }],
+    entries: [
+      {
+        id: "old-bill",
+        kind: "expense",
+        account: "materials",
+        personId: "existing",
+        lines: [{ id: "old-line", workId: "work", amount: 12000 }],
+      },
+    ],
+  });
+  await repository.ensure("real", original);
+  const onSave = vi.fn(async (next: Ledger) => {
+    await repository.save(next);
+  });
+  const onClose = vi.fn();
+  const props = {
+    presentation: "page",
+    kind: "person",
+    ledger: original,
+    mode: "real",
+    onSave,
+    onClose,
+  } as const;
+  const mount = () =>
+    render(
+      <LanguageProvider>
+        <EntitySheet {...props} />
+      </LanguageProvider>,
+    );
+  const ready = () =>
+    waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+  const user = userEvent.setup();
+  let view = mount();
+  await ready();
+  await user.selectOptions(
+    screen.getByLabelText("কীভাবে যুক্ত"),
+    "professional",
+  );
+  fireEvent.change(screen.getByLabelText("নাম"), {
+    target: { value: "নমুনা পরামর্শক" },
+  });
+  fireEvent.change(screen.getByLabelText("পরিচয় / কী কাজ করেন"), {
+    target: { value: "নমুনা বিশেষ নকশা পরামর্শ" },
+  });
+  await user.click(screen.getByRole("button", { name: "ফিরুন" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  view.unmount();
+  database.close();
+  await database.open();
+  expect((await repository.read())!.ledger).toEqual(original);
+  expect(onSave).not.toHaveBeenCalled();
+  view = mount();
+  await ready();
+  expect(
+    (screen.getByLabelText("কীভাবে যুক্ত") as HTMLSelectElement).value,
+  ).toBe("professional");
+  expect((screen.getByLabelText("নাম") as HTMLInputElement).value).toBe(
+    "নমুনা পরামর্শক",
+  );
+  expect(
+    (screen.getByLabelText("পরিচয় / কী কাজ করেন") as HTMLInputElement).value,
+  ).toBe("নমুনা বিশেষ নকশা পরামর্শ");
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+  await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
+  view.unmount();
+  database.close();
+  await database.open();
+  const saved = (await repository.read())!.ledger;
+  expect(saved.people.find((person) => person.id !== "existing")).toMatchObject(
+    {
+      name: "নমুনা পরামর্শক",
+      role: "নমুনা বিশেষ নকশা পরামর্শ",
+      kind: "worker",
+      contactType: "professional",
+      quickActions: ["payment"],
+    },
+  );
+  expect(saved.entries).toEqual(original.entries);
+  expect(saved.contracts).toEqual(original.contracts);
+  const professional = saved.people.find((person) => person.id !== "existing")!;
+  view = render(
+    <LanguageProvider>
+      <EntitySheet {...props} ledger={saved} editId={professional.id} />
+    </LanguageProvider>,
+  );
+  await ready();
+  expect(
+    (screen.getByLabelText("কীভাবে যুক্ত") as HTMLSelectElement).value,
+  ).toBe("professional");
+  expect(
+    (screen.getByLabelText("পরিচয় / কী কাজ করেন") as HTMLInputElement).value,
+  ).toBe("নমুনা বিশেষ নকশা পরামর্শ");
+  view.unmount();
+  const restoredDatabase = new LedgerDatabase(
+    `preset-backup-${crypto.randomUUID()}`,
+  );
+  databases.push(restoredDatabase);
+  const restored = new LedgerRepository(restoredDatabase);
+  await restored.ensure("real", LedgerSchema.parse({}));
+  await restored.importBackup(await repository.exportBackup(), {
+    replace: true,
+  });
+  expect((await restored.read())!.ledger).toEqual(
+    migrateArchitecture(saved).ledger,
+  );
 });
 
 it.each(["87000", "85000"])(
