@@ -45,7 +45,7 @@ describe("notebook navigation", () => {
   ])("matches %s under %s to %s", (path, base, section, expected) => {
     expect(notebookSectionActive(path, base, section)).toBe(expected);
   });
-  it("moves the active label and filled icon after navigating, including sample root without a slash", async () => {
+  it("moves the active label and duotone icon after navigating, including sample root without a slash", async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/sample"]}>
@@ -74,12 +74,15 @@ describe("notebook navigation", () => {
     const overview = screen.getByRole("link", { name: "এক নজরে" });
     const work = screen.getByRole("link", { name: "কাজের খাতা" });
     expect(overview.getAttribute("aria-current")).toBe("page");
-    const filledHome = overview.querySelector("svg")!.innerHTML;
+    const activeHome = overview.querySelector("svg")!.innerHTML;
+    expect(overview.querySelector("svg")!.getAttribute("aria-hidden")).toBe(
+      "true",
+    );
     await user.click(work);
     expect(overview.getAttribute("aria-current")).toBeNull();
     expect(work.getAttribute("aria-current")).toBe("page");
     expect(work.className).toBe("active");
-    expect(overview.querySelector("svg")!.innerHTML).not.toBe(filledHome);
+    expect(overview.querySelector("svg")!.innerHTML).not.toBe(activeHome);
     await user.click(screen.getByRole("link", { name: "ব্যক্তি ও দোকান" }));
     expect(work.getAttribute("aria-current")).toBeNull();
     expect(
