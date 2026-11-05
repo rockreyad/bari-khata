@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -1335,6 +1336,92 @@ it("keeps a server search visible while loading, shows no matches and clears it 
   await screen.findByText("মজুরির বিল");
   expect((search as HTMLInputElement).value).toBe("");
   expect(mocked.read.mock.lastCall?.[4].query).toBeUndefined();
+});
+
+it("waits for a complete Bengali word before requesting server search and cancels cleared preedit", async () => {
+  mocked.read.mockResolvedValue(page());
+  render(<SharedStatementPage />);
+  await screen.findByText("মজুরির বিল");
+  const search = screen.getByRole("searchbox", {
+    name: "লেনদেন খুঁজুন",
+  }) as HTMLInputElement;
+  const summary = screen.getByRole("region", {
+    name: "হিসাবের সারাংশ",
+  }).textContent;
+  vi.useFakeTimers();
+  try {
+    fireEvent.compositionStart(search);
+    fireEvent.input(search, { isComposing: true, target: { value: "sha" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(mocked.read).toHaveBeenCalledTimes(1);
+    expect(search.value).toBe("sha");
+    fireEvent.click(screen.getByRole("button", { name: "খোঁজা মুছুন" }));
+    fireEvent.compositionEnd(search, { target: { value: "শাহ" } });
+    fireEvent.input(search, {
+      inputType: "insertCompositionText",
+      isComposing: false,
+      target: { value: "শাহ" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(search.value).toBe("");
+    expect(mocked.read).toHaveBeenCalledTimes(1);
+    fireEvent.compositionStart(search);
+    fireEvent.change(search, { target: { value: "sha" } });
+    fireEvent.compositionEnd(search, { target: { value: "শাহ" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(mocked.read).toHaveBeenCalledTimes(2);
+    expect(mocked.read.mock.lastCall?.[4].query).toBe("শাহ");
+    expect(
+      screen.getByRole("region", { name: "হিসাবের সারাংশ" }).textContent,
+    ).toBe(summary);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("does not send a previous link's unfinished word to a newly opened shared statement", async () => {
+  mocked.read.mockResolvedValue(page());
+  render(<SharedStatementPage />);
+  await screen.findByText("মজুরির বিল");
+  const search = screen.getByRole("searchbox", { name: "লেনদেন খুঁজুন" });
+  fireEvent.compositionStart(search);
+  fireEvent.change(search, { target: { value: "আগের অসমাপ্ত নাম" } });
+  act(() => {
+    window.location.hash = "b".repeat(64);
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+  await waitFor(() => expect(mocked.read).toHaveBeenCalledTimes(2));
+  await screen.findByText("মজুরির বিল");
+  const nextSearch = screen.getByRole("searchbox", {
+    name: "লেনদেন খুঁজুন",
+  }) as HTMLInputElement;
+  expect(nextSearch.value).toBe("");
+  vi.useFakeTimers();
+  try {
+    fireEvent.compositionEnd(nextSearch, {
+      target: { value: "আগের অসমাপ্ত নাম" },
+    });
+    fireEvent.input(nextSearch, {
+      inputType: "insertCompositionText",
+      isComposing: false,
+      target: { value: "আগের অসমাপ্ত নাম" },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(nextSearch.value).toBe("");
+    expect(mocked.read).toHaveBeenCalledTimes(2);
+    expect(mocked.read.mock.lastCall?.[0]).toBe("b".repeat(64));
+    expect(mocked.read.mock.lastCall?.[4].query).toBeUndefined();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it.each(["payment", "refund"] as const)(

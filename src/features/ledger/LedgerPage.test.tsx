@@ -439,3 +439,76 @@ it("keeps the latest composed text when an older BrowserRouter transition finish
     window.history.replaceState(null, "", originalURL);
   }
 });
+
+it("focuses a requested search once without stealing later filter focus", async () => {
+  state.ledger = fixture();
+  open("/ledger?focus=search");
+  expect(document.activeElement).toBe(
+    screen.getByRole("searchbox", { name: "হিসাব খুঁজুন" }),
+  );
+  const user = userEvent.setup();
+  const sort = screen.getByRole("button", { name: "সাম্প্রতিক আগে" });
+  await user.click(sort);
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: "শুরু থেকে" }),
+  );
+});
+
+it("keeps a completed query when sorting before its BrowserRouter transition renders", async () => {
+  state.ledger = fixture();
+  const originalURL = window.location.href;
+  window.history.replaceState(null, "", "/ledger?work=w&keep=yes");
+  let ready = false;
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  function Gate() {
+    const q = new URLSearchParams(useLocation().search).get("q");
+    if (q === "সিমেন্ট" && !ready) throw pending;
+    return null;
+  }
+  try {
+    render(
+      <BrowserRouter>
+        <Suspense fallback={<p>Loading search</p>}>
+          <LedgerPage />
+          <Location />
+          <Gate />
+        </Suspense>
+      </BrowserRouter>,
+    );
+    const user = userEvent.setup();
+    const input = screen.getByRole("searchbox", {
+      name: "হিসাব খুঁজুন",
+    }) as HTMLInputElement;
+    await user.click(input);
+    fireEvent.compositionStart(input);
+    fireEvent.change(input, { target: { value: "সিমেন্ট" } });
+    await user.click(screen.getByRole("button", { name: "সাম্প্রতিক আগে" }));
+    expect(new URLSearchParams(window.location.search).get("q")).toBe(
+      "সিমেন্ট",
+    );
+    expect(new URLSearchParams(window.location.search).get("order")).toBe(
+      "oldest",
+    );
+    await act(async () => {
+      ready = true;
+      release();
+    });
+    expect(input.value).toBe("সিমেন্ট");
+    expect(
+      new URLSearchParams(screen.getByTestId("location").textContent ?? "").get(
+        "work",
+      ),
+    ).toBe("w");
+    expect(
+      new URLSearchParams(screen.getByTestId("location").textContent ?? "").get(
+        "keep",
+      ),
+    ).toBe("yes");
+    expect(document.querySelectorAll(".history-row")).toHaveLength(30);
+  } finally {
+    window.history.replaceState(null, "", originalURL);
+  }
+});
