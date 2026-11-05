@@ -340,6 +340,67 @@ describe.each(cases)("$name search", (testCase) => {
       window.history.replaceState(null, "", originalURL);
     }
   });
+
+  it("preserves a blurred composition when a filter is clicked before its BrowserRouter query renders", async () => {
+    context.ledger = fixture();
+    const originalURL = window.location.href;
+    window.history.replaceState(null, "", `${testCase.path}?keep=yes`);
+    let ready = false;
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    function Gate() {
+      const query = new URLSearchParams(useLocation().search).get("q");
+      if (query === testCase.final && !ready) throw pending;
+      return null;
+    }
+    try {
+      render(
+        <BrowserRouter>
+          <Suspense fallback={<p>Loading search</p>}>
+            <testCase.Page />
+            <RouteProbe final={testCase.final} />
+            <Gate />
+          </Suspense>
+        </BrowserRouter>,
+      );
+      const user = userEvent.setup();
+      const input = screen.getByRole("textbox", {
+        name: testCase.label,
+      }) as HTMLInputElement;
+      await user.click(input);
+      fireEvent.compositionStart(input);
+      fireEvent.change(input, { target: { value: testCase.final } });
+      await user.click(
+        screen.getByRole("button", {
+          name: testCase.name === "people" ? "মিস্ত্রি / কারিগর" : "চলছে",
+        }),
+      );
+      const browserParams = new URL(window.location.href).searchParams;
+      await act(async () => {
+        ready = true;
+        release();
+      });
+      const expected = {
+        keep: "yes",
+        q: testCase.final,
+        ...(testCase.name === "people"
+          ? { contactType: "craftsperson" }
+          : { status: "ongoing" }),
+      };
+      expect(Object.fromEntries(browserParams)).toEqual(expected);
+      expect(Object.fromEntries(route().searchParams)).toEqual(expected);
+      expect(input.value).toBe(testCase.final);
+      expect(names()).toEqual([testCase.full]);
+    } finally {
+      await act(async () => {
+        ready = true;
+        release();
+      });
+      window.history.replaceState(null, "", originalURL);
+    }
+  });
 });
 
 it("removes only the notebook directory's all-works shortcut", () => {
