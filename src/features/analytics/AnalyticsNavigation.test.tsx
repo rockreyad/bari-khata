@@ -110,7 +110,7 @@ it.each([
     expect(container.querySelector(".report-total > strong")?.textContent).toBe(
       amount,
     );
-    expect(container.querySelectorAll(".history-payment")).toHaveLength(1);
+    expect(container.querySelector(".report-history")).toBeNull();
   },
 );
 
@@ -254,19 +254,13 @@ it("keeps scoped labour bills separate from split cash and refunds", () => {
   expect(container.querySelector(".report-total > strong")?.textContent).toBe(
     "৳2800",
   );
-  expect(container.querySelectorAll(".history-row")).toHaveLength(2);
+  expect(container.querySelector(".report-history")).toBeNull();
   expect(container.querySelectorAll(".history-expense")).toHaveLength(0);
   expect(
-    container.querySelector(".history-payment .history-row-amount")
+    container.querySelector(".report-breakdown-list button > strong")
       ?.textContent,
-  ).toBe("৳3000");
-  expect(
-    container.querySelector(".history-refund .history-row-amount")?.textContent,
-  ).toBe("৳-200");
-  fireEvent.click(
-    container.querySelector<HTMLButtonElement>(".history-payment")!,
-  );
-  expect(onEntry).toHaveBeenCalledWith("split-payment");
+  ).toBe("৳2800");
+  expect(onEntry).not.toHaveBeenCalled();
   expect(mixed).toEqual(before);
 });
 
@@ -295,7 +289,7 @@ it.each([
     expect(container.querySelector(".report-total > strong")?.textContent).toBe(
       amount,
     );
-    expect(container.querySelectorAll(".history-payment")).toHaveLength(1);
+    expect(container.querySelector(".report-history")).toBeNull();
   },
 );
 
@@ -328,7 +322,7 @@ it("clears legacy category hints when choosing all payment accounts", () => {
   expect(container.querySelector(".report-total > strong")?.textContent).toBe(
     "৳2800",
   );
-  expect(container.querySelectorAll(".history-payment")).toHaveLength(3);
+  expect(container.querySelector(".report-history")).toBeNull();
 });
 
 it.each(["transport", "other"])(
@@ -346,7 +340,7 @@ it.each(["transport", "other"])(
     expect(container.querySelector(".report-total > strong")?.textContent).toBe(
       "৳2800",
     );
-    expect(container.querySelectorAll(".history-payment")).toHaveLength(3);
+    expect(container.querySelector(".report-history")).toBeNull();
   },
 );
 
@@ -363,7 +357,7 @@ it("preserves an explicit account while opening broader cash details", () => {
   expect(container.querySelector(".report-total > strong")?.textContent).toBe(
     "৳100",
   );
-  expect(container.querySelectorAll(".history-payment")).toHaveLength(1);
+  expect(container.querySelector(".report-history")).toBeNull();
 });
 
 it("preserves an explicit account rather than replacing it with the cost section", () => {

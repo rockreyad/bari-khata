@@ -1,4 +1,10 @@
 export const analyticsEnglish: Record<string, string> = {
+  "বিলের দাম থেকে মাল ফেরত বাদ আছে। টাকা দেওয়া আবার যোগ হয় না।":
+    "Bill prices after goods returns. Payments are not added again.",
+  "মাল ফেরতের {{amount}} বাদ দেওয়া হয়েছে।":
+    "Goods returns of {{amount}} have been deducted.",
+  "কিছু হিসাব শুধু অন্য তথ্যে মিলেছে। সেগুলো খরচের মোটে ধরা হয়নি।":
+    "Some records match other details only and are excluded from the cost total.",
   "মজুরির বিল": "Labour bills",
   "এই বাছাইয়ে মজুরির বিল নেই।": "No labour bills match these filters.",
   "মালের ধরন": "Material group",

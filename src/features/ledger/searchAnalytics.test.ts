@@ -49,6 +49,44 @@ const read = (
 ) => selectLedgerSearch(buildLedgerSearchIndex(ledger), filters);
 
 describe("ledger search costs", () => {
+  it("keeps report-only discovery lines outside money and applies line eligibility before month totals", () => {
+    const ledger = fixture([
+      bill("bill", [
+        line("sand", "বালু", 10000),
+        line("cement", "সিমেন্ট", 90000),
+      ]),
+      bill("discovery", [line("note", "সিমেন্ট", 5000)], "2026-02-01"),
+      {
+        id: "paid",
+        kind: "payment",
+        allocations: [{ workId: "one", amount: 10000 }],
+        paymentParts: [{ amount: 10000 }],
+      },
+    ]);
+    const index = buildLedgerSearchIndex(ledger);
+    const result = selectLedgerSearch(index, {
+      costLineKeys: new Set(["bill:sand"]),
+      costDiscoveryLineKeys: new Set(["discovery:note"]),
+      month: "2026-01",
+    });
+    expect(result.totalCost).toBe(10000);
+    expect(result.matchedLineKeys).toEqual(["bill:sand"]);
+    expect(
+      result.monthlyRows.map(({ month, total }) => [month, total]),
+    ).toEqual([["2026-01", 10000]]);
+    const allMonths = selectLedgerSearch(index, {
+      costLineKeys: new Set(["bill:sand"]),
+      costDiscoveryLineKeys: new Set(["discovery:note"]),
+    });
+    expect(allMonths.entries.map((entry) => entry.id)).toEqual([
+      "bill",
+      "discovery",
+    ]);
+    expect(allMonths.ambiguousEntryIds).toEqual(["discovery"]);
+    expect(allMonths.amounts.discovery).toBeUndefined();
+    expect(selectLedgerSearch(index).totalCost).toBe(105000);
+  });
+
   it("sums matching lines across the complete result set while preserving original mixed bills", () => {
     const ledger = fixture([
       bill("mixed", [

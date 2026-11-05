@@ -1,16 +1,17 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
   ArrowRightIcon,
   DownloadSimpleIcon,
   FunnelSimpleIcon,
   MagnifyingGlassIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { cashSummary } from "../../domain/cashSummary";
 import type { Ledger } from "../../domain/model";
 import { cashReportCsv } from "./cashReportCsv";
-import { EntryList } from "../../components/ui/EntryList";
+import { useComposedSearch } from "../../lib/useComposedSearch";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { Sheet } from "../../components/Sheet";
@@ -21,7 +22,6 @@ import { reportCashAccount } from "./reportMode";
 
 export function CashReport({
   ledger,
-  onEntry,
 }: {
   ledger: Ledger;
   onEntry?: (id: string) => void;
@@ -36,19 +36,11 @@ export function CashReport({
   const to = validHistoryDate(params.get("to") ?? "");
   const query = (params.get("q") ?? "").slice(0, 300);
   const byPerson = params.get("by") === "person";
-  const requestedPage = Number(params.get("page") ?? "1");
-  const page =
-    Number.isSafeInteger(requestedPage) && requestedPage > 0
-      ? Math.min(requestedPage, 3334)
-      : 1;
-  const result = cashSummary(ledger, {
-    workId,
-    personId,
-    account,
-    from,
-    to,
-    query,
-  });
+  const result = useMemo(
+    () => cashSummary(ledger, { workId, personId, account, from, to, query }),
+    [ledger, workId, personId, account, from, to, query],
+  );
+  const search = useComposedSearch(query, (value) => update("q", value));
   const people = new Map(
     ledger.people.map((person) => [person.id, person.name]),
   );
@@ -67,18 +59,6 @@ export function CashReport({
     Number.isSafeInteger(requestedGroups) && requestedGroups > 0
       ? Math.min(requestedGroups, 334)
       : 1;
-  const amountMap = new Map<string, number>();
-  for (const row of result.rows)
-    amountMap.set(
-      row.entry.id,
-      (amountMap.get(row.entry.id) ?? 0) + row.amount,
-    );
-  const amounts = Object.fromEntries(amountMap);
-  const entries = [...result.entries].sort(
-    (a, b) =>
-      (b.date ?? "").localeCompare(a.date ?? "") ||
-      b.createdAt.localeCompare(a.createdAt),
-  );
   const filtered = Boolean(
     workId || personId || account || from || to || query,
   );
@@ -86,6 +66,11 @@ export function CashReport({
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
+        if (key !== "q") {
+          const latestQuery = search.getCommittedQuery();
+          if (latestQuery) next.set("q", latestQuery);
+          else next.delete("q");
+        }
         next.delete("page");
         next.delete("groups");
         if (key === "account") {
@@ -128,6 +113,7 @@ export function CashReport({
       <header className="page-heading">
         <div>
           <h1>{t("টাকা কোথায় দিলাম")}</h1>
+          <p>{t("দেওয়া টাকা আর বিলের দাম আলাদা হিসাব।")}</p>
         </div>
         <button
           className="report-download icon-button"
@@ -138,15 +124,32 @@ export function CashReport({
           <DownloadSimpleIcon size={21} />
         </button>
       </header>
+      <button
+        className="secondary-button report-mode-action"
+        onClick={showCosts}
+      >
+        {t("মাল ও কাজের দাম দেখি")}
+        <ArrowRightIcon size={17} />
+      </button>
       <section className="history-toolbar">
         <label className="history-search">
           <MagnifyingGlassIcon size={21} />
           <input
             aria-label={t("দেওয়া টাকা খুঁজুন")}
             placeholder={t("নাম বা খাতা খুঁজুন")}
-            value={query}
-            onChange={(event) => update("q", event.target.value)}
+            maxLength={300}
+            {...search.inputProps}
           />
+          {search.value ? (
+            <button
+              type="button"
+              className="history-clear"
+              aria-label={t("খোঁজ মুছুন")}
+              onClick={search.clear}
+            >
+              <XIcon size={17} />
+            </button>
+          ) : null}
         </label>
         <button
           className={`history-filter-button ${filtered ? "has-filter" : ""}`}
@@ -185,7 +188,13 @@ export function CashReport({
         ) : null}
       </section>
       {filtered ? (
-        <button className="text-button" onClick={() => setParams({})}>
+        <button
+          className="text-button"
+          onClick={() => {
+            search.clear();
+            setParams({});
+          }}
+        >
           {t("সব বাছাই মুছুন")}
         </button>
       ) : null}
@@ -250,40 +259,6 @@ export function CashReport({
           </button>
         ) : null}
       </section>
-      <section className="report-history">
-        <div className="report-history-heading">
-          <h2>{t("কখন কত দিয়েছি")}</h2>
-        </div>
-        <EntryList
-          ledger={ledger}
-          entries={entries.slice(0, page * 30)}
-          amounts={amounts}
-          onEntry={(id) => onEntry?.(id)}
-          showKind
-          grouped
-        />
-        {entries.length > page * 30 ? (
-          <button
-            className="history-load-more"
-            onClick={() => {
-              setParams(
-                (previous) => {
-                  const next = new URLSearchParams(previous);
-                  next.set("page", String(page + 1));
-                  return next;
-                },
-                { replace: true, preventScrollReset: true },
-              );
-            }}
-          >
-            {t("আরও হিসাব দেখুন")}
-          </button>
-        ) : null}
-      </section>
-      <button className="secondary-button" onClick={showCosts}>
-        {t("মাল ও কাজের দাম দেখি")}
-        <ArrowRightIcon size={17} />
-      </button>
       {filterOpen ? (
         <Sheet
           title={t("কোন হিসাব দেখবেন?")}
