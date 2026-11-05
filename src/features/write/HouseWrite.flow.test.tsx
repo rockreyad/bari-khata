@@ -1874,7 +1874,7 @@ it("keeps the icon payment method and folded voucher, note and date across reope
   ).toBe("true");
   expect(
     within(methods)
-      .getByRole("button", { name: "নগদ" })
+      .getByRole("button", { name: "ক্যাশ" })
       .getAttribute("aria-pressed"),
   ).toBe("false");
   const fold = screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!;

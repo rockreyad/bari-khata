@@ -553,7 +553,7 @@ describe("quick entry creation flow", () => {
     await ready();
     await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
     expect(
-      screen.getByRole("textbox", { name: "নগদ টাকা ফেরত পেলে লিখুন" }),
+      screen.getByRole("textbox", { name: "ক্যাশ ফেরত পেলে লিখুন" }),
     ).toBeTruthy();
   });
 });

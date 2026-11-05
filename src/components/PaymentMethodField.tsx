@@ -5,7 +5,7 @@ import "./transaction-form.css";
 
 type Method = "cash" | "bkash" | "bank" | "other";
 const methods = [
-  ["cash", "নগদ"],
+  ["cash", "ক্যাশ"],
   ["bkash", "বিকাশ"],
   ["bank", "ব্যাংক"],
   ["other", "অন্যভাবে"],

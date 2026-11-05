@@ -510,7 +510,7 @@ describe("transaction detail activity", () => {
     expect(html).toContain("৳500");
     expect(html).toContain("৳900");
     expect(html).toContain("বিকাশ");
-    expect(html).toContain("নগদ");
+    expect(html).toContain("ক্যাশ");
     expect(html).toContain("ব্যাংক");
     expect(html).toContain(calendarLabel("2026-11-02"));
     expect(html).not.toContain("৳2400");
@@ -651,7 +651,7 @@ describe("transaction detail activity", () => {
     expect(history.match(/class="entry-revision-change"/g)).toHaveLength(1);
     expect(history.match(/৳60000/g)).toHaveLength(1);
     expect(history.match(/৳10000/g)).toHaveLength(1);
-    expect(history).not.toContain("নগদ");
+    expect(history).not.toContain("ক্যাশ");
     expect(history).not.toContain("বাথরুমের খাতা");
   });
   it("keeps a financial correction reason as a new sentence without repeating the old note", () => {

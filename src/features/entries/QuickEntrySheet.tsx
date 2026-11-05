@@ -1538,9 +1538,9 @@ export function QuickEntrySheet({
               </label>
               {returning ? (
                 <label>
-                  {t("নগদ টাকা ফেরত পেলে লিখুন")}
+                  {t("ক্যাশ ফেরত পেলে লিখুন")}
                   <MoneyInput
-                    aria-label={t("নগদ টাকা ফেরত পেলে লিখুন")}
+                    aria-label={t("ক্যাশ ফেরত পেলে লিখুন")}
                     value={draft.refund}
                     placeholder="0"
                     onChange={(e) => field("refund", e.target.value)}

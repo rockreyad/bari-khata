@@ -98,7 +98,7 @@ export const peopleEnglish: Record<string, string> = {
   "মানুষ ও দোকানে ফিরি": "Back to people and shops",
   "এই নামের খাতা": "Contact account",
   "তথ্য বদলাই": "Edit details",
-  "নগদ, বিকাশ বা ব্যাংক": "Cash, bKash or bank",
+  "ক্যাশ, বিকাশ বা ব্যাংক": "Cash, bKash or bank",
   "কেনা বা খরচ লিখি": "Add a purchase",
   "মাল, গাড়িভাড়া বা অন্য খরচ": "Materials, transport or other costs",
   "মাল ফেরত দিই": "Return materials",

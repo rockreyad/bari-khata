@@ -8,7 +8,7 @@ export const houseWriteEnglish: Record<string, string> = {
   "কী হয়েছে?": "What happened?",
   "ঘটনা বেছে নিন। বাকি হিসাব আমরা দেখিয়ে দেব।":
     "Choose what happened. We will show how it changes your account.",
-  "নগদে, বাকিতে বা অন্যের নিজের টাকায়":
+  "ক্যাশে, বাকিতে বা অন্যের নিজের টাকায়":
     "Paid now, on credit, or bought with someone else's money",
   "মজুরি, গাড়িভাড়া বা অন্য কাজের পাওনা":
     "Labour, transport, or another service bill",

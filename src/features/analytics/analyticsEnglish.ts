@@ -1,4 +1,6 @@
 export const analyticsEnglish: Record<string, string> = {
+  "মজুরির বিল": "Labour bills",
+  "এই বাছাইয়ে মজুরির বিল নেই।": "No labour bills match these filters.",
   "মালের ধরন": "Material group",
   "মালের নাম": "Material name",
   ব্র্যান্ড: "Brand",

@@ -374,6 +374,142 @@ it("keeps payment drill-down collapsed and opens only the selected payment or or
   expect(screen.getAllByText("৳30000")).toHaveLength(1);
 });
 
+it("opens each saved bill once without asking the user to match a payment", () => {
+  const ledger = LedgerSchema.parse({
+    people: [{ id: "shop", name: "নমুনা দোকান", kind: "shop" }],
+    works: [
+      { id: "door", name: "দরজা" },
+      { id: "window", name: "জানালা" },
+    ],
+    entries: [
+      {
+        id: "original-bill",
+        kind: "expense",
+        personId: "shop",
+        lines: [
+          {
+            id: "door-line",
+            label: "নমুনা দরজা",
+            workId: "door",
+            amount: 60000,
+          },
+          {
+            id: "window-line",
+            label: "নমুনা জানালা",
+            workId: "window",
+            amount: 40000,
+          },
+        ],
+      },
+      ...[
+        ["second-bill", "নমুনা রং"],
+        ["cancelled-bill", "নমুনা হাতল"],
+        ["unrelated-bill", "নমুনা তালা"],
+      ].map(([id, label]) => ({
+        id,
+        kind: "expense",
+        personId: "shop",
+        lines: [{ id: `${id}-line`, label, workId: "door", amount: 20000 }],
+      })),
+      {
+        id: "cash",
+        kind: "payment",
+        personId: "shop",
+        relatedEntryId: "original-bill",
+        paymentParts: [{ method: "bank", amount: 70000 }],
+        allocations: [
+          { workId: "door", amount: 50000 },
+          { workId: "window", amount: 20000 },
+        ],
+      },
+      {
+        id: "other-cash",
+        kind: "payment",
+        personId: "shop",
+        paymentParts: [{ method: "cash", amount: 10000 }],
+        allocations: [{ workId: "door", amount: 10000 }],
+      },
+    ],
+    paymentAllocations: [
+      {
+        id: "original-door",
+        paymentId: "cash",
+        billId: "original-bill",
+        workId: "door",
+        amount: 20000,
+        createdAt: "2026-11-05T00:00:00.000Z",
+      },
+      {
+        id: "original-window",
+        paymentId: "cash",
+        billId: "original-bill",
+        workId: "window",
+        amount: 10000,
+        createdAt: "2026-11-05T00:00:00.000Z",
+      },
+      {
+        id: "second-match",
+        paymentId: "cash",
+        billId: "second-bill",
+        workId: "door",
+        amount: 10000,
+        createdAt: "2026-11-05T00:00:00.000Z",
+      },
+      {
+        id: "cancelled-match",
+        paymentId: "cash",
+        billId: "cancelled-bill",
+        workId: "door",
+        amount: 10000,
+        createdAt: "2026-11-05T00:00:00.000Z",
+        cancelledAt: "2026-11-05T01:00:00.000Z",
+        cancellationReason: "নমুনা ভুল সংশোধন",
+      },
+      {
+        id: "unrelated-match",
+        paymentId: "other-cash",
+        billId: "unrelated-bill",
+        workId: "door",
+        amount: 10000,
+        createdAt: "2026-11-05T00:00:00.000Z",
+      },
+    ],
+  });
+  const before = structuredClone(ledger);
+  const detail = vi.fn();
+  const save = vi.fn();
+  notebook.mockReturnValue({
+    ledger,
+    mode: "demo",
+    go: vi.fn(),
+    close: vi.fn(),
+    add: vi.fn(),
+    save,
+    notify: vi.fn(),
+    detail,
+  });
+  const { container } = render(<EntryDetail id="cash" />);
+  expect(screen.getAllByRole("button", { name: /^মূল বিল:/ })).toHaveLength(2);
+  fireEvent.click(screen.getByRole("button", { name: "মূল বিল: নমুনা দরজা" }));
+  expect(detail).toHaveBeenLastCalledWith("original-bill");
+  fireEvent.click(screen.getByRole("button", { name: "মূল বিল: নমুনা রং" }));
+  expect(detail).toHaveBeenLastCalledWith("second-bill");
+  expect(
+    screen.queryByRole("button", { name: "মূল বিল: নমুনা হাতল" }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "মূল বিল: নমুনা তালা" }),
+  ).toBeNull();
+  expect(screen.queryByText("কোন বিলে দেওয়া হয়েছিল")).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "এই বিলের সঙ্গে মিল রাখি" }),
+  ).toBeNull();
+  expect(screen.queryByRole("button", { name: "এই মিল বদলাই" })).toBeNull();
+  expect(container.querySelector("form, input, textarea, select")).toBeNull();
+  expect(save).not.toHaveBeenCalled();
+  expect(ledger).toEqual(before);
+});
+
 it("uses a normal confirmation dialog for a transaction and preserves linked cash and audit history", async () => {
   let ledger = LedgerSchema.parse({
     works: [{ id: "door", name: "দরজা" }],

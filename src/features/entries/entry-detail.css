@@ -295,31 +295,3 @@
 .entry-amount-card-v5[data-kind="adjustment"] .entry-kind-v5 > svg {
   color: var(--muted);
 }
-.detail-payment-match .detail-source form,
-.detail-payment-match .detail-match-cancel {
-  display: grid;
-  gap: 12px;
-  margin-block: 12px;
-}
-.detail-payment-match label {
-  display: grid;
-  gap: 6px;
-}
-.detail-payment-match ul {
-  list-style: none;
-  padding: 0;
-}
-.detail-payment-match li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding-block: 8px;
-}
-.detail-payment-match li small {
-  flex-basis: 100%;
-}
-.detail-payment-match textarea {
-  min-height: 72px;
-  width: 100%;
-}

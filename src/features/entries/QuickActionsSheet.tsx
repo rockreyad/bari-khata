@@ -87,7 +87,7 @@ export function QuickActionsSheet({
     : [
         {
           label: "মাল কিনেছি",
-          hint: "নগদে বা বাকিতে কেনা মাল",
+          hint: "ক্যাশে বা বাকিতে কেনা মাল",
           Icon: PackageIcon,
           tone: "blue",
           run: () =>

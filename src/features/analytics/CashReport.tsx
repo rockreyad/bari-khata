@@ -8,7 +8,7 @@ import {
 } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { cashSummary } from "../../domain/cashSummary";
-import type { Account, Ledger } from "../../domain/model";
+import type { Ledger } from "../../domain/model";
 import { cashReportCsv } from "./cashReportCsv";
 import { EntryList } from "../../components/ui/EntryList";
 import { AppSelect } from "../../components/ui/AppSelect";
@@ -17,6 +17,7 @@ import { Sheet } from "../../components/Sheet";
 import { validHistoryDate } from "../history/history";
 import { accountNames, saveFile, todayDhaka } from "../../lib/display";
 import { reportAdjustments } from "./reportAdjustments";
+import { reportCashAccount } from "./reportMode";
 
 export function CashReport({
   ledger,
@@ -30,10 +31,7 @@ export function CashReport({
   const [filterOpen, setFilterOpen] = useState(false);
   const workId = params.get("work") ?? "";
   const personId = params.get("person") ?? "";
-  const rawAccount = params.get("account") ?? "";
-  const account = ["materials", "labour", "other"].includes(rawAccount)
-    ? (rawAccount as Account)
-    : undefined;
+  const account = reportCashAccount(params);
   const from = validHistoryDate(params.get("from") ?? "");
   const to = validHistoryDate(params.get("to") ?? "");
   const query = (params.get("q") ?? "").slice(0, 300);
@@ -90,6 +88,10 @@ export function CashReport({
         const next = new URLSearchParams(previous);
         next.delete("page");
         next.delete("groups");
+        if (key === "account") {
+          next.delete("section");
+          next.delete("type");
+        }
         if (value) next.set(key, value);
         else next.delete(key);
         return next;

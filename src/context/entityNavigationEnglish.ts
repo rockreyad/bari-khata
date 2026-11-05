@@ -75,7 +75,7 @@ export const entityNavigationEnglish: Record<string, string> = {
   "কাজ বা মাল পাওয়ার আগে টাকা": "Payment before work or delivery",
   "বাকি দেখি": "View dues",
   "কাকে কত দিতে হবে": "Who is owed and how much",
-  "নগদে বা বাকিতে কেনা মাল": "Materials paid for or bought on credit",
+  "ক্যাশে বা বাকিতে কেনা মাল": "Materials paid for or bought on credit",
   "মজুরি, ভাড়া বা সেবার বিল": "Labour, rental or service charges",
   "আগাম টাকা ও বাকি হিসাব": "Advance payments and balances",
   "যাকে টাকা দিয়েছেন, তার নামে রাখুন": "Record who received your payment",

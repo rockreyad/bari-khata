@@ -103,6 +103,39 @@
   color: var(--muted);
   margin-top: 3px;
 }
+.report-paid-summary {
+  width: 100%;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 4px;
+}
+.report-paid-summary > button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  text-align: left;
+  color: var(--text);
+}
+.report-paid-summary > button > span {
+  flex: 1;
+  font-size: 14px;
+  color: var(--muted);
+}
+.report-paid-summary > button > strong {
+  font-size: clamp(17px, 5vw, 23px);
+  overflow-wrap: anywhere;
+}
+.report-paid-summary > button > svg {
+  flex: none;
+  color: var(--accent);
+}
+.report-paid-summary > small {
+  color: var(--muted);
+  font-size: 11px;
+}
 .report-basis-paid .report-total > p {
   color: var(--muted);
 }

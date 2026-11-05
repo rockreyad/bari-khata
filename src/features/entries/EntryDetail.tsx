@@ -32,7 +32,6 @@ import { adjustmentBasisLabels } from "../history/adjustmentDisplay";
 import "../history/history.css";
 import "../history/history-v4.css";
 import "./entry-detail.css";
-import { PaymentBillMatch } from "./PaymentBillMatch";
 const auditLabels: Partial<Record<EntryChangeField, string>> = {
   kind: "হিসাবের ধরন",
   date: "লেনদেনের তারিখ",
@@ -176,8 +175,17 @@ export function EntryDetail({ id }: { id: string }) {
           ? "মজুরির বিল"
           : "খরচ"
       : kind;
-  const relatedBill = ledger.entries.find(
-    (row) => row.id === entry.relatedEntryId,
+  const relatedBillIds = new Set(
+    entry.relatedEntryId ? [entry.relatedEntryId] : [],
+  );
+  if (entry.kind === "payment") {
+    for (const allocation of ledger.paymentAllocations ?? []) {
+      if (allocation.paymentId === entry.id && !allocation.cancelledAt)
+        relatedBillIds.add(allocation.billId);
+    }
+  }
+  const relatedBills = ledger.entries.filter((row) =>
+    relatedBillIds.has(row.id),
   );
   const showNote =
     entry.note &&
@@ -732,8 +740,9 @@ export function EntryDetail({ id }: { id: string }) {
             </div>
           </details>
         ) : null}
-        {relatedBill ? (
+        {relatedBills.map((relatedBill) => (
           <button
+            key={relatedBill.id}
             className="entry-related-bill-v5"
             aria-label={`${t("মূল বিল")}: ${formatDigits(relatedBill.lines[0]?.label || t("খরচ"))}`}
             onClick={() => detail(relatedBill.id)}
@@ -747,7 +756,7 @@ export function EntryDetail({ id }: { id: string }) {
             </span>
             <ArrowRightIcon size={16} />
           </button>
-        ) : null}
+        ))}
         {entry.receipts.length ? (
           <details className="detail-fold" open>
             <summary>
@@ -844,9 +853,6 @@ export function EntryDetail({ id }: { id: string }) {
               ) : null}
             </div>
           </details>
-        ) : null}
-        {entry.kind === "payment" ? (
-          <PaymentBillMatch key={entry.id} paymentId={entry.id} />
         ) : null}
         {confirm ? (
           <ConfirmationDialog

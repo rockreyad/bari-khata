@@ -465,7 +465,7 @@ it("preserves split work and multiple payment methods when every optional disclo
         (group) =>
           within(group).getByRole("button", { pressed: true }).textContent,
       ),
-  ).toEqual(["নগদ", "বিকাশ"]);
+  ).toEqual(["ক্যাশ", "বিকাশ"]);
   const splits = screen.getAllByLabelText("টাকা", { exact: true });
   for (const part of splits) await reveal(part, user);
   expect(splits.map(value)).toEqual(["600", "400"]);

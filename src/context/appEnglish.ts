@@ -268,7 +268,7 @@ export const appEnglish: Record<string, string> = {
   "মাল নামানো": "Unloading",
   ভাড়া: "Rentals",
   অন্যান্য: "Other",
-  নগদ: "Cash",
+  ক্যাশ: "Cash",
   বিকাশ: "bKash",
   ব্যাংক: "Bank",
   অন্যভাবে: "Other method",
