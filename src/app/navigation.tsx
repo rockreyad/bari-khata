@@ -34,7 +34,7 @@ export function NotebookNavLink({
   base,
   label,
   icon: Icon,
-  size = 23,
+  size = 24,
 }: {
   to: string;
   base: string;
@@ -51,7 +51,12 @@ export function NotebookNavLink({
       className={active ? "active" : undefined}
       aria-current={active ? "page" : undefined}
     >
-      <Icon size={size} weight={active ? "fill" : "regular"} />
+      <Icon
+        size={size}
+        weight={active ? "duotone" : "regular"}
+        aria-hidden="true"
+        focusable="false"
+      />
       <span>{t(label)}</span>
     </Link>
   );
