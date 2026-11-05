@@ -307,13 +307,30 @@ export function commitmentTotals(ledger: Ledger, scope: FinancialScope = {}) {
   };
 }
 
-export function reconciledPayableGroups(ledger: Ledger) {
-  const { totals, payableGroups } = computeReconciliation(ledger);
+export function reconciledPayableGroups(
+  ledger: Ledger,
+  scope: FinancialScope = {},
+) {
+  const { totals, payableGroups } = computeReconciliation(ledger, scope);
+  if (scope.personId && scope.account)
+    return {
+      total: totals.reconciledPayable,
+      groups:
+        totals.reconciledPayable > 0
+          ? [
+              {
+                party: scope.personId,
+                account: scope.account,
+                amount: totals.reconciledPayable,
+              },
+            ]
+          : [],
+    };
   return {
     total: totals.reconciledPayable,
     groups: [...payableGroups].flatMap(([key, amount]) => {
-      if (amount <= 0n) return [];
       const [party, account] = JSON.parse(key) as [string, Account];
+      if (amount <= 0n) return [];
       return [{ party, account, amount: exact(amount) }];
     }),
   };

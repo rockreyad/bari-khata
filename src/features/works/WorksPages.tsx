@@ -53,6 +53,7 @@ import { AppMenu } from "../../components/ui/AppMenu";
 import { orderedWorks } from "./workOverview";
 import { workBalances, type WorkBalances } from "./workBalances";
 import { workLabourSummary } from "./workLabourSummary";
+import { WorkPayables } from "./WorkPayables";
 const statusNames = {
   planned: "শুরু হয়নি",
   ongoing: "কাজ চলছে",
@@ -563,6 +564,9 @@ export function WorkPage() {
             <strong>{money(row.amount)}</strong>
           </div>
         ))}
+        {balance.valid && balance.reconciledPayable !== null ? (
+          <WorkPayables workId={work.id} />
+        ) : null}
         {balance.valid && balance.costCorrection !== 0 ? (
           <div className="work-known-due">
             <span>
