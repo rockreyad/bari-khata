@@ -25,6 +25,7 @@ import { EntitySheet } from "../../components/EntitySheet";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { MoneyInput } from "../../components/ui/MoneyInput";
+import { TransactionExtras } from "../../components/TransactionExtras";
 import {
   TransactionAmount,
   TransactionDetails,
@@ -1449,7 +1450,29 @@ export function QuickEntrySheet({
               onChange={(method) => field("method", method)}
             />
           ) : null}
-          <TransactionDetails summary={t("ভাউচার, নোট ও তারিখ")}>
+          <TransactionExtras
+            hasReceipts={files.length > 0}
+            dateField={
+              <label>
+                {t("তারিখ")}
+                <AppDatePicker
+                  required
+                  value={draft.date}
+                  onChange={(event) => field("date", event.target.value)}
+                />
+              </label>
+            }
+            noteField={
+              <label>
+                {t("নোট")}
+                <textarea
+                  rows={2}
+                  value={draft.note}
+                  onChange={(event) => field("note", event.target.value)}
+                />
+              </label>
+            }
+          >
             <div className="legacy-transaction-attachments">
               <label className="attachment-button transaction-secondary">
                 <CameraIcon size={20} />
@@ -1498,58 +1521,38 @@ export function QuickEntrySheet({
                 </div>
               ))}
             </div>
-            <div className="entry-more-body">
-              <div className="field-grid">
-                <label>
-                  {t("তারিখ")}
-                  <AppDatePicker
-                    required
-                    value={draft.date}
-                    onChange={(e) => field("date", e.target.value)}
-                  />
-                </label>
-                {!cash &&
-                !labour &&
-                !returning &&
-                (!selectedKind || selectedKind === "other") ? (
-                  <label>
-                    {t("খরচের ধরন")}
-                    <AppSelect
-                      value={draft.costType}
-                      onChange={(e) =>
-                        chooseType(e.target.value as QuickDraft["costType"])
-                      }
-                    >
-                      {Object.entries(costNames).map(([id, label]) => (
-                        <option key={id} value={id}>
-                          {t(label)}
-                        </option>
-                      ))}
-                    </AppSelect>
-                  </label>
-                ) : null}
-              </div>
-              <label>
-                {t("নোট")}
-                <textarea
-                  rows={2}
-                  value={draft.note}
-                  onChange={(e) => field("note", e.target.value)}
-                />
-              </label>
-              {returning ? (
-                <label>
-                  {t("ক্যাশ ফেরত পেলে লিখুন")}
-                  <MoneyInput
-                    aria-label={t("ক্যাশ ফেরত পেলে লিখুন")}
-                    value={draft.refund}
-                    placeholder="0"
-                    onChange={(e) => field("refund", e.target.value)}
-                  />
-                </label>
-              ) : null}
-            </div>
-          </TransactionDetails>
+          </TransactionExtras>
+          {!cash &&
+          !labour &&
+          !returning &&
+          (!selectedKind || selectedKind === "other") ? (
+            <label>
+              {t("খরচের ধরন")}
+              <AppSelect
+                value={draft.costType}
+                onChange={(event) =>
+                  chooseType(event.target.value as QuickDraft["costType"])
+                }
+              >
+                {Object.entries(costNames).map(([id, label]) => (
+                  <option key={id} value={id}>
+                    {t(label)}
+                  </option>
+                ))}
+              </AppSelect>
+            </label>
+          ) : null}
+          {returning ? (
+            <label>
+              {t("ক্যাশ ফেরত পেলে লিখুন")}
+              <MoneyInput
+                aria-label={t("ক্যাশ ফেরত পেলে লিখুন")}
+                value={draft.refund}
+                placeholder="0"
+                onChange={(event) => field("refund", event.target.value)}
+              />
+            </label>
+          ) : null}
         </fieldset>
       </form>
     </Frame>

@@ -114,6 +114,23 @@
   gap: 18px;
   padding-top: 20px;
 }
+.entry-line-contexts {
+  display: grid;
+  gap: 16px;
+}
+.entry-line-context {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.entry-line-context > p,
+.entry-line-work-name {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
 .entry-editor-form .entry-edit-add-row {
   justify-self: start;
   min-height: 44px;

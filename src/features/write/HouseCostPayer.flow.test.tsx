@@ -283,10 +283,9 @@ it("hides charge quantity controls while retaining old draft line metadata, and 
   const receipt = screen.getByLabelText("ভাউচার বা ছবি");
   expect(
     receipt.closest("details")?.querySelector("summary")?.textContent,
-  ).toContain("ভাউচার, নোট ও তারিখ");
-  expect(screen.getByLabelText("তারিখ").closest("details")).toBe(
-    receipt.closest("details"),
-  );
+  ).toContain("ছবি বা রসিদ");
+  expect(screen.getByLabelText("তারিখ").closest("details")).toBeNull();
+  expect(receipt.closest("details")?.open).toBe(false);
   await user.click(screen.getByRole("button", { name: "পুরোটা দিয়েছি" }));
   await user.click(screen.getByRole("button", { name: "ব্যাংক" }));
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));

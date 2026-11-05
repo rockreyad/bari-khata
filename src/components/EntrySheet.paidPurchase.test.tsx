@@ -463,8 +463,10 @@ it("keeps a stale automatic draft blocked until latest cash is reviewed and then
   await ready();
   amount("100");
   const note = screen.getByLabelText("মনে রাখার কথা");
-  await userEvent.click(note.closest("details")!.querySelector("summary")!);
+  expect(note.closest("details")).toBeNull();
   fireEvent.change(note, { target: { value: "নমুনা অসমাপ্ত বিবরণ" } });
+  const receipts = screen.getByText("ছবি বা রসিদ").closest("details")!;
+  if (!receipts.open) await userEvent.click(receipts.querySelector("summary")!);
   await userEvent.upload(
     page.container.querySelector<HTMLInputElement>('input[type="file"]')!,
     new File(["sample pending voucher"], "sample-queued.pdf", {

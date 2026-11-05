@@ -1,0 +1,90 @@
+.transaction-extras {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+.transaction-extras > h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.transaction-extras-fields {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(0, 1.2fr);
+  align-items: start;
+  min-width: 0;
+  gap: 14px;
+}
+.transaction-extras-date,
+.transaction-extras-note {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+.transaction-extras-date:only-child {
+  grid-column: 1 / -1;
+}
+.transaction-form .transaction-extras-note textarea {
+  min-height: 72px;
+  height: 72px;
+  resize: vertical;
+}
+.transaction-extras-receipts {
+  min-width: 0;
+  border-top: 1px solid var(--line);
+}
+.transaction-extras-receipts > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-height: 44px;
+  gap: 8px;
+  padding-top: 12px;
+  list-style: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+}
+.transaction-extras-receipts > summary::-webkit-details-marker {
+  display: none;
+}
+.transaction-extras-receipts > summary svg {
+  flex: none;
+}
+.transaction-extras-receipts > summary small {
+  font-size: 11px;
+  font-weight: 400;
+}
+.transaction-extras-receipts > summary svg:last-child {
+  margin-left: auto;
+}
+.transaction-extras-receipts[open] > summary svg:last-child {
+  transform: rotate(180deg);
+}
+.transaction-extras-receipts > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+.transaction-extras-receipt-content {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  padding-top: 12px;
+}
+.transaction-extras-receipt-content > * {
+  min-width: 0;
+}
+@media (max-width: 540px) {
+  .transaction-extras {
+    padding: 16px;
+  }
+  .transaction-extras-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
