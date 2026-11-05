@@ -68,7 +68,7 @@ it.each(["", "/sample"])(
     expect(api.canReload()).toBe(true);
     expect(
       screen
-        .getAllByRole("link", { name: "এক নজরে" })
+        .getAllByRole("link", { name: "বাড়ি" })
         .every((link) => !link.hasAttribute("aria-current")),
     ).toBe(true);
   },

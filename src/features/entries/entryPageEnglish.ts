@@ -1,4 +1,31 @@
 export const entryPageEnglish: Record<string, string> = {
+  "চুক্তির বাকি কাজ: {{amount}}": "Agreement commitment remaining: {{amount}}",
+  "অসমাপ্ত মিলের লেখা রাখা বা পড়া যায়নি। আবার খুলে চেষ্টা করুন।":
+    "The unfinished bill match could not be saved or loaded. Reopen it and try again.",
+  "আগের লেখা আনছি…": "Loading unfinished work…",
+  "মিল রাখা হয়েছে, তবে অসমাপ্ত লেখার কপিটি মুছতে পারিনি। আবার খুলে দেখুন।":
+    "The bill match was saved, but its draft copy could not be removed. Reopen it to review.",
+  "মিল খুলে রাখা হয়েছে, তবে অসমাপ্ত লেখার কপিটি মুছতে পারিনি। আবার খুলে দেখুন।":
+    "The bill match was cancelled, but its draft copy could not be removed. Reopen it to review.",
+  "কোন বিলে দেওয়া হয়েছিল": "Match this payment to bills",
+  "আগে দেওয়া টাকার সঙ্গে বিল মেলালে আবার টাকা দেওয়া বা খরচ হবে না।":
+    "Matching previously paid money does not record another payment or expense.",
+  "এখনও বিলে লাগানো হয়নি: {{amount}}": "Not yet matched to bills: {{amount}}",
+  "বিলের বাকি ও এই দেওয়া টাকার মধ্যে সঠিক অঙ্ক লিখুন। খাতা বদলালে আবার দেখে নিন।":
+    "Enter an amount within the bill balance and this payment. Review again if the notebook changed.",
+  "কেন মিল বদলাচ্ছেন, ছোট করে লিখুন।":
+    "Add a short reason for changing this match.",
+  "মিল বদলানো যায়নি। আবার দেখে চেষ্টা করুন।":
+    "The match could not be changed. Review it and try again.",
+  "আগের মিল খুলেছি": "Earlier match cancelled",
+  "এই মিল বদলাই": "Change this match",
+  "কেন মিল বদলাচ্ছেন": "Why change this match?",
+  "মিল খুলে রাখি": "Cancel the match",
+  "বিলে বাকি {{amount}}": "Bill balance {{amount}}",
+  "এই বিলে লাগাব: {{name}}": "Match to bill: {{name}}",
+  "এই বিলের সঙ্গে মিল রাখি": "Save bill match",
+  "মেলানোর মতো যাচাই করা বিল পাওয়া যায়নি। আগে বিলের তথ্য দেখে নিন।":
+    "No reviewed bill is available to match. Review the bill information first.",
   "নতুন বিল নাকি শুধু টাকা দেওয়া, বেছে নিন।":
     "Choose a new bill or a payment without another bill.",
   "বাকি নিশ্চিত নয়। কাজ বেছে নিন, বা নতুন বিল কিংবা অগ্রিম বেছে নিন।":

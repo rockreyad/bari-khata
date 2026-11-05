@@ -9,13 +9,13 @@ import {
 } from "react-router";
 import {
   BookOpenIcon,
-  ChartDonutIcon,
   CloudCheckIcon,
   CloudSlashIcon,
   GearSixIcon,
   HouseLineIcon,
   BookBookmarkIcon,
-  ClockCounterClockwiseIcon,
+  DotsThreeOutlineIcon,
+  PlusIcon,
   UsersIcon,
 } from "@phosphor-icons/react";
 import {
@@ -28,6 +28,7 @@ import {
 import { NotebookNavLink, notebookSectionActive } from "./navigation";
 import { useNotebook, type AddOptions } from "./NotebookProvider";
 import { useLanguageContext } from "../context/LanguageProvider";
+import { MorePage } from "../features/more/MorePage";
 import { HomePage } from "../features/home/HomePage";
 import { WorksPage, WorkPage } from "../features/works/WorksPages";
 import { LedgerPage } from "../features/ledger/LedgerPage";
@@ -36,6 +37,21 @@ import { AccountSchema, CostTypeSchema } from "../domain/model";
 import { QuickActionsSheet } from "../features/entries/QuickActionsSheet";
 import { PwaUpdateNotice } from "../components/PwaUpdateNotice";
 import { useParams } from "react-router";
+const MigrationReviewPage = lazy(() =>
+  import("../features/import/MigrationReviewPage").then((module) => ({
+    default: module.MigrationReviewPage,
+  })),
+);
+const HouseWritePage = lazy(() =>
+  import("../features/write/HouseWritePage").then((module) => ({
+    default: module.HouseWritePage,
+  })),
+);
+const HouseWriteChooser = lazy(() =>
+  import("../features/write/HouseWritePage").then((module) => ({
+    default: module.HouseWriteChooser,
+  })),
+);
 const QuickEntrySheet = lazy(() =>
   import("../features/entries/QuickEntrySheet").then((m) => ({
     default: m.QuickEntrySheet,
@@ -186,6 +202,7 @@ function EntryRoute() {
       presentation="page"
       key={JSON.stringify(options)}
       options={options}
+      resumeDraftKey={params.get("draftKey") ?? undefined}
     />
   );
 }
@@ -229,11 +246,13 @@ function PersonRoute() {
   );
 }
 export function AppShell() {
-  const { ledger, state, mode, base, quick, go, close, save } = useNotebook();
+  const { ledger, state, mode, base, go, close, save } = useNotebook();
   const { t, formatDigits } = useLanguageContext();
   const [params] = useSearchParams();
   const location = useLocation();
-  const entryPage = isEntryPage(location.pathname);
+  const entryPage =
+    isEntryPage(location.pathname) ||
+    /\/write\/[^/]+\/?$/.test(location.pathname);
   const formOpen =
     entryPage ||
     ["_add", "_entity", "_entry", "_quick"].some((key) => params.has(key));
@@ -244,11 +263,11 @@ export function AppShell() {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [location.pathname]);
   const nav = [
-    { to: "/", label: "এক নজরে", icon: HouseLineIcon },
-    { to: "/works", label: "কাজের খাতা", icon: BookBookmarkIcon },
-    { to: "/ledger", label: "আগের হিসাব", icon: ClockCounterClockwiseIcon },
-    { to: "/people", label: "ব্যক্তি ও দোকান", icon: UsersIcon },
-    { to: "/reports", label: "রিপোর্ট", icon: ChartDonutIcon },
+    { to: "/", label: "বাড়ি", icon: HouseLineIcon },
+    { to: "/works", label: "কাজ", icon: BookBookmarkIcon },
+    { to: "/write", label: "লিখি", icon: PlusIcon },
+    { to: "/people", label: "মানুষ", icon: UsersIcon },
+    { to: "/more", label: "আরও", icon: DotsThreeOutlineIcon },
   ];
   const rawKind = params.get("_add");
   const addKind =
@@ -416,6 +435,11 @@ export function AppShell() {
               />
             ) : (
               <Routes>
+                <Route path="write" element={<HouseWriteChooser />} />
+                <Route path="write/:action" element={<HouseWritePage />} />
+                <Route path="more" element={<MorePage />} />
+                <Route path="migration" element={<MigrationReviewPage />} />
+                <Route path="history" element={<LedgerPage />} />
                 <Route path="entries/new" element={<EntryRoute />} />
                 <Route path="entries/:entryId/edit" element={<EntryRoute />} />
                 <Route path="jobs/new" element={<ContractRoute />} />
@@ -479,37 +503,8 @@ export function AppShell() {
         </main>
       </div>
       <nav className="mobile-bottom-nav" aria-label={t("প্রধান মেনু")}>
-        {[nav[0], nav[1]].map((item) => (
-          <NotebookNavLink
-            key={item.to}
-            {...item}
-            label={item.to === "/works" ? "খাতা" : item.label}
-            base={base}
-          />
-        ))}
-        <button
-          className="mobile-add"
-          onClick={quick}
-          aria-label={t("হিসাব লিখি")}
-        >
-          <span className="mobile-add-icon">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M12 5v14M5 12h14"
-                stroke="currentColor"
-                strokeWidth="3.5"
-                strokeLinecap="round"
-              />
-            </svg>
-          </span>
-        </button>
-        {[nav[2], nav[3]].map((item) => (
-          <NotebookNavLink
-            key={item.to}
-            {...item}
-            label={item.to === "/ledger" ? "ইতিহাস" : "মানুষ"}
-            base={base}
-          />
+        {nav.map((item) => (
+          <NotebookNavLink key={item.to} {...item} base={base} />
         ))}
       </nav>
       <PwaUpdateNotice blocked={updateBlocked} floating />

@@ -36,6 +36,7 @@ export function useInlineDraft<T>(
       ? state
       : { scope, value: initial, ready: false, failed: !storage };
   const queue = useRef(Promise.resolve());
+  const writeFailure = useRef<{ scope: string; error: unknown } | null>(null);
   const latest = useRef(current.value);
   latest.current = current.value;
   useEffect(() => {
@@ -77,8 +78,10 @@ export function useInlineDraft<T>(
         if (mode === "real" && getActiveOwner() !== activeOwner)
           throw new Error("account_changed");
         await storage.saveDraft(key, schema.parse(next));
+        if (writeFailure.current?.scope === scope) writeFailure.current = null;
       })
-      .catch(() => {
+      .catch((error) => {
+        writeFailure.current = { scope, error };
         setState((previous) =>
           previous.scope === scope ? { ...previous, failed: true } : previous,
         );
@@ -87,6 +90,7 @@ export function useInlineDraft<T>(
   const clear = async (next: T) => {
     if (!storage) throw new Error("authentication_required");
     await queue.current;
+    if (writeFailure.current?.scope === scope) throw writeFailure.current.error;
     if (mode === "real" && getActiveOwner() !== activeOwner)
       throw new Error("account_changed");
     await storage.removeDraft(key);
@@ -100,5 +104,10 @@ export function useInlineDraft<T>(
     clear,
     ready: current.ready,
     failed: current.failed,
+    flush: async () => {
+      await queue.current;
+      if (writeFailure.current?.scope === scope)
+        throw writeFailure.current.error;
+    },
   };
 }

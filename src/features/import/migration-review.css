@@ -1,0 +1,106 @@
+.migration-review-page {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 960px;
+  margin-inline: auto;
+}
+.migration-review-page section,
+.migration-review-sources {
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg, 16px);
+  background: var(--surface);
+}
+.migration-review-page h2 {
+  font-size: 1.05rem;
+  margin: 0 0 0.8rem;
+}
+.migration-review-page p {
+  color: var(--muted);
+  line-height: 1.8;
+  margin: 0.5rem 0;
+}
+.migration-review-totals,
+.migration-review-sources dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1rem 0 0;
+}
+.migration-review-page dt {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.migration-review-page dd {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0.4rem 0 0;
+  font-variant-numeric: tabular-nums;
+}
+.migration-review-table {
+  overflow-x: auto;
+}
+.migration-review-table table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 640px;
+}
+.migration-review-table td,
+.migration-review-table th {
+  padding: 0.8rem;
+  text-align: start;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.migration-review-table th {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+.migration-review-table td:not(:first-child) {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.migration-review-issues {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.8rem;
+}
+.migration-review-issues li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.migration-review-issues strong {
+  font-weight: 500;
+}
+.migration-review-issues button {
+  flex-shrink: 0;
+}
+.migration-review-sources summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+.migration-review-sources dl + dl {
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 600px) {
+  .migration-review-page section,
+  .migration-review-sources {
+    padding: 1rem;
+  }
+  .migration-review-totals,
+  .migration-review-sources dl {
+    grid-template-columns: 1fr;
+  }
+  .migration-review-issues li {
+    align-items: start;
+    flex-direction: column;
+  }
+}

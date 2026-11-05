@@ -5,7 +5,6 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import {
   entryReturn,
-  entryUrl,
   contractUrl,
   personUrl,
   isEntryPage,
@@ -14,6 +13,7 @@ import {
 import { useLedger } from "../data/useLedger";
 import { getActiveOwner } from "../data/database";
 import { useLanguageContext } from "../context/LanguageProvider";
+import { houseWriteUrl } from "./houseRoutes";
 
 export function NotebookProvider({
   mode,
@@ -119,28 +119,16 @@ export function NotebookProvider({
     notify,
     quick: () => {
       if (!currentScope()) return;
-      setSearch((previous) => {
-        const next = new URLSearchParams(previous);
-        [
-          "_entry",
-          "_entity",
-          "_edit",
-          "_add",
-          "_work",
-          "_person",
-          "_account",
-          "_type",
-        ].forEach((key) => next.delete(key));
-        next.set("_quick", "1");
-        return next;
-      });
+      navigate(
+        `${base}/write?${new URLSearchParams({ back: `${location.pathname}${location.search}` })}`,
+      );
     },
     add: (options) => {
       if (!currentScope()) return;
       const previous = isEntryPage(location.pathname)
         ? (new URLSearchParams(location.search).get("back") ?? `${base}/`)
         : `${location.pathname}${location.search}`;
-      navigate(entryUrl(base, options, previous));
+      navigate(houseWriteUrl(base, options, previous));
     },
     entity: (kind, id, workId, personId) => {
       if (!currentScope()) return;

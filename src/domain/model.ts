@@ -360,6 +360,7 @@ export const BalanceAdjustmentSchema = z
   .object({
     target: z.enum(["person", "work"]),
     basis: z.enum(["paid", "cost", "balance"]),
+    calculationVersion: z.literal(2).optional(),
     account: AccountSchema.nullable(),
     delta: SignedMoneySchema.refine(
       (amount) => amount !== 0,
@@ -371,6 +372,11 @@ export const BalanceAdjustmentSchema = z
   })
   .strict()
   .superRefine((adjustment, ctx) => {
+    if (adjustment.calculationVersion === 2 && adjustment.basis !== "balance")
+      ctx.addIssue({
+        code: "custom",
+        message: "Earned balance version applies only to a balance correction",
+      });
     if (
       BigInt(adjustment.after) - BigInt(adjustment.before) !==
       BigInt(adjustment.delta)

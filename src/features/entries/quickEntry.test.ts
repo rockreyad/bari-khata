@@ -1006,7 +1006,8 @@ it.each([false, true])(
     });
     expect(contractSummary(next, "house")).toMatchObject({
       netPaid: 500000,
-      remaining: 1500000,
+      remaining: 0,
+      remainingCommitment: 1500000,
     });
     expect(contractSummary(next, "other-job").netPaid).toBe(0);
     expect(summarize(next).cost).toBe(0);

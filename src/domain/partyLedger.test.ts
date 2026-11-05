@@ -373,7 +373,8 @@ describe("party identity and explicit bill settlement", () => {
       }),
     ]);
     expect(contractSummary(records, "agreement")).toMatchObject({
-      remaining: 10000,
+      remaining: 7000,
+      remainingCommitment: 10000,
       payable: 7000,
       paid: 4000,
       advance: 0,
@@ -382,13 +383,14 @@ describe("party identity and explicit bill settlement", () => {
       { billId: "earned", amount: 2000 },
     ]);
     expect(contractSummary(applied, "agreement")).toMatchObject({
-      remaining: 8000,
+      remaining: 5000,
+      remainingCommitment: 8000,
       payable: 5000,
       paid: 4000,
       advance: 0,
     });
     expect(partyLedger(applied, "party")).toMatchObject({
-      payable: 8000,
+      payable: 5000,
       receivable: 2000,
     });
   });
@@ -457,8 +459,13 @@ describe("allocation financial validation", () => {
       billOutstanding: 1000,
       unallocatedCash: 0,
     });
-    expect(() => setEntryVoided(settled, "paid", true)).toThrow();
-    expect(() => setEntryVoided(settled, "purchase", true)).toThrow();
+    expect(
+      setEntryVoided(settled, "paid", true).paymentAllocations![0].cancelledAt,
+    ).toBeTruthy();
+    expect(
+      setEntryVoided(settled, "purchase", true).paymentAllocations![0]
+        .cancelledAt,
+    ).toBeTruthy();
     expect(() =>
       replaceEntry(settled, {
         ...settled.entries[0],

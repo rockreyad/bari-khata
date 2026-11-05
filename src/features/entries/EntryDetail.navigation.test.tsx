@@ -15,7 +15,12 @@ import { EntryDetail } from "./EntryDetail";
 const { notebook } = vi.hoisted(() => ({ notebook: vi.fn() }));
 vi.mock("../../app/NotebookProvider", () => ({ useNotebook: notebook }));
 vi.mock("../../data/repository", () => ({
-  createWorkspaceStorage: () => ({ getReceipt: vi.fn() }),
+  createWorkspaceStorage: () => ({
+    getReceipt: vi.fn(),
+    readDraft: async () => null,
+    saveDraft: async () => {},
+    removeDraft: async () => {},
+  }),
 }));
 vi.mock("../../components/Sheet", () => ({
   Sheet: ({ children, footer }: { children: ReactNode; footer: ReactNode }) => (
@@ -44,6 +49,7 @@ vi.mock("../../context/LanguageProvider", () => ({
   useLanguageContext: () => ({
     t: (text: string) => text,
     money: (value: number) => `৳${value / 100}`,
+    number: (value: number) => String(value),
     date: (value: string | null) => value || "তারিখ দেওয়া নেই",
     language: "bn",
     formatDigits: (value: string | number) => String(value),

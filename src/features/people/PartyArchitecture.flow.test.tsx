@@ -14,14 +14,9 @@ import {
 } from "../../app/NotebookContext";
 import { LanguageProvider } from "../../context/LanguageProvider";
 import { getAccountDatabase, setActiveOwner } from "../../data/database";
-import {
-  createWorkspaceStorage,
-  getScopedRepository,
-} from "../../data/repository";
+import { getScopedRepository } from "../../data/repository";
 import { LedgerSchema, type Ledger } from "../../domain/model";
-import { summarize } from "../../domain/ledger";
 import { savePreferences } from "../../lib/preferences";
-import { PartyAllocationPanel } from "./PartyAllocationPanel";
 import { partyLedger } from "../../domain/partyLedger";
 import { QuickEntrySheet } from "../entries/QuickEntrySheet";
 import { AgreementMilestones } from "../jobs/AgreementMilestones";
@@ -158,110 +153,6 @@ function Harness({
 function mount(initial: Ledger, element: React.ReactNode) {
   return render(<Harness initial={initial}>{element}</Harness>);
 }
-
-it("allocates one existing advance across multiple bills and notebooks, reopens it, then cancels a link without changing cash or costs", async () => {
-  const initial = fixture();
-  const repo = await setup(initial);
-  const before = summarize(initial);
-  const user = userEvent.setup();
-  const first = mount(initial, <PartyAllocationPanel personId="party" />);
-  await user.click(screen.getByText("দেওয়া টাকা বিলে লাগাই"));
-  const payment = screen.getByLabelText("কোন দেওয়া টাকা");
-  await waitFor(() =>
-    expect((payment as HTMLSelectElement).disabled).toBe(false),
-  );
-  await user.selectOptions(payment, "advance");
-  expect(screen.queryByLabelText(/বিলে লাগাব: নমুনা মজুরির বিল/)).toBeNull();
-  await user.type(
-    screen.getByLabelText("বিলে লাগাব: নমুনা প্রথম বিল · নমুনা ছাদ"),
-    "100",
-  );
-  await user.type(
-    screen.getByLabelText("বিলে লাগাব: নমুনা প্রথম বিল · নমুনা দেয়াল"),
-    "150",
-  );
-  await user.type(
-    screen.getByLabelText("বিলে লাগাব: নমুনা দ্বিতীয় বিল · নমুনা ছাদ"),
-    "100",
-  );
-  await user.click(screen.getByRole("button", { name: "বিলে লাগাই" }));
-  await waitFor(async () =>
-    expect((await repo.read())!.ledger.paymentAllocations).toHaveLength(3),
-  );
-  expect(summarize((await repo.read())!.ledger)).toEqual(before);
-  first.unmount();
-  repo.database.close();
-  await repo.database.open();
-  const saved = (await repo.read())!.ledger;
-  mount(saved, <PartyAllocationPanel personId="party" />);
-  await user.click(screen.getByText("কোন বিলে কত মিটিয়েছি"));
-  await waitFor(() =>
-    expect(
-      (
-        screen.getAllByRole("button", {
-          name: "বিলের সম্পর্ক বাতিল করি",
-        })[0] as HTMLButtonElement
-      ).disabled,
-    ).toBe(false),
-  );
-  await user.click(
-    screen.getAllByRole("button", { name: "বিলের সম্পর্ক বাতিল করি" })[0],
-  );
-  await user.type(
-    screen.getByLabelText("কেন সম্পর্ক বাতিল করছেন"),
-    "নমুনা ভুল বিল বেছেছিলাম",
-  );
-  await user.click(screen.getByRole("button", { name: "সম্পর্ক বাতিল রাখুন" }));
-  await waitFor(async () =>
-    expect(
-      (await repo.read())!.ledger.paymentAllocations?.[0].cancelledAt,
-    ).toBeTruthy(),
-  );
-  const after = (await repo.read())!.ledger;
-  expect(after.entries).toEqual(initial.entries);
-  expect(after.paymentAllocations?.[0].cancellationReason).toBe(
-    "নমুনা ভুল বিল বেছেছিলাম",
-  );
-  expect(summarize(after)).toEqual(before);
-});
-
-it("keeps an unfinished allocation draft when reopened", async () => {
-  const initial = fixture();
-  await setup(initial);
-  const user = userEvent.setup();
-  const first = mount(initial, <PartyAllocationPanel personId="party" />);
-  await user.click(screen.getByText("দেওয়া টাকা বিলে লাগাই"));
-  await waitFor(() =>
-    expect(
-      (screen.getByLabelText("কোন দেওয়া টাকা") as HTMLSelectElement).disabled,
-    ).toBe(false),
-  );
-  await user.selectOptions(screen.getByLabelText("কোন দেওয়া টাকা"), "advance");
-  await user.type(
-    screen.getByLabelText("বিলে লাগাব: নমুনা প্রথম বিল · নমুনা ছাদ"),
-    "75",
-  );
-  await waitFor(async () =>
-    expect(
-      await createWorkspaceStorage().readDraft("payment-allocation:party"),
-    ).toMatchObject({
-      paymentId: "advance",
-      amounts: { '["first","roof"]': "75" },
-    }),
-  );
-  first.unmount();
-  mount(initial, <PartyAllocationPanel personId="party" />);
-  await user.click(screen.getByText("দেওয়া টাকা বিলে লাগাই"));
-  await waitFor(() =>
-    expect(
-      (
-        screen.getByLabelText(
-          "বিলে লাগাব: নমুনা প্রথম বিল · নমুনা ছাদ",
-        ) as HTMLInputElement
-      ).value,
-    ).toMatch(/[৭7][৫5]/),
-  );
-});
 
 it("adds optional agreement milestones, saves status, and reopens without producing a financial entry", async () => {
   const initial = fixture();

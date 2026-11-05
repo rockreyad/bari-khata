@@ -4,6 +4,8 @@ import type { Account, CostType, Entry, Ledger } from "./model.js";
 import { EntryCoreSchema, validateLedger } from "./model.js";
 import { adjustmentBalanceDelta, reconciledTotals } from "./adjustmentMath.js";
 import { cashObligationParts } from "./cashObligations.js";
+import { unresolvedContractAdjustmentIds } from "./contractObligations.js";
+import { allocatePayment, partyLedger } from "./partyLedger.js";
 
 export const accounts: Account[] = ["materials", "labour", "other"];
 export const costTypes: CostType[] = [
@@ -394,6 +396,8 @@ export function contractSummary(ledger: Ledger, contractId: string) {
   );
   let billed = 0;
   let adjustment = 0;
+  let commitmentAdjustment = 0;
+  const unresolved = unresolvedContractAdjustmentIds(ledger);
   let paid = 0;
   let refunds = 0;
   let obligationPaid = 0;
@@ -412,15 +416,18 @@ export function contractSummary(ledger: Ledger, contractId: string) {
       if (entry.kind === "payment") obligationPaid += settled;
       else obligationRefunds += settled;
     }
-    if (entry.kind === "adjustment")
-      adjustment += adjustmentBalanceDelta(entry);
+    if (entry.kind === "adjustment") {
+      commitmentAdjustment += adjustmentBalanceDelta(entry);
+      if (!unresolved.has(entry.id))
+        adjustment += adjustmentBalanceDelta(entry);
+    }
   }
   const agreed = contract?.total ?? 0;
   const netPaid = paid - refunds;
   const obligationNetPaid = obligationPaid - obligationRefunds;
   const balance =
     BigInt(Math.max(agreed, billed)) +
-    BigInt(adjustment) -
+    BigInt(commitmentAdjustment) -
     BigInt(obligationNetPaid);
   const billedBalance =
     BigInt(billed) + BigInt(adjustment) - BigInt(obligationNetPaid);
@@ -433,7 +440,12 @@ export function contractSummary(ledger: Ledger, contractId: string) {
     refunds,
     netPaid,
     obligationNetPaid,
-    remaining: Number(balance > 0n ? balance : 0n),
+    billedBalance: Number(billedBalance),
+    remaining: Number(billedBalance > 0n ? billedBalance : 0n),
+    remainingCommitment: Number(balance > 0n ? balance : 0n),
+    unearnedCommitment: Math.max(agreed - billed, 0),
+    commitmentAdjustment,
+    balanceAmbiguous: entries.some((entry) => unresolved.has(entry.id)),
     payable: Number(billedBalance > 0n ? billedBalance : 0n),
     advance: Math.max(obligationNetPaid - billed, 0),
     entries,
@@ -457,6 +469,19 @@ export function setEntryVoided(
   const now = new Date().toISOString();
   return validateLedger({
     ...ledger,
+    paymentAllocations: voided
+      ? ledger.paymentAllocations?.map((row) =>
+          !row.cancelledAt &&
+          (row.paymentId === entryId || row.billId === entryId)
+            ? {
+                ...row,
+                cancelledAt: now,
+                cancellationReason:
+                  "লেনদেন বাতিল করায় বিলের সঙ্গে টাকার মিল খুলেছি",
+              }
+            : row,
+        )
+      : ledger.paymentAllocations,
     entries: ledger.entries.map((entry) =>
       entry.id === entryId && entry.voided !== voided
         ? {
@@ -521,6 +546,71 @@ export function replaceExpenseAndSettlements(
 ): Ledger {
   const original = ledger.entries.find((entry) => entry.id === replacement.id);
   if (!original) throw new Error("Unknown entry");
+  const matched = (ledger.paymentAllocations ?? []).filter(
+    (row) => !row.cancelledAt && row.billId === original.id,
+  );
+  const paidIds = new Set(matched.map((row) => row.paymentId));
+  const pairedCash =
+    paidIds.size === 1
+      ? ledger.entries.find(
+          (entry) =>
+            paidIds.has(entry.id) &&
+            entry.kind === "payment" &&
+            entry.relatedEntryId === original.id,
+        )
+      : undefined;
+  const changed =
+    original.kind === "expense" &&
+    replacement.kind === "expense" &&
+    (entryTotal(original) !== entryTotal(replacement) ||
+      JSON.stringify(entryWorkIds(original).sort()) !==
+        JSON.stringify(entryWorkIds(replacement).sort()));
+  if (
+    changed &&
+    pairedCash &&
+    new Set(original.lines.map((line) => line.workId)).size === 1 &&
+    new Set(replacement.lines.map((line) => line.workId)).size === 1 &&
+    !(ledger.paymentAllocations ?? []).some(
+      (row) =>
+        !row.cancelledAt &&
+        row.paymentId === pairedCash.id &&
+        row.billId !== original.id,
+    )
+  ) {
+    const at = new Date().toISOString();
+    const neutral = validateLedger({
+      ...ledger,
+      paymentAllocations: ledger.paymentAllocations!.map((row) =>
+        matched.some((previous) => previous.id === row.id)
+          ? {
+              ...row,
+              cancelledAt: at,
+              cancellationReason:
+                "বিলের অঙ্ক বদলানোয় দেওয়া টাকার ভাগ আবার মিলিয়েছি",
+            }
+          : row,
+      ),
+    });
+    const edited = replaceExpenseAndSettlements(neutral, replacement);
+    const updatedBill = edited.entries.find(
+      (entry) => entry.id === original.id,
+    )!;
+    const payment = partyLedger(
+      edited,
+      updatedBill.personId ?? "",
+    ).payments.find((row) => row.id === pairedCash.id);
+    const workId = updatedBill.lines[0].workId;
+    const amount = Math.min(
+      matched.reduce((sum, row) => sum + row.amount, 0),
+      entryTotal(updatedBill),
+      payment?.works.find((row) => row.workId === workId)?.available ?? 0,
+    );
+    return amount
+      ? allocatePayment(edited, pairedCash.id, [
+          { billId: updatedBill.id, workId, amount },
+        ])
+      : edited;
+  }
   const linked = ledger.entries.filter(
     (entry) => entry.relatedEntryId === original.id,
   );

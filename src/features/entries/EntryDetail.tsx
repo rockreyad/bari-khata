@@ -32,6 +32,7 @@ import { adjustmentBasisLabels } from "../history/adjustmentDisplay";
 import "../history/history.css";
 import "../history/history-v4.css";
 import "./entry-detail.css";
+import { PaymentBillMatch } from "./PaymentBillMatch";
 const auditLabels: Partial<Record<EntryChangeField, string>> = {
   kind: "হিসাবের ধরন",
   date: "লেনদেনের তারিখ",
@@ -843,6 +844,9 @@ export function EntryDetail({ id }: { id: string }) {
               ) : null}
             </div>
           </details>
+        ) : null}
+        {entry.kind === "payment" ? (
+          <PaymentBillMatch key={entry.id} paymentId={entry.id} />
         ) : null}
         {confirm ? (
           <ConfirmationDialog

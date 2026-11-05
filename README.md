@@ -34,7 +34,7 @@ npm run preview
 
 [অ্যাকাউন্টের সেটআপ](docs/REGISTRATION.md) · [রিলিজের নিয়ম](docs/RELEASING.md) · [সব নির্দেশনা](docs/)
 
-[খাতার নতুন গঠন, পুরোনো তথ্য আনা ও ফেরার নিয়ম](docs/ARCHITECTURE-MIGRATION.md)
+[একটি বাড়ির হিসাব: পর্দা, হিসাবের নিয়ম ও তথ্যের গঠন](docs/HOUSE-ACCOUNTING-DESIGN.md) · [পুরোনো তথ্য আনা ও ফেরার নিয়ম](docs/ARCHITECTURE-MIGRATION.md)
 
 ## লাইসেন্স
 

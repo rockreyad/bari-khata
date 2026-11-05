@@ -27,8 +27,8 @@ describe("notebook navigation", () => {
     ["/sample/works/door", "/sample", "/works", true],
     ["/works/door", "", "/works", true],
     ["/people/shah-alam", "", "/people", true],
-    ["/jobs", "", "/people", true],
-    ["/sample/jobs/job-one", "/sample", "/people", true],
+    ["/jobs", "", "/works", true],
+    ["/sample/jobs/job-one", "/sample", "/works", true],
     ["/jobs-other", "", "/people", false],
     ["/materials/cement", "", "/reports", true],
     ["/sample/review", "/sample", "/ledger", true],
@@ -38,6 +38,10 @@ describe("notebook navigation", () => {
     ["/settings-appearance", "", "/settings", false],
     ["/people-other", "", "/people", false],
     ["/works", "", "/", false],
+    ["/write/payment", "", "/write", true],
+    ["/sample/history", "/sample", "/more", true],
+    ["/settings/appearance", "", "/more", true],
+    ["/reports", "", "/more", true],
   ])("matches %s under %s to %s", (path, base, section, expected) => {
     expect(notebookSectionActive(path, base, section)).toBe(expected);
   });

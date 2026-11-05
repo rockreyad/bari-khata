@@ -236,6 +236,11 @@ export async function synchronizeWorkspace(
   if (!frozen) {
     const cloud = await transport.load();
     if (cloud.document?.isDemo) throw new Error("workspace_mode_mismatch");
+    if (cloud.revision < row.cloudRevision) {
+      if (!cloud.document) throw new Error("cloud_revision_regressed");
+      await recordConflict(repo, transport, cloud);
+      return { status: "conflict" };
+    }
     if (cloud.revision !== row.cloudRevision) {
       if (row.pending || (row.generation > 0 && row.cloudRevision === 0)) {
         await recordConflict(repo, transport, cloud);
@@ -260,7 +265,7 @@ export async function synchronizeWorkspace(
         await repo.database.transaction(
           "rw",
           [
-            repo.database.workspaces,
+            ...repo.database.workspaceTables(),
             repo.database.migrations,
             repo.database.receipts,
           ],
@@ -275,7 +280,7 @@ export async function synchronizeWorkspace(
               "cloud",
               String(cloud.revision),
             );
-            await repo.database.workspaces.put({
+            await repo.writeWorkspace({
               ...current,
               ledger: migration.ledger,
               generation: current.generation + (migration.changed ? 1 : 0),
@@ -296,8 +301,7 @@ export async function synchronizeWorkspace(
     if (!frozen) {
       frozen = await repo.database.transaction(
         "rw",
-        repo.database.workspaces,
-        repo.database.outbox,
+        [...repo.database.workspaceTables(), repo.database.outbox],
         async () => {
           const current = await repo.read("real");
           if (!current?.pending) return undefined;
@@ -325,13 +329,15 @@ export async function synchronizeWorkspace(
     const sent = frozen;
     await repo.database.transaction(
       "rw",
-      repo.database.workspaces,
-      repo.database.outbox,
-      repo.database.conflicts,
+      [
+        ...repo.database.workspaceTables(),
+        repo.database.outbox,
+        repo.database.conflicts,
+      ],
       async () => {
         const current = await repo.read("real");
         if (!current) throw new Error("workspace_missing");
-        await repo.database.workspaces.put({
+        await repo.writeWorkspace({
           ...current,
           cloudRevision: response.revision,
           ownerId: transport.ownerId,
@@ -347,6 +353,11 @@ export async function synchronizeWorkspace(
 
   let latest = (await repo.read("real"))!;
   const confirmed = await transport.load();
+  if (confirmed.revision < latest.cloudRevision) {
+    if (!confirmed.document) throw new Error("cloud_revision_regressed");
+    await recordConflict(repo, transport, confirmed);
+    return { status: "conflict" };
+  }
   if (confirmed.revision !== latest.cloudRevision) {
     if (latest.pending) {
       await recordConflict(repo, transport, confirmed);
@@ -373,7 +384,7 @@ export async function synchronizeWorkspace(
     await repo.database.transaction(
       "rw",
       [
-        repo.database.workspaces,
+        ...repo.database.workspaceTables(),
         repo.database.migrations,
         repo.database.receipts,
       ],
@@ -387,7 +398,7 @@ export async function synchronizeWorkspace(
           "cloud",
           String(confirmed.revision),
         );
-        await repo.database.workspaces.put({
+        await repo.writeWorkspace({
           ...current,
           ledger: migration.ledger,
           generation: current.generation + (migration.changed ? 1 : 0),
@@ -492,7 +503,7 @@ export async function resolveCloudConflict(
   await db.transaction(
     "rw",
     [
-      db.workspaces,
+      ...db.workspaceTables(),
       db.conflicts,
       db.outbox,
       db.recoveries,
@@ -531,7 +542,7 @@ export async function resolveCloudConflict(
           : null;
       if (incoming && !preservesArchitecture(current.ledger, incoming.ledger))
         throw new Error("architecture_data_would_be_lost");
-      await db.workspaces.put({
+      await repository.writeWorkspace({
         ...current,
         ledger: incoming?.ledger ?? current.ledger,
         cloudRevision: conflict.revision,

@@ -6,7 +6,7 @@
 
 অ্যাপটি React/Vite PWA। `src/app/AppShell.tsx`-এ route, `NotebookProvider`-এ খাতার কাজ, `src/domain/model.ts`-এ Zod যাচাই, `src/domain/ledger.ts` ও `adjustmentMath.ts`-এ খরচ ও বাকি হিসাব থাকে। `QuickEntrySheet`, `EntrySheet` ও `EntitySheet` থেকে নতুন ঘটনা, সংশোধন, ব্যক্তি ও চুক্তি লেখা হয়। মানুষ, কাজ, চুক্তি, বিস্তারিত লেনদেন, রিপোর্ট, ইতিহাস, ব্যাকআপ ও ভাগ করা বিবরণের আলাদা পর্দা আছে। `src/application/mcpCommands.ts`, `mcpQueries.ts`, `server/mcp/` ও `api/` সহকারীর অনুরোধ ও অনুমতি সামলায়; এগুলো আলাদা কোনো আর্থিক খাতা নয়।
 
-স্থানীয় IndexedDB-তে `workspaces`, `receipts`, `outbox`, `conflicts`, `drafts` ও `recoveries` ছিল। প্রতিটি মালিকের আলাদা database; নমুনা খাতাও আলাদা। খাতার একটিমাত্র JSON document `workspaces.ledger`-এ থাকে। Supabase-এ একই document `public.ledger_documents.document`-এ থাকে; `ledger_operations` একই অনুরোধ আবার এলে একই ফল ফেরায়। `owner_id`, revision তুলনা, document যাচাই ও ইতিহাস রক্ষার trigger আছে। ভাউচার ব্যক্তিগত `bari-receipts` bucket-এ থাকে। লগইন, ভাগ করা লিংক ও সহকারীর অনুমতির টেবিল হিসাবের document থেকে আলাদা।
+স্থানীয় IndexedDB-তে `workspaces`, `receipts`, `outbox`, `conflicts`, `drafts` ও `recoveries` ছিল। প্রতিটি মালিকের আলাদা database; নমুনা খাতাও আলাদা। আগের খাতার একটিমাত্র JSON document `workspaces.ledger`-এ থাকত; বর্তমান স্থানীয় entity storage নিচে বলা আছে। Supabase-এ একই document `public.ledger_documents.document`-এ থাকে; `ledger_operations` একই অনুরোধ আবার এলে একই ফল ফেরায়। `owner_id`, revision তুলনা, document যাচাই ও ইতিহাস রক্ষার trigger আছে। ভাউচার ব্যক্তিগত `bari-receipts` bucket-এ থাকে। লগইন, ভাগ করা লিংক ও সহকারীর অনুমতির টেবিল হিসাবের document থেকে আলাদা।
 
 আগেই বিল ও নগদ দেওয়া আলাদা ঘটনা ছিল। চুক্তি না করেও বিল এবং আংশিক টাকা দেওয়া যেত। পুরোনো সংশোধন, বাতিল/ফিরিয়ে আনা, ভাউচার ও উৎসের ইতিহাসও ছিল। তবে ব্যক্তির ধরন একটিমাত্র পছন্দ ছিল; একাধিক দায়িত্ব স্পষ্টভাবে রাখা যেত না। `entries.allocations` টাকা কোন কাজে গেল তা বলে, কোন বিল মিটল তা বলে না। `relatedEntryId` একটি বিলের যোগসূত্র দিতে পারে, এক টাকায় একাধিক বিল মেটানোর তালিকা দিতে পারে না। চুক্তির ধাপ এবং অগ্রিম ও ফেরতযোগ্য জমার স্পষ্ট পরিচয়ও ছিল না। সংরক্ষিত পুরোনো JSON পড়ার সময় কিছু অনুপস্থিত ঘরে default বসত, কিন্তু পরিবর্তনের স্থায়ী প্রতিবেদন ও ফেরার পথ ছিল না।
 
@@ -39,13 +39,17 @@
 
 বিল, টাকা, তারিখ, বর্ণনা, নোট, উৎস, সংশোধন ও চুক্তি নতুন করে বানানো হয় না। কোনো পুরোনো টাকা কোন বিল মিটিয়েছে তা অনুমান করে `paymentAllocations` লেখা হয় না। আগের `relatedEntryId`-এর সরাসরি যোগসূত্র বর্তমান হিসাবেও বোঝা হয়। যোগসূত্র বা স্পষ্ট কারণবিহীন নগদ ঘটনা `ambiguousCashEntryIds`-এ এবং অজানা পরিচয় `unspecifiedIdentityPartyIds`-এ থাকে।
 
-পরিবর্তনের আগে ও পরে project, প্রতিটি party, account ও work-এর খরচ, নগদ দেওয়া, ফেরত, বাকি, অগ্রিম এবং সমন্বয় মেলে। ব্যক্তি, কাজ, মাল, চুক্তি, entry, revision ও receipt-এর সংখ্যাও থাকে। `entries` এবং `contracts`-এর সম্পূর্ণ parsed ইতিহাস অপরিবর্তিত না থাকলে রূপান্তর ব্যর্থ হয়। এখানে পয়সাকে টাকায় বদলানো বা দশমিক rounding হয় না।
+একই বর্তমান নিয়মে পরিবর্তনের আগে ও পরে project, প্রতিটি party, account ও work-এর উৎসের খরচ, নগদ দেওয়া, ফেরত ও সমন্বয় মেলে। পুরোনো commitment-ভিত্তিক display due এবং বর্তমান earned due আলাদা semantic report-এ ব্যাখ্যা হয়; ভুল পুরোনো due ধরে নতুন financial row বানিয়ে সমান করা হয় না। ব্যক্তি, কাজ, মাল, চুক্তি, entry, revision ও receipt-এর সংখ্যাও থাকে। `entries` এবং `contracts`-এর সম্পূর্ণ parsed ইতিহাস অপরিবর্তিত না থাকলে রূপান্তর ব্যর্থ হয়। এখানে পয়সাকে টাকায় বদলানো বা দশমিক rounding হয় না।
 
 `LedgerDatabase`-এর IndexedDB version 2 upgrade একই transaction-এ মূল workspace row ও আগে থেকে স্থানীয়ভাবে থাকা সব receipt blob-এর অবিকল কপি `migrations` store-এ রাখে, প্রতিবেদন লেখে, তারপর নতুন document বসায়। স্থায়ী key `architecture:<workspace>:2`; আবার খুললে দ্বিতীয় কপি বা নতুন financial record হয় না। একটি workspace নষ্ট হলে পুরো upgrade বাতিল হয় এবং পুরোনো database থাকে। `drafts`, `outbox`, `conflicts` ও আগের recovery-গুলো অক্ষত থাকে। ক্লাউড থেকে এখনও নামানো হয়নি এমন ভাউচারের blob এই স্থানীয় কপিতে থাকার দাবি করা হয় না; তার উল্লেখ document-এ থাকে এবং মূল storage-এর backup আলাদাভাবে লাগবে।
 
 নতুন device-এ পুরোনো cloud document এলে তার রূপান্তরের কপি `architecture:<workspace>:2:cloud:<revision>` key-এ থাকে। পরিবর্তিত document একই revision-এর ভিত্তিতে নতুন অনুরোধে যায়। পুরোনো backup restore/merge-এও যাচাই ও রূপান্তর হয়; source কপি `:backup:<SHA-256>` key-এ রাখা হয়। backup restore-এর আগে বর্তমান খাতা ও ভাউচারের আগের recovery আচরণও চালু থাকে। আলাদা record-এর অমিল ব্যবহারকারীর বাছাই ছাড়া মেটে না।
 
 `outbox`-এর জমাট বাঁধা অনুরোধ কখনো পাল্টানো হয় না। আগের অনুরোধ সার্ভারে পৌঁছে উত্তর হারিয়ে যেতে পারে; একই request ID-তে বদলানো JSON পাঠালে hash আর মিলবে না। আগে সেই মূল অনুরোধ অপরিবর্তিত যায়, পরে নতুন generation-এর রূপান্তর আলাদা request ID-তে যায়। মালিক, cloud revision ও অসমাপ্ত লেখা অক্ষত থাকে; অনলাইনে না যাওয়া নতুন কপি pending থাকে।
+
+পুরোনো contract balance adjustment-এর অর্থ বর্তমান bill বা চুক্তি দেখে নতুন করে অনুমান করা হয় না। নতুন balance correction earned ভিত্তি ও stale-value guard পেরিয়ে `appendBalanceAdjustment()` থেকে তৈরি হলে তবেই `adjustment.calculationVersion: 2` থাকে। field ঐচ্ছিক, default নেই এবং শুধুই balance correction-এর জন্য। marker-বিহীন পুরোনো সক্রিয় contract balance adjustment পরের bill/চুক্তি সম্পাদনার পরেও unresolved থাকে; migration কখনো retroactively marker বসায় না।
+
+সম্পূর্ণ adjustment object ও revision immutable comparison-এ থাকার কারণে পুরোনো unmarked record-কে marker দিয়ে “নতুন” করা, অথবা নতুন record থেকে marker বাদ দেওয়া local save, restore ও reviewed backup merge-এ আটকে যায়। entity checksum-এ পরিচিত field-টি অন্তর্ভুক্ত; field না থাকা legacy record-এ কোনো default যোগ হয় না। নতুন marker ও পুরোনো absence দুটোই reopen/backup-এ অক্ষত থাকে। উৎসের অমীমাংসিত সমন্বয় তথ্য হারানো ছাড়া `/migration`-এ দেখা যায়।
 
 পুরোনো ক্লায়েন্ট নতুন marker, দায়িত্বের ক্ষেত্র, ধাপ, বিল মেলানোর ইতিহাস বা নগদের স্পষ্ট পরিচয় বাদ দিলে save/restore প্রত্যাখ্যাত হয় বা cloud conflict থাকে। allocation মুছে বা তার মূল টাকা/যোগসূত্র পাল্টানো যায় না; কারণ ও সময়সহ একবার বাতিল করা যায়। বাতিলের ইতিহাসও ফের বদলানো যায় না। ধাপের শর্ত বদলানো যায়, আগে ব্যবহৃত ধাপের `id` বাদ দেওয়া যায় না।
 
@@ -80,7 +84,7 @@ if (current) {
 
 1. আগে database snapshot, `ledger_operations`, ভাগ করা লিংক/অনুমতির প্রয়োজনীয় তথ্য এবং ব্যক্তিগত receipt storage-এর পূর্ণ backup নিতে হবে। ফিরিয়ে আনার পদ্ধতি আলাদা পরীক্ষার পরিবেশে যাচাই করতে হবে। পাসওয়ার্ড বা key রিপোর্টে রাখা যাবে না।
 2. কপিতে `migrateArchitecture()` চালিয়ে গণনা, party/project balance, পুরোনো ইতিহাস ও ভাউচার মিলিয়ে দেখতে হবে। duplicate candidate ও অজানা নগদ ঘটনার প্রতিবেদন মালিককে দেখাতে হবে; অস্পষ্ট তথ্য থেকে financial adjustment বানানো যাবে না।
-3. Supabase migration `202611050002_party_ledger_architecture.sql` এবং `202611050003_shared_payment_allocations.sql` ক্রম অনুযায়ী আগে প্রয়োগ করতে হবে, তারপর নতুন client প্রকাশ করতে হবে। নতুন guard প্রতিষ্ঠিত তথ্য পুরোনো client দিয়ে বাদ পড়া ঠেকায়। কেবল এই স্থানীয় কাজ শেষ হয়েছে বলে production migration শেষ ধরা যাবে না।
+3. Supabase migration `202611050002_party_ledger_architecture.sql`, `202611050003_shared_payment_allocations.sql` ও `202611050004_earned_obligations.sql` ক্রম অনুযায়ী আগে প্রয়োগ করতে হবে, তারপর নতুন client প্রকাশ করতে হবে। নতুন guard প্রতিষ্ঠিত তথ্য পুরোনো client দিয়ে বাদ পড়া ঠেকায়। কেবল এই স্থানীয় কাজ শেষ হয়েছে বলে production migration শেষ ধরা যাবে না।
 4. বিভিন্ন device-এর pending লেখা, সেশন শেষ হওয়া, conflict, পুনরায় অনলাইন হওয়া ও receipt download যাচাই করতে হবে। স্বয়ংক্রিয় migration কোনো আলাদা device-এর জমা লেখা মুছে দেয় না।
 5. আসল খাতার আগে/পরে মেলানো শেষ এবং rollback-এর সময়সীমা পার না হওয়া পর্যন্ত পুরোনো financial fields, recovery কপি বা migration history মুছবেন না। বর্তমান document-এর ঐতিহাসিক ক্ষেত্রগুলো ব্যবহার হচ্ছে; শুধু পুরোনো নাম বলে বাদ দেওয়া নিরাপদ নয়।
 
@@ -101,13 +105,20 @@ node --import tsx scripts/backend-shared-allocations-check.ts
 
 স্থানীয় Supabase পরীক্ষার দুটি script শুধু স্থানীয় Docker socket ও `supabase_db_bari-khata` ব্যবহার করে। নতুন schema ও নমুনা লেখা একই transaction-এ যাচাই করে শেষে rollback হয়; আগের function/অনুমতি অক্ষত থাকা এবং নমুনা owner সরেছে কি না আলাদা করে মেলে। shared বিবরণে একটি পরিশোধের একাধিক বিল, কাজ অনুযায়ী সীমিত তথ্য, ফেরতযোগ্য জমা এবং ২০টির পরের পরিশোধের পাতা যাচাই করা হয়।
 
-## এই branch-এর যাচাই
+## যাচাইয়ের পরিসর
 
-৫ নভেম্বর ২০২৬-এর স্থানীয় যাচাই:
+নমুনা data-তে domain, storage, migration, source report, draft/receipt, UI save/reopen, backend permission এবং rollback পরীক্ষা আছে। চূড়ান্ত delivery-র test ফল বর্তমান code-এর সঙ্গে মিলিয়ে দিতে হবে; আগের পর্যায়ের test count এই পরের পরিবর্তনের প্রমাণ নয়। স্থানীয় backend checks production data migrate বা যাচাই করার দাবি নয়।
 
-- `npm test`: ১৮৩টি file-এ ২,৩৭৭টি test সফল। পরে যোগ করা `src/data/conflictMigration.test.ts`-এর একটি focused test-ও সফল।
-- `npm run typecheck`, `npm run build`, পরিবর্তিত TypeScript/CSS/Markdown-এর Prettier check এবং `git diff --check` সফল। আলাদা lint script নেই। build-এ বড় chunk-এর সতর্কতা আছে।
-- `backend-architecture-check.ts`: ৩৩টি schema, অর্থ, অনুমতি ও rollback পরীক্ষা সফল। `backend-shared-allocations-check.ts`-এ ২৭টি পরিশোধ ২০+৭ পাতায় দেখা, কাজের সীমা, legacy যোগসূত্র, বাতিল সম্পর্ক, ফেরতযোগ্য জমা ও গোপনীয়তার পরীক্ষা সফল। database-এ পরীক্ষার পরিবর্তন রাখা হয়নি।
-- ব্রাউজারের নমুনা খাতায় ১,৭০০ টাকার পুরোনো পরিশোধ থেকে ১,৫০০ টাকা বিলে বসানো হয়েছে। অসমাপ্ত ১,৫০০ টাকার লেখা reload-এর পর ফিরে এসেছে; সংরক্ষণের পরে reload ও নতুন tab-এ বিলে মেলানো বাকি শূন্য এবং অব্যবহৃত টাকা ২০০ দেখা গেছে। মূল cash entry ১,৭০০-ই আছে। নতুন tab-এ browser error পাওয়া যায়নি।
+## বর্তমানে স্থানীয় সংরক্ষণ: entity format 3, IndexedDB version 4
 
-এই ফল নমুনা ও স্থানীয় পরীক্ষার প্রমাণ। production-এর পূর্ণ backup, প্রকৃত খাতার reconciliation এবং প্রকাশের অনুমতি এখনও প্রকাশের আগের ধাপ।
+বর্তমান বাস্তবায়নে `workspaces`-এ সম্পূর্ণ সক্রিয় Ledger JSON থাকে না। এটি কেবল owner, generation, cloud revision ও pending অবস্থার metadata রাখে। `ledgerHeaders` project/header, collection-এর count ও SHA-256 রাখে; `ledgerEntities`-এ `workspace`, `collection`, `id` ও আগের ক্রম ধরে পৃথক aggregate record থাকে। repository পড়ার সময় এগুলো জুড়ে Zod দিয়ে সম্পর্ক ও checksum যাচাই করে। লেখার সময় বদলানো record ও header/metadata একই transaction-এ থাকে। কোনো record কমে গেলে, header নষ্ট হলে বা বৈধ ধরনের টাকার অঙ্কও বাইরে থেকে বদলে গেলে পুরোনো তথ্য reset করে নয়, পড়া বন্ধ করে তা জানানো হয়।
+
+v2 থেকে v3-তে যাওয়ার আগে `storage:<workspace>:3` key-এ সঠিক source workspace ও পাওয়া blob-এর recovery থাকে। v1 থেকে এলে প্রথম metadata migration-এর source কপিটিও থাকে। `outbox`-এর জমাট request অপরিবর্তিত। JSON এখনও backup, cloud wire, frozen request ও অপরিবর্তনীয় recovery-তে আছে; এগুলো দ্বিতীয় সম্পাদনাযোগ্য স্থানীয় হিসাব নয়। **Postgres-এর atomic versioned snapshot এই একটি বাড়ির জন্য নির্বাচিত commit/transport boundary। পূর্ণ relational server ও প্রতি-record network sync এখন করা হয়নি; সেগুলো পরিমাপ করা প্রয়োজন হলে বিকল্প, refactor শেষ হওয়ার বাধ্যতামূলক শর্ত নয়।**
+
+নতুন backup-এ canonical ledger ও receipt encoding-এর SHA-256 এবং সংরক্ষিত semantic migration report থাকে। পুরোনো checksum-বিহীন backup গ্রহণ করা যায়; নতুন checksum থাকা backup-এ অমিল হলে কোনো লেখা হওয়ার আগে restore/merge থামে। checksum দুর্ঘটনাজনিত পরিবর্তন ধরতে সাহায্য করে; উৎসের সত্যতা বা হিসাবের কারণের বিকল্প নয়।
+
+`createMigrationReview(ledger)` এবং `repository.migrationReview(mode)` আগের commitment-ভিত্তিক বাকি, বর্তমান earned বাকি, এখনও না হওয়া কাজ এবং অজানা নগদ/ঐতিহাসিক তথ্যের তালিকা দেয়। `পুরোনো হিসাব যাচাই` পর্দা `/migration` থেকে মূল লেখা খোলা যায়। চুক্তির ভবিষ্যৎ টাকাকে খরচ বানিয়ে দুই ধরনের বাকি জোর করে সমান করা হয় না। backup/restore-এ পুরোনো report-গুলোও থাকে। `createWorkspaceStorage(mode).listDraftKeys()` শুধু সক্রিয় খাতার key ফেরায়, যাতে নতুন লেখার প্রবাহে যাওয়ার পরেও আগের অসমাপ্ত ফর্ম খোলা যায়; draft value বা অন্য account-এর key প্রকাশ করে না।
+
+একই উন্নয়ন চলাকালীন checksum যোগ হওয়ার আগেই তৈরি হওয়া v3 database-এর জন্য IndexedDB version 4 upgrade আছে। এটি শুধু পরিচিত checksum-বিহীন header চিনে, পূর্ণ entity count/ক্রম/পরিচয়/financial relation/history ও স্থানীয় receipt যাচাই করে। তারপর `storageRecoveries`-এ `integrity:<workspace>:4` key-এ মূল raw header, entity row, workspace metadata ও blob রেখে checksum বসায়। malformed বা অমিল checksum থাকলে সেটি মুছে নতুন checksum বানিয়ে দেওয়া হয় না; upgrade থামে এবং পুরোনো data থাকে। draft ও frozen request বদলায় না। সাধারণ repository read কখনো checksum-বিহীন data গ্রহণ করে না।
+
+Remote snapshot expected revision ও request hash যাচাই করে; pending স্থানীয় লেখা থাকলে আলাদা cloud কপি conflict হয়। revision regression-ও স্থানীয় newer history বদলে দেওয়ার বদলে conflict হয়। এই নিয়মে silent overwrite হয় না, তবে unrelated দুই device-এর edit-ও conflict হতে পারে। per-entity sync এখন না করার এই tradeoff ইচ্ছাকৃত। portable backup active ledger/উল্লেখিত receipt/report রাখে; পূর্ণ server backup বা সব device-এর draft/outbox dump নয়। বর্তমানে custody wallet, mixed funding ও supplier-to-worker দায়-হস্তান্তরের পূর্ণ workflow নেই; শুধু অন্যের নিজের টাকায় মালের সরাসরি reimbursement সমর্থিত।

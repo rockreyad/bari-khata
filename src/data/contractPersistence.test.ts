@@ -53,6 +53,7 @@ it("reopens and restores contract history while refusing a save or backup that d
       "contract_history_would_be_lost",
     );
     const corrupt = JSON.parse(backup);
+    delete corrupt.integrity;
     corrupt.ledger.contracts[0].activity = [];
     await expect(
       repo.importBackup(JSON.stringify(corrupt), { replace: true }),

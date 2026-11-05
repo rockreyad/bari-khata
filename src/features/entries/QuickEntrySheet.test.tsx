@@ -638,7 +638,7 @@ it("keeps notebook creation available across contact identities and keeps the un
   expect(state.notebook.save).not.toHaveBeenCalled();
 });
 
-it("pays a house-contract worker once and previews total agreement progress across work notebooks", async () => {
+it("pays an explicitly selected house agreement without presenting unearned work as current due", async () => {
   state.notebook.ledger = LedgerSchema.parse({
     works: [
       { id: "door", name: "দরজা" },
@@ -679,7 +679,12 @@ it("pays a house-contract worker once and previews total agreement progress acro
   const { container } = render(
     <QuickEntrySheet
       presentation="page"
-      options={{ kind: "payment", personId: "worker", workId: "door" }}
+      options={{
+        kind: "payment",
+        personId: "worker",
+        workId: "door",
+        contractId: "house",
+      }}
     />,
   );
   await ready();
@@ -689,15 +694,12 @@ it("pays a house-contract worker once and previews total agreement progress acro
   expect(screen.queryByText("মজুরির বিল")).toBeNull();
   await user.type(screen.getByLabelText("কত টাকা"), "30000");
   expect(
-    container.querySelector(
-      ".entry-contract-progress .balance-progress-amounts",
-    )?.textContent,
-  ).toContain("দিয়েছি100000");
+    container.querySelector(".entry-contract-progress .entry-balance-result")
+      ?.textContent,
+  ).toContain("অগ্রিম থাকবে100000");
   expect(
-    container.querySelector(
-      ".entry-contract-progress .balance-progress-amounts",
-    )?.textContent,
-  ).toContain("বাকি500000");
+    container.querySelector(".entry-contract-progress")?.textContent,
+  ).not.toContain("বাকি500000");
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
   const saved = state.notebook.ledger as Ledger;
@@ -1623,7 +1625,7 @@ describe("balance-aware payment choices", () => {
     await userEvent.type(screen.getByLabelText("কত টাকা"), "150");
     expect(
       view.container.querySelector(".entry-balance-result")?.textContent,
-    ).toBe("অগ্রিম থাকবে150");
+    ).toBe("অগ্রিম থাকবে1150");
     await userEvent.click(screen.getByRole("button", { name: "রাখুন" }));
     await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
     const saved = state.notebook.ledger as Ledger;
@@ -1801,7 +1803,7 @@ describe("NARC-131 preferred payment job", () => {
       (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value,
     ).toBe("tiles");
     expect(
-      screen.getByRole("button", { name: "বাকি মেটাই", pressed: true }),
+      screen.getByRole("button", { name: "অগ্রিম", pressed: true }),
     ).toBeTruthy();
     await user.type(screen.getByLabelText("কত টাকা"), "500");
     await user.click(screen.getByRole("button", { name: "রাখুন" }));
@@ -1828,6 +1830,7 @@ describe("NARC-131 preferred payment job", () => {
     await ready();
     await user.selectOptions(screen.getByLabelText("কাজ", { exact: true }), "");
     await user.selectOptions(screen.getByLabelText("কাজের খাতা"), "paint");
+    await user.click(screen.getByRole("button", { name: "নতুন বিল ও টাকা" }));
     expect(
       (screen.getByLabelText("কাজ", { exact: true }) as HTMLSelectElement)
         .value,

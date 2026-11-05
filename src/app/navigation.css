@@ -126,3 +126,22 @@
     transition: none;
   }
 }
+
+.app-sidebar nav a[href$="/write"] {
+  margin-block: 8px;
+  background: var(--accent-strong);
+  color: var(--primary-ink);
+}
+@media (max-width: 760px) {
+  .app-frame > nav.mobile-bottom-nav > a:nth-child(3) > svg {
+    width: 44px;
+    height: 36px;
+    padding: 7px 11px;
+    border-radius: 13px;
+    background: var(--accent-strong);
+    color: var(--primary-ink);
+  }
+  .app-frame > nav.mobile-bottom-nav > a:nth-child(3) {
+    color: var(--accent-strong);
+  }
+}

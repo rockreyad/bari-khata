@@ -105,6 +105,31 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 describe("public live statements", () => {
+  it.each(["labour", "materials"] as const)(
+    "does not present unresolved %s contract corrections as a final due or credit",
+    async (account) => {
+      const source = page();
+      mocked.read.mockResolvedValue(
+        SharedStatementSchema.parse({
+          ...source,
+          account,
+          totals: {
+            ...source.totals,
+            balanceAmbiguous: true,
+            earnedPayable: null,
+            advance: 15000,
+          },
+        }),
+      );
+      render(<SharedStatementPage />);
+      await screen.findByText(
+        "পুরোনো চুক্তির ছাড় আর কাজের বিল আলাদা করে মেলানো বাকি। এখন বাকি বা জমার চূড়ান্ত অঙ্ক দেখানো হচ্ছে না।",
+      );
+      expect(screen.queryByText("৳200")).toBeNull();
+      expect(screen.queryByText("৳150")).toBeNull();
+      expect(screen.queryByText("বাকি নেই")).toBeNull();
+    },
+  );
   it("identifies the adjusted metric even when a public row has no description", async () => {
     const source = page();
     mocked.read.mockResolvedValue(

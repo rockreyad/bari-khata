@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  createMigrationReview,
+  type MigrationReview,
+} from "./migrationReview.js";
 import { contactPresetFrom } from "./contactTypes.js";
 import { preservesPaymentAllocationHistory } from "./partyLedger.js";
 import { LedgerSchema, type Account, type Ledger } from "./model.js";
@@ -126,6 +130,7 @@ export type ArchitectureMigrationReport = {
   duplicatePartyCandidates: string[][];
   ambiguousCashEntryIds: string[];
   unspecifiedIdentityPartyIds: string[];
+  review?: MigrationReview;
 };
 
 function duplicatePartyCandidates(ledger: Ledger) {
@@ -216,6 +221,7 @@ export function migrateArchitecture(value: unknown): {
       before,
       after,
       reconciled: true,
+      review: createMigrationReview(original),
       duplicatePartyCandidates: duplicatePartyCandidates(ledger),
       ambiguousCashEntryIds: ledger.entries
         .filter(

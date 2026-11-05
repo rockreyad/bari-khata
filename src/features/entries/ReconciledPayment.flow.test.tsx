@@ -99,6 +99,21 @@ function fixture() {
         allocations: [{ workId: "roof", amount: 210000 }],
         paymentParts: [{ amount: 210000 }],
       },
+      ...["door", "roof"].map((workId) => ({
+        id: `${workId}-earned`,
+        kind: "expense",
+        account: "labour",
+        contractId: `${workId}-job`,
+        personId: "worker",
+        lines: [
+          {
+            id: `${workId}-earned-line`,
+            workId,
+            costType: "labour",
+            amount: 200000,
+          },
+        ],
+      })),
     ],
   });
 }
@@ -112,15 +127,26 @@ it("keeps a professional's reconciled jobs separate from a custom partial labour
       ...job,
       total: [100000, 150000][index],
     })),
-    entries: source.entries.map((entry, index) => ({
-      ...entry,
-      allocations: [
-        { ...entry.allocations[0], amount: [110000, 160000][index] },
-      ],
-      paymentParts: [
-        { ...entry.paymentParts[0], amount: [110000, 160000][index] },
-      ],
-    })),
+    entries: source.entries.map((entry) => {
+      const index = entry.contractId === "door-job" ? 0 : 1;
+      return entry.kind === "payment"
+        ? {
+            ...entry,
+            allocations: [
+              { ...entry.allocations[0], amount: [110000, 160000][index] },
+            ],
+            paymentParts: [
+              { ...entry.paymentParts[0], amount: [110000, 160000][index] },
+            ],
+          }
+        : {
+            ...entry,
+            lines: entry.lines.map((line) => ({
+              ...line,
+              amount: [100000, 150000][index],
+            })),
+          };
+    }),
   });
   const adjusted = appendBalanceAdjustment(
     original,
@@ -185,13 +211,13 @@ it("keeps a professional's reconciled jobs separate from a custom partial labour
   );
   expect(partial.contracts).toEqual(original.contracts);
   expect(partial.people).toEqual(original.people);
-  expect(partial.entries).toHaveLength(5);
+  expect(partial.entries).toHaveLength(adjusted.entries.length + 2);
   expect(partial.paymentPurposes).toHaveLength(1);
   expect(partial.paymentPurposes[0]).toMatchObject({
     name: "নমুনা নকশা দেখা",
     account: "labour",
   });
-  const bill = partial.entries[3];
+  const bill = partial.entries[adjusted.entries.length];
   expect(bill).toMatchObject({
     kind: "expense",
     account: "labour",
@@ -206,14 +232,14 @@ it("keeps a professional's reconciled jobs separate from a custom partial labour
       },
     ],
   });
-  expect(partial.entries[4]).toMatchObject({
+  expect(partial.entries[adjusted.entries.length + 1]).toMatchObject({
     kind: "payment",
     relatedEntryId: bill.id,
     paymentPurposeId: partial.paymentPurposes[0].id,
     allocations: [{ workId: "roof", amount: 12000 }],
   });
   expect(contactSummary(partial, partial.people[0])).toMatchObject({
-    actualCost: 30000,
+    actualCost: 280000,
     actualPaid: 282000,
     reconciledNetPaid: 262000,
     reconciledPayable: 18000,
@@ -230,16 +256,17 @@ it("keeps a professional's reconciled jobs separate from a custom partial labour
   expect(
     (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
       .disabled,
-  ).toBe(true);
+  ).toBe(false);
   await user.selectOptions(screen.getByLabelText("কাজের খাতা"), "roof");
   await user.selectOptions(screen.getByLabelText("কাজ"), "");
   expect(
-    screen.getByText(
+    screen.queryByText(
       "কিছু মজুরির বিল কোন কাজের, তা মেলানো নেই। কাজ বেছে নিয়ে হিসাব দেখুন।",
     ),
-  ).toBeTruthy();
-  expect(view.container.querySelector(".entry-balance-preview")).toBeNull();
+  ).toBeNull();
+  expect(view.container.querySelector(".entry-balance-preview")).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "অগ্রিম" }));
+  await user.clear(screen.getByLabelText("কত টাকা"));
   await user.type(screen.getByLabelText("কত টাকা"), "180");
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(context.close).toHaveBeenCalledTimes(2));
@@ -252,9 +279,9 @@ it("keeps a professional's reconciled jobs separate from a custom partial labour
   );
   expect(
     settled.entries.filter((entry) => entry.kind === "expense"),
-  ).toHaveLength(1);
+  ).toHaveLength(3);
   expect(contactSummary(settled, settled.people[0])).toMatchObject({
-    actualCost: 30000,
+    actualCost: 280000,
     actualPaid: 300000,
     reconciledNetPaid: 280000,
     reconciledPayable: 0,
@@ -356,13 +383,17 @@ it.each([
     database.close();
     await database.open();
     const saved = (await repo.read())!.ledger;
-    expect(saved.entries.slice(0, 2)).toEqual(original.entries);
-    expect(saved.entries[2]).toEqual(correction);
-    expect(saved.entries).toHaveLength(cost ? 5 : 4);
+    expect(saved.entries.slice(0, original.entries.length)).toEqual(
+      original.entries,
+    );
+    expect(saved.entries[original.entries.length]).toEqual(correction);
+    expect(saved.entries).toHaveLength(
+      original.entries.length + (cost ? 3 : 2),
+    );
     expect(
       contactAccountSummary(saved, saved.people[0], "labour"),
     ).toMatchObject({
-      actualCost: cost,
+      actualCost: 400000 + cost,
       actualPaid: 440000,
       reconciledNetPaid: 410000,
       reconciledPayable: 0,
@@ -392,7 +423,7 @@ it.each([
   },
 );
 
-it("asks to choose a job when unlinked labour bills make the combined balance uncertain, while keeping payment available", async () => {
+it("keeps an unlinked earned bill known without treating an unearned agreement as another bill", async () => {
   const original = LedgerSchema.parse({
     works: [{ id: "work", name: "নমুনা কাজের খাতা" }],
     people: [{ id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" }],
@@ -456,24 +487,31 @@ it("asks to choose a job when unlinked labour bills make the combined balance un
   const notice =
     "কিছু মজুরির বিল কোন কাজের, তা মেলানো নেই। কাজ বেছে নিয়ে হিসাব দেখুন।";
   await user.selectOptions(screen.getByLabelText("কাজ"), "");
+  await user.click(screen.getByRole("button", { name: "অগ্রিম" }));
   await user.type(screen.getByLabelText("কত টাকা"), "100");
-  expect(screen.getByText(notice)).toBeTruthy();
-  expect(view.container.querySelector(".entry-balance-preview")).toBeNull();
+  expect(screen.queryByText(notice)).toBeNull();
+  expect(view.container.querySelector(".entry-balance-preview")).toBeTruthy();
+  expect(
+    view.container.querySelector(".entry-balance-result")?.textContent,
+  ).toBe("অগ্রিম থাকবে100");
   await user.selectOptions(screen.getByLabelText("কাজ"), "job");
   expect(screen.queryByText(notice)).toBeNull();
   expect(view.container.querySelector(".entry-contract-progress")).toBeTruthy();
   await user.selectOptions(screen.getByLabelText("কাজ"), "");
-  expect(screen.getByText(notice)).toBeTruthy();
+  expect(screen.queryByText(notice)).toBeNull();
+  await user.click(screen.getByRole("button", { name: "অগ্রিম" }));
   expect(
     (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
       .disabled,
-  ).toBe(true);
-  await user.click(screen.getByRole("button", { name: "অগ্রিম" }));
+  ).toBe(false);
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(context.close).toHaveBeenCalledOnce());
   const saved = (await repo.read())!.ledger;
   expect(saved.entries.slice(0, 3)).toEqual(adjusted.entries);
   expect(saved.entries).toHaveLength(4);
+  expect(contactAccountSummary(saved, saved.people[0], "labour")).toMatchObject(
+    { actualCost: 100000, reconciledPayable: 0, reconciledAdvance: 10000 },
+  );
   expect(saved.entries.at(-1)).toMatchObject({
     kind: "payment",
     contractId: null,

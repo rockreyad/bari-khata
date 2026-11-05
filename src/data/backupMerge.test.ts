@@ -361,6 +361,7 @@ describe("reviewed backup merging", () => {
       ),
     ).toEqual(new Uint8Array([1, 2, 3, 4]));
     const corrupt = JSON.parse(backup);
+    delete corrupt.integrity;
     corrupt.receipts[0].base64 = "BAQDBA==";
     const saved = (await repo.read())!;
     await expect(

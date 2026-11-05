@@ -267,8 +267,11 @@ export function ContractCard({
 }) {
   const { t, money, date, formatDigits } = useLanguageContext();
   const summary = contractSummary(ledger, contract.id);
-  const extra = Math.max(summary.netPaid - contract.total, 0);
-  if (!Number.isSafeInteger(summary.remaining) || !Number.isSafeInteger(extra))
+  const extra = summary.advance;
+  if (
+    !summary.balanceAmbiguous &&
+    (!Number.isSafeInteger(summary.remaining) || !Number.isSafeInteger(extra))
+  )
     return (
       <p className="form-error" role="alert">
         {t("টাকার অঙ্ক বেশি হয়েছে।")}
@@ -313,15 +316,23 @@ export function ContractCard({
         </div>
         <div
           className={
-            summary.remaining > 0 ? "job-detail-due" : "job-detail-settled"
+            summary.balanceAmbiguous
+              ? "job-detail-review"
+              : summary.remaining > 0
+                ? "job-detail-due"
+                : "job-detail-settled"
           }
         >
           <dt>{t("বাকি")}</dt>
-          <dd>{money(summary.remaining)}</dd>
+          <dd>
+            {summary.balanceAmbiguous
+              ? t("বাকি মেলানো বাকি")
+              : money(summary.remaining)}
+          </dd>
         </div>
-        {extra > 0 ? (
+        {!summary.balanceAmbiguous && extra > 0 ? (
           <div className="job-extra-paid">
-            <dt>{t("বেশি দিয়েছি")}</dt>
+            <dt>{t("আগে দেওয়া টাকা")}</dt>
             <dd>{money(extra)}</dd>
           </div>
         ) : null}

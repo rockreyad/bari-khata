@@ -1,6 +1,7 @@
 import type { Account, Entry, Ledger } from "./model.js";
 import { effectiveAccounts } from "./effectiveAccounts.js";
 import { cashObligationParts } from "./cashObligations.js";
+import { unresolvedContractAdjustmentIds } from "./contractObligations.js";
 
 export type AdjustmentBasis = "paid" | "cost" | "balance";
 export type FinancialScope = {
@@ -34,8 +35,14 @@ type Bucket = {
   adjustment: bigint;
 };
 
-function computeReconciliation(ledger: Ledger, scope: FinancialScope = {}) {
+function computeReconciliation(
+  ledger: Ledger,
+  scope: FinancialScope = {},
+  includeUnearnedCommitments = false,
+) {
   const accounts = effectiveAccounts(ledger);
+  const unresolved = unresolvedContractAdjustmentIds(ledger);
+  const unresolvedInScope: string[] = [];
   const buckets = new Map<string, Bucket>();
   const key = (party: string, account: Account, contractId: string | null) =>
     JSON.stringify([party, account, contractId]);
@@ -113,15 +120,17 @@ function computeReconciliation(ledger: Ledger, scope: FinancialScope = {}) {
   );
   for (const job of jobs.values()) bucket(job.personId, "labour", job.id);
   const jobPeople = new Set([...jobs.values()].map((job) => job.personId));
-  const balanceAmbiguous = [...buckets.values()].some(
-    (row) =>
-      row.account === "labour" &&
-      !row.contractId &&
-      row.cost - row.paid + row.refunds > 0n &&
-      (row.party.startsWith("anonymous:")
-        ? jobs.size > 0
-        : jobPeople.has(row.party)),
-  );
+  const balanceAmbiguous =
+    includeUnearnedCommitments &&
+    [...buckets.values()].some(
+      (row) =>
+        row.account === "labour" &&
+        !row.contractId &&
+        row.cost - row.paid + row.refunds > 0n &&
+        (row.party.startsWith("anonymous:")
+          ? jobs.size > 0
+          : jobPeople.has(row.party)),
+    );
   let costCorrection = 0n,
     paidCorrection = 0n,
     balanceCorrection = 0n,
@@ -141,6 +150,10 @@ function computeReconciliation(ledger: Ledger, scope: FinancialScope = {}) {
     if (scope.account && change.account !== scope.account) continue;
     if (scope.contractId && entry.contractId !== scope.contractId) continue;
     if (scope.workId && change.workId !== scope.workId) continue;
+    if (!includeUnearnedCommitments && unresolved.has(entry.id)) {
+      unresolvedInScope.push(entry.id);
+      continue;
+    }
     const delta = BigInt(change.delta),
       owed = BigInt(adjustmentBalanceDelta(entry));
     if (change.basis === "cost") costCorrection += delta;
@@ -171,7 +184,11 @@ function computeReconciliation(ledger: Ledger, scope: FinancialScope = {}) {
     const job = row.contractId ? jobs.get(row.contractId) : null;
     const agreed = BigInt(job?.total ?? 0);
     const base =
-      (job && agreed > row.cost ? agreed : row.cost) - row.paid + row.refunds;
+      (includeUnearnedCommitments && job && agreed > row.cost
+        ? agreed
+        : row.cost) -
+      row.paid +
+      row.refunds;
     grossPayable += positive(base);
     grossAdvance += positive(-base);
     const adjusted = base + row.adjustment;
@@ -231,7 +248,8 @@ function computeReconciliation(ledger: Ledger, scope: FinancialScope = {}) {
       ...(Object.fromEntries(
         Object.entries(result).map(([name, value]) => [name, exact(value)]),
       ) as { [K in keyof typeof result]: number }),
-      balanceAmbiguous,
+      balanceAmbiguous: balanceAmbiguous || unresolvedInScope.length > 0,
+      unresolvedAdjustmentIds: unresolvedInScope,
     },
     payableGroups,
   };
@@ -239,6 +257,13 @@ function computeReconciliation(ledger: Ledger, scope: FinancialScope = {}) {
 
 export function reconciledTotals(ledger: Ledger, scope: FinancialScope = {}) {
   return computeReconciliation(ledger, scope).totals;
+}
+
+export function legacyCommitmentTotals(
+  ledger: Ledger,
+  scope: FinancialScope = {},
+) {
+  return computeReconciliation(ledger, scope, true).totals;
 }
 
 export function reconciledPayableGroups(ledger: Ledger) {

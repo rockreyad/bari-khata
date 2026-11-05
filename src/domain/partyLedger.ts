@@ -39,8 +39,9 @@ export function partyLedger(
     (entry) => !entry.voided && entry.balanceImpact === "normal",
   );
   const activeIds = new Set(active.map((entry) => entry.id));
+  const entryIds = new Set(entries.map((entry) => entry.id));
   const allocationHistory = (ledger.paymentAllocations ?? []).filter(
-    (allocation) => entries.some((entry) => entry.id === allocation.paymentId),
+    (allocation) => entryIds.has(allocation.paymentId),
   );
   const allocations = allocationHistory.filter(
     (allocation) =>
@@ -232,6 +233,9 @@ export function partyLedger(
       (allocation) => allocation.cancelledAt,
     ),
     payable: totals.reconciledPayable,
+    earnedPayable: totals.balanceAmbiguous ? null : totals.reconciledPayable,
+    balanceAmbiguous: totals.balanceAmbiguous,
+    unresolvedAdjustmentIds: totals.unresolvedAdjustmentIds,
     billOutstanding: bills.reduce((sum, bill) => sum + bill.outstanding, 0),
     allocated: allocations.reduce(
       (sum, allocation) => sum + allocation.amount,

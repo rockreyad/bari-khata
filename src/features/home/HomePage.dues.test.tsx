@@ -160,8 +160,8 @@ function mount(
 }
 
 it.each([
-  ["bn", "দিতে বাকি", "কোথায় কত বাকি", "৳\u202f৩৪০", "এক নজরে"],
-  ["en", "Amount owed", "Where money is owed", "৳\u202f340", "Overview"],
+  ["bn", "দিতে বাকি", "কোথায় কত বাকি", "৳\u202f১৪০", "এক নজরে"],
+  ["en", "Amount owed", "Where money is owed", "৳\u202f140", "Overview"],
 ] as const)(
   "opens the complete %s due page and returns home with its back button",
   async (language, dueLabel, title, total, backLabel) => {
@@ -178,15 +178,14 @@ it.each([
     const page = screen.getByRole("region", { name: title });
     expect(page.querySelector(".home-dues-total dd")?.textContent).toBe(total);
     const rows = [...page.querySelectorAll(".home-dues-row")];
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(2);
     expect(
       rows.map(
         (row) => row.querySelector(".home-dues-copy strong")?.textContent,
       ),
-    ).toEqual(["নমুনা মিস্ত্রি", "নমুনা দোকান", "সিমেন্ট"]);
-    expect(rows[0].textContent).toContain("টাইলসের কাজ");
-    expect(rows[1].textContent).toContain("ছাদের কাজ");
-    expect(rows[2].textContent).toContain(
+    ).toEqual(["নমুনা দোকান", "সিমেন্ট"]);
+    expect(rows[0].textContent).toContain("ছাদের কাজ");
+    expect(rows[1].textContent).toContain(
       language === "bn" ? "নাম দেওয়া নেই" : "Name unknown",
     );
     expect(screen.getByTestId("route").textContent).toBe("/dues");
@@ -260,14 +259,10 @@ it.each(["", "/sample"])(
   },
 );
 
-it("opens a commitment-only owner in the labour account instead of an empty history", async () => {
-  const user = userEvent.setup();
+it("does not list an unearned agreement as a current due", () => {
   const ledger = fixture();
-  ledger.people.find((person) => person.id === "worker")!.kind = "other";
   mount(ledger, "bn", "/dues");
-  await user.click(screen.getByRole("button", { name: /নমুনা মিস্ত্রি/ }));
-  expect(state.go).toHaveBeenLastCalledWith("/people/worker?account=labour");
-  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByRole("button", { name: /নমুনা মিস্ত্রি/ })).toBeNull();
 });
 
 it("keeps the due page and pagination beneath an unnamed bill detail", async () => {

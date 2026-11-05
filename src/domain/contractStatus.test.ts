@@ -57,7 +57,10 @@ describe("independent job progress", () => {
     expect(paid.contracts[0].status).toBeNull();
     const done = change(ledger, "done", "কাজ শেষ হয়েছে");
     expect(done.contracts[0].status).toBe("done");
-    expect(contractSummary(done, "job").remaining).toBe(150000);
+    expect(contractSummary(done, "job")).toMatchObject({
+      remaining: 0,
+      remainingCommitment: 150000,
+    });
     expect(done.entries).toEqual(ledger.entries);
     expect(summarize(done)).toMatchObject({ cost: 100000, netPaid: 150000 });
     expect(change(paid, "planned").contracts[0].status).toBe("planned");

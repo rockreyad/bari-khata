@@ -1,4 +1,63 @@
 export const architectureEnglish: Record<string, string> = {
+  "আগের অগ্রিম বদলেছে। নতুন প্রস্তাব দেখে আবার বেছে নিন।":
+    "The earlier advance has changed. Review the new proposal and choose again.",
+  "অগ্রিম না লাগিয়ে রাখি": "Continue without using an advance",
+  "নতুন লেখা খোলা যায়নি। আগের লেখা অক্ষত আছে; আবার চেষ্টা করুন।":
+    "A new draft could not be opened. The earlier record is intact; try again.",
+  "এই হিসাব আগেই রাখা হয়েছে।": "This record has already been saved.",
+  "অসমাপ্ত লেখার কপি আবার খুলেছে। একই টাকা দ্বিতীয়বার রাখা হবে না।":
+    "An older draft has reopened. The same money will not be recorded twice.",
+  "রাখা হিসাবটি দেখি": "View the saved record",
+  "নতুন হিসাব লিখি": "Start a new record",
+  "আগের তথ্য দেখে নিতে হবে": "Earlier records need review",
+  "বাকি এখনও পরিষ্কার নয়": "The balance needs review",
+  "আগের হিসাব দেখে নিই": "Review earlier records",
+  "পুরোনো হিসাব দেখে বাকি ঠিক করি":
+    "Review earlier records to establish the balance",
+  "পুরোনো হিসাব যাচাই": "Review earlier accounts",
+  "আগের লেখা অক্ষত রেখে নতুন বাকি বুঝে নিই":
+    "Understand the current balance while keeping the earlier records",
+  বাড়ি: "Home",
+  লিখি: "Write",
+  "বাড়ির হিসাব": "House accounts",
+  "বাড়ির মোট হিসাব": "House totals",
+  "এ পর্যন্ত খরচ": "Cost so far",
+  "খরচ দেখি": "View costs",
+  "ফেরত পাওয়া টাকা বাদে": "After money returned",
+  "কাকে কত, দেখে নিই": "See who needs paying",
+  "আগে দিয়ে রেখেছি {{amount}}": "Paid ahead: {{amount}}",
+  "এখন কী লিখবেন?": "What would you like to record?",
+  "মালের দাম আর দেওয়া টাকা": "The purchase price and money paid",
+  "যতটুকু কাজ হয়েছে, তার টাকা": "The amount for work completed",
+  "বাকি মেটানো বা আগাম দেওয়া": "Settle a due or pay ahead",
+  "প্রথম মাল কেনা বা টাকা দেওয়া লিখে শুরু করুন।":
+    "Start with your first purchase or payment.",
+  "যে কাজগুলো চলছে": "Work in progress",
+  "{{count}}টি লেখায় তথ্য যোগ করা বাকি":
+    "Details are missing from {{count}} records",
+  "সময় হলে দেখে নিই": "Review them when you have time",
+  "পুরোনো খাতার খরচ রাখা আছে। সেই সময়ের দেওয়া আর বাকি টাকা পুরো জানা নেই।":
+    "Earlier recorded costs are included. Their payments and balances are not fully known.",
+  "এখনকার হিসাব": "Current account",
+  "এখনও হিসাব লেখা হয়নি": "No records yet",
+  "জমা আছে": "Credit held",
+  "ফেরত পাব": "To receive back",
+  "মাল ও কাজ হয়েছে": "Goods and work received",
+  "এই নামের শেষ ৫টি লেখা": "The latest five records for this contact",
+  "মাল কেনা, কাজের বিল বা টাকা দেওয়া এখান থেকেই লিখুন।":
+    "Record purchases, work completed or payments here.",
+  "কাজের দর": "Agreed work prices",
+  "ঠিক করা দর": "Agreed price",
+  "কাজের দর ঠিক করা থাকলে রাখি": "Keep an agreed work price",
+  "আগের সব হিসাব": "All past records",
+  "তারিখ, নাম বা কাজ দিয়ে খুঁজে দেখুন": "Search by date, contact or work",
+  "খরচের রিপোর্ট": "Cost reports",
+  "মাল, কাজ আর মাস অনুযায়ী হিসাব": "By material, work and month",
+  "খাতার সেটিংস": "Notebook settings",
+  "ব্যাকআপ, ভাষা আর নিজের পছন্দ": "Backups, language and preferences",
+  "পুরোনো লেখা দেখি, খাতার যত্ন নিই।":
+    "Find past records and look after your notebook.",
+
   "যাচাই বাকি বিল আগে দেখে নিন, তারপর টাকার সঙ্গে মেলান।":
     "Review unconfirmed bills before allocating payments to them.",
   "টাকা কীভাবে মিটবে": "How will this money be settled?",

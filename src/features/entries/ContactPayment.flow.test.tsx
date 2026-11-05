@@ -244,7 +244,7 @@ it.each([
       </MemoryRouter>,
     );
     expect(
-      profile.container.querySelector(".contact-summary-hero")?.textContent,
+      profile.container.querySelector(".person-now-card")?.textContent,
     ).toContain(`৳${(paid + 10000) / 100}`);
     expect(profile.container.textContent).toContain("নমুনা মাল নামানো");
     const history = profile.container.querySelector(".contact-history")!;

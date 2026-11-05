@@ -1,417 +1,232 @@
-.home-overview {
-  display: grid;
-  gap: 18px;
-  min-width: 0;
+.house-home {
+  max-width: 900px;
+  margin-inline: auto;
+  gap: 27px;
 }
 .home-overview-heading {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 20px;
-}
-.home-overview-heading > div {
-  min-width: 0;
+  align-items: center;
+  gap: 18px;
 }
 .home-overview-project {
-  margin-bottom: 4px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
+  margin-bottom: 5px;
   overflow-wrap: anywhere;
 }
 .home-overview-heading h1 {
   font-size: 28px;
   font-weight: 650;
-  line-height: 1.35;
 }
 .home-overview-search {
   display: grid;
-  place-items: center;
   flex: none;
-  width: 44px;
-  height: 44px;
+  place-items: center;
+  width: 45px;
+  height: 45px;
   padding: 0;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 15px;
   background: var(--surface);
-  color: var(--muted);
+  color: var(--text);
 }
-.home-overview-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  min-width: 0;
+.house-overview {
+  overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 24px;
+  border-radius: 25px;
   background: var(--surface);
 }
-.home-overview-balance {
-  min-width: 0;
-  padding: 24px 24px 0;
-}
-.home-overview-balance-heading {
+.house-cost {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0 16px;
-  min-width: 0;
+  gap: 9px;
+  padding: 27px 26px 24px;
 }
-.home-overview-paid,
-.home-overview-paid dd,
-.home-overview-due {
-  margin: 0;
-}
-.home-overview-paid,
-.home-overview-paid-total {
-  display: contents;
-}
-.home-overview-paid-total > dt {
-  grid-column: 1;
-  grid-row: 1;
-  color: var(--muted);
+.house-cost > span {
   font-size: 13px;
-  font-weight: 500;
+  color: var(--muted);
 }
-.home-overview-paid-total > dd {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  min-width: 0;
+.house-cost > strong {
   max-width: 100%;
-  overflow-wrap: anywhere;
-  color: var(--text);
-  font-size: 42px;
+  font-size: clamp(32px, 7vw, 47px);
   font-weight: 650;
-  letter-spacing: normal;
-  line-height: 1.3;
-  white-space: normal;
+  line-height: 1.35;
   font-variant-numeric: tabular-nums;
-}
-.home-overview-paid-total > .home-overview-long-amount {
-  font-size: clamp(18px, 5.5vw, 30px);
-}
-.home-overview-refund-note {
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
-.home-overview-correction {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
-.home-overview-correction dd {
   overflow-wrap: anywhere;
 }
-.home-overview-report {
-  grid-column: 2;
-  grid-row: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
+.house-cost .text-button {
+  position: absolute;
+  right: 22px;
+  top: 17px;
   min-height: 44px;
-  margin-right: -4px;
-  padding: 0 4px 0 8px;
-  border-radius: 8px;
-  color: var(--accent-strong);
   font-size: 12px;
-  font-weight: 550;
-  white-space: nowrap;
 }
-.home-overview-due {
+.house-money-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 16px;
-  align-items: baseline;
-  gap: 12px;
-  width: 100%;
-  min-height: 44px;
-  margin-top: 18px;
-  padding: 14px 0 4px;
+  grid-template-columns: 1fr 1fr;
   border-top: 1px solid var(--line);
-  border-radius: 0;
-  text-align: left;
 }
-.home-overview-due > span {
-  color: var(--muted);
-  font-size: 12px;
-}
-.home-overview-due > strong {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--text);
-  font-size: 18px;
-  font-weight: 550;
-  line-height: 1.45;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.home-overview-due > svg {
-  align-self: center;
-  color: var(--muted);
-}
-.home-overview-actions {
+.house-money-row > button {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-content: center;
-  gap: 10px;
+  gap: 7px;
+  align-content: start;
   min-width: 0;
-  padding: 22px 24px;
-}
-.home-overview-actions > button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-width: 0;
-  min-height: 48px;
-  padding: 11px 14px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
+  width: auto;
+  margin: 0;
+  padding: 21px 25px;
+  border: 0;
+  border-radius: 0;
+  text-align: start;
   background: var(--surface);
-  color: var(--text);
-  font-size: 14px;
+}
+.house-money-row > button + button {
+  border-left: 1px solid var(--line);
+}
+.house-money-row span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.house-money-row strong {
+  font-size: clamp(20px, 5vw, 28px);
   font-weight: 600;
-  line-height: 1.5;
-}
-.home-overview-actions > .home-overview-add {
-  border-color: var(--accent-strong);
-  background: var(--accent-strong);
-  color: var(--primary-ink);
-}
-.home-overview-details {
-  grid-column: 1 / -1;
-  min-width: 0;
-  border-top: 1px solid var(--line);
-}
-.home-overview-details > summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 48px;
-  padding: 11px 24px;
-  border-radius: 0 0 24px 24px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  list-style: none;
-}
-.home-overview-details > summary::-webkit-details-marker {
-  display: none;
-}
-.home-overview-details > summary::marker {
-  content: "";
-}
-.home-overview-details > summary > svg {
-  flex: none;
-  transition: transform 160ms ease;
-}
-.home-overview-details[open] > summary {
-  border-radius: 0;
-  color: var(--accent-strong);
-}
-.home-overview-details[open] > summary > svg {
-  transform: rotate(180deg);
-}
-.home-overview-cash-note {
-  padding: 0 24px 8px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.7;
-}
-.home-overview-breakdown {
-  display: grid;
-  min-width: 0;
-  padding: 0 24px 12px;
-}
-.home-overview-breakdown > button {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 15px;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-width: 0;
-  min-height: 48px;
-  padding: 12px 0;
-  border-radius: 8px;
-  color: var(--text);
-  text-align: left;
-}
-.home-overview-breakdown > button + button {
-  border-top: 1px solid var(--line);
-}
-.home-overview-category {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-.home-overview-category > svg,
-.home-overview-breakdown > button > svg {
-  flex: none;
-  color: var(--muted);
-}
-.home-overview-breakdown > button > strong {
-  max-width: 100%;
+  line-height: 1.4;
   overflow-wrap: anywhere;
-  font-size: 15px;
-  font-weight: 550;
-  letter-spacing: normal;
-  line-height: 1.5;
-  text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.home-v3 :is(button, summary):focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+.house-money-row small {
+  font-size: 10px;
+  color: var(--muted);
 }
-.home-overview-details > summary:focus-visible {
-  outline-offset: -4px;
+.house-money-row .home-overview-due strong {
+  color: var(--due);
 }
-.home-v3 .section-heading > .text-button {
-  min-width: 44px;
-  min-height: 44px;
-  padding-inline: 4px;
-  border-radius: 8px;
+.house-credit-note {
+  padding: 12px 25px;
+  border-top: 1px solid var(--line);
+  color: var(--accent-strong);
+  font-size: 12px;
 }
-.home-overview-search:active,
-.home-overview-report:active,
-.home-overview-due:active,
-.home-overview-details > summary:active,
-.home-overview-breakdown > button:active,
-.home-overview-actions > .home-overview-pay:active,
-.home-v3 .section-heading > .text-button:active {
+.house-home .section-heading {
+  margin-bottom: 13px;
+}
+.house-home .section-heading h2 {
+  font-size: 17px;
+  font-weight: 600;
+}
+.house-home .section-heading .text-button {
+  font-size: 12px;
+  min-height: 40px;
+}
+.house-write-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 11px;
+}
+.house-write-actions > button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 17px 8px;
+  padding: 19px;
+  border: 1px solid var(--line);
+  border-radius: 19px;
+  background: var(--surface);
+  text-align: start;
+}
+.house-action-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
   background: var(--accent-soft);
   color: var(--accent-strong);
 }
-.home-overview-actions > .home-overview-add:active {
-  border-color: var(--accent);
-  background: var(--accent);
+.house-write-actions > button > span:nth-child(2) {
+  grid-row: 2;
+  grid-column: 1 / -1;
 }
-@media (hover: hover) and (pointer: fine) {
-  .home-overview-search:hover,
-  .home-overview-report:hover,
-  .home-overview-due:hover,
-  .home-overview-details > summary:hover,
-  .home-overview-breakdown > button:hover,
-  .home-overview-actions > .home-overview-pay:hover {
+.house-write-actions strong,
+.house-write-actions small {
+  display: block;
+}
+.house-write-actions strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.house-write-actions small {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.house-write-actions > button > svg {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--muted);
+}
+.house-first-entry {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 25px 15px;
+  color: var(--muted);
+  text-align: center;
+}
+.house-first-entry p,
+.house-history-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.house-history-note {
+  padding-inline: 4px;
+}
+.house-home :is(button, summary):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+@media (hover: hover) {
+  .house-write-actions > button:hover,
+  .house-money-row > button:hover {
     background: var(--surface-muted);
-    color: var(--accent-strong);
-  }
-  .home-overview-actions > .home-overview-add:hover {
-    border-color: var(--accent);
-    background: var(--accent);
   }
 }
-@media (min-width: 1000px) {
-  .home-overview-card {
-    grid-template-columns: minmax(0, 1fr) 210px;
-  }
-  .home-overview-balance {
-    padding: 24px 28px 26px;
-  }
-  .home-overview-paid-total > dd {
-    font-size: 46px;
-  }
-  .home-overview-actions {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
-    padding: 28px 24px 28px 0;
-  }
-  .home-overview-details > summary {
-    padding-right: 28px;
-    padding-left: 28px;
-  }
-  .home-overview-breakdown {
-    padding-right: 28px;
-    padding-left: 28px;
-  }
-  .home-overview-cash-note {
-    padding-right: 28px;
-    padding-left: 28px;
-  }
-}
-@media (max-width: 760px) {
-  .home-overview {
-    gap: 16px;
-  }
-  .home-overview-heading {
-    gap: 16px;
+@media (max-width: 540px) {
+  .house-home {
+    gap: 24px;
   }
   .home-overview-heading h1 {
     font-size: 25px;
   }
-  .home-overview-project {
-    font-size: 12px;
+  .house-cost {
+    padding: 23px 21px;
   }
-  .home-overview-balance {
-    padding: 18px 20px 0;
+  .house-cost .text-button {
+    right: 18px;
+    top: 13px;
   }
-  .home-overview-balance-heading {
-    column-gap: 10px;
+  .house-money-row > button {
+    padding: 18px 20px;
   }
-  .home-overview-paid-total > dd {
-    font-size: 38px;
+  .house-write-actions {
+    grid-template-columns: 1fr;
+    gap: 9px;
   }
-  .home-overview-actions {
-    padding: 20px;
+  .house-write-actions > button {
+    grid-template-columns: 44px minmax(0, 1fr) 18px;
+    gap: 13px;
+    padding: 15px 17px;
   }
-  .home-overview-details > summary {
-    padding-right: 20px;
-    padding-left: 20px;
+  .house-write-actions > button > span:nth-child(2) {
+    grid-column: 2;
+    grid-row: 1;
   }
-  .home-overview-breakdown {
-    padding-right: 20px;
-    padding-left: 20px;
+  .house-write-actions > button > svg {
+    grid-column: 3;
   }
-  .home-overview-cash-note {
-    padding-right: 20px;
-    padding-left: 20px;
-  }
-}
-@media (max-width: 370px) {
-  .home-overview-balance {
-    padding-right: 16px;
-    padding-left: 16px;
-  }
-  .home-overview-paid-total > dd {
-    font-size: 34px;
-  }
-  .home-overview-actions {
-    gap: 8px;
-    padding-right: 16px;
-    padding-left: 16px;
-  }
-  .home-overview-actions > button {
-    gap: 6px;
-    padding-right: 8px;
-    padding-left: 8px;
-    font-size: 13px;
-  }
-  .home-overview-details > summary,
-  .home-overview-breakdown,
-  .home-overview-cash-note {
-    padding-right: 16px;
-    padding-left: 16px;
-  }
-  .home-overview-breakdown > button {
-    gap: 8px;
-  }
-  .home-overview-category {
-    gap: 7px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .home-overview-details > summary > svg {
-    transition: none;
+  .house-write-actions small {
+    margin-top: 3px;
   }
 }

@@ -169,7 +169,7 @@ describe("explicit non-cash balance adjustments", () => {
       paid: 4000,
       refunds: 0,
       payable: 6000,
-      reconciledPayable: 38000,
+      reconciledPayable: 3000,
       adjustment: -3000,
     });
     expect(cashSummary(next)).toEqual(cashSummary(original));
@@ -186,7 +186,7 @@ describe("explicit non-cash balance adjustments", () => {
       paid: 0,
       refunds: 0,
       payable: 0,
-      reconciledPayable: 43000,
+      reconciledPayable: 8000,
       advance: 0,
     });
     ledger = save(ledger, -2000, {
@@ -232,13 +232,13 @@ describe("explicit non-cash balance adjustments", () => {
     expect(readBalanceAdjustmentScope(next, scope).balance).toBe(7000);
     expect(summarize(next, "one")).toMatchObject({
       payable: 6000,
-      reconciledPayable: 12000,
+      reconciledPayable: 2000,
       cost: 10000,
       paid: 4000,
     });
     expect(workBalances(next, "one")).toMatchObject({
       billPayable: 6000,
-      reconciledPayable: 12000,
+      reconciledPayable: 2000,
       netPaid: 4000,
     });
     expect(entryWorkIds(next.entries.at(-1)!)).toEqual(["one"]);
@@ -267,7 +267,7 @@ describe("explicit non-cash balance adjustments", () => {
         account: "labour",
         contractId: "job",
       }).balance,
-    ).toBe(10000);
+    ).toBe(0);
   });
   it("rejects a stale balance and leaves both the original and concurrently updated ledger intact", () => {
     const original = fixture(),
@@ -318,7 +318,9 @@ describe("explicit non-cash balance adjustments", () => {
     expect(archived.entries).toEqual(original.entries);
   });
   it("guards an explicitly selected archived job or scoped notebook but preserves historical adjustments", () => {
-    const original = fixture([]);
+    const original = fixture([
+      bill("earned", 10000, "worker", "labour", "one", "job"),
+    ]);
     const input = {
       target: "person" as const,
       basis: "balance" as const,
@@ -391,38 +393,40 @@ describe("explicit non-cash balance adjustments", () => {
       ledger,
       {
         ...jobScope,
-        expectedBefore: 5500,
-        after: 3000,
+        expectedBefore: 1500,
+        after: 500,
         reason: "বাকি মজুরি মিলিয়েছি",
       },
       at,
     );
     expect(next.entries.at(-1)?.adjustment?.workId).toBe("one");
     expect(readBalanceAdjustmentScope(next, jobScope)).toMatchObject({
-      balance: 3000,
+      balance: 500,
       agreed: 10000,
       paid: 4500,
       cost: 6000,
-      adjustment: -2500,
+      adjustment: -1000,
     });
     expect(contractSummary(next, "job")).toMatchObject({
-      remaining: 3000,
+      remaining: 500,
+      remainingCommitment: 4500,
       agreed: 10000,
       netPaid: 4500,
-      adjustment: -2500,
+      adjustment: -1000,
     });
     expect(jobBalances(next).get("job")).toMatchObject({
-      remaining: 3000,
+      remaining: 500,
       netPaid: 4500,
       state: "due",
     });
     expect(jobBalances(next).get("second-job")).toMatchObject({
-      remaining: 5000,
+      remaining: 0,
+      remainingCommitment: 5000,
     });
     expect(workBalances(next, "one")).toMatchObject({
-      billPayable: 0,
-      scopedOutstanding: 3000,
-      workCommitmentOutstanding: 3000,
+      billPayable: 500,
+      scopedOutstanding: 4500,
+      workCommitmentOutstanding: 4500,
     });
     expect(next.contracts).toEqual(ledger.contracts);
     expect(cashSummary(next)).toEqual(cashSummary(ledger));
@@ -454,7 +458,9 @@ describe("explicit non-cash balance adjustments", () => {
   });
   it("keeps whole-house adjustments global and never allocates them to notebooks", () => {
     const next = appendBalanceAdjustment(
-      fixture([]),
+      fixture([
+        bill("house-earned", 20000, "worker", "labour", "one", "house"),
+      ]),
       {
         personId: "worker",
         account: "labour",
@@ -533,7 +539,10 @@ describe("explicit non-cash balance adjustments", () => {
   it("keeps a safe final balance exact even when intermediate contract arithmetic exceeds the safe range", () => {
     const maximum = Number.MAX_SAFE_INTEGER;
     const ledger = LedgerSchema.parse({
-      ...fixture([payment("tiny", 2, "worker", "labour", "one", "job")]),
+      ...fixture([
+        bill("earned", maximum - 4, "worker", "labour", "one", "job"),
+        payment("tiny", 2, "worker", "labour", "one", "job"),
+      ]),
       contracts: [
         { id: "job", personId: "worker", workId: "one", total: maximum },
       ],
@@ -544,8 +553,8 @@ describe("explicit non-cash balance adjustments", () => {
         personId: "worker",
         account: "labour",
         contractId: "job",
-        expectedBefore: maximum - 2,
-        after: maximum,
+        expectedBefore: maximum - 6,
+        after: maximum - 4,
         reason: "দুই পয়সা মিলিয়েছি",
       },
       at,
@@ -556,11 +565,12 @@ describe("explicit non-cash balance adjustments", () => {
         account: "labour",
         contractId: "job",
       }).balance,
-    ).toBe(maximum);
-    expect(contractSummary(next, "job").remaining).toBe(maximum);
+    ).toBe(maximum - 4);
+    expect(contractSummary(next, "job").remaining).toBe(maximum - 4);
+    expect(contractSummary(next, "job").remainingCommitment).toBe(maximum);
     expect(jobBalances(next).get("job")).toMatchObject({
       valid: true,
-      remaining: maximum,
+      remaining: maximum - 4,
     });
     expect(() =>
       save(fixture([]), maximum, { expectedBefore: -maximum }),
@@ -762,7 +772,7 @@ describe("targeted total correction bases", () => {
       reconciledNetPaid: 6000,
       paidCorrection: 2000,
       owedCorrection: -2000,
-      reconciledPayable: 16000,
+      reconciledPayable: 6000,
       unallocatedWorkOwedCorrection: -2000,
     });
     expect(readTyped(next, { ...work, basis: "paid" }).value).toBe(6000);
@@ -792,7 +802,7 @@ describe("targeted total correction bases", () => {
       actualNetPaid: 4000,
       costCorrection: 3000,
       owedCorrection: 3000,
-      reconciledPayable: 16000,
+      reconciledPayable: 6000,
       unallocatedWorkOwedCorrection: 3000,
     });
     expect(summarize(next)).toMatchObject({
@@ -828,8 +838,8 @@ describe("targeted total correction bases", () => {
     );
     expect(readTyped(next, target)).toMatchObject({
       value: 5500,
-      grossPayable: 30500,
-      reconciledPayable: 29500,
+      grossPayable: 1500,
+      reconciledPayable: 500,
     });
     expect(jobBalances(next)).toEqual(jobBalances(original));
     expect(next.contracts).toEqual(original.contracts);
@@ -837,13 +847,13 @@ describe("targeted total correction bases", () => {
     expect(personSummary(next, "worker")).toMatchObject({
       netPaid: 4500,
       reconciledNetPaid: 5500,
-      reconciledPayable: 29500,
+      reconciledPayable: 500,
       advance: 0,
     });
   });
   it("does not turn a job discount into a false advance when the agreement is still owed", () => {
     const next = appendTyped(
-      fixture([]),
+      fixture([bill("earned", 10000, "worker", "labour", "one", "job")]),
       {
         target: "person",
         basis: "balance",
@@ -863,10 +873,10 @@ describe("targeted total correction bases", () => {
       advance: 0,
     });
     expect(personSummary(next, "worker")).toMatchObject({
-      cost: 0,
+      cost: 10000,
       netPaid: 0,
       advance: 0,
-      reconciledPayable: 33000,
+      reconciledPayable: 8000,
       reconciledAdvance: 0,
     });
   });
@@ -1129,11 +1139,9 @@ describe("targeted total correction bases", () => {
       );
     },
   );
-  it("rejects an ambiguous debt baseline but still permits exact paid or cost totals", () => {
+  it("reads earned debt independently of optional unearned agreements", () => {
     const original = fixture([bill("loose-wages", 6000, "worker", "labour")]);
-    expect(() => readTyped(original, { ...work, basis: "balance" })).toThrow(
-      "balance_adjustment_ambiguous",
-    );
+    expect(readTyped(original, { ...work, basis: "balance" }).value).toBe(6000);
     expect(readTyped(original, { ...work, basis: "cost" }).value).toBe(6000);
     const next = appendTyped(
       original,
@@ -1149,7 +1157,7 @@ describe("targeted total correction bases", () => {
     expect(workBalances(next, "one")).toMatchObject({
       valid: true,
       reconciledNetPaid: 1000,
-      reconciledPayable: null,
+      reconciledPayable: 6000,
     });
   });
   it("validates target/account metadata instead of inventing a contact for work totals", () => {
@@ -1176,7 +1184,7 @@ describe("targeted total correction bases", () => {
   it("rejects unsafe aggregate corrections when loading untrusted data", () => {
     const maximum = Number.MAX_SAFE_INTEGER;
     const base = LedgerSchema.parse({
-      ...fixture([]),
+      ...fixture([bill("earned", maximum, "worker", "labour", "one", "house")]),
       contracts: [
         {
           id: "house",
@@ -1203,12 +1211,22 @@ describe("targeted total correction bases", () => {
       },
     };
     expect(
-      LedgerSchema.safeParse({ ...base, entries: [malicious] }).success,
+      LedgerSchema.safeParse({ ...base, entries: [...base.entries, malicious] })
+        .success,
     ).toBe(false);
   });
   it("rejects an unsafe notebook pool even when another notebook's correction cancels its global delta", () => {
     const base = LedgerSchema.parse({
-      ...fixture([]),
+      ...fixture([
+        bill(
+          "earned",
+          Number.MAX_SAFE_INTEGER,
+          "worker",
+          "labour",
+          "one",
+          "job",
+        ),
+      ]),
       contracts: [
         {
           id: "job",
@@ -1237,7 +1255,11 @@ describe("targeted total correction bases", () => {
     expect(
       LedgerSchema.safeParse({
         ...base,
-        entries: [record("large", "one", 1), record("offset", "two", -1)],
+        entries: [
+          ...base.entries,
+          record("large", "one", 1),
+          record("offset", "two", -1),
+        ],
       }).success,
     ).toBe(false);
   });

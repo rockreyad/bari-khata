@@ -346,3 +346,188 @@ it("preserves adjustment history during unrelated MCP writes and audited MCP voi
   });
   expect(restored.entries.at(-1)!.revisions).toHaveLength(2);
 });
+
+function earnedContractFixture() {
+  return LedgerSchema.parse({
+    works: [{ id: "roof", name: "নমুনা ছাদ" }],
+    people: [{ id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" }],
+    contracts: [
+      { id: "job", workId: "roof", personId: "worker", total: 100000 },
+    ],
+    entries: [
+      {
+        id: "earned",
+        kind: "expense",
+        account: "labour",
+        personId: "worker",
+        contractId: "job",
+        lines: [
+          {
+            id: "earned-line",
+            workId: "roof",
+            costType: "labour",
+            amount: 30000,
+          },
+        ],
+      },
+      {
+        id: "job-paid",
+        kind: "payment",
+        account: "labour",
+        personId: "worker",
+        contractId: "job",
+        allocations: [{ workId: "roof", amount: 10000 }],
+        paymentParts: [{ amount: 10000 }],
+      },
+    ],
+  });
+}
+
+it("keeps an unmarked legacy contract correction unresolved after later earned bills, migration, reopening and backup restoration", async () => {
+  const source = repository(),
+    base = earnedContractFixture();
+  const legacy = LedgerSchema.parse({
+    ...base,
+    entries: [
+      ...base.entries,
+      {
+        id: "legacy-contract-correction",
+        kind: "adjustment",
+        account: "labour",
+        personId: "worker",
+        contractId: "job",
+        note: "নমুনা পুরোনো চুক্তির বাকি কমিয়েছিলাম",
+        adjustment: {
+          target: "person",
+          basis: "balance",
+          account: "labour",
+          before: 90000,
+          after: 80000,
+          delta: -10000,
+          workId: "roof",
+        },
+      },
+    ],
+  });
+  const migrated = migrateArchitecture(legacy).ledger;
+  expect(
+    migrated.entries.at(-1)?.adjustment?.calculationVersion,
+  ).toBeUndefined();
+  await source.ensure("real", migrated);
+  await source.save((ledger) =>
+    LedgerSchema.parse({
+      ...ledger,
+      entries: [
+        ...ledger.entries,
+        {
+          id: "later-earned",
+          kind: "expense",
+          account: "labour",
+          personId: "worker",
+          contractId: "job",
+          lines: [
+            {
+              id: "later-line",
+              workId: "roof",
+              costType: "labour",
+              amount: 70000,
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  source.database.close();
+  await source.database.open();
+  const saved = (await source.read())!.ledger;
+  const review = (await source.migrationReview()).current;
+  expect(review.issues).toContainEqual(
+    expect.objectContaining({
+      code: "legacy_adjustment_review",
+      entityIds: ["legacy-contract-correction"],
+    }),
+  );
+  expect(review.earnedPayable).toBe(90000);
+  const backup = await source.exportBackup(),
+    target = repository();
+  await target.importBackup(backup, { replace: true });
+  const restored = (await target.read())!.ledger;
+  expect(restored.entries).toEqual(saved.entries);
+  expect(
+    restored.entries.find((entry) => entry.id === "legacy-contract-correction")
+      ?.adjustment?.calculationVersion,
+  ).toBeUndefined();
+  expect((await target.migrationReview()).current.issues).toContainEqual(
+    expect.objectContaining({ code: "legacy_adjustment_review" }),
+  );
+  const promoted = structuredClone(restored);
+  promoted.entries.find(
+    (entry) => entry.id === "legacy-contract-correction",
+  )!.adjustment!.calculationVersion = 2;
+  await expect(target.save(promoted)).rejects.toThrow(
+    "balance_adjustment_would_be_lost",
+  );
+  const alteredCopy = JSON.parse(await target.exportBackup());
+  delete alteredCopy.integrity;
+  alteredCopy.ledger = promoted;
+  await expect(
+    target.importBackup(JSON.stringify(alteredCopy), { replace: true }),
+  ).rejects.toThrow("balance_adjustment_would_be_lost");
+  await expect(
+    target.mergeBackup(JSON.stringify(alteredCopy), {
+      ...mergeOptions(restored),
+      decisions: { "entries:legacy-contract-correction": "backup" },
+    }),
+  ).rejects.toThrow("backup_history_conflict");
+  expect((await target.read())!.ledger).toEqual(restored);
+});
+
+it("round-trips a newly earned-based correction marker and refuses an older copy that removes it", async () => {
+  const source = repository(),
+    base = earnedContractFixture();
+  const corrected = appendBalanceAdjustment(
+    base,
+    {
+      target: "person",
+      basis: "balance",
+      personId: "worker",
+      account: "labour",
+      contractId: "job",
+      workId: "roof",
+      expectedBefore: 20000,
+      after: 15000,
+      reason: "নমুনা পাওয়া কাজের বিলের বাকি ঠিক করেছি",
+    },
+    at,
+  );
+  const correction = corrected.entries.at(-1)!;
+  expect(correction.adjustment?.calculationVersion).toBe(2);
+  await source.ensure("real", corrected);
+  source.database.close();
+  await source.database.open();
+  expect(
+    (await source.read())!.ledger.entries.at(-1)?.adjustment
+      ?.calculationVersion,
+  ).toBe(2);
+  const target = repository();
+  await target.importBackup(await source.exportBackup(), { replace: true });
+  const restored = (await target.read())!.ledger;
+  expect(restored.entries).toEqual(corrected.entries);
+  const stripped = structuredClone(restored);
+  delete stripped.entries.at(-1)!.adjustment!.calculationVersion;
+  await expect(target.save(stripped)).rejects.toThrow(
+    "balance_adjustment_would_be_lost",
+  );
+  const oldCopy = JSON.parse(await target.exportBackup());
+  delete oldCopy.integrity;
+  oldCopy.ledger = stripped;
+  await expect(
+    target.importBackup(JSON.stringify(oldCopy), { replace: true }),
+  ).rejects.toThrow("balance_adjustment_would_be_lost");
+  expect(
+    (await target.migrationReview()).current.issues.some(
+      (issue) => issue.code === "legacy_adjustment_review",
+    ),
+  ).toBe(false);
+  expect((await target.read())!.ledger).toEqual(restored);
+});

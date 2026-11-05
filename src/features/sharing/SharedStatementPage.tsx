@@ -178,7 +178,9 @@ function SharedShopSummary({ statement }: { statement: SharedStatement }) {
   const paid = totals.reconciledNetPaid ?? totals.paid;
   const due = totals.reconciledPayable ?? totals.payable;
   const credit = totals.reconciledAdvance ?? totals.advance;
+  const ambiguous = Boolean(totals.balanceAmbiguous);
   const fullyPaid =
+    !ambiguous &&
     cost > 0 &&
     cost === paid &&
     due === 0 &&
@@ -205,7 +207,8 @@ function SharedShopSummary({ statement }: { statement: SharedStatement }) {
         ) : null}
       </div>
       {!fullyPaid &&
-      (cost !== 0 ||
+      (ambiguous ||
+        cost !== 0 ||
         paid !== 0 ||
         due !== 0 ||
         credit !== 0 ||
@@ -227,12 +230,16 @@ function SharedShopSummary({ statement }: { statement: SharedStatement }) {
             }
           >
             <dt>{t(credit > 0 ? "ক্রেতা পাবেন" : "বাকি")}</dt>
-            <dd>{money(credit > 0 ? credit : due)}</dd>
+            <dd>
+              {ambiguous
+                ? t("বাকি মেলানো বাকি")
+                : money(credit > 0 ? credit : due)}
+            </dd>
             {correction(totals.balanceCorrection)}
           </div>
         </dl>
       ) : null}
-      {due === 0 && credit === 0 ? (
+      {!ambiguous && due === 0 && credit === 0 ? (
         <p className="shared-paid-status">
           <CheckCircleIcon size={16} />
           {t(fullyPaid ? "পুরো বিল মেটানো" : "বাকি নেই")}
@@ -357,6 +364,7 @@ export function SharedStatementPage() {
   const cost = totals?.reconciledCost ?? totals?.cost ?? 0;
   const due = totals?.reconciledPayable ?? totals?.payable ?? 0;
   const credit = totals?.reconciledAdvance ?? totals?.advance ?? 0;
+  const ambiguous = Boolean(totals?.balanceAmbiguous);
   const metrics = [
     ...((cost !== 0 && (cost !== paid || due > 0 || credit > 0)) ||
     totals?.costCorrection
@@ -369,7 +377,7 @@ export function SharedStatementPage() {
           },
         ]
       : []),
-    ...(due > 0 || totals?.balanceCorrection
+    ...(!ambiguous && (due > 0 || totals?.balanceCorrection)
       ? [
           {
             label: "আর পাবেন",
@@ -471,6 +479,13 @@ export function SharedStatementPage() {
               <span>{formatDigits(statement.workName)}</span>
             </div>
           ) : null}
+          {ambiguous ? (
+            <p role="status" className="shared-metric-note">
+              {t(
+                "পুরোনো চুক্তির ছাড় আর কাজের বিল আলাদা করে মেলানো বাকি। এখন বাকি বা জমার চূড়ান্ত অঙ্ক দেখানো হচ্ছে না।",
+              )}
+            </p>
+          ) : null}
           {isShop ? (
             <SharedShopSummary statement={statement} />
           ) : (
@@ -518,7 +533,7 @@ export function SharedStatementPage() {
                     </div>
                   ))}
                 </dl>
-              ) : credit === 0 ? (
+              ) : !ambiguous && credit === 0 ? (
                 <p className="shared-settled">
                   {t(
                     cost > 0 &&
@@ -532,7 +547,7 @@ export function SharedStatementPage() {
                   )}
                 </p>
               ) : null}
-              {credit > 0 ? (
+              {!ambiguous && credit > 0 ? (
                 <details className="shared-reconciliation">
                   <summary>
                     <span>{t("আপনার কাছে জমা")}</span>
@@ -584,9 +599,19 @@ export function SharedStatementPage() {
                           <dd>{money(contract.netPaid)}</dd>
                         </div>
                         <div>
-                          <dt>{t("আর পাবেন")}</dt>
-                          <dd>{money(contract.remaining)}</dd>
+                          <dt>{t("কাজের বিলের বাকি")}</dt>
+                          <dd>
+                            {ambiguous
+                              ? t("বাকি মেলানো বাকি")
+                              : money(contract.remaining)}
+                          </dd>
                         </div>
+                        {contract.unearnedCommitment !== undefined ? (
+                          <div>
+                            <dt>{t("এখনও বিল হয়নি")}</dt>
+                            <dd>{money(contract.unearnedCommitment)}</dd>
+                          </div>
+                        ) : null}
                       </dl>
                     </article>
                   ))}

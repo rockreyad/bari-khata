@@ -21,6 +21,24 @@ function fixture(): Ledger {
       { id: "roof-job", personId: "worker", workId: "roof", total: 250000 },
     ],
     entries: [
+      ...[
+        { id: "door", total: 150000 },
+        { id: "roof", total: 250000 },
+      ].map((work) => ({
+        id: `${work.id}-earned`,
+        kind: "expense",
+        personId: "worker",
+        account: "labour",
+        contractId: `${work.id}-job`,
+        lines: [
+          {
+            id: `${work.id}-line`,
+            workId: work.id,
+            costType: "labour",
+            amount: work.total,
+          },
+        ],
+      })),
       {
         id: "door-paid",
         kind: "payment",
@@ -87,7 +105,9 @@ describe("payment balance after a person's total is reconciled", () => {
     expect(
       preview(LedgerSchema.parse(JSON.parse(JSON.stringify(paidAgain)))),
     ).toEqual({ balance: -10000, acrossJobs: true });
-    expect(paidAgain.entries.slice(0, 2)).toEqual(original.entries);
+    expect(paidAgain.entries.slice(0, original.entries.length)).toEqual(
+      original.entries,
+    );
     expect(paidAgain.contracts).toEqual(original.contracts);
   });
 
@@ -195,7 +215,7 @@ describe("payment balance after a person's total is reconciled", () => {
     expect(preview(ledger)).toEqual({ balance: 0, acrossJobs: true });
   });
 
-  it("leaves the combined balance unknown when an unlinked wage bill may belong to an agreed job", () => {
+  it("knows an unlinked earned bill balance without counting a separate unearned agreement twice", () => {
     const ledger = appendBalanceAdjustment(
       LedgerSchema.parse({
         works: [{ id: "door", name: "নমুনা দরজা" }],
@@ -231,7 +251,7 @@ describe("payment balance after a person's total is reconciled", () => {
       },
       at,
     );
-    expect(preview(ledger)).toEqual({ balance: null, acrossJobs: true });
+    expect(preview(ledger)).toEqual({ balance: 90000, acrossJobs: true });
   });
 
   it("keeps a person with no jobs in the ordinary running account", () => {

@@ -116,7 +116,7 @@ describe("durable architecture conversion", () => {
     );
     upgraded.close();
     await upgraded.open();
-    expect(await upgraded.migrations.count()).toBe(1);
+    expect(await upgraded.migrations.count()).toBe(2);
     expect((await repo.read())?.generation).toBe(4);
   });
 
@@ -172,9 +172,9 @@ describe("durable architecture conversion", () => {
     ).rejects.toThrow("architecture_rollback_already_synced");
     await upgraded.workspaces.update("real", { cloudRevision: 5 });
     await repo.rollbackArchitectureMigration(id, current);
-    expect((await upgraded.workspaces.get("real"))?.ledger).toEqual(row.ledger);
+    expect((await repo.read())?.ledger).toEqual(row.ledger);
     expect((await upgraded.migrations.get(id))?.status).toBe("rolled-back");
-    expect(await upgraded.migrations.count()).toBe(1);
+    expect(await upgraded.migrations.count()).toBe(2);
 
     const second = repository();
     await second.ensure("real", legacyArchitectureFixture());

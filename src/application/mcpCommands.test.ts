@@ -200,7 +200,8 @@ describe("MCP financial commands", () => {
       expect(contractSummary(ledger, agreement.id)).toMatchObject({
         agreed: 100000,
         paid: 25000,
-        remaining: 75000,
+        remaining: 0,
+        remainingCommitment: 75000,
       });
       expect(summarize(ledger)).toMatchObject({ cost: 0, paid: 25000 });
       for (const change of [{ person_id: "shop" }, { work_id: "tiles" }]) {
@@ -509,7 +510,8 @@ describe("MCP financial commands", () => {
     });
     expect(updated.contracts[0].activity).toHaveLength(2);
     expect(contractSummary(updated, id)).toMatchObject({
-      remaining: 65000000,
+      remaining: 0,
+      remainingCommitment: 65000000,
       payable: 0,
     });
   });

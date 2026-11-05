@@ -68,6 +68,7 @@ it("rejects silently omitted links on local save and old backups, while allowing
     "person_work_links_would_be_lost",
   );
   const backup = JSON.parse(await repo.exportBackup());
+  delete backup.integrity;
   delete backup.ledger.people[0].workIds;
   await expect(
     repo.importBackup(JSON.stringify(backup), { replace: true }),
@@ -106,6 +107,7 @@ it("keeps notebook links during reviewed backup merging and requires explicit cl
   const current = fixture();
   await repo.ensure("real", current);
   const copy = JSON.parse(await repo.exportBackup());
+  delete copy.integrity;
   delete copy.ledger.people[0].workIds;
   const options = {
     expectedLedger: current,

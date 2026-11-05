@@ -68,7 +68,8 @@ describe.each(["English", "Bengali"] as const)(
         agreed: paisa(600000),
         billed: 0,
         paid: paisa(30000),
-        remaining: paisa(570000),
+        remaining: 0,
+        remainingCommitment: paisa(570000),
         payable: 0,
         advance: paisa(30000),
       });

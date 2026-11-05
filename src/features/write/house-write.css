@@ -1,0 +1,280 @@
+.house-write-chooser {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 34px 24px 60px;
+}
+.house-write-chooser header {
+  margin-bottom: 28px;
+}
+.house-write-chooser h1 {
+  font-size: 30px;
+  margin: 8px 0;
+}
+.house-write-chooser header p,
+.house-write-note {
+  color: var(--muted);
+}
+.house-write-choices {
+  display: grid;
+  gap: 12px;
+}
+.house-write-choices > button {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  text-align: left;
+  background: var(--surface);
+  color: var(--text);
+}
+.house-write-choices > button:hover {
+  background: var(--surface-muted);
+}
+.house-write-choices > button > span:nth-child(2) {
+  flex: 1;
+}
+.house-write-choices strong,
+.house-write-choices small {
+  display: block;
+}
+.house-write-choices strong {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.house-write-choices small {
+  color: var(--muted);
+  font-size: 14px;
+}
+.house-action-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  background: var(--surface-muted);
+  color: var(--accent-strong);
+}
+.house-write-note {
+  margin-top: 24px;
+}
+.house-write-page .entry-page-body {
+  max-width: 720px;
+}
+.house-write-page .entry-page-footer > div {
+  max-width: 680px;
+}
+.house-write-page .entry-page-footer .primary-button {
+  width: 100%;
+}
+.house-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: 22px;
+}
+.house-form label {
+  display: grid;
+  gap: 8px;
+  font-weight: 500;
+  min-width: 0;
+}
+.house-form input:not([type="checkbox"]):not([type="file"]),
+.house-form textarea {
+  width: 100%;
+  min-width: 0;
+}
+.house-form textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+.house-form .text-button {
+  justify-self: start;
+}
+.house-field-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.house-cost-lines {
+  display: grid;
+  gap: 18px;
+}
+.house-cost-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(110px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+.house-cost-line > .icon-button {
+  margin-bottom: 8px;
+}
+.house-amount input {
+  font-size: 28px;
+  min-height: 62px;
+}
+.house-payment-preview {
+  background: var(--surface-muted);
+  padding: 22px;
+  border-radius: 16px;
+}
+.house-preview-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.house-preview-heading h2 {
+  font-size: 18px;
+  margin: 0;
+}
+.house-payment-preview dl {
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+.house-payment-preview dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+.house-payment-preview dt {
+  color: var(--muted);
+}
+.house-payment-preview dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.house-payment-preview .house-result {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  margin-top: 4px;
+}
+.house-payment-preview .house-result dt {
+  color: var(--text);
+}
+.house-payment-preview .house-result dd {
+  font-size: 23px;
+}
+.house-allocation-preview {
+  margin: 0 0 20px;
+  padding: 0 0 16px;
+  list-style: none;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
+}
+.house-allocation-preview li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.house-allocation-preview small,
+.house-allocation-edit small {
+  display: block;
+  color: var(--muted);
+  margin-top: 3px;
+  font-size: 13px;
+}
+.house-allocation-preview strong {
+  white-space: nowrap;
+  font-weight: 500;
+}
+.house-allocation-edit {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.house-allocation-edit label {
+  grid-template-columns: minmax(0, 1fr) minmax(90px, 140px);
+  align-items: center;
+}
+.house-form .house-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 400;
+}
+.house-check input {
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+.house-details {
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+.house-details > summary {
+  color: var(--muted);
+  padding: 6px 0;
+}
+.house-details[open] {
+  display: grid;
+  gap: 18px;
+}
+.house-details[open] > label,
+.house-details[open] > div {
+  margin-top: 18px;
+}
+.house-attachments ul {
+  list-style: none;
+  padding: 0;
+}
+.house-attachments li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+}
+.house-attachments li span {
+  overflow-wrap: anywhere;
+}
+.house-legacy-notice {
+  border-top: 1px solid var(--line);
+  margin-top: 18px;
+  padding-top: 10px;
+}
+.house-payment-scope {
+  display: grid;
+  gap: 14px;
+}
+.house-payment-scope > p {
+  margin: 0;
+}
+@media (max-width: 540px) {
+  .house-write-chooser {
+    padding: 24px 16px 45px;
+  }
+  .house-write-choices > button {
+    padding: 18px 14px;
+    gap: 12px;
+  }
+  .house-write-choices strong {
+    font-size: 18px;
+  }
+  .house-action-icon {
+    width: 40px;
+    height: 44px;
+  }
+  .house-field-pair {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .house-cost-line {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .house-cost-line > label:first-child {
+    grid-column: 1 / -1;
+  }
+  .house-payment-preview {
+    padding: 18px;
+  }
+}

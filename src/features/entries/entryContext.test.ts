@@ -142,7 +142,7 @@ describe("entry context", () => {
       account: "labour",
       costType: "labour",
       workId: "other",
-      contractId: "contract",
+      contractId: "",
     });
     ledger.contracts.push({
       ...ledger.contracts[0],
@@ -237,7 +237,7 @@ it("prefills a requested worker job and keeps wrong-person or incompatible noteb
     account: "labour",
     workId: "other",
     contractId: "specific-job",
-    purpose: "settle",
+    purpose: "advance",
   });
   expect(
     entryContext(ledger, {

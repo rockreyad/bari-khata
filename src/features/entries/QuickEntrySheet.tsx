@@ -29,7 +29,6 @@ import { FormError, useFormError } from "../../components/ui/FormError";
 import { personKind } from "../../domain/contacts";
 import { Sheet } from "../../components/Sheet";
 import { EntryFrame } from "../../components/EntryFrame";
-import { BalanceProgress } from "../../components/ui/BalanceProgress";
 import { EntryPaymentPreview } from "./EntryPaymentPreview";
 import { entryPaymentBalance } from "./entryPaymentBalance";
 import { moneyInputValue } from "../../lib/numericFields";
@@ -102,9 +101,11 @@ const costNames = {
 export function QuickEntrySheet({
   options,
   presentation = "sheet",
+  resumeDraftKey,
 }: {
   options: AddOptions;
   presentation?: "sheet" | "page";
+  resumeDraftKey?: string;
 }) {
   const { ledger, mode, save, close, notify } = useNotebook();
   const { t, money, formatDigits } = useLanguageContext();
@@ -112,7 +113,10 @@ export function QuickEntrySheet({
   const baseDraftKey = `quick-v2:${options.kind ?? "expense"}:${options.workId ?? "all"}:${options.personId ?? "all"}${options.costType ? `:${options.costType}` : ""}`;
   const legacyKey = `${baseDraftKey}${options.purpose ? `:${options.purpose}` : ""}`;
   const accountDraftKey = `${legacyKey}${options.account ? `:account=${options.account}` : ""}`;
-  const key = `${accountDraftKey}${options.contractId ? `:job=${options.contractId}` : ""}${options.milestoneId ? `:milestone=${options.milestoneId}` : ""}`;
+  const key =
+    resumeDraftKey?.startsWith("quick-v2:") && resumeDraftKey.length <= 1500
+      ? resumeDraftKey
+      : `${accountDraftKey}${options.contractId ? `:job=${options.contractId}` : ""}${options.milestoneId ? `:milestone=${options.milestoneId}` : ""}`;
   const [draft, setDraft] = useState(() => entryContext(ledger, options));
   const [ready, setReady] = useState(false);
   const [more, setMore] = useState(false);
@@ -1368,17 +1372,21 @@ export function QuickEntrySheet({
             agreement ? (
               <section className="entry-contract-progress">
                 <h3>{t("কাজের হিসাব")}</h3>
-                {agreement.adjustment !== 0 && intent.balance !== null ? (
+                {agreement.balanceAmbiguous ? (
+                  <p>{t("বাকি এখনও পরিষ্কার নয়")}</p>
+                ) : (
                   <EntryPaymentPreview
-                    previousBalance={intent.balance}
+                    previousBalance={intent.balance ?? 0}
                     currentCost={0}
                     payment={paidNow}
                   />
-                ) : (
-                  <BalanceProgress
-                    total={Math.max(agreement.agreed, agreement.billed)}
-                    paid={agreement.netPaid + paidNow}
-                  />
+                )}
+                {agreement.unearnedCommitment > 0 && (
+                  <p className="field-hint">
+                    {t("চুক্তির বাকি কাজ: {{amount}}", {
+                      amount: money(agreement.unearnedCommitment),
+                    })}
+                  </p>
                 )}
               </section>
             ) : prior?.balance === null ? (

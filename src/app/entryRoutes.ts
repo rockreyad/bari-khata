@@ -27,7 +27,7 @@ export function entryReturn(path: string | null | undefined, base = "") {
       !jobPage &&
       relative !== "/timeline" &&
       !/^\/dues\/?$/.test(relative) &&
-      !/^(?:\/(?:works|people|ledger|reports|materials|review|settings)(?:\/[^/]*)*|\/)?$/.test(
+      !/^(?:\/(?:works|people|ledger|history|more|reports|materials|review|settings)(?:\/[^/]*)*|\/)?$/.test(
         relative,
       )
     )
@@ -93,7 +93,10 @@ export function isPersonFormPage(pathname: string) {
 }
 
 export function isEntryPage(pathname: string) {
-  return /\/(?:entries|contracts|jobs|people)\/(?:new|[^/]+\/edit)\/?$/.test(
-    pathname,
+  return (
+    /\/write\/(?:purchase|charge|payment)\/?$/.test(pathname) ||
+    /\/(?:entries|contracts|jobs|people)\/(?:new|[^/]+\/edit)\/?$/.test(
+      pathname,
+    )
   );
 }

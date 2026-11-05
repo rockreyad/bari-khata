@@ -47,7 +47,8 @@ it("keeps the exact quantity/rate calculation and separately agreed total in aud
   });
   expect(contractSummary(ledger, agreement.id)).toMatchObject({
     agreed: 8700000,
-    remaining: 8700000,
+    remaining: 0,
+    remainingCommitment: 8700000,
   });
   const updated = saveContractChange(
     ledger,
@@ -59,7 +60,10 @@ it("keeps the exact quantity/rate calculation and separately agreed total in aud
     total: 8700000,
     calculatedTotal: 8730800,
   });
-  expect(contractSummary(updated, agreement.id).remaining).toBe(8500000);
+  expect(contractSummary(updated, agreement.id)).toMatchObject({
+    remaining: 0,
+    remainingCommitment: 8500000,
+  });
   expect(preservesContractHistory(ledger, updated)).toBe(true);
 });
 

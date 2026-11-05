@@ -173,7 +173,8 @@ describe("whole-house contracts and their history", () => {
     expect(contractSummary(ledger, "house")).toMatchObject({
       agreed: 60000000,
       netPaid: 6000000,
-      remaining: 54000000,
+      remaining: 0,
+      remainingCommitment: 54000000,
       billed: 0,
     });
     expect(summarize(ledger)).toMatchObject({ cost: 0, netPaid: 6000000 });
@@ -388,14 +389,18 @@ describe("earned daily wages and entry intent", () => {
         personId: "shah",
         workId: "door",
       }),
-    ).toMatchObject({ purpose: "settle", contractId: "house" });
+    ).toMatchObject({ purpose: "charge", contractId: "" });
     expect(
       entryWorkChange(
         house,
         { ...draft, purpose: "settle", contractId: "house" },
         "roof",
       ),
-    ).toMatchObject({ workId: "roof", contractId: "house", purpose: "settle" });
+    ).toMatchObject({
+      workId: "roof",
+      contractId: "house",
+      purpose: "advance",
+    });
     expect(
       entryContactChange(ledger, { ...draft, purpose: "advance" }, "shah"),
     ).toEqual({ personId: "shah" });

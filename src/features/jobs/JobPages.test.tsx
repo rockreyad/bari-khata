@@ -217,6 +217,63 @@ function withPayments() {
 }
 
 describe("compact job previews", () => {
+  it.each(["bn", "en"] as const)(
+    "shows review wording for an unclear old correction in the %s preview and detail",
+    (language) => {
+      const base = fixture(1);
+      const ledger = LedgerSchema.parse({
+        ...base,
+        entries: [
+          {
+            id: "unclear-old-correction",
+            kind: "adjustment",
+            personId: "worker",
+            account: "labour",
+            contractId: "job-0",
+            note: "নমুনা পুরোনো চুক্তির ছাড়",
+            adjustment: {
+              target: "person",
+              basis: "balance",
+              account: "labour",
+              workId: null,
+              before: 100000,
+              after: 80000,
+              delta: -20000,
+            },
+          },
+        ],
+      });
+      const label =
+        language === "bn" ? "বাকি মেলানো বাকি" : "Balance needs review";
+      const preview = mount(
+        ledger,
+        "/jobs",
+        language,
+        <JobPreview ledger={ledger} contracts={ledger.contracts} />,
+      );
+      expect(
+        preview.container.querySelector(".job-tile-balance strong")
+          ?.textContent,
+      ).toBe(label);
+      expect(preview.container.querySelector(".job-tile-settled")).toBeNull();
+      expect(
+        preview.container.querySelector(".job-payment-settled"),
+      ).toBeNull();
+      expect(preview.container.textContent).not.toContain(
+        language === "bn"
+          ? "টাকার অঙ্ক বেশি হয়েছে।"
+          : "The amount is too large.",
+      );
+      preview.unmount();
+      const detail = mount(ledger, "/jobs/job-0", language);
+      expect(
+        detail.container.querySelector(".job-detail-review dd")?.textContent,
+      ).toBe(label);
+      expect(detail.container.querySelector(".job-extra-paid")).toBeNull();
+      expect(detail.container.querySelector(".job-detail-settled")).toBeNull();
+      expect(detail.container.querySelector(".form-error")).toBeNull();
+    },
+  );
   it("keeps ongoing jobs ahead of recent completed jobs within four cards and follows their latest transaction", () => {
     const ledger = LedgerSchema.parse({
       ...fixture(0),
@@ -514,7 +571,7 @@ const copy = {
     title: "কাজের হিসাব",
     goal: "৳\u202f৬,০০,০০০",
     paid: "৳\u202f২৫,০০০",
-    remaining: "৳\u202f৫,৭৫,০০০",
+    remaining: "৳\u202f০",
     refund: "৳\u202f৫,০০০",
     edit: "কাজ বদলাই",
     pay: "টাকা দিই",
@@ -525,7 +582,7 @@ const copy = {
     title: "Work details",
     goal: "৳\u202f600,000",
     paid: "৳\u202f25,000",
-    remaining: "৳\u202f575,000",
+    remaining: "৳\u202f0",
     refund: "৳\u202f5,000",
     edit: "Edit job",
     pay: "Pay",
@@ -580,6 +637,21 @@ it("shows overpayment rather than zero remaining in the preview and keeps zero-p
   const ledger = fixture(1);
   ledger.entries.push(
     EntrySchema.parse({
+      id: "earned",
+      kind: "expense",
+      contractId: "job-0",
+      personId: "worker",
+      account: "labour",
+      lines: [
+        {
+          id: "earned-line",
+          workId: "door",
+          amount: 60000000,
+          costType: "labour",
+        },
+      ],
+    }),
+    EntrySchema.parse({
       id: "overpaid",
       kind: "payment",
       contractId: "job-0",
@@ -597,7 +669,7 @@ it("shows overpayment rather than zero remaining in the preview and keeps zero-p
   );
   expect(
     preview.container.querySelector(".job-tile-amounts")?.textContent,
-  ).toContain("বেশি দিয়েছি৳\u202f১,০০০");
+  ).toContain("আগে দেওয়া টাকা৳\u202f১,০০০");
   preview.unmount();
   const page = mount(ledger, "/jobs/job-0");
   expect(page.container.querySelector(".job-extra-paid dd")?.textContent).toBe(
@@ -826,6 +898,21 @@ function filterFixture() {
       total: 100000,
     })),
     entries: [
+      ...jobs.map((job) => ({
+        id: `earned-${job.id}`,
+        kind: "expense",
+        personId: "worker",
+        account: "labour",
+        contractId: job.id,
+        lines: [
+          {
+            id: `earned-line-${job.id}`,
+            workId: "door",
+            costType: "labour",
+            amount: 100000,
+          },
+        ],
+      })),
       cash("active-cash", "active-due", 40000),
       cash("old-cash", "old-paid", 100000),
       cash("over-cash", "done-over", 120000),
@@ -979,6 +1066,23 @@ it("resets the twelve-card window after a status filter changes and keeps insigh
   const ledger = fixture(30);
   ledger.contracts.forEach((job, index) => {
     job.status = index % 2 ? "ongoing" : "done";
+    ledger.entries.push(
+      EntrySchema.parse({
+        id: `earned-${job.id}`,
+        kind: "expense",
+        personId: job.personId,
+        account: "labour",
+        contractId: job.id,
+        lines: [
+          {
+            id: `earned-line-${job.id}`,
+            workId: job.workId ?? "door",
+            amount: job.total,
+            costType: "labour",
+          },
+        ],
+      }),
+    );
   });
   const { container } = mount(ledger, "/jobs?status=ongoing");
   expect(container.querySelectorAll(".job-snap-card")).toHaveLength(12);
@@ -1004,7 +1108,7 @@ it("reclassifies refunded overpayment exactly and clears only known filters", ()
   const { container } = mount(ledger, "/jobs?balance=overpaid&keep=1");
   expect(container.querySelectorAll(".job-snap-card")).toHaveLength(1);
   expect(container.querySelector(".job-tile-amounts")?.textContent).toContain(
-    "বেশি দিয়েছি৳\u202f১০০",
+    "আগে দেওয়া টাকা৳\u202f১০০",
   );
   state.ledger = LedgerSchema.parse({
     ...ledger,
@@ -1169,7 +1273,7 @@ it("keeps cancelled, historical and unmatched cash out of list-card balances", (
       element.querySelector(".job-tile-name")?.textContent === "কাজের হিসাব",
   )!;
   expect(card.querySelector(".job-tile-balance strong")?.textContent).toBe(
-    "৳\u202f৫,৭৫,০০০",
+    "৳\u202f২৫,০০০",
   );
-  expect(card.classList.contains("job-payment-due")).toBe(true);
+  expect(card.classList.contains("job-payment-overpaid")).toBe(true);
 });

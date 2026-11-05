@@ -44,7 +44,7 @@ export function JobTile({
   return (
     <button
       type="button"
-      className={`job-snap-card job-payment-${summary.state}`}
+      className={`job-snap-card job-payment-${summary.balanceAmbiguous ? "review" : summary.state}`}
       onClick={onOpen}
     >
       <span className="job-tile-heading">
@@ -67,14 +67,19 @@ export function JobTile({
           <small>{t("মোট")}</small>
           <strong>{money(job.total)}</strong>
         </span>
-        {summary.state === "settled" ? (
+        {summary.balanceAmbiguous ? (
+          <span className="job-tile-balance">
+            <small>{t("বাকি")}</small>
+            <strong>{t("বাকি মেলানো বাকি")}</strong>
+          </span>
+        ) : summary.state === "settled" ? (
           <span className="job-tile-settled">
             <CheckCircleIcon size={18} weight="duotone" />
             {t("বাকি নেই")}
           </span>
         ) : (
           <span className="job-tile-balance">
-            <small>{t(summary.extra > 0 ? "বেশি দিয়েছি" : "বাকি")}</small>
+            <small>{t(summary.extra > 0 ? "আগে দেওয়া টাকা" : "বাকি")}</small>
             <strong>
               {summary.valid ? money(remaining) : t("টাকার অঙ্ক বেশি হয়েছে।")}
             </strong>

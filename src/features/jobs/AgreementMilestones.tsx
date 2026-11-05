@@ -9,7 +9,7 @@ import { AppSelect } from "../../components/ui/AppSelect";
 import { MoneyInput } from "../../components/ui/MoneyInput";
 import { FormError } from "../../components/ui/FormError";
 import { useInlineDraft } from "../entries/useInlineDraft";
-import "../people/party-allocations.css";
+import "./milestones.css";
 const DraftSchema = z.object({
   title: z.string().max(300),
   amount: z.string().max(100),

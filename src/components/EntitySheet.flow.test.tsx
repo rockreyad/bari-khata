@@ -436,7 +436,8 @@ it("updates a used whole-house amount with a reason and records before/after whi
   expect(contractSummary(next, "house")).toMatchObject({
     agreed: 65000000,
     netPaid: 10000000,
-    remaining: 55000000,
+    remaining: 0,
+    remainingCommitment: 55000000,
   });
   expect(next.contracts[0].activity[0]).toMatchObject({
     reason: "সিঁড়ির কাজ যোগ হয়েছে",

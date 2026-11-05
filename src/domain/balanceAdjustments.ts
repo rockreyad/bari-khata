@@ -164,6 +164,7 @@ export function appendBalanceAdjustment(
     adjustment: {
       target: scope.target,
       basis: scope.basis,
+      ...(scope.basis === "balance" ? { calculationVersion: 2 } : {}),
       account: scope.account,
       before: scope.value,
       after: input.after,

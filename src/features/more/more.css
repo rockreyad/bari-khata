@@ -1,0 +1,60 @@
+.more-page {
+  max-width: 720px;
+  margin-inline: auto;
+}
+.more-links {
+  display: grid;
+  gap: 12px;
+}
+.more-links > button {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 15px;
+  width: 100%;
+  min-height: 100px;
+  padding: 20px;
+  text-align: start;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+}
+.more-link-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 15px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.more-links strong,
+.more-links small {
+  display: block;
+}
+.more-links strong {
+  font-size: 16px;
+  font-weight: 600;
+}
+.more-links small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.more-links > button > svg {
+  color: var(--muted);
+}
+.more-links > button:hover {
+  border-color: var(--accent);
+}
+.more-links > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+@media (max-width: 420px) {
+  .more-links > button {
+    padding: 16px;
+    gap: 12px;
+  }
+}

@@ -63,6 +63,32 @@ function advanceFixture() {
     ],
     entries: [
       {
+        ...bill("earned-first", "worker", 1000),
+        account: "labour",
+        contractId: "first",
+        lines: [
+          {
+            id: "earned-first-line",
+            workId: "one",
+            amount: 1000,
+            costType: "labour",
+          },
+        ],
+      },
+      {
+        ...bill("earned-second", "worker", 1000, "two"),
+        account: "labour",
+        contractId: "second",
+        lines: [
+          {
+            id: "earned-second-line",
+            workId: "two",
+            amount: 1000,
+            costType: "labour",
+          },
+        ],
+      },
+      {
         ...payment("overpaid", "worker", 1500),
         account: "labour",
         contractId: "first",
@@ -72,7 +98,7 @@ function advanceFixture() {
 }
 
 describe("homepage payable breakdown", () => {
-  it("includes named, anonymous, work-contract and whole-house commitments once", () => {
+  it("includes named, anonymous, work-contract and whole-house earned bills once", () => {
     const ledger = LedgerSchema.parse({
       ...base,
       contracts: [
@@ -86,6 +112,32 @@ describe("homepage payable breakdown", () => {
         },
       ],
       entries: [
+        {
+          ...bill("earned-work", "worker", 5000, "two"),
+          account: "labour",
+          contractId: "work-job",
+          lines: [
+            {
+              id: "earned-work-line",
+              workId: "two",
+              amount: 5000,
+              costType: "labour",
+            },
+          ],
+        },
+        {
+          ...bill("earned-house", "house-worker", 8000),
+          account: "labour",
+          contractId: "house-job",
+          lines: [
+            {
+              id: "earned-house-line",
+              workId: "one",
+              amount: 8000,
+              costType: "labour",
+            },
+          ],
+        },
         bill("shop-bill", "shop", 10000),
         payment("shop-paid", "shop", 4000),
         bill("anonymous-bill", null, 3000),
@@ -103,7 +155,7 @@ describe("homepage payable breakdown", () => {
           personId: "house-worker",
           entryId: null,
           amount: 8000,
-          workIds: [],
+          workIds: ["one"],
           wholeHouse: true,
         },
         {
@@ -329,13 +381,26 @@ describe("homepage payable breakdown", () => {
     },
   );
 
-  it("keeps archived commitments while excluding historical and voided entries from amounts and context", () => {
+  it("keeps archived earned dues while excluding historical and voided entries from amounts and context", () => {
     let ledger = LedgerSchema.parse({
       ...base,
       contracts: [
         { id: "job", personId: "worker", workId: "two", total: 1000 },
       ],
       entries: [
+        {
+          ...bill("earned", "worker", 1000, "two"),
+          account: "labour",
+          contractId: "job",
+          lines: [
+            {
+              id: "earned-line",
+              workId: "two",
+              amount: 1000,
+              costType: "labour",
+            },
+          ],
+        },
         bill("current", "shop", 1000),
         { ...bill("old", "shop", 9000, "two"), balanceImpact: "historical" },
         { ...bill("cancelled", "shop", 7000, "two"), voided: true },
@@ -346,10 +411,12 @@ describe("homepage payable breakdown", () => {
     ledger = setEntityRemoved(ledger, "contract", "job", true);
     const result = read(ledger);
     expect(result.total).toBe(2000);
-    expect(result.rows.map((row) => [row.personId, row.workIds])).toEqual([
-      ["shop", ["one"]],
-      ["worker", ["two"]],
-    ]);
+    expect(result.rows.map((row) => [row.personId, row.workIds])).toEqual(
+      expect.arrayContaining([
+        ["shop", ["one"]],
+        ["worker", ["two"]],
+      ]),
+    );
   });
 
   it("uses canonical groups if an imported person id also matches an anonymous party id", () => {

@@ -3,82 +3,57 @@ import { Navigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
-  ArrowUUpLeftIcon,
-  CaretDownIcon,
   DotsThreeIcon,
+  NotePencilIcon,
   PhoneCallIcon,
   PlusIcon,
-  TruckIcon,
   WalletIcon,
 } from "@phosphor-icons/react";
 import { useEntityRemoval } from "../../components/EntityRemoval";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { EntryList } from "../../components/ui/EntryList";
-import { SpendingChart } from "../../components/ui/SpendingChart";
 import { AppMenu } from "../../components/ui/AppMenu";
 import {
-  allowedContactActions,
-  canCreateContactJob,
   contactSummary,
-  contactPaymentAccount,
   personKind,
   sortContactEntries,
 } from "../../domain/contacts";
 import { contractAppliesToWork } from "../../domain/contracts";
-import { personSummary } from "../../domain/ledger";
-import { JobPreview } from "../jobs/JobPreview";
-import { jobBalanceTotals } from "../jobs/jobView";
+import { partyLedger } from "../../domain/partyLedger";
 import { PersonMark, kindLabels } from "./ContactIdentity";
 import { StatementSheet } from "./StatementSheet";
 import { phoneLink } from "./people";
-import { PartyAllocationPanel } from "./PartyAllocationPanel";
 import { PersonNotebooks } from "./PersonNotebooks";
-import { TotalAdjustmentSheet } from "../reconciliation/TotalAdjustmentSheet";
 import "./people.css";
 import "./person-page.css";
 import "./person-activity.css";
-import "../reconciliation/balance-adjustment.css";
+import "./person-simple.css";
+
 export function PersonPage() {
-  const { ledger, go, add, entity, detail, base } = useNotebook();
+  const { ledger, go, entity, detail, base } = useNotebook();
   const { t, money, formatDigits } = useLanguageContext();
   const { id, personId } = useParams();
   const [params, setParams] = useSearchParams();
   const [shareOpen, setShareOpen] = useState(false);
-  const [adjustmentOpen, setAdjustmentOpen] = useState(false);
   const person = ledger.people.find((record) => record.id === (id ?? personId));
   const removal = useEntityRemoval("person", id ?? personId);
-  const kind = person ? personKind(person) : "other";
-  const defaultAccount = person
-    ? contactPaymentAccount(ledger, person)
-    : "materials";
   const workId = ledger.works.some((work) => work.id === params.get("work"))
     ? params.get("work")!
     : "";
-  const full = params.get("view") === "history";
   const summary = useMemo(
     () => (person ? contactSummary(ledger, person, workId || undefined) : null),
     [ledger, person, workId],
+  );
+  const account = useMemo(
+    () => (person ? partyLedger(ledger, person.id) : null),
+    [ledger, person],
   );
   const entries = useMemo(
     () => sortContactEntries(summary?.entries ?? [], false),
     [summary],
   );
-  const chartLedger = useMemo(
-    () => ({ ...ledger, entries: summary?.entries ?? [] }),
-    [ledger, summary],
-  );
-  const filter = (key: string, value: string) =>
-    setParams(
-      (previous) => {
-        const next = new URLSearchParams(previous);
-        if (value) next.set(key, value);
-        else next.delete(key);
-        return next;
-      },
-      { replace: true },
-    );
-  if (!person || !summary)
+  if (!person || !summary || !account)
     return (
       <div className="empty-panel">
         <h1>{t("এই নামটি খাতায় নেই")}</h1>
@@ -87,144 +62,50 @@ export function PersonPage() {
         </button>
       </div>
     );
-  if (full) {
-    const scoped = new URLSearchParams(params);
-    scoped.delete("view");
-    scoped.delete("account");
-    scoped.set("person", person.id);
-    if (!scoped.has("order")) scoped.set("order", "oldest");
-    return (
-      <Navigate replace to={`${base ?? ""}/ledger?${scoped.toString()}`} />
-    );
-  }
-  const historyQuery = new URLSearchParams({
-    person: person.id,
-    order: "oldest",
-  });
-  if (workId) historyQuery.set("work", workId);
-  const fullHistoryPath = `/ledger?${historyQuery.toString()}`;
+  const history = new URLSearchParams({ person: person.id, order: "oldest" });
+  if (workId) history.set("work", workId);
+  const historyPath = `/history?${history}`;
+  if (params.get("view") === "history")
+    return <Navigate replace to={`${base ?? ""}${historyPath}`} />;
+  const kind = personKind(person);
+  const ambiguous = summary.balanceAmbiguous;
+  const due = ambiguous ? 0 : summary.reconciledPayable;
+  const advance = ambiguous ? 0 : summary.reconciledAdvance;
+  const receivable = !workId
+    ? account.receivable
+    : account.payments
+        .filter((payment) => payment.context === "receivable")
+        .reduce(
+          (sum, payment) =>
+            sum +
+            payment.works
+              .filter((work) => work.workId === workId)
+              .reduce((total, work) => total + work.available, 0),
+          0,
+        );
   const href = phoneLink(person.phone);
-  const actions = removal.archived ? [] : allowedContactActions(person);
-  const addPayment = () =>
-    add({
-      kind: "payment",
-      personId: person.id,
-      workId: workId || undefined,
-      account: defaultAccount,
-    });
-  const addPurchase = () =>
-    add({
-      kind: "expense",
-      personId: person.id,
-      workId: workId || undefined,
-      account: "materials",
-      costType: "material",
-    });
-  const addTransport = () =>
-    add({
-      kind: "expense",
-      personId: person.id,
-      workId: workId || undefined,
-      account: "other",
-      costType: "transport",
-    });
-  const addReturn = () =>
-    add({
-      kind: "return",
-      personId: person.id,
-      workId: workId || undefined,
-      account: "materials",
-    });
-  const personContracts = ledger.contracts.filter(
-    (c) =>
-      c.personId === person.id && (!workId || contractAppliesToWork(c, workId)),
+  const contracts = ledger.contracts.filter(
+    (contract) =>
+      contract.personId === person.id &&
+      !contract.archivedAt &&
+      (!workId || contractAppliesToWork(contract, workId)),
   );
-  const uncontractedAdvance =
-    !workId && summary.owedCorrection !== 0 && summary.reconciledAdvance > 0
-      ? summary.reconciledAdvance
-      : personContracts.length
-        ? personSummary(
-            {
-              ...ledger,
-              entries: summary.entries.filter((entry) => !entry.contractId),
-            },
-            person.id,
-            workId || undefined,
-          ).advance
-        : summary.reconciledAdvance;
-  const jobTotals = jobBalanceTotals(ledger, personContracts);
-  const hasJobs = personContracts.some((job) => !job.archivedAt);
-  const costMetric =
-    (summary.reconciledCost !== 0 || summary.costCorrection !== 0) &&
-    summary.reconciledCost !== summary.reconciledNetPaid
-      ? {
-          label: "মাল ও কাজের খরচ",
-          amount: summary.reconciledCost,
-        }
-      : null;
-  const metrics = [
-    ...((summary.balanceAmbiguous
-      ? summary.payable
-      : summary.reconciledPayable) > 0
-      ? [
-          {
-            label: summary.balanceAmbiguous ? "বিলের বাকি" : "দিতে বাকি",
-            amount: summary.balanceAmbiguous
-              ? summary.payable
-              : summary.reconciledPayable,
-            tone: "contact-due",
-          },
-        ]
-      : []),
-  ];
-  if (
-    kind === "shop" &&
-    summary.confirmedCost > 0 &&
-    summary.reconciledAdvance > 0
-  )
-    metrics.push({
-      label: summary.owedCorrection !== 0 ? "আমার জমা" : "অগ্রিম",
-      amount: summary.reconciledAdvance,
-      tone: "contact-credit",
-    });
-  const showJobDetails =
-    hasJobs &&
-    (!jobTotals.valid ||
-      summary.balanceAmbiguous ||
-      (workId &&
-        personContracts.some(
-          (job) => job.scope === "house" && !job.archivedAt,
-        )) ||
-      jobTotals.extra > 0 ||
-      jobTotals.remaining !==
-        (metrics.find((metric) => metric.tone === "contact-due")?.amount ?? 0));
-  const showAdvanceDetails =
-    uncontractedAdvance > 0 && (kind !== "shop" || summary.confirmedCost <= 0);
-  const showMainActions = actions.some((action) =>
-    ["payment", "purchase", "transport", "return"].includes(action),
-  );
+  const write = (action?: "purchase" | "charge" | "payment") => {
+    const query = new URLSearchParams({ person: person.id });
+    if (workId) query.set("work", workId);
+    go(`/write${action ? `/${action}` : ""}?${query}`);
+  };
   const menu = [
     {
       label: t("তথ্য ও বোতাম বদলাই"),
       onSelect: () => entity("person", person.id),
       disabled: removal.archived,
     },
-    {
-      label: t("হিসাবের কপি পাঠাই"),
-      onSelect: () => setShareOpen(true),
-    },
-    ...(!removal.archived
-      ? [
-          {
-            label: t("মোট হিসাব মেলাই"),
-            onSelect: () => setAdjustmentOpen(true),
-          },
-        ]
-      : []),
+    { label: t("হিসাবের কপি পাঠাই"), onSelect: () => setShareOpen(true) },
     removal.menuItem,
   ];
   return (
-    <div className="contacts-page contact-detail-page">
+    <div className="contacts-page contact-detail-page person-simple-page">
       <nav className="contact-navigation" aria-label={t("মানুষ ও দোকান")}>
         <button className="back-link" onClick={() => go("/people")}>
           <ArrowLeftIcon size={18} />
@@ -233,13 +114,14 @@ export function PersonPage() {
         <div className="contact-navigation-actions">
           {href ? (
             <a className="icon-button" href={href} aria-label={t("ফোন করি")}>
-              <PhoneCallIcon size={22} weight="duotone" />
+              <PhoneCallIcon size={22} />
             </a>
           ) : null}
           <AppMenu
             label={t("এই নামের আরও কাজ")}
             trigger={
               <button
+                type="button"
                 className="icon-button"
                 aria-label={t("আরও")}
                 ref={removal.triggerRef}
@@ -256,238 +138,115 @@ export function PersonPage() {
         <div>
           <h1>{formatDigits(person.name)}</h1>
           <div className="contact-profile-meta">
-            <p title={formatDigits(person.role || t(kindLabels[kind]))}>
-              {formatDigits(person.role || t(kindLabels[kind]))}
-            </p>
+            <p>{formatDigits(person.role || t(kindLabels[kind]))}</p>
             <PersonNotebooks
               ledger={ledger}
               person={person}
               selectedWorkId={workId}
-              onSelect={(id) => filter("work", id)}
+              onSelect={(next) =>
+                setParams(
+                  (previous) => {
+                    const changed = new URLSearchParams(previous);
+                    if (next) changed.set("work", next);
+                    else changed.delete("work");
+                    return changed;
+                  },
+                  { replace: true },
+                )
+              }
             />
           </div>
         </div>
       </header>
       {removal.notice}
       {removal.dialog}
-      <section
-        className={`contact-summary-card contact-summary-${kind}`}
-        aria-label={t("এই নামের মোট হিসাব")}
-      >
-        <div
-          className={`contact-summary-top ${metrics.length ? "has-balance" : ""}`}
-        >
-          <div className="contact-summary-hero">
-            <span>{t("মোট টাকা দিয়েছি")}</span>
-            <strong>{money(summary.reconciledNetPaid)}</strong>
-            {summary.refunds > 0 ? <small>{t("ফেরত বাদে")}</small> : null}
-          </div>
-          {metrics.length ? (
-            <dl className="contact-summary-metrics">
-              {metrics.map((metric) => (
-                <div key={metric.label}>
-                  <dt>{t(metric.label)}</dt>
-                  <dd className={metric.tone}>{money(metric.amount)}</dd>
-                </div>
-              ))}
-            </dl>
+      <section className="person-now-card" aria-label={t("এখনকার হিসাব")}>
+        <div className="person-balance-head">
+          <span>
+            {t(
+              ambiguous
+                ? "বাকি এখনও পরিষ্কার নয়"
+                : due > 0
+                  ? "দিতে বাকি"
+                  : advance > 0
+                    ? "জমা আছে"
+                    : receivable > 0
+                      ? "ফেরত পাব"
+                      : entries.length
+                        ? "এখন কোনো বাকি নেই"
+                        : "এখনও হিসাব লেখা হয়নি",
+            )}
+          </span>
+          {!ambiguous && (due > 0 || advance > 0 || receivable > 0) ? (
+            <strong className={due > 0 ? "contact-due" : "contact-credit"}>
+              {money(due > 0 ? due : advance > 0 ? advance : receivable)}
+            </strong>
           ) : null}
         </div>
-        {showMainActions ? (
-          <div
-            className={`contact-main-actions ${kind === "shop" ? "contact-shop-actions" : ""}`}
-            role="group"
-            aria-label={t("হিসাব লেখার বোতাম")}
+        {ambiguous ? (
+          <button
+            type="button"
+            className="text-button person-review-link"
+            onClick={() =>
+              go(`/migration?person=${encodeURIComponent(person.id)}`)
+            }
           >
-            {kind === "shop" ? (
-              <>
-                {actions.includes("purchase") ? (
-                  <button className="primary-button" onClick={addPurchase}>
-                    <PlusIcon size={20} />
-                    <span>{t("মাল কিনলাম")}</span>
-                    <ArrowRightIcon
-                      className="contact-action-arrow"
-                      size={18}
-                      aria-hidden="true"
-                    />
-                  </button>
-                ) : null}
-                {actions.includes("payment") ||
-                actions.includes("transport") ||
-                actions.includes("return") ? (
-                  <div className="contact-shop-secondary">
-                    {actions.includes("payment") ? (
-                      <button className="secondary-button" onClick={addPayment}>
-                        <WalletIcon size={18} />
-                        {t("টাকা দিই")}
-                      </button>
-                    ) : null}
-                    {actions.includes("transport") ? (
-                      <button
-                        className="secondary-button"
-                        onClick={addTransport}
-                      >
-                        <TruckIcon size={18} />
-                        {t("আনার খরচ লিখি")}
-                      </button>
-                    ) : null}
-                    {actions.includes("return") ? (
-                      <button className="secondary-button" onClick={addReturn}>
-                        <ArrowUUpLeftIcon size={18} />
-                        {t("মাল ফেরত দিই")}
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <>
-                {actions.includes("payment") ? (
-                  <button className="primary-button" onClick={addPayment}>
-                    <WalletIcon size={20} weight="duotone" />
-                    <span>{t("টাকা দিই")}</span>
-                    <ArrowRightIcon
-                      className="contact-action-arrow"
-                      size={18}
-                      aria-hidden="true"
-                    />
-                  </button>
-                ) : null}
-                {actions.includes("purchase") ? (
-                  <button
-                    className={
-                      actions.includes("payment")
-                        ? "secondary-button"
-                        : "primary-button"
-                    }
-                    onClick={addPurchase}
-                  >
-                    <PlusIcon size={19} />
-                    {t("মাল কিনলাম")}
-                  </button>
-                ) : null}
-                {actions.includes("transport") ? (
-                  <button
-                    className={
-                      actions.includes("payment") ||
-                      actions.includes("purchase")
-                        ? "secondary-button"
-                        : "primary-button"
-                    }
-                    onClick={addTransport}
-                  >
-                    <TruckIcon size={20} />
-                    {t("আনার খরচ লিখি")}
-                  </button>
-                ) : null}
-                {actions.includes("return") ? (
-                  <button
-                    className={
-                      actions.some((action) =>
-                        ["payment", "purchase", "transport"].includes(action),
-                      )
-                        ? "secondary-button"
-                        : "primary-button"
-                    }
-                    onClick={addReturn}
-                  >
-                    <ArrowUUpLeftIcon size={19} />
-                    {t("মাল ফেরত দিই")}
-                  </button>
-                ) : null}
-              </>
-            )}
+            {t("আগের হিসাব দেখে নিই")}
+            <ArrowRightIcon size={16} />
+          </button>
+        ) : null}
+        <dl className="person-money-details">
+          {due > 0 && advance > 0 ? (
+            <div>
+              <dt>{t("জমা আছে")}</dt>
+              <dd>{money(advance)}</dd>
+            </div>
+          ) : null}
+          {receivable > 0 && (ambiguous || due > 0 || advance > 0) ? (
+            <div>
+              <dt>{t("ফেরত পাব")}</dt>
+              <dd>{money(receivable)}</dd>
+            </div>
+          ) : null}
+          <div>
+            <dt>{t("মোট টাকা দিয়েছি")}</dt>
+            <dd>{money(summary.reconciledNetPaid)}</dd>
+          </div>
+          {summary.reconciledCost !== 0 ? (
+            <div>
+              <dt>{t("মাল ও কাজ হয়েছে")}</dt>
+              <dd>{money(summary.reconciledCost)}</dd>
+            </div>
+          ) : null}
+        </dl>
+        {!removal.archived ? (
+          <div className="person-record-actions">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => write("payment")}
+            >
+              <WalletIcon size={21} />
+              {t("টাকা দিই")}
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => write()}
+            >
+              <NotePencilIcon size={21} />
+              {t("হিসাব লিখি")}
+            </button>
           </div>
         ) : null}
-        {showAdvanceDetails || costMetric || showJobDetails ? (
-          <details className="contact-reconciliation">
-            <summary>
-              {t("আরও হিসাব")}
-              <CaretDownIcon size={16} />
-            </summary>
-            {showAdvanceDetails ? (
-              <dl>
-                <dt>
-                  {t(
-                    summary.owedCorrection !== 0 ? "আমার জমা" : "অগ্রিম দিয়েছি",
-                  )}
-                </dt>
-                <dd>{money(uncontractedAdvance)}</dd>
-              </dl>
-            ) : null}
-            {costMetric ? (
-              <dl className="contact-detail-metrics">
-                <dt>{t(costMetric.label)}</dt>
-                <dd>{money(costMetric.amount)}</dd>
-              </dl>
-            ) : null}
-            {showJobDetails ? (
-              <div className="contact-job-totals">
-                <h2>{t("সব কাজ মিলিয়ে")}</h2>
-                {jobTotals.valid ? (
-                  <dl>
-                    <div>
-                      <dt>{t("চুক্তির অবশিষ্ট")}</dt>
-                      <dd className="contact-due">
-                        {money(jobTotals.remaining)}
-                      </dd>
-                    </div>
-                    {jobTotals.extra > 0 ? (
-                      <div>
-                        <dt>{t("বেশি দিয়েছি")}</dt>
-                        <dd className="contact-credit">
-                          {money(jobTotals.extra)}
-                        </dd>
-                      </div>
-                    ) : null}
-                  </dl>
-                ) : (
-                  <p>{t("টাকার অঙ্ক বেশি হয়েছে।")}</p>
-                )}
-                <small>{t("কাজের মোট দর থেকে দেওয়া টাকা বাদে")}</small>
-              </div>
-            ) : null}
-          </details>
-        ) : null}
       </section>
-      <PartyAllocationPanel
-        key={person.id}
-        personId={person.id}
-        archived={removal.archived}
-      />
-      <div className="contact-trend-card">
-        <SpendingChart
-          ledger={chartLedger}
-          personId={person.id}
-          workId={workId || undefined}
-          basis="paid"
-          title="মাসের হিসাব"
-          presentation="embedded"
-        />
-      </div>
-      {canCreateContactJob(person) || personContracts.length > 0 ? (
-        <JobPreview
-          ledger={ledger}
-          contracts={personContracts}
-          personId={person.id}
-          allowCreate={canCreateContactJob(person)}
-          workId={workId || undefined}
-        />
-      ) : null}
-      {summary.historicalCount ? (
-        <p className="contact-old-note">
-          {t(
-            "পুরোনো খাতার পরিশোধ পরিষ্কার নয়। সেই তথ্য দিয়ে বাকি বা আগাম ধরে নেওয়া হয়নি।",
-          )}
-        </p>
-      ) : null}
       <section className="contact-history">
         <div className="contact-history-heading">
           <div>
-            <h2>{t("শেষ ৫টি লেনদেন")}</h2>
-            <p>{t("সব হিসাব")}</p>
+            <h2>{t("সাম্প্রতিক হিসাব")}</h2>
+            <p>{t("এই নামের শেষ ৫টি লেখা")}</p>
           </div>
-          <button className="text-button" onClick={() => go(fullHistoryPath)}>
+          <button className="text-button" onClick={() => go(historyPath)}>
             {t("পুরো হিসাব")}
             <ArrowRightIcon size={17} />
           </button>
@@ -502,23 +261,72 @@ export function PersonPage() {
           workId={workId || undefined}
           onEntry={detail}
         />
+        {!entries.length ? (
+          <div className="person-first-record">
+            <NotePencilIcon size={28} weight="duotone" />
+            <p>{t("মাল কেনা, কাজের বিল বা টাকা দেওয়া এখান থেকেই লিখুন।")}</p>
+          </div>
+        ) : null}
       </section>
+      {contracts.length ? (
+        <section className="person-agreements" aria-label={t("কাজের দর")}>
+          <div className="section-heading">
+            <h2>{t("কাজের দর")}</h2>
+            {!removal.archived ? (
+              <button
+                className="text-button"
+                onClick={() =>
+                  entity("contract", undefined, workId || undefined, person.id)
+                }
+              >
+                <PlusIcon size={17} />
+                {t("যোগ করি")}
+              </button>
+            ) : null}
+          </div>
+          {contracts.map((contract) => (
+            <button
+              key={contract.id}
+              className="person-agreement-row"
+              onClick={() =>
+                go(
+                  `/jobs/${encodeURIComponent(contract.id)}?back=${encodeURIComponent(`${base ?? ""}/people/${person.id}`)}`,
+                )
+              }
+            >
+              <span>
+                <strong>{formatDigits(contract.title || t("কাজ"))}</strong>
+                <small>
+                  {t("ঠিক করা দর")}: {money(contract.total)}
+                </small>
+              </span>
+              <ArrowRightIcon size={18} />
+            </button>
+          ))}
+        </section>
+      ) : !removal.archived ? (
+        <button
+          className="text-button person-agreement-add"
+          onClick={() =>
+            entity("contract", undefined, workId || undefined, person.id)
+          }
+        >
+          <PlusIcon size={16} />
+          {t("কাজের দর ঠিক করা থাকলে রাখি")}
+        </button>
+      ) : null}
+      {summary.historicalCount ? (
+        <p className="contact-old-note">
+          {t(
+            "পুরোনো খাতার পরিশোধ পরিষ্কার নয়। সেই তথ্য দিয়ে বাকি বা আগাম ধরে নেওয়া হয়নি।",
+          )}
+        </p>
+      ) : null}
       {shareOpen ? (
         <StatementSheet
           person={person}
           workId={workId || undefined}
           onClose={() => setShareOpen(false)}
-        />
-      ) : null}
-      {adjustmentOpen ? (
-        <TotalAdjustmentSheet
-          target={{
-            target: "person",
-            id: person.id,
-            workId: workId || null,
-          }}
-          name={person.name}
-          onClose={() => setAdjustmentOpen(false)}
         />
       ) : null}
     </div>

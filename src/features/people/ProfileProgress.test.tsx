@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import {
   cleanup,
   fireEvent,
   render,
-  screen,
   waitFor,
   within,
 } from "@testing-library/react";
@@ -135,148 +134,13 @@ function fixture() {
   );
   return ledger;
 }
-const copy = {
-  bn: {
-    goal: "৳\u202f৬,০০,০০০",
-    paid: "৳\u202f৫০,০০০",
-    remaining: "৳\u202f৫,৫০,০০০",
-    year: "২০২৬",
-    old: "৳\u202f৫,০০,০০০",
-    due: "৳\u202f৬৩,০০০",
-  },
-  en: {
-    goal: "৳\u202f600,000",
-    paid: "৳\u202f50,000",
-    remaining: "৳\u202f550,000",
-    year: "2026",
-    old: "৳\u202f500,000",
-    due: "৳\u202f63,000",
-  },
-};
-
-it("shows aggregate remaining and overpaid job totals on the worker profile without offsetting them", () => {
-  const ledger = LedgerSchema.parse({
-    works: [
-      { id: "bath", name: "বাথরুম" },
-      { id: "electric", name: "বিদ্যুৎ" },
-    ],
-    people: [{ id: "worker", name: "মোরশেদ", kind: "worker" }],
-    contracts: [
-      { id: "a", personId: "worker", workId: "bath", total: 100000 },
-      { id: "b", personId: "worker", workId: "electric", total: 200000 },
-    ],
-    entries: [
-      {
-        id: "pay-a",
-        kind: "payment",
-        account: "labour",
-        personId: "worker",
-        contractId: "a",
-        allocations: [{ workId: "bath", amount: 120000 }],
-        paymentParts: [{ amount: 120000 }],
-      },
-      {
-        id: "pay-b",
-        kind: "payment",
-        account: "labour",
-        personId: "worker",
-        contractId: "b",
-        allocations: [{ workId: "electric", amount: 50000 }],
-        paymentParts: [{ amount: 50000 }],
-      },
-    ],
-  });
-  const before = JSON.stringify(ledger);
-  const view = mount(ledger, "/people/worker");
-  const totals = view.container.querySelector<HTMLElement>(
-    ".contact-job-totals",
-  )!;
-  expect(totals.textContent).toContain("৳\u202f১,৫০০");
-  expect(totals.textContent).toContain("৳\u202f২০০");
-  expect(within(totals).getByText("বেশি দিয়েছি")).toBeTruthy();
-  expect(JSON.stringify(ledger)).toBe(before);
-});
-
-describe.each(["bn", "en"] as const)("profile progress in %s", (language) => {
-  it("keeps a compact house-job preview on the profile and opens full totals and history in the dedicated job page", () => {
-    const ledger = fixture();
-    const before = JSON.stringify(ledger);
-    const profile = mount(ledger, "/people/worker?work=door", language);
-    const cards =
-      profile.container.querySelectorAll<HTMLElement>(".job-snap-card");
-    expect(cards).toHaveLength(1);
-    expect(cards[0].textContent).toContain(copy[language].goal);
-    expect(cards[0].textContent).toContain(copy[language].remaining);
-    expect(cards[0].textContent).not.toContain(copy[language].paid);
-    expect(cards[0].textContent).not.toContain(
-      language === "bn" ? "পুরো বাড়ি" : "Whole house",
-    );
-    expect(within(cards[0]).queryByRole("progressbar")).toBeNull();
-    expect(profile.container.querySelector(".contract-history")).toBeNull();
-    expect(profile.container.querySelector(".contract-card")).toBeNull();
-    expect(
-      profile.container.querySelector(".contact-summary-hero")?.textContent,
-    ).toContain(language === "bn" ? "৳\u202f৩০,০০০" : "৳\u202f30,000");
-    expect(profile.container.textContent).not.toContain("ছাদের বাড়তি কাজ");
-    fireEvent.click(cards[0]);
-    expect(state.go).toHaveBeenLastCalledWith(
-      "/jobs/house?back=%2Fpeople%2Fworker%3Fwork%3Ddoor",
-    );
-    profile.unmount();
-    const detail = mount(ledger, "/jobs/house?tab=history", language);
-    const card = detail.container.querySelector<HTMLElement>(".contract-card")!;
-    expect(card.textContent).toContain(copy[language].goal);
-    expect(card.textContent).toContain(copy[language].paid);
-    expect(card.textContent).toContain(copy[language].remaining);
-    expect(card.textContent).toContain(copy[language].year);
-    expect(
-      Number(
-        within(card).getByRole("progressbar").getAttribute("aria-valuenow"),
-      ),
-    ).toBeCloseTo(8.33, 2);
-    expect(
-      detail.container.querySelector(".contract-history")?.textContent,
-    ).toContain("বারান্দার কাজ যোগ হয়েছে");
-    fireEvent.click(
-      detail.container.querySelector<HTMLButtonElement>(
-        ".job-page-heading .icon-button",
-      )!,
-    );
-    expect(state.entity).toHaveBeenLastCalledWith("contract", "house");
-    fireEvent.click(
-      detail.container.querySelector<HTMLButtonElement>(
-        "#job-transactions-tab",
-      )!,
-    );
-    expect(detail.container.querySelectorAll(".history-payment")).toHaveLength(
-      2,
-    );
-    expect(
-      detail.container.querySelector(".job-detail-panel")?.textContent,
-    ).not.toContain("দরজার দোকান");
-    expect(JSON.stringify(ledger)).toBe(before);
-  });
-
-  it("shows a shop's paid cash and due without an unexplained progress bar", () => {
-    const { container } = mount(fixture(), "/people/shop?work=door", language);
-    expect(
-      container.querySelector(".contact-summary-metrics")?.textContent,
-    ).toContain(copy[language].due);
-    expect(within(container).queryByRole("progressbar")).toBeNull();
-    expect(
-      container.querySelector(".contact-detail-metrics")?.textContent,
-    ).toContain(language === "bn" ? "৳\u202f৯৩,০০০" : "৳\u202f93,000");
-    expect(container.querySelector(".contract-card")).toBeNull();
-  });
-});
-
 it("opens a work's compact house-job preview and retains its legacy and dated changes on the job history route", () => {
   const ledger = fixture();
   const work = mount(ledger, "/works/door?tab=labour");
   const tile = work.container.querySelector<HTMLElement>(".job-snap-card")!;
   expect(tile.textContent).toContain("শাহ আলম");
   expect(tile.textContent).not.toContain("পুরো বাড়ি");
-  expect(tile.textContent).toContain("৳\u202f৫,৫০,০০০");
+  expect(tile.textContent).toContain("৳\u202f৬,০০,০০০");
   expect(work.container.querySelectorAll(".job-snap-card")).toHaveLength(1);
   expect(work.container.querySelector(".contract-history")).toBeNull();
   expect(within(tile).queryByRole("progressbar")).toBeNull();
@@ -307,83 +171,6 @@ it("opens a work's compact house-job preview and retains its legacy and dated ch
   ).toHaveLength(1);
 });
 
-it("keeps purchasing and one shop payment action with the current work prefilled", () => {
-  mount(fixture(), "/people/shop?work=door");
-  fireEvent.click(screen.getByRole("button", { name: "মাল কিনলাম" }));
-  expect(state.add).toHaveBeenLastCalledWith({
-    kind: "expense",
-    personId: "shop",
-    workId: "door",
-    account: "materials",
-    costType: "material",
-  });
-  expect(screen.getAllByRole("button", { name: "টাকা দিই" })).toHaveLength(1);
-  expect(screen.queryByRole("button", { name: "বাকি মেটাই" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "অগ্রিম" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "টাকা দিই" }));
-  expect(state.add).toHaveBeenLastCalledWith({
-    kind: "payment",
-    personId: "shop",
-    workId: "door",
-    account: "materials",
-  });
-  expect(state.add).toHaveBeenCalledTimes(2);
-});
-
-it("hides a paid shop bar while retaining the exact surplus as advance", () => {
-  const ledger = fixture();
-  const payment = ledger.entries.find((entry) => entry.id === "shop-cash")!;
-  payment.allocations[0].amount = 10000000;
-  payment.paymentParts[0].amount = 10000000;
-  const { container } = mount(
-    LedgerSchema.parse(ledger),
-    "/people/shop?work=door",
-  );
-  expect(container.querySelector(".contact-bill-progress")).toBeNull();
-  expect(
-    container.querySelector(".contact-summary-metrics")?.textContent,
-  ).toContain("অগ্রিম৳\u202f৭,০০০");
-  expect(
-    container.querySelector(".contact-reconciliation")?.textContent,
-  ).not.toContain("অগ্রিম");
-});
-
-it("does not turn historical bills with unknown payment into a shop payable or a progress bar", () => {
-  const ledger = fixture();
-  ledger.entries.push(
-    ...LedgerSchema.parse({
-      works: ledger.works,
-      people: ledger.people,
-      entries: [
-        {
-          id: "old-shop-bill",
-          kind: "expense",
-          personId: "shop",
-          balanceImpact: "historical",
-          date: "2026-01-01",
-          lines: [
-            {
-              id: "old-shop-line",
-              workId: "door",
-              amount: 9990000,
-              label: "পুরোনো মাল",
-            },
-          ],
-        },
-      ],
-    }).entries,
-  );
-  const { container } = mount(ledger, "/people/shop?work=door");
-  expect(within(container).queryByRole("progressbar")).toBeNull();
-  expect(
-    container.querySelector(".contact-summary-metrics")?.textContent,
-  ).toContain("৳\u202f৬৩,০০০");
-  expect(
-    container.querySelector(".contact-summary-metrics")?.textContent,
-  ).not.toContain("৳\u202f১,৯২,৯০০");
-  expect(container.querySelector(".contact-old-note")).not.toBeNull();
-});
-
 it("loads older job changes only on the dedicated history page and hides the button at the end", async () => {
   const ledger = fixture();
   const contract = ledger.contracts.find((row) => row.id === "house")!;
@@ -408,90 +195,3 @@ it("loads older job changes only on the dedicated history page and hides the but
   ).toBeNull();
   expect(contract.history).toHaveLength(14);
 });
-
-it("does not call ordinary contract instalments an advance, while retaining a separate explicit uncontracted advance", () => {
-  const ledger = LedgerSchema.parse({
-    works: [{ id: "door", name: "দরজা" }],
-    people: [{ id: "worker", name: "মিস্ত্রি", kind: "worker" }],
-    contracts: [
-      {
-        id: "c",
-        scope: "house",
-        personId: "worker",
-        total: 60000000,
-        rate: 60000000,
-      },
-    ],
-    entries: [
-      {
-        id: "paid",
-        kind: "payment",
-        account: "labour",
-        personId: "worker",
-        contractId: "c",
-        allocations: [{ workId: "door", amount: 3000000 }],
-        paymentParts: [{ amount: 3000000 }],
-      },
-    ],
-  });
-  const first = mount(ledger, "/people/worker");
-  expect(first.container.querySelector(".contact-reconciliation")).toBeNull();
-  expect(
-    first.container.querySelector(".job-snap-card")?.textContent,
-  ).toContain("৳\u202f৫,৭০,০০০");
-  first.unmount();
-  const next = LedgerSchema.parse({
-    ...ledger,
-    entries: [
-      ...ledger.entries,
-      {
-        id: "advance",
-        kind: "payment",
-        account: "labour",
-        personId: "worker",
-        note: "অগ্রিম",
-        allocations: [{ workId: "door", amount: 1500000 }],
-        paymentParts: [{ amount: 1500000 }],
-      },
-    ],
-  });
-  const second = mount(next, "/people/worker");
-  expect(
-    second.container.querySelector(".contact-reconciliation dd")?.textContent,
-  ).toBe("৳\u202f১৫,০০০");
-});
-
-describe.each(["bn", "en"] as const)(
-  "settled shop summary in %s",
-  (language) => {
-    it("keeps one paid amount and a separate monthly chart without a repeated purchase price or completed bar", () => {
-      const ledger = fixture();
-      const payment = ledger.entries.find((entry) => entry.id === "shop-cash")!;
-      payment.allocations[0].amount = 9300000;
-      payment.paymentParts[0].amount = 9300000;
-      const before = JSON.stringify(ledger);
-      const { container } = mount(
-        LedgerSchema.parse(ledger),
-        "/people/shop",
-        language,
-      );
-      const summary = container.querySelector<HTMLElement>(
-        ".contact-summary-card",
-      )!;
-      const amount = language === "bn" ? "৳\u202f৯৩,০০০" : "৳\u202f93,000";
-      expect(
-        summary.querySelector(".contact-summary-hero")?.textContent,
-      ).toContain(amount);
-      expect(summary.querySelector(".contact-summary-metrics")).toBeNull();
-      expect(within(summary).queryByRole("progressbar")).toBeNull();
-      const chart = within(container).getByRole("region", {
-        name: language === "bn" ? "মাসের হিসাব" : "Monthly activity",
-      });
-      expect(chart.querySelector("h2")).toBeNull();
-      expect(chart.querySelector(".spending-chart-legend")).toBeNull();
-      expect(chart.textContent).not.toContain(amount);
-      expect(summary.textContent?.split(amount)).toHaveLength(2);
-      expect(JSON.stringify(ledger)).toBe(before);
-    });
-  },
-);

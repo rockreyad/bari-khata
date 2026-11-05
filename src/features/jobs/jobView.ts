@@ -5,6 +5,8 @@ import type {
   Ledger,
 } from "../../domain/model";
 import { adjustmentBalanceDelta } from "../../domain/adjustmentMath";
+import { cashObligationParts } from "../../domain/cashObligations";
+import { unresolvedContractAdjustmentIds } from "../../domain/contractObligations";
 
 const transactionDay = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Dhaka",
@@ -92,15 +94,26 @@ export function readJobStatus(value: string): JobStatus {
 export type JobBalance = {
   netPaid: number;
   remaining: number;
+  remainingCommitment: number;
+  unearnedCommitment: number;
   extra: number;
   state: "due" | "settled" | "overpaid";
+  balanceAmbiguous: boolean;
   valid: boolean;
 };
 export function jobBalances(ledger: Ledger): Map<string, JobBalance> {
   const jobs = new Map(ledger.contracts.map((job) => [job.id, job]));
   const paid = new Map<string, bigint>();
+  const settled = new Map<string, bigint>();
   const billed = new Map<string, bigint>();
   const adjustments = new Map<string, bigint>();
+  const commitmentAdjustments = new Map<string, bigint>();
+  const unresolved = unresolvedContractAdjustmentIds(ledger);
+  const unresolvedJobs = new Set(
+    ledger.entries
+      .filter((entry) => unresolved.has(entry.id))
+      .map((entry) => entry.contractId),
+  );
   for (const entry of ledger.entries) {
     if (
       entry.voided ||
@@ -111,6 +124,12 @@ export function jobBalances(ledger: Ledger): Map<string, JobBalance> {
     const job = jobs.get(entry.contractId);
     if (!job || entry.personId !== job.personId) continue;
     if (entry.kind === "adjustment") {
+      commitmentAdjustments.set(
+        job.id,
+        (commitmentAdjustments.get(job.id) ?? 0n) +
+          BigInt(adjustmentBalanceDelta(entry)),
+      );
+      if (unresolved.has(entry.id)) continue;
       adjustments.set(
         job.id,
         (adjustments.get(job.id) ?? 0n) + BigInt(adjustmentBalanceDelta(entry)),
@@ -137,6 +156,15 @@ export function jobBalances(ledger: Ledger): Map<string, JobBalance> {
       job.id,
       (paid.get(job.id) ?? 0n) + (entry.kind === "refund" ? -amount : amount),
     );
+    const obligation = cashObligationParts(ledger, entry).reduce(
+      (sum, part) => sum + BigInt(part.amount),
+      0n,
+    );
+    settled.set(
+      job.id,
+      (settled.get(job.id) ?? 0n) +
+        obligation * (entry.kind === "refund" ? -1n : 1n),
+    );
   }
   const maximum = BigInt(Number.MAX_SAFE_INTEGER);
   return new Map(
@@ -144,8 +172,13 @@ export function jobBalances(ledger: Ledger): Map<string, JobBalance> {
       const net = paid.get(job.id) ?? 0n;
       const agreed = BigInt(job.total),
         cost = billed.get(job.id) ?? 0n;
+      const obligationPaid = settled.get(job.id) ?? 0n;
       const difference =
-        (agreed > cost ? agreed : cost) + (adjustments.get(job.id) ?? 0n) - net;
+        cost + (adjustments.get(job.id) ?? 0n) - obligationPaid;
+      const committed =
+        (agreed > cost ? agreed : cost) +
+        (commitmentAdjustments.get(job.id) ?? 0n) -
+        obligationPaid;
       const remaining = difference > 0n ? difference : 0n;
       const extra = difference < 0n ? -difference : 0n;
       return [
@@ -153,10 +186,14 @@ export function jobBalances(ledger: Ledger): Map<string, JobBalance> {
         {
           netPaid: Number(net),
           remaining: Number(remaining),
+          remainingCommitment: Number(committed > 0n ? committed : 0n),
+          unearnedCommitment: Number(agreed > cost ? agreed - cost : 0n),
           extra: Number(extra),
           state:
             difference > 0n ? "due" : difference < 0n ? "overpaid" : "settled",
+          balanceAmbiguous: unresolvedJobs.has(job.id),
           valid:
+            !unresolvedJobs.has(job.id) &&
             net >= -maximum &&
             net <= maximum &&
             remaining <= maximum &&

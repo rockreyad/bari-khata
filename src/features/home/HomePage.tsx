@@ -1,191 +1,146 @@
 import {
   ArrowRightIcon,
   ArrowUpRightIcon,
-  CaretDownIcon,
-  CaretRightIcon,
-  CoinsIcon,
+  ClipboardTextIcon,
   HardHatIcon,
   MagnifyingGlassIcon,
   PackageIcon,
   PlusIcon,
-  ClipboardTextIcon,
+  WalletIcon,
 } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { summarize } from "../../domain/ledger";
-import { cashSummary } from "../../domain/cashSummary";
 import { EntryList } from "../../components/ui/EntryList";
 import { pendingReviewEntries } from "../import/bulkReview";
 import { WorkCard } from "../works/WorksPages";
 import { orderedWorks } from "../works/workOverview";
 import "./home-summary.css";
+
 export function HomePage() {
-  const { ledger, add, go, detail } = useNotebook();
+  const { ledger, go, detail } = useNotebook();
   const { t, money, number, formatDigits } = useLanguageContext();
-  const s = summarize(ledger);
-  const paid = cashSummary(ledger);
-  const totalPaid = money(s.reconciledNetPaid);
+  const summary = summarize(ledger);
   const pending = pendingReviewEntries(ledger).length;
-  const ongoingWorks = orderedWorks(ledger).filter(
-    (work) => work.status === "ongoing",
-  );
-  const cards = [
+  const works = orderedWorks(ledger)
+    .filter((work) => work.status === "ongoing")
+    .slice(0, 3);
+  const actions = [
     {
-      label: "মাল কিনতে দিয়েছি",
-      value: paid.byAccount.materials,
-      scope: "materials",
+      path: "/write/purchase",
+      title: "মাল কিনেছি",
+      description: "মালের দাম আর দেওয়া টাকা",
       Icon: PackageIcon,
     },
     {
-      label: "মিস্ত্রিকে দিয়েছি",
-      value: paid.byAccount.labour,
-      scope: "labour",
+      path: "/write/charge",
+      title: "কাজের বিল",
+      description: "যতটুকু কাজ হয়েছে, তার টাকা",
       Icon: HardHatIcon,
     },
-    ...(paid.byAccount.other !== 0
-      ? [
-          {
-            label: "অন্য কাজে দিয়েছি",
-            value: paid.byAccount.other,
-            scope: "other",
-            Icon: CoinsIcon,
-          },
-        ]
-      : []),
+    {
+      path: "/write/payment",
+      title: "টাকা দিয়েছি",
+      description: "বাকি মেটানো বা আগাম দেওয়া",
+      Icon: WalletIcon,
+    },
   ];
   return (
-    <div className="home-v3 page-flow">
-      <div className="home-overview">
-        <header className="home-overview-heading">
-          <div>
-            <p className="home-overview-project">
-              {formatDigits(ledger.project.name)}
-            </p>
-            <h1>{t("আমার হিসাব")}</h1>
-          </div>
-          <button
-            className="home-overview-search"
-            aria-label={t("আগের হিসাব খুঁজুন")}
-            onClick={() => go("/ledger?focus=search")}
-          >
-            <MagnifyingGlassIcon size={23} />
-          </button>
-        </header>
-        <section
-          className="home-overview-card"
-          aria-label={t("মোট টাকা দিয়েছি")}
+    <div className="home-v3 house-home page-flow">
+      <header className="home-overview-heading">
+        <div>
+          <p className="home-overview-project">
+            {formatDigits(ledger.project.name)}
+          </p>
+          <h1>{t("বাড়ির হিসাব")}</h1>
+        </div>
+        <button
+          type="button"
+          className="home-overview-search"
+          aria-label={t("আগের হিসাব খুঁজুন")}
+          onClick={() => go("/history?focus=search")}
         >
-          <div className="home-overview-balance">
-            <div className="home-overview-balance-heading">
-              <dl className="home-overview-paid">
-                <div className="home-overview-paid-total">
-                  <dt>{t("মোট টাকা দিয়েছি")}</dt>
-                  <dd
-                    className={
-                      totalPaid.length > 16
-                        ? "home-overview-long-amount"
-                        : undefined
-                    }
-                  >
-                    {totalPaid}
-                  </dd>
-                </div>
-                {s.paidCorrection !== 0 ? (
-                  <div className="home-overview-correction">
-                    <dt>{t("সমন্বয়")}</dt>
-                    <dd>{money(s.paidCorrection)}</dd>
-                  </div>
-                ) : null}
-              </dl>
-              <button
-                className="home-overview-report"
-                onClick={() => go("/reports")}
-              >
-                {t("রিপোর্ট")}
-                <ArrowUpRightIcon size={16} aria-hidden="true" />
-              </button>
-            </div>
-            {paid.refunds > 0 ? (
-              <p className="home-overview-refund-note">
-                {t("ফেরত পাওয়া টাকা বাদ দিয়ে")}
-              </p>
-            ) : null}
-            {s.reconciledPayable > 0 ? (
-              <button
-                type="button"
-                className="home-overview-due"
-                onClick={() => go("/dues")}
-              >
-                <span>{t("দিতে বাকি")}</span>
-                <strong>{money(s.reconciledPayable)}</strong>
-                <CaretRightIcon size={16} aria-hidden="true" />
-              </button>
-            ) : null}
-          </div>
-          <div className="home-overview-actions">
-            <button className="home-overview-add" onClick={() => add()}>
-              <PlusIcon size={20} aria-hidden="true" />
-              {t("খরচ লিখি")}
-            </button>
-            <button
-              className="home-overview-pay"
-              onClick={() => add({ kind: "payment" })}
-            >
-              <ArrowUpRightIcon size={20} aria-hidden="true" />
-              {t("টাকা দিলাম")}
-            </button>
-          </div>
-          <details className="home-overview-details">
-            <summary>
-              {t("কোথায় কত দিয়েছি")}
-              <CaretDownIcon size={17} aria-hidden="true" />
-            </summary>
-            {s.paidCorrection !== 0 ? (
-              <p className="home-overview-cash-note">
-                {t("এই ভাগে দেওয়া ও ফেরত পাওয়া টাকার হিসাব আছে।")}
-              </p>
-            ) : null}
-            <div className="home-overview-breakdown">
-              {cards.map(({ label, value, scope, Icon }) => (
-                <button
-                  key={scope}
-                  onClick={() => go(`/reports?account=${scope}`)}
-                >
-                  <span className="home-overview-category">
-                    <Icon size={18} aria-hidden="true" />
-                    <span>{t(label)}</span>
-                  </span>
-                  <strong>{money(value)}</strong>
-                  <CaretRightIcon size={15} aria-hidden="true" />
-                </button>
-              ))}
-            </div>
-          </details>
-        </section>
-        {pending > 0 ? (
+          <MagnifyingGlassIcon size={23} />
+        </button>
+      </header>
+      <section className="house-overview" aria-label={t("বাড়ির মোট হিসাব")}>
+        <div className="house-cost">
+          <span>{t("এ পর্যন্ত খরচ")}</span>
+          <strong>{money(summary.cost + summary.costCorrection)}</strong>
           <button
-            className="home-review-notice"
-            onClick={() => go("/review?bulk=1")}
+            type="button"
+            className="text-button"
+            onClick={() => go("/reports?mode=cost&section=all")}
           >
-            <span className="home-review-symbol">
-              <ClipboardTextIcon size={22} weight="duotone" />
-            </span>
-            <span>
-              <strong>
-                {t("{{count}}টি হিসাবের তথ্য যোগ করা বাকি", {
-                  count: number(pending),
-                })}
-              </strong>
-              <small>{t("একসাথে দেখে ঠিক করুন")}</small>
-            </span>
-            <ArrowRightIcon size={18} />
+            {t("খরচ দেখি")}
+            <ArrowUpRightIcon size={16} />
           </button>
+        </div>
+        <div className="house-money-row">
+          <button
+            type="button"
+            className="house-paid"
+            onClick={() => go("/reports")}
+          >
+            <span>{t("মোট টাকা দিয়েছি")}</span>
+            <strong>{money(summary.reconciledNetPaid)}</strong>
+            <small>{t("ফেরত পাওয়া টাকা বাদে")}</small>
+          </button>
+          <button
+            type="button"
+            className="home-overview-due"
+            onClick={() =>
+              go(summary.balanceAmbiguous ? "/migration" : "/dues")
+            }
+          >
+            <span>{t("দিতে বাকি")}</span>
+            <strong>
+              {summary.balanceAmbiguous
+                ? t("যাচাই বাকি")
+                : money(summary.reconciledPayable)}
+            </strong>
+            <small>
+              {t(
+                summary.balanceAmbiguous
+                  ? "আগের তথ্য দেখে নিতে হবে"
+                  : summary.reconciledPayable > 0
+                    ? "কাকে কত, দেখে নিই"
+                    : "এখন কোনো বাকি নেই",
+              )}
+            </small>
+          </button>
+        </div>
+        {!summary.balanceAmbiguous && summary.reconciledAdvance > 0 ? (
+          <p className="house-credit-note">
+            {t("আগে দিয়ে রেখেছি {{amount}}", {
+              amount: money(summary.reconciledAdvance),
+            })}
+          </p>
         ) : null}
-      </div>
+      </section>
+      <section className="house-write" aria-label={t("হিসাব লিখি")}>
+        <div className="section-heading">
+          <h2>{t("এখন কী লিখবেন?")}</h2>
+        </div>
+        <div className="house-write-actions">
+          {actions.map(({ path, title, description, Icon }) => (
+            <button type="button" key={path} onClick={() => go(path)}>
+              <span className="house-action-icon">
+                <Icon size={25} weight="duotone" />
+              </span>
+              <span>
+                <strong>{t(title)}</strong>
+                <small>{t(description)}</small>
+              </span>
+              <ArrowRightIcon size={18} />
+            </button>
+          ))}
+        </div>
+      </section>
       <section className="panel home-history-v3">
         <div className="section-heading">
           <h2>{t("সাম্প্রতিক হিসাব")}</h2>
-          <button className="text-button" onClick={() => go("/ledger")}>
+          <button className="text-button" onClick={() => go("/history")}>
             {t("সব হিসাব")}
             <ArrowRightIcon size={16} />
           </button>
@@ -197,18 +152,24 @@ export function HomePage() {
           entries={ledger.entries}
           onEntry={detail}
         />
+        {!ledger.entries.length ? (
+          <div className="house-first-entry">
+            <ClipboardTextIcon size={29} weight="duotone" />
+            <p>{t("প্রথম মাল কেনা বা টাকা দেওয়া লিখে শুরু করুন।")}</p>
+          </div>
+        ) : null}
       </section>
       <section>
         <div className="section-heading">
-          <h2>{t("কাজের খাতা")}</h2>
+          <h2>{t("যে কাজগুলো চলছে")}</h2>
           <button className="text-button" onClick={() => go("/works")}>
-            {t("সব খাতা")}
+            {t("সব কাজ")}
             <ArrowRightIcon size={16} />
           </button>
         </div>
-        {ongoingWorks.length ? (
+        {works.length ? (
           <div className="work-carousel">
-            {ongoingWorks.map((work) => (
+            {works.map((work) => (
               <WorkCard
                 key={work.id}
                 work={work}
@@ -218,29 +179,42 @@ export function HomePage() {
             ))}
           </div>
         ) : (
-          <button className="empty-panel" onClick={() => go("/works")}>
-            <PlusIcon size={28} />
-            {t(
-              ledger.works.some((work) => !work.archivedAt)
-                ? "এখন কোনো কাজ চলছে না। সব খাতা দেখুন"
-                : "কাজের খাতা খুলুন",
-            )}
+          <button
+            type="button"
+            className="empty-panel"
+            onClick={() => go("/works")}
+          >
+            <PlusIcon size={26} />
+            {t("কাজের খাতা খুলুন")}
           </button>
         )}
       </section>
-      {s.historicalEntryCount ? (
-        <details className="old-record-note">
-          <summary>{t("পুরোনো খাতার টাকা সম্পর্কে")}</summary>
-          <p>
-            {t(
-              "পুরোনো খরচ রাখা আছে। কোন টাকা দেওয়া হয়েছে আর কোনটি বাকি, সব জায়গায় লেখা ছিল না। তাই আগের বাকি ধরে নেওয়া হয়নি।",
-            )}
-          </p>
-          <button className="text-button" onClick={() => go("/review")}>
-            {t("পুরোনো হিসাব মিলিয়ে দেখি")}
-            <ArrowRightIcon size={16} />
-          </button>
-        </details>
+      {pending > 0 ? (
+        <button
+          type="button"
+          className="home-review-notice"
+          onClick={() => go("/review?bulk=1")}
+        >
+          <span className="home-review-symbol">
+            <ClipboardTextIcon size={22} />
+          </span>
+          <span>
+            <strong>
+              {t("{{count}}টি লেখায় তথ্য যোগ করা বাকি", {
+                count: number(pending),
+              })}
+            </strong>
+            <small>{t("সময় হলে দেখে নিই")}</small>
+          </span>
+          <ArrowRightIcon size={18} />
+        </button>
+      ) : null}
+      {summary.historicalEntryCount ? (
+        <p className="house-history-note">
+          {t(
+            "পুরোনো খাতার খরচ রাখা আছে। সেই সময়ের দেওয়া আর বাকি টাকা পুরো জানা নেই।",
+          )}
+        </p>
       ) : null}
     </div>
   );

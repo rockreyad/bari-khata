@@ -37,7 +37,15 @@ it("rehydrates old disk/backup status as unknown, then saves an audited status w
   const raw = legacyJobStatusLedger();
   const source = repository();
   await source.ensure("real", LedgerSchema.parse(raw));
-  await source.database.workspaces.update("real", { ledger: raw as Ledger });
+  for (const contract of raw.contracts) {
+    const record = await source.database.ledgerEntities
+      .where("[workspace+collection+id]")
+      .equals(["real", "contracts", contract.id])
+      .first();
+    await source.database.ledgerEntities.update(record!.key, {
+      value: contract,
+    });
+  }
   source.database.close();
   await source.database.open();
   const opened = (await source.read())!.ledger;

@@ -20,6 +20,36 @@ it("shows a worker's job balances separately rather than cancelling one job's ov
     ],
     entries: [
       {
+        id: "earned-bath",
+        kind: "expense",
+        account: "labour",
+        personId: "worker",
+        contractId: "bath-job",
+        lines: [
+          {
+            id: "earned-bath-line",
+            workId: "bath",
+            amount: 100000,
+            costType: "labour",
+          },
+        ],
+      },
+      {
+        id: "earned-electric",
+        kind: "expense",
+        account: "labour",
+        personId: "worker",
+        contractId: "electric-job",
+        lines: [
+          {
+            id: "earned-electric-line",
+            workId: "electric",
+            amount: 200000,
+            costType: "labour",
+          },
+        ],
+      },
+      {
         id: "a",
         kind: "payment",
         account: "labour",

@@ -1,0 +1,46 @@
+.agreement-milestones {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+.agreement-milestones h2 {
+  margin: 0 0 14px;
+  font-size: 17px;
+}
+.agreement-milestones details {
+  margin-top: 16px;
+}
+.agreement-milestones summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.agreement-milestones form {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+}
+.agreement-milestones label {
+  display: grid;
+  gap: 6px;
+}
+.agreement-milestones p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.agreement-milestones .milestone-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.agreement-milestones .milestone-item small {
+  color: var(--muted);
+}
+@media (max-width: 420px) {
+  .agreement-milestones {
+    padding: 16px;
+  }
+}

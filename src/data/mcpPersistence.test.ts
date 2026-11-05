@@ -142,6 +142,7 @@ describe("MCP provenance in offline storage and backups", () => {
       "mcp_provenance_would_be_lost",
     );
     const backup = JSON.parse(await source.exportBackup());
+    delete backup.integrity;
     delete backup.ledger.entries[0].revisions[0].before.provenance;
     await expect(
       source.importBackup(JSON.stringify(backup), { replace: true }),

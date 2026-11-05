@@ -101,9 +101,8 @@ it("navigates from a filtered demo profile to an entry URL and back without losi
   const path = "/sample/people/shop?work=door&account=materials&order=oldest";
   mount(path);
   fireEvent.click(screen.getByRole("button", { name: "Add payment" }));
-  expect(current().pathname).toBe("/sample/entries/new");
+  expect(current().pathname).toBe("/sample/write/payment");
   expect(Object.fromEntries(current().searchParams)).toEqual({
-    kind: "payment",
     back: path,
     work: "door",
     person: "shop",
@@ -222,7 +221,7 @@ it.each([
 it("uses root account routes outside the demo and blocks navigation after the active owner changes", () => {
   mount("/people/shop?work=door", "real");
   fireEvent.click(screen.getByRole("button", { name: "Add payment" }));
-  expect(current().pathname).toBe("/entries/new");
+  expect(current().pathname).toBe("/write/payment");
   fireEvent.click(screen.getByRole("button", { name: "Close" }));
   expect(current().pathname).toBe("/people/shop");
   state.owner = "owner-two";
