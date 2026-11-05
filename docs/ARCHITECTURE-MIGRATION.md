@@ -84,7 +84,7 @@ if (current) {
 
 1. আগে database snapshot, `ledger_operations`, ভাগ করা লিংক/অনুমতির প্রয়োজনীয় তথ্য এবং ব্যক্তিগত receipt storage-এর পূর্ণ backup নিতে হবে। ফিরিয়ে আনার পদ্ধতি আলাদা পরীক্ষার পরিবেশে যাচাই করতে হবে। পাসওয়ার্ড বা key রিপোর্টে রাখা যাবে না।
 2. কপিতে `migrateArchitecture()` চালিয়ে গণনা, party/project balance, পুরোনো ইতিহাস ও ভাউচার মিলিয়ে দেখতে হবে। duplicate candidate ও অজানা নগদ ঘটনার প্রতিবেদন মালিককে দেখাতে হবে; অস্পষ্ট তথ্য থেকে financial adjustment বানানো যাবে না।
-3. Supabase migration `202611050002_party_ledger_architecture.sql`, `202611050003_shared_payment_allocations.sql` ও `202611050004_earned_obligations.sql` ক্রম অনুযায়ী আগে প্রয়োগ করতে হবে, তারপর নতুন client প্রকাশ করতে হবে। নতুন guard প্রতিষ্ঠিত তথ্য পুরোনো client দিয়ে বাদ পড়া ঠেকায়। কেবল এই স্থানীয় কাজ শেষ হয়েছে বলে production migration শেষ ধরা যাবে না।
+3. Supabase migration `202611050002_party_ledger_architecture.sql`, `202611050003_shared_payment_allocations.sql` ও `202611050004_earned_obligations.sql`, `202611050005_completed_contract_earnings.sql` ক্রম অনুযায়ী আগে প্রয়োগ করতে হবে, তারপর নতুন client প্রকাশ করতে হবে। নতুন guard প্রতিষ্ঠিত তথ্য পুরোনো client দিয়ে বাদ পড়া ঠেকায়। কেবল এই স্থানীয় কাজ শেষ হয়েছে বলে production migration শেষ ধরা যাবে না।
 4. বিভিন্ন device-এর pending লেখা, সেশন শেষ হওয়া, conflict, পুনরায় অনলাইন হওয়া ও receipt download যাচাই করতে হবে। স্বয়ংক্রিয় migration কোনো আলাদা device-এর জমা লেখা মুছে দেয় না।
 5. আসল খাতার আগে/পরে মেলানো শেষ এবং rollback-এর সময়সীমা পার না হওয়া পর্যন্ত পুরোনো financial fields, recovery কপি বা migration history মুছবেন না। বর্তমান document-এর ঐতিহাসিক ক্ষেত্রগুলো ব্যবহার হচ্ছে; শুধু পুরোনো নাম বলে বাদ দেওয়া নিরাপদ নয়।
 

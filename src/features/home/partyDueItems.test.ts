@@ -57,6 +57,46 @@ const correction = (delta: number) => ({
     delta,
   },
 });
+it("keeps a finished unpaid job attached to its settlement even before its first entry", () => {
+  const ledger = LedgerSchema.parse({
+    ...base(),
+    contracts: [
+      {
+        id: "finished",
+        personId: "person",
+        workId: "roof",
+        total: 3500000,
+        status: "done",
+      },
+      {
+        id: "planned",
+        personId: "person",
+        workId: "wall",
+        total: 9000000,
+        status: "planned",
+      },
+    ],
+  });
+  const before = structuredClone(ledger);
+  const rows = partyDueItems(ledger, "person");
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({
+    contractId: "finished",
+    account: "labour",
+    workId: "roof",
+    amount: 3500000,
+  });
+  expect(rows[0].billId).toBeUndefined();
+  expect(
+    new URL(
+      partyDuePaymentUrl(rows[0], "/parties/person"),
+      "https://bari.invalid",
+    ).searchParams.get("contract"),
+  ).toBe("finished");
+  expect(partyDueItems(ledger, "person", { workId: "wall" })).toEqual([]);
+  expect(partyDueItems(ledger, "person", { account: "materials" })).toEqual([]);
+  expect(ledger).toEqual(before);
+});
 it("keeps unmatched cash as one neutral net balance without assigning it to guessed old bills", () => {
   const ledger = base([
     bill("first", 10000),

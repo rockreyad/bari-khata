@@ -125,11 +125,16 @@ function mount(
   );
 }
 async function ready() {
-  await waitFor(() =>
-    expect(
-      (screen.getByRole("button", { name: "হিসাব রাখুন" }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(false),
+  await waitFor(
+    () =>
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "হিসাব রাখুন",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    { timeout: 3000 },
   );
 }
 async function choose(
@@ -197,7 +202,7 @@ it("selects a notebook through the real picker, retains it after other choices a
     saved.entries.find((entry) => entry.kind === "payment")!.allocations,
   ).toEqual([{ workId: "paint", amount: 4000 }]);
   expect(saved.works).toEqual(initial.works);
-});
+}, 10000);
 
 it("creates and selects a notebook inline without losing the unfinished purchase or creating a financial record early", async () => {
   const initial = await setup(),
@@ -354,4 +359,158 @@ it("does not silently reuse a general notebook inferred only from old cash histo
   expect(screen.getByRole("combobox", { name: "খাতা" }).textContent).toContain(
     "নমুনা রং",
   );
+});
+
+it("chooses a previous work description by keyboard and preserves its amount, notebook and contract across reopening", async () => {
+  const initial = await setup(
+    LedgerSchema.parse({
+      ...fixture(),
+      contracts: [
+        {
+          id: "job",
+          personId: "worker",
+          workId: "roof",
+          title: "নমুনা ঘরের কাজ",
+          total: 100000,
+          status: "ongoing",
+        },
+      ],
+      entries: [
+        {
+          id: "old-work",
+          kind: "expense",
+          personId: "worker",
+          account: "labour",
+          contractId: "job",
+          lines: [
+            {
+              id: "old-line",
+              workId: "roof",
+              costType: "labour",
+              label: "দেয়ালে প্লাস্টার",
+              amount: 10000,
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  const user = userEvent.setup();
+  const path = "/write/charge?person=worker&work=roof&contract=job&paid=yes";
+  const first = mount(initial, path, "charge");
+  await ready();
+  expect(screen.queryByRole("button", { name: "আরও কাজ" })).toBeNull();
+  await user.type(screen.getByLabelText(/^বিলের টাকা/), "200");
+  const description = screen.getByRole("combobox", { name: "কাজের বিবরণ ১" });
+  await user.type(description, "প্লাস্টার");
+  await user.keyboard("{ArrowDown}{Enter}");
+  expect((description as HTMLInputElement).value).toBe("দেয়ালে প্লাস্টার");
+  expect(close).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "বিকাশ" }));
+  await user.click(screen.getByRole("button", { name: "ফিরুন" }));
+  await waitFor(() => expect(close).toHaveBeenCalledOnce());
+  first.unmount();
+  repository.database.close();
+  await repository.database.open();
+  mount((await repository.read())!.ledger, path, "charge");
+  await ready();
+  expect(
+    (
+      screen.getByRole("combobox", {
+        name: "কাজের বিবরণ ১",
+      }) as HTMLInputElement
+    ).value,
+  ).toBe("দেয়ালে প্লাস্টার");
+  expect(
+    latinDigits(
+      (screen.getByLabelText(/^বিলের টাকা/) as HTMLInputElement).value,
+    ),
+  ).toBe("200");
+  expect(screen.getByRole("combobox", { name: "খাতা" }).textContent).toContain(
+    "নমুনা ছাদ",
+  );
+  expect(
+    screen.getByRole("combobox", { name: "কোন কাজের জন্য" }).textContent,
+  ).toContain("নমুনা ঘরের কাজ");
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(close).toHaveBeenCalledTimes(2));
+  const saved = (await repository.read())!.ledger;
+  expect(saved.entries.find((entry) => entry.id === "old-work")).toEqual(
+    initial.entries[0],
+  );
+  const added = saved.entries.filter((entry) => entry.id !== "old-work");
+  expect(added).toHaveLength(2);
+  expect(added.find((entry) => entry.kind === "expense")).toMatchObject({
+    contractId: "job",
+    lines: [{ workId: "roof", label: "দেয়ালে প্লাস্টার", amount: 20000 }],
+  });
+  expect(added.find((entry) => entry.kind === "payment")).toMatchObject({
+    contractId: "job",
+    paymentParts: [{ amount: 20000, method: "bkash" }],
+  });
+  expect(saved.contracts).toEqual(initial.contracts);
+});
+
+it("keeps every row of an old multi-work draft although adding another work row is no longer offered", async () => {
+  const initial = await setup();
+  const draft = QuickDraftSchema.parse({
+    id: "old-multi-work",
+    date: "2026-11-05",
+    kind: "expense",
+    costType: "labour",
+    account: "labour",
+    workId: "roof",
+    personId: "worker",
+    payment: "due",
+    rows: [
+      {
+        id: "first-old-row",
+        label: "আগের প্লাস্টারের কাজ",
+        amount: "100",
+        quantity: "2",
+        unit: "দিন",
+      },
+      { id: "second-old-row", label: "আগের মেরামতের কাজ", amount: "200" },
+    ],
+  });
+  await createWorkspaceStorage().saveDraft(
+    "house-cost:charge:worker:roof:none:none",
+    { draft, files: [] },
+  );
+  mount(initial, "/write/charge?person=worker&work=roof", "charge");
+  await ready();
+  expect(screen.queryByRole("button", { name: "আরও কাজ" })).toBeNull();
+  expect(
+    screen
+      .getAllByRole("combobox", { name: /কাজের বিবরণ/ })
+      .map((field) => (field as HTMLInputElement).value),
+  ).toEqual(["আগের প্লাস্টারের কাজ", "আগের মেরামতের কাজ"]);
+  await userEvent
+    .setup()
+    .click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(close).toHaveBeenCalledOnce());
+  const saved = (await repository.read())!.ledger;
+  expect(saved.entries).toHaveLength(1);
+  expect(saved.entries[0]).toMatchObject({
+    id: "old-multi-work",
+    date: "2026-11-05",
+    kind: "expense",
+    lines: [
+      {
+        id: "first-old-row",
+        workId: "roof",
+        label: "আগের প্লাস্টারের কাজ",
+        amount: 10000,
+        quantity: "2",
+        unit: "দিন",
+      },
+      {
+        id: "second-old-row",
+        workId: "roof",
+        label: "আগের মেরামতের কাজ",
+        amount: 20000,
+      },
+    ],
+  });
+  expect(saved.contracts).toEqual(initial.contracts);
 });

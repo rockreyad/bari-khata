@@ -26,7 +26,7 @@ Exit code `0` মানে গঠন ও স্বয়ংক্রিয় reconcil
 1. সব device-এর pending লেখা, draft, receipt ও recovery-সহ IndexedDB কপি এবং server database/private receipt storage-এর consistent backup রাখুন। portable backup পুরো server বা সব device-এর dump নয়।
 2. উপরের script কপিতে চালিয়ে `report.json` পর্যালোচনা করুন। source-এর সঙ্গে ID, date, amount, note, attachment ও history মেলান। পুরোনো unmarked contract balance adjustment-এর অর্থ অজানা থাকলে নতুন calculation marker দিয়ে সেটিকে নিশ্চিত বানাবেন না।
 3. test environment-এ `backup.json` ফিরিয়ে entry, পক্ষের হিসাব, sector ও work দেখুন। নতুন bill/payment, advance, draft, reopen, backup/restore ও একাধিক device-এর conflict পরীক্ষা করুন।
-4. অনুমোদিত প্রকাশে SQL `202611050002_party_ledger_architecture.sql`, `202611050003_shared_payment_allocations.sql`, `202611050004_earned_obligations.sql` আগে প্রয়োগ করুন, তারপর compatible client দিন।
+4. অনুমোদিত প্রকাশে SQL `202611050002_party_ledger_architecture.sql`, `202611050003_shared_payment_allocations.sql`, `202611050004_earned_obligations.sql`, `202611050005_completed_contract_earnings.sql` আগে প্রয়োগ করুন, তারপর compatible client দিন।
 5. source-preserving স্থানীয় upgrade স্বয়ংক্রিয়ভাবে হয়। device-এ অসমাপ্ত লেখা বা cloud conflict থাকলে সেগুলো অক্ষত থাকবে; ব্যবহারকারীকে migration-এর হিসাব মেলানোর workflow দেওয়া হবে না।
 
 ## ফেরত যাওয়ার সীমা

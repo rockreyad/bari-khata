@@ -77,6 +77,48 @@ function expectWritePath(
   expect(url.pathname).toBe(path);
   expect(Object.fromEntries(url.searchParams)).toEqual(query);
 }
+it("shows unpaid completed work on the profile without repeating a zero due or treating paid wages as a deposit", () => {
+  state.ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "নমুনা খাতা" }],
+    people: [{ id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" }],
+    contracts: [
+      {
+        id: "job",
+        personId: "worker",
+        workId: "work",
+        total: 3500000,
+        status: "done",
+      },
+    ],
+    entries: [
+      {
+        id: "paid",
+        kind: "payment",
+        personId: "worker",
+        account: "labour",
+        contractId: "job",
+        paymentParts: [{ amount: 1000000 }],
+        allocations: [{ workId: "work", amount: 1000000 }],
+      },
+    ],
+  });
+  const original = structuredClone(state.ledger);
+  const { container } = renderPage();
+  const summary = screen.getByRole("region", { name: "এই নামের মোট হিসাব" });
+  expect(summary.querySelector(".contact-summary-hero")?.textContent).toContain(
+    "৳10000",
+  );
+  expect(
+    summary.querySelector(".contact-summary-metrics")?.textContent,
+  ).toContain("দিতে বাকি৳25000");
+  expect(container.querySelector(".job-snap-card")?.textContent).toContain(
+    "৳25000",
+  );
+  expect(summary.querySelector(".contact-job-totals")).toBeNull();
+  expect(within(summary).queryByText("আমার জমা")).toBeNull();
+  expect(within(summary).queryByText("বিলের বাকি")).toBeNull();
+  expect(state.ledger).toEqual(original);
+});
 it("shows the person's corrected paid total without a correction note in the directory", () => {
   const base = fixture();
   const person = base.people.find((row) => row.id === "worker")!;
@@ -385,9 +427,8 @@ it("puts payment before the chart and shows a matching job balance only once", (
   renderPage();
   const summary = screen.getByRole("region", { name: "এই নামের মোট হিসাব" });
   expect(within(summary).queryByText("৳600")).toBeNull();
-  expect(summary.querySelector(".contact-job-totals")?.textContent).toContain(
-    "জমা আছে৳400",
-  );
+  expect(summary.querySelector(".contact-job-totals")).toBeNull();
+  expect(within(summary).queryByText("জমা আছে")).toBeNull();
   const payment = within(summary).getByRole("button", { name: "টাকা দিই" });
   const chart = screen.getByRole("region", { name: "মাসের হিসাব" });
   expect(summary.contains(chart)).toBe(false);
@@ -552,11 +593,8 @@ it("keeps a house commitment accessible when its remaining amount happens to equ
   expect(
     container.querySelector(".contact-summary-metrics")?.textContent,
   ).toContain("৳600");
-  const extra = container.querySelector(".contact-job-totals")!;
-  expect(extra.textContent).toContain("সব কাজ মিলিয়ে");
-  expect(extra.textContent).toContain("বিলের বাকি৳0");
-  expect(extra.textContent).not.toContain("চুক্তির অবশিষ্ট৳600");
-  expect(extra.closest("details")?.hasAttribute("open")).toBe(false);
+  expect(container.querySelector(".contact-job-totals")).toBeNull();
+  expect(container.querySelector(".job-snap-card")).not.toBeNull();
 });
 
 describe("minimal people pages", () => {

@@ -122,7 +122,6 @@
       .entry-amount-card-v5 > strong,
       .shared-total-main > strong,
       .report-total > strong,
-      .job-detail-total > strong,
       .spending-chart-header h2
     ) {
     min-width: 0;

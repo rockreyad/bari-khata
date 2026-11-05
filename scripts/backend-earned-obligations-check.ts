@@ -6,7 +6,8 @@ import { LedgerSchema } from "../src/domain/model";
 import { reconciledTotals } from "../src/domain/adjustmentMath";
 import { SharedStatementSchema } from "../src/features/sharing/shareModel";
 import { appendBalanceAdjustment } from "../src/domain/balanceAdjustments";
-import { setEntryVoided } from "../src/domain/ledger";
+import { contractSummary, setEntryVoided } from "../src/domain/ledger";
+import { contactAccountSummary } from "../src/domain/contacts";
 
 const container = "supabase_db_bari-khata";
 const endpoint = JSON.parse(
@@ -52,7 +53,7 @@ const quote = (value: string) => `'${value.replaceAll("'", "''")}'`;
 const json = (value: unknown) => `${quote(JSON.stringify(value))}::jsonb`;
 const fingerprint = () =>
   db(
-    "select jsonb_agg(jsonb_build_object('name',n.nspname||'.'||p.proname,'body',md5(pg_get_functiondef(p.oid)),'acl',p.proacl::text) order by n.nspname,p.proname) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.proname in ('read_contact_share','ledger_obligation_cash_amount','ledger_unresolved_contract_adjustments','adjustment_snapshot_is_valid');",
+    "select jsonb_agg(jsonb_build_object('name',n.nspname||'.'||p.proname,'body',md5(pg_get_functiondef(p.oid)),'acl',p.proacl::text) order by n.nspname,p.proname) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.proname in ('read_contact_share','ledger_obligation_cash_amount','ledger_unresolved_contract_adjustments','ledger_completed_contract_cost','adjustment_snapshot_is_valid');",
   );
 const before = fingerprint();
 const owner = randomUUID(),
@@ -150,6 +151,47 @@ const invalidVersion = structuredClone(marked) as unknown as {
 };
 invalidVersion.entries.at(-1)!.adjustment!.calculationVersion = 3;
 const voidedMarked = setEntryVoided(marked, marked.entries.at(-1)!.id, true);
+const completedCases = [
+  { name: "unpaid", entries: [], status: "done" },
+  {
+    name: "overpaid",
+    entries: [
+      {
+        ...base.entries[1],
+        paymentParts: [{ amount: 11000 }],
+        allocations: [{ workId: "roof", amount: 11000 }],
+      },
+    ],
+    status: "done",
+  },
+  { name: "explicit", entries: base.entries, status: "done" },
+  {
+    name: "voided",
+    entries: [{ ...base.entries[0], voided: true }],
+    status: "done",
+  },
+  {
+    name: "historical",
+    entries: [{ ...base.entries[0], balanceImpact: "historical" }],
+    status: "done",
+  },
+  { name: "planned", entries: [], status: "planned" },
+  { name: "ongoing", entries: [], status: "ongoing" },
+  {
+    name: "separate-credit",
+    entries: [{ ...base.entries[1], contractId: null }],
+    status: "done",
+  },
+].map((row, index) => ({
+  name: row.name,
+  owner: randomUUID(),
+  token: String(index + 1).repeat(64),
+  ledger: LedgerSchema.parse({
+    ...base,
+    contracts: [{ ...base.contracts[0], status: row.status }],
+    entries: row.entries,
+  }),
+}));
 const strip = (source: string) =>
   source
     .trim()
@@ -184,14 +226,29 @@ const migration = strip(
     "utf8",
   ),
 );
+const completedMigration = strip(
+  readFileSync(
+    new URL(
+      "../supabase/migrations/202611050005_completed_contract_earnings.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+);
 const sql = [
   "begin; set local lock_timeout='2s'; set local statement_timeout='20s';",
   helper,
   migration,
+  completedMigration,
   `insert into auth.users(id,email) values (${quote(owner)}::uuid,${quote(`earned-${owner}@example.invalid`)}),(${quote(ambiguousOwner)}::uuid,${quote(`unclear-${ambiguousOwner}@example.invalid`)}),(${quote(markerOwner)}::uuid,${quote(`marker-${markerOwner}@example.invalid`)});`,
   `insert into public.ledger_documents(owner_id,revision,document) values (${quote(owner)}::uuid,1,${json(base)}),(${quote(ambiguousOwner)}::uuid,1,${json(ambiguous)});`,
   `insert into public.ledger_documents(owner_id,revision,document) values (${quote(markerOwner)}::uuid,1,${json(marked)});`,
   `insert into public.contact_share_links(owner_id,person_id,account,token_hash) values (${quote(owner)}::uuid,'party','labour',encode(extensions.digest(repeat('e',64),'sha256'),'hex')),(${quote(ambiguousOwner)}::uuid,'party','labour',encode(extensions.digest(repeat('f',64),'sha256'),'hex'));`,
+  ...completedCases.flatMap((row) => [
+    `insert into auth.users(id,email) values (${quote(row.owner)}::uuid,${quote(`completed-${row.owner}@example.invalid`)});`,
+    `insert into public.ledger_documents(owner_id,revision,document) values (${quote(row.owner)}::uuid,1,${json(row.ledger)});`,
+    `insert into public.contact_share_links(owner_id,person_id,account,token_hash) values (${quote(row.owner)}::uuid,'party','labour',encode(extensions.digest(${quote(row.token)},'sha256'),'hex'));`,
+  ]),
   `do $stable$ begin
     if private.ledger_unresolved_contract_adjustments(${json(later)})<>array['old-discount'] or private.ledger_unresolved_contract_adjustments(${json(revised)})<>array['old-discount'] then raise exception 'later_facts_cleared_old_ambiguity'; end if;
     if private.ledger_unresolved_contract_adjustments(${json(marked)})<>'{}'::text[] or not public.ledger_adjustments_are_valid(${json(marked)}) or not public.ledger_adjustments_are_valid(${json(voidedMarked)}) then raise exception 'new_earned_marker_or_history_rejected'; end if;
@@ -201,10 +258,14 @@ const sql = [
     exception when others then if sqlerrm not in ('balance_adjustment_would_be_lost','ledger_history_would_be_lost') then raise; end if; end;
     if (select document#>>array['entries',${quote(String(marked.entries.length - 1))},'adjustment','calculationVersion'] from public.ledger_documents where owner_id=${quote(markerOwner)}::uuid)<>'2' then raise exception 'marker_was_lost'; end if;
   end; $stable$;`,
-  "set local role anon; select public.read_contact_share(repeat('e',64)); select public.read_contact_share(repeat('f',64)); reset role; rollback;",
+  "set local role anon; select public.read_contact_share(repeat('e',64)); select public.read_contact_share(repeat('f',64));",
+  ...completedCases.map(
+    (row) => `select public.read_contact_share(${quote(row.token)});`,
+  ),
+  "reset role; rollback;",
 ].join("\n");
 try {
-  const [earned, unclear] = db(sql)
+  const [earned, unclear, ...completedStatements] = db(sql)
     .split("\n")
     .map((line) => SharedStatementSchema.parse(JSON.parse(line)));
   assert.equal(earned.totals.payable, 2000);
@@ -219,6 +280,46 @@ try {
   assert.equal(unclear.totals.advance, 0);
   assert.equal(unclear.contracts[0].remaining, 0);
   assert.equal(unclear.contracts[0].remainingCommitment, 8000);
+  completedCases.forEach((row, index) => {
+    const statement = completedStatements[index];
+    const canonical = contactAccountSummary(
+      row.ledger,
+      row.ledger.people[0],
+      "labour",
+    );
+    const contract = contractSummary(row.ledger, "agreement");
+    assert.equal(
+      statement.totals.payable,
+      canonical.reconciledPayable,
+      row.name,
+    );
+    assert.equal(
+      statement.totals.advance,
+      canonical.reconciledAdvance,
+      row.name,
+    );
+    assert.equal(
+      statement.totals.reconciledCost,
+      canonical.reconciledCost,
+      row.name,
+    );
+    assert.equal(statement.totals.actualPaid, canonical.actualPaid, row.name);
+    assert.equal(
+      statement.contracts[0].remaining,
+      contract.remaining,
+      row.name,
+    );
+    assert.equal(
+      statement.contracts[0].unearnedCommitment,
+      contract.unearnedCommitment,
+      row.name,
+    );
+    assert.equal(
+      statement.rows.length,
+      row.ledger.entries.filter((entry) => !entry.voided).length,
+      row.name,
+    );
+  });
 } finally {
   assert.equal(
     fingerprint(),
@@ -227,11 +328,11 @@ try {
   );
   assert.equal(
     db(
-      `select count(*) from auth.users where id in (${quote(owner)}::uuid,${quote(ambiguousOwner)}::uuid,${quote(markerOwner)}::uuid);`,
+      `select count(*) from auth.users where id in (${[owner, ambiguousOwner, markerOwner, ...completedCases.map((row) => row.owner)].map((id) => `${quote(id)}::uuid`).join(",")});`,
     ),
     "0",
   );
 }
 process.stdout.write(
-  "স্থানীয় Supabase: কাজের বিলের বাকি, ভবিষ্যৎ চুক্তি, পুরোনো অস্পষ্ট ছাড়, browser schema এবং rollback যাচাই সফল।\n",
+  "স্থানীয় Supabase: সম্পন্ন কাজের পাওনা, বিল একবার গণনা, কাজের বিলের বাকি, ভবিষ্যৎ চুক্তি, পুরোনো অস্পষ্ট ছাড়, browser schema এবং rollback যাচাই সফল।\n",
 );

@@ -1012,10 +1012,10 @@ it("shows scoped compact job previews on the labour tab and routes details away 
   expect(tiles).toHaveLength(2);
   expect(tiles[0].textContent).toContain("শাহ আলম");
   expect(tiles[0].textContent).toContain("৳10000");
-  expect(tiles[0].textContent).toContain("আগে দেওয়া টাকা৳2000");
+  expect(tiles[0].textContent).toContain("দিয়েছি৳2000");
   expect(tiles[1].textContent).toContain("রহিম");
   expect(tiles[1].textContent).toContain("৳50000");
-  expect(tiles[1].textContent).toContain("আগে দেওয়া টাকা৳5000");
+  expect(tiles[1].textContent).toContain("দিয়েছি৳5000");
   expect(preview.textContent).not.toContain("শুধু ছাদের কাজ");
   expect(preview.textContent).not.toContain("পুরো বাড়ি");
   expect(within(preview).queryByRole("progressbar")).toBeNull();

@@ -97,13 +97,13 @@ export function createMigrationReview(value: Ledger): MigrationReview {
     return {
       contractId: contract.id,
       agreed: contract.total,
-      earned: summary.billed,
+      earned: summary.earned,
       cashNetPaid: summary.netPaid,
       legacyPayable: old.reconciledPayable,
       legacyAdvance: old.reconciledAdvance,
       earnedPayable: current.reconciledPayable,
       earnedAdvance: current.reconciledAdvance,
-      unearnedCommitment: Math.max(0, contract.total - summary.billed),
+      unearnedCommitment: summary.unearnedCommitment,
     };
   });
   const old = legacyCommitmentTotals(ledger),

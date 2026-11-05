@@ -35,7 +35,6 @@ import { contractAppliesToWork } from "../../domain/contracts";
 import { personSummary } from "../../domain/ledger";
 import { partyLedger } from "../../domain/partyLedger";
 import { JobPreview } from "../jobs/JobPreview";
-import { jobBalanceTotals } from "../jobs/jobView";
 import { PersonMark, kindLabels } from "./ContactIdentity";
 import { StatementSheet } from "./StatementSheet";
 import { phoneLink } from "./people";
@@ -221,6 +220,7 @@ export function PersonPage() {
         ? personSummary(
             {
               ...ledger,
+              contracts: [],
               entries: summary.entries.filter((entry) => !entry.contractId),
             },
             person.id,
@@ -250,6 +250,7 @@ export function PersonPage() {
       const credit = personSummary(
         {
           ...scoped,
+          contracts: [],
           entries: scoped.entries.filter((entry) => !entry.contractId),
         },
         person.id,
@@ -263,8 +264,6 @@ export function PersonPage() {
     summary.owedCorrection !== 0
       ? uncontractedCredit
       : Math.min(uncontractedCredit, advanceCash);
-  const jobTotals = jobBalanceTotals(ledger, personContracts);
-  const hasJobs = personContracts.some((job) => !job.archivedAt);
   const costMetric =
     (summary.reconciledCost !== 0 || summary.costCorrection !== 0) &&
     summary.reconciledCost !== summary.reconciledNetPaid
@@ -298,17 +297,6 @@ export function PersonPage() {
       amount: summary.reconciledAdvance,
       tone: "contact-credit",
     });
-  const showJobDetails =
-    hasJobs &&
-    (!jobTotals.valid ||
-      summary.balanceAmbiguous ||
-      (workId &&
-        personContracts.some(
-          (job) => job.scope === "house" && !job.archivedAt,
-        )) ||
-      jobTotals.extra > 0 ||
-      jobTotals.remaining !==
-        (metrics.find((metric) => metric.tone === "contact-due")?.amount ?? 0));
   const showAdvanceDetails =
     uncontractedAdvance > 0 && (kind !== "shop" || summary.confirmedCost <= 0);
   const showMainActions = actions.some((action) =>
@@ -513,7 +501,7 @@ export function PersonPage() {
             )}
           </div>
         ) : null}
-        {showAdvanceDetails || costMetric || showJobDetails ? (
+        {showAdvanceDetails || costMetric ? (
           <details className="contact-reconciliation">
             <summary>
               {t("আরও হিসাব")}
@@ -534,38 +522,6 @@ export function PersonPage() {
                 <dt>{t(costMetric.label)}</dt>
                 <dd>{money(costMetric.amount)}</dd>
               </dl>
-            ) : null}
-            {showJobDetails ? (
-              <div className="contact-job-totals">
-                <h2>{t("সব কাজ মিলিয়ে")}</h2>
-                {jobTotals.valid ? (
-                  <dl>
-                    <div>
-                      <dt>{t("বিলের বাকি")}</dt>
-                      <dd className="contact-due">
-                        {money(jobTotals.remaining)}
-                      </dd>
-                    </div>
-                    {jobTotals.extra > 0 ? (
-                      <div>
-                        <dt>{t("জমা আছে")}</dt>
-                        <dd className="contact-credit">
-                          {money(jobTotals.extra)}
-                        </dd>
-                      </div>
-                    ) : null}
-                  </dl>
-                ) : (
-                  <p>
-                    {t(
-                      summary.balanceAmbiguous
-                        ? "যাচাই বাকি"
-                        : "টাকার অঙ্ক বেশি হয়েছে।",
-                    )}
-                  </p>
-                )}
-                <small>{t("কাজের বিল থেকে দেওয়া টাকা বাদে")}</small>
-              </div>
             ) : null}
           </details>
         ) : null}

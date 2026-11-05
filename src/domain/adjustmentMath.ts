@@ -1,7 +1,10 @@
 import type { Account, Entry, Ledger } from "./model.js";
 import { effectiveAccounts } from "./effectiveAccounts.js";
 import { cashObligationParts } from "./cashObligations.js";
-import { unresolvedContractAdjustmentIds } from "./contractObligations.js";
+import {
+  contractEarnings,
+  unresolvedContractAdjustmentIds,
+} from "./contractObligations.js";
 
 export type AdjustmentBasis = "paid" | "cost" | "balance";
 export type FinancialScope = {
@@ -41,6 +44,7 @@ function computeReconciliation(
   includeUnearnedCommitments = false,
 ) {
   const accounts = effectiveAccounts(ledger);
+  const earnings = contractEarnings(ledger);
   const unresolved = unresolvedContractAdjustmentIds(ledger);
   const unresolvedInScope: string[] = [];
   const buckets = new Map<string, Bucket>();
@@ -118,7 +122,15 @@ function computeReconciliation(
       )
       .map((job) => [job.id, job]),
   );
-  for (const job of jobs.values()) bucket(job.personId, "labour", job.id);
+  let completedContractCost = 0n;
+  for (const job of jobs.values()) {
+    const row = bucket(job.personId, "labour", job.id);
+    const earned = earnings.get(job.id)!;
+    if (earned.fromCompletion) {
+      row.cost += earned.earned;
+      completedContractCost += earned.earned;
+    }
+  }
   const jobPeople = new Set([...jobs.values()].map((job) => job.personId));
   const balanceAmbiguous =
     includeUnearnedCommitments &&
@@ -223,6 +235,7 @@ function computeReconciliation(
     scope.contractId || signedPersonScope ? corrected - advance : corrected;
   const result = {
     actualCost,
+    completedContractCost,
     actualPaid,
     actualRefunds,
     actualNetPaid: actualPaid - actualRefunds,
@@ -232,7 +245,7 @@ function computeReconciliation(
     owedCorrection,
     grossPayable,
     grossAdvance,
-    reconciledCost: actualCost + costCorrection,
+    reconciledCost: actualCost + completedContractCost + costCorrection,
     reconciledNetPaid: actualPaid - actualRefunds + paidCorrection,
     reconciledBalance: balance,
     reconciledPayable: positive(balance),

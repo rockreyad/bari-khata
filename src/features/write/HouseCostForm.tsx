@@ -10,6 +10,7 @@ import { PaymentMethodField } from "../../components/PaymentMethodField";
 import { MoneyInput } from "../../components/ui/MoneyInput";
 import { NumericInput } from "../../components/ui/NumericInput";
 import { AppSelect } from "../../components/ui/AppSelect";
+import { AppCombobox } from "../../components/ui/AppCombobox";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { FormError, useFormError } from "../../components/ui/FormError";
 import {
@@ -34,6 +35,7 @@ import { useInlineDraft } from "../entries/useInlineDraft";
 import { recordHouseCost } from "./houseCost";
 import { HouseSavedNotice } from "./HouseSavedNotice";
 import { HouseAttachments } from "./HouseAttachments";
+import { workDescriptionSuggestions } from "./workDescriptionSuggestions";
 import {
   planHouseBillAdvance,
   applyHouseBillAdvance,
@@ -143,6 +145,25 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
     initial,
   );
   const { draft, files } = value;
+  const descriptions = useMemo(
+    () =>
+      action === "charge"
+        ? workDescriptionSuggestions(ledger, {
+            costType: draft.costType,
+            personId: draft.personId,
+            workId: draft.workId,
+            contractId: draft.contractId,
+          })
+        : [],
+    [
+      action,
+      ledger,
+      draft.costType,
+      draft.personId,
+      draft.workId,
+      draft.contractId,
+    ],
+  );
   const person = ledger.people.find((row) => row.id === draft.personId);
   const policy = person ? contactEntryPolicy(person) : null;
   const compatible =
@@ -615,24 +636,57 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                 >
                   <label>
                     {t(action === "purchase" ? "কী কিনেছেন" : "কী কাজ হয়েছে")}
-                    <input
-                      aria-label={t(
-                        action === "purchase"
-                          ? "মালের নাম {{number}}"
-                          : "কাজের বিবরণ {{number}}",
-                        { number: formatDigits(index + 1) },
-                      )}
-                      required
-                      maxLength={200}
-                      value={row.label}
-                      aria-invalid={invalidField === `label:${row.id}`}
-                      aria-describedby={
-                        invalidField === `label:${row.id}` ? errorId : undefined
-                      }
-                      onChange={(event) =>
-                        rowField(row.id, "label", event.target.value)
-                      }
-                    />
+                    {action === "charge" ? (
+                      <AppCombobox
+                        aria-label={t("কাজের বিবরণ {{number}}", {
+                          number: formatDigits(index + 1),
+                        })}
+                        suggestions={descriptions}
+                        required
+                        maxLength={200}
+                        value={row.label}
+                        aria-invalid={invalidField === `label:${row.id}`}
+                        aria-describedby={
+                          invalidField === `label:${row.id}`
+                            ? errorId
+                            : descriptions.length
+                              ? `work-description-hint-${row.id}`
+                              : undefined
+                        }
+                        onChange={(event) =>
+                          rowField(row.id, "label", event.target.value)
+                        }
+                      />
+                    ) : (
+                      <input
+                        aria-label={t(
+                          action === "purchase"
+                            ? "মালের নাম {{number}}"
+                            : "কাজের বিবরণ {{number}}",
+                          { number: formatDigits(index + 1) },
+                        )}
+                        required
+                        maxLength={200}
+                        value={row.label}
+                        aria-invalid={invalidField === `label:${row.id}`}
+                        aria-describedby={
+                          invalidField === `label:${row.id}`
+                            ? errorId
+                            : undefined
+                        }
+                        onChange={(event) =>
+                          rowField(row.id, "label", event.target.value)
+                        }
+                      />
+                    )}
+                    {action === "charge" && descriptions.length > 0 && (
+                      <small
+                        id={`work-description-hint-${row.id}`}
+                        className="field-hint"
+                      >
+                        {t("আগের লেখা বেছে নিন বা নিজে লিখুন")}
+                      </small>
+                    )}
                   </label>
                   {index > 0 ? (
                     <label>
@@ -731,27 +785,29 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               </section>
             ))}
           </div>
-          <button
-            type="button"
-            className="transaction-secondary"
-            onClick={() =>
-              field("rows", [
-                ...draft.rows,
-                {
-                  ...initial.draft.rows[0],
-                  id: crypto.randomUUID(),
-                  label: "",
-                  amount: "",
-                  brand: "",
-                  quantity: "",
-                  unit: "",
-                },
-              ])
-            }
-          >
-            <PlusIcon size={17} />
-            {t(action === "purchase" ? "আরও মাল" : "আরও কাজ")}
-          </button>
+          {action === "purchase" && (
+            <button
+              type="button"
+              className="transaction-secondary"
+              onClick={() =>
+                field("rows", [
+                  ...draft.rows,
+                  {
+                    ...initial.draft.rows[0],
+                    id: crypto.randomUUID(),
+                    label: "",
+                    amount: "",
+                    brand: "",
+                    quantity: "",
+                    unit: "",
+                  },
+                ])
+              }
+            >
+              <PlusIcon size={17} />
+              {t("আরও মাল")}
+            </button>
+          )}
           <div
             className={
               draft.payment === "worker"

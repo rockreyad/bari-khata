@@ -77,73 +77,74 @@ export function partyDueItems(
         label: "বাকির হিসাব",
       } satisfies PartyDueItem;
     };
-    const buckets = [...new Set(entries.map((entry) => entry.contractId))].map(
-      (contractId) => {
-        const source = entries.filter(
-          (entry) => entry.contractId === contractId,
-        );
-        const current = reconciledTotals(
-          {
-            ...accountLedger,
-            entries: source,
-            contracts: ledger.contracts.filter(
-              (contract) => contract.id === contractId,
-            ),
-          },
-          { personId, ...(scope.workId ? { workId: scope.workId } : {}) },
-        );
-        const bills = summary.bills
-          .filter(
-            (bill) =>
-              effective.get(bill.entry.id) === account &&
-              bill.entry.contractId === contractId,
-          )
-          .flatMap((bill) =>
-            bill.works
-              .filter(
-                (work) =>
-                  work.outstanding > 0 &&
-                  (!scope.workId || work.workId === scope.workId),
-              )
-              .map((work) => ({ bill, work })),
-          )
-          .sort(
-            (a, b) =>
-              (a.bill.entry.date ?? "9999").localeCompare(
-                b.bill.entry.date ?? "9999",
-              ) ||
-              a.bill.entry.createdAt.localeCompare(b.bill.entry.createdAt) ||
-              a.bill.entry.id.localeCompare(b.bill.entry.id) ||
-              a.work.workId.localeCompare(b.work.workId),
-          );
-        const unmatchedCash = summary.payments.some(
-          (payment) =>
-            effective.get(payment.entry.id) === account &&
-            payment.entry.contractId === contractId &&
-            payment.context !== "receivable" &&
-            payment.works.some(
+    const contractIds = accountLedger.contracts
+      .filter((contract) => contract.personId === personId)
+      .map((contract) => contract.id);
+    const buckets = [
+      ...new Set([...entries.map((entry) => entry.contractId), ...contractIds]),
+    ].map((contractId) => {
+      const source = entries.filter((entry) => entry.contractId === contractId);
+      const current = reconciledTotals(
+        {
+          ...accountLedger,
+          entries: source,
+          contracts: ledger.contracts.filter(
+            (contract) => contract.id === contractId,
+          ),
+        },
+        { personId, ...(scope.workId ? { workId: scope.workId } : {}) },
+      );
+      const bills = summary.bills
+        .filter(
+          (bill) =>
+            effective.get(bill.entry.id) === account &&
+            bill.entry.contractId === contractId,
+        )
+        .flatMap((bill) =>
+          bill.works
+            .filter(
               (work) =>
-                work.available > 0 &&
+                work.outstanding > 0 &&
                 (!scope.workId || work.workId === scope.workId),
-            ),
+            )
+            .map((work) => ({ bill, work })),
+        )
+        .sort(
+          (a, b) =>
+            (a.bill.entry.date ?? "9999").localeCompare(
+              b.bill.entry.date ?? "9999",
+            ) ||
+            a.bill.entry.createdAt.localeCompare(b.bill.entry.createdAt) ||
+            a.bill.entry.id.localeCompare(b.bill.entry.id) ||
+            a.work.workId.localeCompare(b.work.workId),
         );
-        const correction = source.some(
-          (entry) =>
-            !entry.voided &&
-            entry.kind === "adjustment" &&
-            entry.adjustment?.target === "person" &&
-            (!scope.workId || entry.adjustment.workId === scope.workId),
-        );
-        return {
-          contractId,
-          source,
-          amount: current.balanceAmbiguous ? 0 : current.reconciledPayable,
-          bills,
-          unmatchedCash,
-          correction,
-        };
-      },
-    );
+      const unmatchedCash = summary.payments.some(
+        (payment) =>
+          effective.get(payment.entry.id) === account &&
+          payment.entry.contractId === contractId &&
+          payment.context !== "receivable" &&
+          payment.works.some(
+            (work) =>
+              work.available > 0 &&
+              (!scope.workId || work.workId === scope.workId),
+          ),
+      );
+      const correction = source.some(
+        (entry) =>
+          !entry.voided &&
+          entry.kind === "adjustment" &&
+          entry.adjustment?.target === "person" &&
+          (!scope.workId || entry.adjustment.workId === scope.workId),
+      );
+      return {
+        contractId,
+        source,
+        amount: current.balanceAmbiguous ? 0 : current.reconciledPayable,
+        bills,
+        unmatchedCash,
+        correction,
+      };
+    });
     const bucketTotal = buckets.reduce((sum, bucket) => sum + bucket.amount, 0);
     if (bucketTotal !== totals.reconciledPayable) {
       result.push(aggregate(totals.reconciledPayable, null, entries));

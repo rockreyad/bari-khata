@@ -94,6 +94,10 @@ export function contactAccountLedger(
   return {
     ...ledger,
     entries: own.filter((entry) => effective.get(entry.id) === account),
+    contracts:
+      account === "labour"
+        ? ledger.contracts.filter((row) => row.personId === person.id)
+        : [],
   };
 }
 export function sortContactEntries(
@@ -119,7 +123,6 @@ export function contactAccountSummary(
     ...summary,
     ...reconciledTotals(scoped, {
       personId: person.id,
-      account,
       ...(workId ? { workId } : {}),
     }),
     historicalCount: summary.entries.filter(
@@ -145,26 +148,8 @@ export function contactSummary(
   workId?: string,
 ) {
   const summary = personSummary(ledger, person.id, workId);
-  const accounts = (["materials", "labour", "other"] as const).map((account) =>
-    reconciledTotals(ledger, {
-      personId: person.id,
-      account,
-      ...(workId ? { workId } : {}),
-    }),
-  );
-  const payable = accounts.reduce(
-    (sum, account) => sum + account.reconciledPayable,
-    0,
-  );
-  const advance = accounts.reduce(
-    (sum, account) => sum + account.reconciledAdvance,
-    0,
-  );
   return {
     ...summary,
-    reconciledPayable: payable,
-    reconciledAdvance: advance,
-    reconciledBalance: payable,
     historicalCount: summary.entries.filter(
       (entry) => entry.balanceImpact === "historical",
     ).length,

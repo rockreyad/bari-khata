@@ -4,7 +4,10 @@ import type { Account, CostType, Entry, Ledger } from "./model.js";
 import { EntryCoreSchema, validateLedger } from "./model.js";
 import { adjustmentBalanceDelta, reconciledTotals } from "./adjustmentMath.js";
 import { cashObligationParts } from "./cashObligations.js";
-import { unresolvedContractAdjustmentIds } from "./contractObligations.js";
+import {
+  contractEarnings,
+  unresolvedContractAdjustmentIds,
+} from "./contractObligations.js";
 import { allocatePayment, partyLedger } from "./partyLedger.js";
 
 export const accounts: Account[] = ["materials", "labour", "other"];
@@ -372,9 +375,13 @@ export function partyAccountBalance(
     }),
     emptyBalance(),
   );
-  // This running account excludes other jobs and their agreed totals.
+  // Only this contract can contribute completed work to its running account.
   const reconciled = reconciledTotals(
-    { ...ledger, entries, contracts: [] },
+    {
+      ...ledger,
+      entries,
+      contracts: ledger.contracts.filter((row) => row.id === contractId),
+    },
     { personId, account },
   );
   return {
@@ -423,19 +430,22 @@ export function contractSummary(ledger: Ledger, contractId: string) {
     }
   }
   const agreed = contract?.total ?? 0;
+  const earnings = contractEarnings(ledger).get(contractId);
+  const earned = earnings?.earned ?? BigInt(billed);
   const netPaid = paid - refunds;
   const obligationNetPaid = obligationPaid - obligationRefunds;
   const balance =
     BigInt(Math.max(agreed, billed)) +
     BigInt(commitmentAdjustment) -
     BigInt(obligationNetPaid);
-  const billedBalance =
-    BigInt(billed) + BigInt(adjustment) - BigInt(obligationNetPaid);
+  const billedBalance = earned + BigInt(adjustment) - BigInt(obligationNetPaid);
   return {
     contract,
     agreed,
     adjustment,
     billed,
+    earned: Number(earned),
+    earnedFromCompletion: earnings?.fromCompletion ?? false,
     paid,
     refunds,
     netPaid,
@@ -443,11 +453,13 @@ export function contractSummary(ledger: Ledger, contractId: string) {
     billedBalance: Number(billedBalance),
     remaining: Number(billedBalance > 0n ? billedBalance : 0n),
     remainingCommitment: Number(balance > 0n ? balance : 0n),
-    unearnedCommitment: Math.max(agreed - billed, 0),
+    unearnedCommitment: Number(
+      BigInt(agreed) > earned ? BigInt(agreed) - earned : 0n,
+    ),
     commitmentAdjustment,
     balanceAmbiguous: entries.some((entry) => unresolved.has(entry.id)),
     payable: Number(billedBalance > 0n ? billedBalance : 0n),
-    advance: Math.max(obligationNetPaid - billed, 0),
+    advance: Number(billedBalance < 0n ? -billedBalance : 0n),
     entries,
   };
 }

@@ -4,7 +4,6 @@ import {
   ClockCounterClockwiseIcon,
   PencilSimpleIcon,
 } from "@phosphor-icons/react";
-import { BalanceProgress } from "../../components/ui/BalanceProgress";
 import { LoadMore } from "../../components/ui/LoadMore";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { contractChanges } from "../../domain/contracts";
@@ -268,6 +267,19 @@ export function ContractCard({
   const { t, money, date, formatDigits } = useLanguageContext();
   const summary = contractSummary(ledger, contract.id);
   const extra = summary.advance;
+  const showCredit =
+    !summary.balanceAmbiguous &&
+    extra > 0 &&
+    (summary.earned > 0 || extra !== summary.netPaid);
+  const showBalance =
+    summary.balanceAmbiguous ||
+    summary.remaining > 0 ||
+    showCredit ||
+    summary.earned > 0;
+  const creditLabel =
+    summary.earned >= contract.total && contract.total > 0
+      ? "বেশি দিয়েছি"
+      : "জমা আছে";
   if (
     !summary.balanceAmbiguous &&
     (!Number.isSafeInteger(summary.remaining) || !Number.isSafeInteger(extra))
@@ -299,50 +311,56 @@ export function ContractCard({
           ) : null}
         </header>
       ) : null}
-      <div className="job-detail-total">
-        <span>{t("মোট টাকা")}</span>
-        {contract.calculatedTotal != null &&
-        contract.calculatedTotal !== contract.total ? (
-          <s aria-label={t("পরিমাণ ও দর অনুযায়ী")}>
-            {money(contract.calculatedTotal)}
-          </s>
-        ) : null}
-        <strong>{money(contract.total)}</strong>
-      </div>
-      <dl className="job-detail-money">
-        <div className="job-detail-paid">
-          <dt>{t("দিয়েছি")}</dt>
-          <dd>{money(summary.netPaid)}</dd>
+      <div className="job-summary-values" data-balance={showBalance}>
+        <div className="job-detail-total">
+          <span>{t("মোট টাকা")}</span>
+          {contract.calculatedTotal != null &&
+          contract.calculatedTotal !== contract.total ? (
+            <s aria-label={t("পরিমাণ ও দর অনুযায়ী")}>
+              {money(contract.calculatedTotal)}
+            </s>
+          ) : null}
+          <strong>{money(contract.total)}</strong>
         </div>
-        <div
-          className={
-            summary.balanceAmbiguous
-              ? "job-detail-review"
-              : summary.remaining > 0
-                ? "job-detail-due"
-                : "job-detail-settled"
-          }
-        >
-          <dt>{t("বাকি")}</dt>
-          <dd>
-            {summary.balanceAmbiguous
-              ? t("বাকি মেলানো বাকি")
-              : money(summary.remaining)}
-          </dd>
-        </div>
-        {!summary.balanceAmbiguous && extra > 0 ? (
-          <div className="job-extra-paid">
-            <dt>{t("আগে দেওয়া টাকা")}</dt>
-            <dd>{money(extra)}</dd>
+        <dl className="job-detail-money">
+          <div className="job-detail-paid">
+            <dt>{t("দিয়েছি")}</dt>
+            <dd>{money(summary.netPaid)}</dd>
           </div>
-        ) : null}
-      </dl>
-      <BalanceProgress
-        total={contract.total}
-        paid={summary.netPaid}
-        showAmounts={false}
-        showStatus={false}
-      />
+          {showBalance ? (
+            <div
+              className={
+                summary.balanceAmbiguous
+                  ? "job-detail-review"
+                  : showCredit
+                    ? "job-extra-paid"
+                    : summary.remaining > 0
+                      ? "job-detail-due"
+                      : "job-detail-settled"
+              }
+            >
+              <dt>{t(showCredit ? creditLabel : "দিতে বাকি")}</dt>
+              <dd>
+                {summary.balanceAmbiguous
+                  ? t("বাকি মেলানো বাকি")
+                  : showCredit
+                    ? money(extra)
+                    : summary.remaining > 0
+                      ? money(summary.remaining)
+                      : t("বাকি নেই")}
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+      </div>
+      {!summary.balanceAmbiguous &&
+      summary.earned > 0 &&
+      summary.earned !== contract.total &&
+      !summary.earnedFromCompletion ? (
+        <p className="job-earned-note">
+          {t("বিল হয়েছে {{amount}}", { amount: money(summary.earned) })}
+        </p>
+      ) : null}
       {summary.refunds > 0 ? (
         <p className="job-refund-note">
           {t("ফেরত পেয়েছি")} <strong>{money(summary.refunds)}</strong>

@@ -1,9 +1,4 @@
-import {
-  ArrowRightIcon,
-  CheckCircleIcon,
-  HardHatIcon,
-  PlusIcon,
-} from "@phosphor-icons/react";
+import { ArrowRightIcon, HardHatIcon, PlusIcon } from "@phosphor-icons/react";
 import { useMemo } from "react";
 import { useLocation } from "react-router";
 import { jobDetailUrl } from "../../app/jobRoutes";
@@ -39,6 +34,16 @@ export function JobTile({
     [balance, ledger, job.id],
   );
   const remaining = summary.extra > 0 ? summary.extra : summary.remaining;
+  const showCredit =
+    !summary.balanceAmbiguous &&
+    summary.extra > 0 &&
+    (summary.earned > 0 || summary.extra !== summary.netPaid);
+  const showBalance =
+    !summary.valid ||
+    summary.balanceAmbiguous ||
+    summary.remaining > 0 ||
+    showCredit ||
+    summary.earned > 0;
   const status = jobStatusKey(job);
   const worker = ledger.people.find((person) => person.id === job.personId);
   return (
@@ -62,29 +67,38 @@ export function JobTile({
       {showWorker && worker ? (
         <span className="job-tile-worker">{formatDigits(worker.name)}</span>
       ) : null}
-      <span className="job-tile-amounts">
+      <span className="job-tile-amounts" data-balance={showBalance}>
         <span>
           <small>{t("মোট")}</small>
           <strong>{money(job.total)}</strong>
+        </span>
+        <span className="job-tile-paid">
+          <small>{t("দিয়েছি")}</small>
+          <strong>{money(summary.netPaid)}</strong>
         </span>
         {summary.balanceAmbiguous ? (
           <span className="job-tile-balance">
             <small>{t("বাকি")}</small>
             <strong>{t("বাকি মেলানো বাকি")}</strong>
           </span>
-        ) : summary.state === "settled" ? (
-          <span className="job-tile-settled">
-            <CheckCircleIcon size={18} weight="duotone" />
-            {t("বাকি নেই")}
-          </span>
-        ) : (
+        ) : summary.earned > 0 && summary.state === "settled" ? (
+          <span className="job-tile-settled">{t("বাকি নেই")}</span>
+        ) : showBalance ? (
           <span className="job-tile-balance">
-            <small>{t(summary.extra > 0 ? "আগে দেওয়া টাকা" : "বাকি")}</small>
+            <small>
+              {t(
+                showCredit
+                  ? summary.earned >= job.total && job.total > 0
+                    ? "বেশি দিয়েছি"
+                    : "জমা আছে"
+                  : "দিতে বাকি",
+              )}
+            </small>
             <strong>
               {summary.valid ? money(remaining) : t("টাকার অঙ্ক বেশি হয়েছে।")}
             </strong>
           </span>
-        )}
+        ) : null}
       </span>
     </button>
   );

@@ -154,7 +154,7 @@ const copy = {
   },
 };
 
-it("shows aggregate remaining and overpaid job totals on the worker profile without offsetting them", () => {
+it("keeps separate job balances on their cards without a repeated aggregate summary", () => {
   const ledger = LedgerSchema.parse({
     works: [
       { id: "bath", name: "বাথরুম" },
@@ -188,12 +188,8 @@ it("shows aggregate remaining and overpaid job totals on the worker profile with
   });
   const before = JSON.stringify(ledger);
   const view = mount(ledger, "/parties/worker");
-  const totals = view.container.querySelector<HTMLElement>(
-    ".contact-job-totals",
-  )!;
-  expect(totals.textContent).toContain("৳\u202f০");
-  expect(totals.textContent).toContain("৳\u202f১,৭০০");
-  expect(within(totals).getByText("জমা আছে")).toBeTruthy();
+  expect(view.container.querySelector(".contact-job-totals")).toBeNull();
+  expect(view.container.querySelectorAll(".job-snap-card")).toHaveLength(2);
   expect(JSON.stringify(ledger)).toBe(before);
 });
 
@@ -229,11 +225,7 @@ describe.each(["bn", "en"] as const)("profile progress in %s", (language) => {
     expect(card.textContent).toContain(copy[language].paid);
     expect(card.textContent).toContain(copy[language].remaining);
     expect(card.textContent).toContain(copy[language].year);
-    expect(
-      Number(
-        within(card).getByRole("progressbar").getAttribute("aria-valuenow"),
-      ),
-    ).toBeCloseTo(8.33, 2);
+    expect(within(card).queryByRole("progressbar")).toBeNull();
     expect(
       detail.container.querySelector(".contract-history")?.textContent,
     ).toContain("বারান্দার কাজ যোগ হয়েছে");
@@ -443,11 +435,9 @@ it("does not call ordinary contract instalments an advance, while retaining a se
     ],
   });
   const first = mount(ledger, "/parties/worker");
+  expect(first.container.querySelector(".contact-job-totals")).toBeNull();
   expect(
-    first.container.querySelector(".contact-reconciliation")?.textContent,
-  ).toContain("জমা আছে");
-  expect(
-    first.container.querySelector(".contact-reconciliation")?.textContent,
+    first.container.querySelector(".contact-reconciliation")?.textContent ?? "",
   ).not.toContain("অগ্রিম দিয়েছি");
   expect(
     first.container.querySelector(".job-snap-card")?.textContent,

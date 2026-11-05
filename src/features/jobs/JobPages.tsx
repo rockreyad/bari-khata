@@ -649,11 +649,6 @@ export function JobPage() {
         showHeading={false}
         showHistory={false}
       />
-      <AgreementMilestones
-        key={job.id}
-        contractId={job.id}
-        archived={removal.archived || Boolean(worker?.archivedAt)}
-      />
       <button
         type="button"
         className="primary-button job-pay"
@@ -671,6 +666,17 @@ export function JobPage() {
         <WalletIcon size={21} weight="duotone" />
         {t("টাকা দিই")}
       </button>
+      <details className="job-milestones">
+        <summary>
+          {t("কাজের ধাপ")}
+          <CaretDownIcon size={17} aria-hidden="true" />
+        </summary>
+        <AgreementMilestones
+          key={job.id}
+          contractId={job.id}
+          archived={removal.archived || Boolean(worker?.archivedAt)}
+        />
+      </details>
       <div
         className="job-detail-tabs"
         role="tablist"

@@ -20,6 +20,7 @@ import {
 } from "../../domain/model";
 import { saveContractChange } from "../../domain/contracts";
 import { savePreferences } from "../../lib/preferences";
+import { formatMoney } from "../../lib/formatMoney";
 import { JobPreview } from "./JobPreview";
 import { JobPage, JobsPage } from "./JobPages";
 
@@ -603,7 +604,10 @@ describe.each(["bn", "en"] as const)("job details in %s", (language) => {
     ).toBe(copy[language].goal);
     const amounts = container.querySelectorAll(".job-detail-money dd");
     expect(amounts[0].textContent).toBe(copy[language].paid);
-    expect(amounts[1].textContent).toBe(copy[language].remaining);
+    expect(amounts).toHaveLength(1);
+    expect(container.querySelector(".job-detail-due")).toBeNull();
+    expect(container.querySelector(".job-extra-paid")).toBeNull();
+    expect(container.querySelector(".balance-progress")).toBeNull();
     expect(container.querySelector(".job-refund-note")?.textContent).toContain(
       copy[language].refund,
     );
@@ -669,15 +673,17 @@ it("shows overpayment rather than zero remaining in the preview and keeps zero-p
   );
   expect(
     preview.container.querySelector(".job-tile-amounts")?.textContent,
-  ).toContain("আগে দেওয়া টাকা৳\u202f১,০০০");
+  ).toContain("বেশি দিয়েছি৳\u202f১,০০০");
   preview.unmount();
   const page = mount(ledger, "/works/job-0");
   expect(page.container.querySelector(".job-extra-paid dd")?.textContent).toBe(
     "৳\u202f১,০০০",
   );
-  expect(
-    page.container.querySelectorAll(".job-detail-money dd")[1].textContent,
-  ).toBe("৳\u202f০");
+  expect(page.container.querySelector(".job-detail-due")).toBeNull();
+  expect(page.container.querySelectorAll(".job-detail-money dd")).toHaveLength(
+    2,
+  );
+  expect(page.container.querySelector(".balance-progress")).toBeNull();
   page.unmount();
   const empty = mount(fixture(1), "/works/job-0");
   expect(
@@ -685,6 +691,165 @@ it("shows overpayment rather than zero remaining in the preview and keeps zero-p
   ).toBe("৳\u202f০");
   expect(screen.getByRole("button", { name: "টাকা দিই" })).toBeTruthy();
 });
+
+it.each([
+  {
+    status: "done",
+    paid: 3600000,
+    billed: null,
+    due: 0,
+    extra: 100000,
+    settled: false,
+    label: "বেশি দিয়েছি",
+  },
+  {
+    status: "done",
+    paid: 1000000,
+    billed: null,
+    due: 2500000,
+    extra: 0,
+    settled: false,
+    label: "",
+  },
+  {
+    status: "done",
+    paid: 3500000,
+    billed: null,
+    due: 0,
+    extra: 0,
+    settled: true,
+    label: "",
+  },
+  {
+    status: "ongoing",
+    paid: 1000000,
+    billed: null,
+    due: 0,
+    extra: 0,
+    settled: false,
+    label: "",
+  },
+  {
+    status: "done",
+    paid: 2000000,
+    billed: 1000000,
+    due: 0,
+    extra: 1000000,
+    settled: false,
+    label: "জমা আছে",
+  },
+] as const)(
+  "keeps completed/earned money clear for $status paid $paid and bill $billed",
+  async ({ status, paid, billed, due, extra, settled, label }) => {
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "door", name: "নমুনা খাতা" }],
+      people: [{ id: "worker", name: "নমুনা কর্মী", kind: "worker" }],
+      contracts: [
+        {
+          id: "job",
+          personId: "worker",
+          workId: "door",
+          title: "নমুনা কাজ",
+          total: 3500000,
+          status,
+        },
+      ],
+      entries: [
+        ...(billed === null
+          ? []
+          : [
+              {
+                id: "bill",
+                kind: "expense",
+                personId: "worker",
+                contractId: "job",
+                account: "labour",
+                lines: [
+                  {
+                    id: "line",
+                    workId: "door",
+                    costType: "labour",
+                    amount: billed,
+                  },
+                ],
+              },
+            ]),
+        {
+          id: "cash",
+          kind: "payment",
+          personId: "worker",
+          contractId: "job",
+          account: "labour",
+          paymentContext: "settlement",
+          allocations: [{ workId: "door", amount: paid }],
+          paymentParts: [{ amount: paid }],
+        },
+      ],
+    });
+    const before = JSON.stringify(ledger);
+    let page = mount(ledger, "/works/job");
+    const card = page.container.querySelector(".contract-card")!;
+    expect(card.querySelector(".job-detail-total strong")?.textContent).toBe(
+      formatMoney(3500000, "bn"),
+    );
+    expect(card.querySelector(".job-detail-paid dd")?.textContent).toBe(
+      formatMoney(paid, "bn"),
+    );
+    expect(card.querySelector(".balance-progress")).toBeNull();
+    expect(card.textContent).not.toContain("আগে দেওয়া টাকা");
+    if (due)
+      expect(card.querySelector(".job-detail-due dd")?.textContent).toBe(
+        formatMoney(due, "bn"),
+      );
+    else expect(card.querySelector(".job-detail-due")).toBeNull();
+    if (extra) {
+      expect(card.querySelector(".job-extra-paid dt")?.textContent).toBe(label);
+      expect(card.querySelector(".job-extra-paid dd")?.textContent).toBe(
+        formatMoney(extra, "bn"),
+      );
+    } else expect(card.querySelector(".job-extra-paid")).toBeNull();
+    if (settled)
+      expect(card.querySelector(".job-detail-settled dd")?.textContent).toBe(
+        "বাকি নেই",
+      );
+    else expect(card.querySelector(".job-detail-settled")).toBeNull();
+    if (billed !== null)
+      expect(card.querySelector(".job-earned-note")?.textContent).toContain(
+        formatMoney(billed, "bn"),
+      );
+    expect(
+      screen.getByRole("button", { name: "কাজের অবস্থা বদলাই" }).textContent,
+    ).toContain(status === "done" ? "শেষ" : "চলছে");
+    const stages =
+      page.container.querySelector<HTMLDetailsElement>(".job-milestones")!;
+    expect(stages.open).toBe(false);
+    if (paid === 3600000) {
+      await userEvent.click(stages.querySelector("summary")!);
+      expect(screen.getByRole("heading", { name: "কাজের ধাপ" })).toBeTruthy();
+      expect(screen.getByText("ধাপ যোগ করি")).toBeTruthy();
+    }
+    page.unmount();
+    page = mount(
+      ledger,
+      "/works",
+      "bn",
+      <JobPreview ledger={ledger} contracts={ledger.contracts} />,
+    );
+    const tile = page.container.querySelector(".job-snap-card")!;
+    expect(tile.querySelector(".job-tile-paid strong")?.textContent).toBe(
+      formatMoney(paid, "bn"),
+    );
+    if (due || extra)
+      expect(tile.querySelector(".job-tile-balance strong")?.textContent).toBe(
+        formatMoney(due || extra, "bn"),
+      );
+    else expect(tile.querySelector(".job-tile-balance")).toBeNull();
+    expect(Boolean(tile.querySelector(".job-tile-settled"))).toBe(settled);
+    expect(tile.querySelector(`.job-status-${status}`)).not.toBeNull();
+    expect(tile.textContent).not.toContain("আগে দেওয়া টাকা");
+    expect(JSON.stringify(ledger)).toBe(before);
+  },
+);
 
 it("paginates only the job's own transactions and excludes a mismatched party even if the record carries the same job id", () => {
   const ledger = fixture(2);
@@ -1111,7 +1276,7 @@ it("reclassifies refunded overpayment exactly and clears only known filters", ()
   const { container } = mount(ledger, "/works?balance=overpaid&keep=1");
   expect(container.querySelectorAll(".job-snap-card")).toHaveLength(1);
   expect(container.querySelector(".job-tile-amounts")?.textContent).toContain(
-    "আগে দেওয়া টাকা৳\u202f১০০",
+    "বেশি দিয়েছি৳\u202f১০০",
   );
   state.ledger = LedgerSchema.parse({
     ...ledger,
@@ -1275,8 +1440,9 @@ it("keeps cancelled, historical and unmatched cash out of list-card balances", (
     (element) =>
       element.querySelector(".job-tile-name")?.textContent === "কাজের হিসাব",
   )!;
-  expect(card.querySelector(".job-tile-balance strong")?.textContent).toBe(
+  expect(card.querySelector(".job-tile-paid strong")?.textContent).toBe(
     "৳\u202f২৫,০০০",
   );
+  expect(card.querySelector(".job-tile-balance")).toBeNull();
   expect(card.classList.contains("job-payment-overpaid")).toBe(true);
 });

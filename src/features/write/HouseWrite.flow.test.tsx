@@ -230,6 +230,54 @@ async function cost(
 }
 const payPath = "/write/payment?person=party&work=roof&account=materials";
 
+it("pays a finished job with no separate bill and retains its remaining due after IndexedDB reopens", async () => {
+  const initial = LedgerSchema.parse({
+    ...base(),
+    contracts: [
+      {
+        id: "finished",
+        personId: "party",
+        workId: "roof",
+        total: 3500000,
+        status: "done",
+      },
+    ],
+  });
+  const repo = await setup(initial);
+  const user = userEvent.setup();
+  const due = partyDueItems(initial, "party")[0];
+  expect(due).toMatchObject({ contractId: "finished", amount: 3500000 });
+  const page = mount(
+    initial,
+    <HousePaymentForm />,
+    partyDuePaymentUrl(due, "/works/finished"),
+  );
+  await ready();
+  const amount = screen.getByLabelText("কত দিয়েছেন") as HTMLInputElement;
+  expect(latinDigits(amount.value)).toBe("35000");
+  await user.clear(amount);
+  await user.type(amount, "10000");
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  page.unmount();
+  repo.database.close();
+  await repo.database.open();
+  const saved = (await repo.read())!.ledger;
+  expect(saved.entries).toHaveLength(1);
+  expect(saved.entries[0]).toMatchObject({
+    kind: "payment",
+    contractId: "finished",
+    personId: "party",
+    account: "labour",
+    paymentParts: [{ amount: 1000000 }],
+  });
+  expect(saved.paymentAllocations).toHaveLength(0);
+  expect(saved.contracts).toEqual(initial.contracts);
+  expect(partyDueItems(saved, "party")).toMatchObject([
+    { contractId: "finished", amount: 2500000 },
+  ]);
+});
+
 it("shows the selected recipient's due before amount entry without injecting their preferred work into a general payment", async () => {
   const source = withBills();
   const initial = LedgerSchema.parse({

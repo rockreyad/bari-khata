@@ -50,11 +50,17 @@ Party তৈরির সময় রাখা ধরন/একাধিক দা
 
 চুক্তির মোট এবং earned cost আলাদা। নমুনা চুক্তি ১,০০০, কাজ হয়েছে ৩০০, দেওয়া ১০০ হলে earned due ২০০; এখনও না হওয়া commitment ৭০০। ধাপ শেষ চিহ্নিত করলেই bill তৈরি হয় না।
 
+পুরোনো পদ্ধতিতে রাখা পুরো কাজের অবস্থা `done` হলে এবং সেই কাজের কোনো bill document না থাকলে নির্ধারিত মোট টাকা কাজের পাওনা হিসেবে ধরা হয়। ৩৫,০০০ টাকার শেষ কাজের জন্য ১০,০০০ দেওয়া থাকলে বাকি ২৫,০০০; ৩৬,০০০ দেওয়া থাকলে বাড়তি ১,০০০। এটি শুধু হিসাবের ব্যাখ্যা, নতুন expense entry তৈরি হয় না। স্পষ্ট bill, বাতিল bill বা পুরোনো historical bill থাকলে সেই মোট আবার যোগ করা হয় না। শুরু হয়নি বা চলছে এমন কাজের পুরো প্রতিশ্রুত টাকা পাওনা হয়ে যায় না। পরিশোধ করলে শুধু cash বাড়ে, খরচ দ্বিতীয়বার বাড়ে না।
+
+কর্মীর সারাংশে «দিতে বাকি» সামনে থাকে; নিচে একই কাজের মোট বাকি ও জমা আবার দেখানো হয় না। কাজের কার্ডে মোট, দিয়েছি এবং দরকার হলে বাকি বা বাড়তি টাকা থাকে। কাজের অবস্থা ও টাকা মেটানোর অবস্থা আলাদা; শূন্য বাকির সারি বা একই টাকা বোঝানো একাধিক সারি নেই। কাজের ঐচ্ছিক ধাপ ভাঁজ করে রাখা যায়।
+
 ## ৩. বর্তমান command ও দৃশ্যমান প্রস্তাব
 
 `planHousePayment()` প্রাসঙ্গিক bill, প্রতি bill-এর অঙ্ক, credit ও অবশিষ্ট উদ্দেশ্য দেখায়। `recordHousePayment()` আবার বর্তমান data-এর সঙ্গে প্রস্তাব যাচাই করে, তারপর cash entry ও allocation এক পরিবর্তনে দেয়। repository একই transaction-এ তা রাখে। খাতা বদলে গেলে পুরোনো প্রস্তাব নীরবে প্রয়োগ হয় না।
 
 মাল ও কাজের bill-এ খাতা বাছার ঘর সরাসরি দেখা যায়। স্পষ্ট route, কর্মীর একমাত্র নির্ধারিত খাতা বা বাড়ির একমাত্র সক্রিয় খাতা ছাড়া কোনো খাতা ধরে নেওয়া হয় না। ফাঁকা খাতায় bill রাখা আটকে যায়; সাধারণ খাতা চাইলে সেটিও বেছে নিতে হয়। একই form থেকে নতুন খাতা বানালে আগের অঙ্ক, বিবরণ ও ভাউচার অক্ষত থাকে এবং নতুন খাতা বাছা হয়। `paid=yes`-এর draft সাধারণ unpaid bill draft থেকে আলাদা থাকে।
+
+«কী কাজ হয়েছে» লিখতে শুরু করলে আগের কাজের বিবরণ থেকে সাজেশন পাওয়া যায়; বেছে নিলে শুধু বিবরণ বসে, টাকার অঙ্ক নীরবে বদলায় না। নিজের মতো লেখাও যায়। কাজের bill-এ «আরও কাজ» বোতাম নেই; আগে লেখা একাধিক সারির draft অক্ষত থাকে।
 
 দোকানদারের «বাকি দেখি» শুধু তাঁর সম্পর্কিত বাকি দেখায়। অগ্রিমের জন্য ধরে নেওয়া পছন্দের খাতা/account দিয়ে এই তালিকা সংকুচিত হয় না; profile-এ ব্যবহারকারী স্পষ্ট filter দিলে সেটি থাকে। প্রতিটি «পরিশোধ» link-এ bill, কর্মী, খাতা, account, contract এবং পয়সায় অঙ্ক যায়। form-এ তা আগে থেকে ভরা থাকে, আংশিক টাকা দিতে অঙ্ক কমানো যায়। বিলের বাকি ছাড়িয়ে টাকা দেওয়া আটকে যায়। শুধু নগদ ও bill allocation যোগ হয়; নতুন খরচ হয় না।
 
@@ -128,7 +134,7 @@ Migration developer-এর দায়িত্ব; ব্যবহারকার
 
 1. **কোনো production পরিবর্তনের আগে:** `ledger_documents`, `ledger_operations`, share/assistant-এর প্রয়োজনীয় state এবং private receipt storage-এর পূর্ণ consistent backup নিতে হবে। সংশ্লিষ্ট device-এর IndexedDB-তে pending/draft/recovery থাকা কপিও রাখতে হবে। এক device-এর export দিয়ে অন্য device সম্পূর্ণ আছে বলা যাবে না। secrets report-এ নয়; financial export Git-এ বাদ থাকা `private/`-এ।
 2. **কপিতে rehearsal:** `migrateArchitecture()`/entity upgrade/backup restore চালিয়ে source IDs/counts, খরচ, cash, party/work/account ও agreement bridge দেখুন। unknown cash, disputed adjustment এবং missing blob আলাদা করুন। incomplete backup-কে সম্পূর্ণ বলবেন না।
-3. **server guard আগে:** অনুমোদিত প্রকাশে `202611050002_party_ledger_architecture.sql`, `202611050003_shared_payment_allocations.sql`, `202611050004_earned_obligations.sql` ক্রমানুসারে পরীক্ষা ও প্রয়োগ, তারপর client rollout। এখনো production-এ এগুলো প্রয়োগ করা হয়নি। নতুন data পুরোনো client দিয়ে বাদ পড়া server guard আটকায়।
+3. **server guard আগে:** অনুমোদিত প্রকাশে `202611050002_party_ledger_architecture.sql`, `202611050003_shared_payment_allocations.sql`, `202611050004_earned_obligations.sql`, `202611050005_completed_contract_earnings.sql` ক্রমানুসারে পরীক্ষা ও প্রয়োগ, তারপর client rollout। এখনো production-এ এগুলো প্রয়োগ করা হয়নি। নতুন data পুরোনো client দিয়ে বাদ পড়া server guard আটকায়।
 4. **একাধিক device যাচাই:** dropped response, frozen retry, pending edit, expired login, conflict, shared statement ও receipt download দেখুন। অপ্রেরিত data মুছবেন না। `report.json`-এ দেখা পার্থক্যকে guessed financial row দিয়ে চাপা দেবেন না।
 5. **ফেরার সীমা:** `rollbackArchitectureMigration()` কেবল অপরিবর্তিত generation/document, একই cloud revision এবং frozen request/conflict না থাকলে স্থানীয় source ফেরায়। নতুন লেখা বা নতুন cloud save হলে এটি থামে। পরে ফেরার জন্য compatible client/server এবং সব নতুন লেখা রক্ষা করা recovery পরিকল্পনা লাগবে; পুরোনো snapshot বসিয়ে নতুন facts হারানো নয়।
 6. **শেষে cleanup:** ব্যবহৃত compatibility/history fields বা recovery যাচাই ছাড়া মুছবেন না। historical archive রাখা intentional; সেটি দ্বিতীয় editable ledger নয়। push/PR ও production কাজ স্থানীয় branch-এর অনুমতি থেকে নিজে থেকে অনুমোদিত হয় না।

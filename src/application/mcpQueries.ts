@@ -321,6 +321,12 @@ function scopedCostLines(ledger: Ledger, entry: Entry, args: QueryArgs) {
 function currentSummary(ledger: Ledger, args: QueryArgs) {
   const all = {
     ...ledger,
+    contracts: ledger.contracts.filter(
+      (contract) =>
+        (!args.person_id || contract.personId === args.person_id) &&
+        (!args.contract_id || contract.id === args.contract_id) &&
+        (!args.account || args.account === "labour"),
+    ),
     entries: filteredEntries(
       ledger,
       {
@@ -335,7 +341,7 @@ function currentSummary(ledger: Ledger, args: QueryArgs) {
         material_group_id: undefined,
         brand: undefined,
         usage: undefined,
-        include_voided: false,
+        include_voided: true,
       },
       false,
     ),

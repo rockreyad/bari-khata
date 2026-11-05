@@ -6,7 +6,10 @@ import type {
 } from "../../domain/model";
 import { adjustmentBalanceDelta } from "../../domain/adjustmentMath";
 import { cashObligationParts } from "../../domain/cashObligations";
-import { unresolvedContractAdjustmentIds } from "../../domain/contractObligations";
+import {
+  contractEarnings,
+  unresolvedContractAdjustmentIds,
+} from "../../domain/contractObligations";
 
 const transactionDay = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Dhaka",
@@ -92,6 +95,8 @@ export function readJobStatus(value: string): JobStatus {
     : null;
 }
 export type JobBalance = {
+  earned: number;
+  earnedFromCompletion: boolean;
   netPaid: number;
   remaining: number;
   remainingCommitment: number;
@@ -103,6 +108,7 @@ export type JobBalance = {
 };
 export function jobBalances(ledger: Ledger): Map<string, JobBalance> {
   const jobs = new Map(ledger.contracts.map((job) => [job.id, job]));
+  const earnings = contractEarnings(ledger);
   const paid = new Map<string, bigint>();
   const settled = new Map<string, bigint>();
   const billed = new Map<string, bigint>();
@@ -173,8 +179,9 @@ export function jobBalances(ledger: Ledger): Map<string, JobBalance> {
       const agreed = BigInt(job.total),
         cost = billed.get(job.id) ?? 0n;
       const obligationPaid = settled.get(job.id) ?? 0n;
+      const earned = earnings.get(job.id)!.earned;
       const difference =
-        cost + (adjustments.get(job.id) ?? 0n) - obligationPaid;
+        earned + (adjustments.get(job.id) ?? 0n) - obligationPaid;
       const committed =
         (agreed > cost ? agreed : cost) +
         (commitmentAdjustments.get(job.id) ?? 0n) -
@@ -184,10 +191,12 @@ export function jobBalances(ledger: Ledger): Map<string, JobBalance> {
       return [
         job.id,
         {
+          earned: Number(earned),
+          earnedFromCompletion: earnings.get(job.id)!.fromCompletion,
           netPaid: Number(net),
           remaining: Number(remaining),
           remainingCommitment: Number(committed > 0n ? committed : 0n),
-          unearnedCommitment: Number(agreed > cost ? agreed - cost : 0n),
+          unearnedCommitment: Number(agreed > earned ? agreed - earned : 0n),
           extra: Number(extra),
           state:
             difference > 0n ? "due" : difference < 0n ? "overpaid" : "settled",
