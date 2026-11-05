@@ -1,4 +1,5 @@
 import { effectiveAccounts } from "../../domain/effectiveAccounts";
+import { buildMaterialGroupResolver } from "../../domain/materialGroupResolution";
 import { entryWorkIds } from "../../domain/ledger";
 import { parseMoneyText, poishaDecimal } from "../../domain/money";
 import type { Account, Entry, EntryLine, Ledger } from "../../domain/model";
@@ -28,6 +29,8 @@ type CostDocument = {
   identitySearchable: string;
   searchable: string;
   tokens: Set<string>;
+  resolvedGroupId: string | null;
+  ambiguousGroupIds: Set<string>;
   ambiguousOrigins?: CostDocument[];
 };
 type EntryDocument = {
@@ -42,6 +45,8 @@ export type LedgerSearchIndex = {
   documents: EntryDocument[];
   materials: Map<string, MaterialDocument>;
   materialNames: string[];
+  namedGroups: (name: string) => string[];
+  namedIdentityWords: (name: string) => string[];
 };
 export type LedgerSearchFilters = HistoryFilters & {
   material?: string;
@@ -54,6 +59,7 @@ export type LedgerSearchResult = {
   matchedPartEntryIds: string[];
   ambiguousEntryIds: string[];
   partiallyAmbiguousEntryIds: string[];
+  groupAmbiguousEntryIds: string[];
   totalCost: number;
   purchases: number;
   returns: number;
@@ -95,6 +101,7 @@ const matches = (document: string, words: string[]) =>
 
 export function buildLedgerSearchIndex(ledger: Ledger): LedgerSearchIndex {
   const accounts = effectiveAccounts(ledger);
+  const resolveGroup = buildMaterialGroupResolver(ledger);
   const people = new Map(
     ledger.people.map((person) => [person.id, person.name]),
   );
@@ -113,13 +120,18 @@ export function buildLedgerSearchIndex(ledger: Ledger): LedgerSearchIndex {
     names: string[],
     rank: number,
     description?: string,
+    includeLabel = true,
   ) => {
     if (!label.trim() || materials.has(token)) return;
     materials.set(token, {
       token,
       label,
       names: [
-        ...new Set([label, ...names].map(normalizeLabel).filter(Boolean)),
+        ...new Set(
+          [...(includeLabel ? [label] : []), ...names]
+            .map(normalizeLabel)
+            .filter(Boolean),
+        ),
       ],
       rank,
       ...(description ? { description } : {}),
@@ -132,9 +144,8 @@ export function buildLedgerSearchIndex(ledger: Ledger): LedgerSearchIndex {
     const lineSearch: string[] = [];
     const costs = entry.lines.map((line): CostDocument => {
       const item = items.get(line.itemId ?? "");
-      const group = groups.get(
-        line.materialGroupId ?? item?.materialGroupId ?? "",
-      );
+      const resolution = resolveGroup(line);
+      const group = groups.get(resolution.groupId ?? "");
       const identity = [
         line.label,
         line.usage,
@@ -142,8 +153,10 @@ export function buildLedgerSearchIndex(ledger: Ledger): LedgerSearchIndex {
         item?.brand,
         item?.usage,
         ...(item?.aliases ?? []),
-        group?.name,
-        ...(group?.aliases ?? []),
+        ...(group ? resolveGroup.searchNames(group.id) : []),
+        ...resolution.ambiguousGroupIds.flatMap((id) => {
+          return resolveGroup.searchNames(id);
+        }),
       ];
       const searchable = text([
         ...identity,
@@ -157,14 +170,28 @@ export function buildLedgerSearchIndex(ledger: Ledger): LedgerSearchIndex {
       if (group) tokens.add(`group:${group.id}`);
       if (!line.itemId && line.costType === "material" && line.label.trim())
         tokens.add(`label:${normalizeLabel(line.label)}`);
+      if (isCost && !entry.voided)
+        for (const id of [
+          resolution.groupId,
+          ...resolution.ambiguousGroupIds,
+        ]) {
+          const candidate = groups.get(id ?? "");
+          if (candidate)
+            addMaterial(
+              `group:${candidate.id}`,
+              candidate.name,
+              resolveGroup.searchNames(candidate.id),
+              0,
+              undefined,
+              false,
+            );
+        }
       if (
         isCost &&
         !entry.voided &&
         line.costType === "material" &&
         (entry.kind === "expense" || item || group)
       ) {
-        if (group)
-          addMaterial(`group:${group.id}`, group.name, group.aliases, 0);
         if (item)
           addMaterial(
             `item:${item.id}`,
@@ -198,6 +225,8 @@ export function buildLedgerSearchIndex(ledger: Ledger): LedgerSearchIndex {
         identitySearchable: text(identity),
         searchable,
         tokens,
+        resolvedGroupId: resolution.groupId,
+        ambiguousGroupIds: new Set(resolution.ambiguousGroupIds),
       };
     });
     const total = isCost
@@ -241,7 +270,13 @@ export function buildLedgerSearchIndex(ledger: Ledger): LedgerSearchIndex {
     const original = byId.get(document.entry.relatedEntryId);
     if (original?.entry.kind !== "expense") continue;
     for (const cost of document.costs) {
-      if (cost.line.itemId || cost.line.materialGroupId) continue;
+      if (
+        cost.line.itemId ||
+        cost.line.materialGroupId ||
+        cost.resolvedGroupId ||
+        cost.ambiguousGroupIds.size
+      )
+        continue;
       const origins = original.costs.filter(
         ({ line }) =>
           line.workId === cost.line.workId &&
@@ -253,7 +288,13 @@ export function buildLedgerSearchIndex(ledger: Ledger): LedgerSearchIndex {
         document.searchable,
         ...origins.map((origin) => origin.identitySearchable),
       ]);
-      if (identities.size === 1 && !identities.has("")) {
+      const originGroups = new Set(
+        origins.map((origin) => origin.resolvedGroupId),
+      );
+      const consistentOrigins =
+        !origins.some((origin) => origin.ambiguousGroupIds.size) &&
+        originGroups.size === 1;
+      if (identities.size === 1 && !identities.has("") && consistentOrigins) {
         cost.identitySearchable = text([
           cost.identitySearchable,
           ...origins.map((origin) => origin.identitySearchable),
@@ -266,7 +307,27 @@ export function buildLedgerSearchIndex(ledger: Ledger): LedgerSearchIndex {
           ...cost.tokens,
           ...origins.flatMap((origin) => [...origin.tokens]),
         ]);
-      } else cost.ambiguousOrigins = origins;
+        cost.ambiguousGroupIds = new Set(
+          origins.flatMap((origin) => [...origin.ambiguousGroupIds]),
+        );
+        cost.resolvedGroupId = origins[0].resolvedGroupId;
+      } else if (consistentOrigins && origins[0].resolvedGroupId) {
+        const group = groups.get(origins[0].resolvedGroupId)!;
+        const names = resolveGroup.searchNames(group.id);
+        cost.identitySearchable = text([cost.identitySearchable, ...names]);
+        cost.searchable = text([cost.searchable, ...names]);
+        cost.tokens.add(`group:${group.id}`);
+        cost.resolvedGroupId = group.id;
+        cost.ambiguousOrigins = origins;
+      } else {
+        cost.ambiguousOrigins = origins;
+        cost.ambiguousGroupIds = new Set(
+          origins.flatMap((origin) => [
+            ...origin.ambiguousGroupIds,
+            ...(origin.resolvedGroupId ? [origin.resolvedGroupId] : []),
+          ]),
+        );
+      }
     }
   }
   return {
@@ -275,6 +336,8 @@ export function buildLedgerSearchIndex(ledger: Ledger): LedgerSearchIndex {
     materialNames: [
       ...new Set([...materials.values()].flatMap((choice) => choice.names)),
     ],
+    namedGroups: resolveGroup.namedGroups,
+    namedIdentityWords: resolveGroup.namedIdentityWords,
   };
 }
 
@@ -308,18 +371,41 @@ export function selectLedgerSearch(
     }
   }
   const identityWords = [
-    ...new Set(
-      index.materialNames.flatMap((name) => {
+    ...new Set([
+      ...index.namedIdentityWords(filters.query ?? ""),
+      ...index.materialNames.flatMap((name) => {
         if (!words.length) return [];
         if (` ${normalizedQuery} `.includes(` ${name} `)) return wordsOf(name);
         return matches(name, words) ? words : [];
       }),
-    ),
+    ]),
   ];
   const material = filters.material
     ? (index.materials.get(filters.material) ?? null)
     : null;
   const materialInvalid = Boolean(filters.material && !material);
+  const requestedGroup = material?.token.startsWith("group:")
+    ? material.token.slice("group:".length)
+    : null;
+  const queryGroups = new Set(
+    numericAmount === null ? index.namedGroups(filters.query ?? "") : [],
+  );
+  if (words.length && numericAmount === null)
+    for (const choice of index.materials.values())
+      if (
+        choice.token.startsWith("group:") &&
+        choice.names.some((name) => matches(name, words))
+      )
+        queryGroups.add(choice.token.slice("group:".length));
+  const groupScope = requestedGroup
+    ? new Set([requestedGroup])
+    : material
+      ? new Set<string>()
+      : queryGroups;
+  const groupUncertain = (cost: CostDocument) =>
+    material && !requestedGroup
+      ? cost.tokens.has(material.token) && cost.ambiguousGroupIds.size > 0
+      : [...cost.ambiguousGroupIds].some((id) => groupScope.has(id));
   const monthInvalid = Boolean(
     filters.month && filters.month !== "undated" && !validMonth(filters.month),
   );
@@ -329,6 +415,7 @@ export function selectLedgerSearch(
   const matchedPartEntryIds: string[] = [];
   const ambiguousEntryIds: string[] = [];
   const partiallyAmbiguousEntryIds: string[] = [];
+  const groupAmbiguousEntryIds: string[] = [];
   const months = new Map<string, MonthBucket>();
   const costEntries = new Set<string>(),
     undatedEntries = new Set<string>(),
@@ -370,12 +457,16 @@ export function selectLedgerSearch(
     const selected = scopeCosts.filter(
       (cost) =>
         (!material || cost.tokens.has(material.token)) &&
+        !groupUncertain(cost) &&
+        (material ||
+          !groupScope.size ||
+          [...groupScope].some((id) => cost.tokens.has(`group:${id}`))) &&
         (wholeBillMatch ||
           (matches(cost.searchable, words) &&
             matches(cost.identitySearchable, identityWords))),
     );
     const ambiguousReturn = scopeCosts.some((cost) =>
-      !material && matches(cost.searchable, words)
+      selected.includes(cost)
         ? false
         : cost.ambiguousOrigins?.some(
             (origin) =>
@@ -384,7 +475,22 @@ export function selectLedgerSearch(
               matches(origin.identitySearchable, identityWords),
           ),
     );
-    if (material ? !selected.length && !ambiguousReturn : !broadMatch) continue;
+    const ambiguousGroup = Boolean(
+      (groupScope.size || material) &&
+      scopeCosts.some(
+        (cost) =>
+          groupUncertain(cost) &&
+          (wholeBillMatch ||
+            (matches(cost.searchable, words) &&
+              matches(cost.identitySearchable, identityWords))),
+      ),
+    );
+    if (
+      material
+        ? !selected.length && !ambiguousReturn && !ambiguousGroup
+        : !broadMatch
+    )
+      continue;
     if (document.costs.length && !scopeCosts.length) continue;
     const dated = Boolean(entry.date && validHistoryDate(entry.date));
     const inMonth =
@@ -415,9 +521,10 @@ export function selectLedgerSearch(
     }
     if (!inMonth) continue;
     entries.push(entry);
+    if (ambiguousGroup && !entry.voided) groupAmbiguousEntryIds.push(entry.id);
     if (
       document.costs.length &&
-      (words.length || ambiguousReturn) &&
+      (words.length || ambiguousReturn || ambiguousGroup) &&
       !selected.length &&
       !entry.voided
     )
@@ -479,6 +586,7 @@ export function selectLedgerSearch(
     matchedPartEntryIds,
     ambiguousEntryIds,
     partiallyAmbiguousEntryIds,
+    groupAmbiguousEntryIds,
     totalCost: exact(purchases - returns),
     purchases: exact(purchases),
     returns: exact(returns),
@@ -492,8 +600,11 @@ export function selectLedgerSearch(
     historicalEntryCount: historicalEntries.size,
     reviewCost: exact(reviewCost),
     reviewEntryCount: reviewEntries.size,
-    ambiguousEntryCount:
-      ambiguousEntryIds.length + partiallyAmbiguousEntryIds.length,
+    ambiguousEntryCount: new Set([
+      ...ambiguousEntryIds,
+      ...partiallyAmbiguousEntryIds,
+      ...groupAmbiguousEntryIds,
+    ]).size,
     unassignedAdjustmentCount,
     monthlyRows,
     material: material

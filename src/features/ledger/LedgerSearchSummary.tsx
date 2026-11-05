@@ -18,6 +18,10 @@ export function LedgerSearchSummary({
   const [expanded, setExpanded] = useState(Boolean(month));
   const chartId = useId();
   const invalidScope = result?.materialInvalid || result?.monthInvalid;
+  const groupAmbiguities = new Set(result?.groupAmbiguousEntryIds ?? []);
+  const otherAmbiguityCount =
+    result?.ambiguousEntryIds.filter((id) => !groupAmbiguities.has(id))
+      .length ?? 0;
   return (
     <section className="ledger-search-summary" aria-label={t("খোঁজার হিসাব")}>
       {!result || invalidScope ? (
@@ -134,11 +138,18 @@ export function LedgerSearchSummary({
               <strong>{money(result.baseUndatedCost)}</strong>
             </button>
           ) : null}
-          {result.ambiguousEntryIds.length > 0 ? (
+          {otherAmbiguityCount > 0 ? (
             <p className="ledger-search-note" role="status">
               {t(
                 "{{count}}টি বিল শুধু অন্য তথ্যে মিলেছে। সেগুলো খরচের মোটে ধরা হয়নি।",
-                { count: number(result.ambiguousEntryIds.length) },
+                { count: number(otherAmbiguityCount) },
+              )}
+            </p>
+          ) : null}
+          {groupAmbiguities.size > 0 ? (
+            <p className="ledger-search-note" role="status">
+              {t(
+                "কিছু লেখায় একাধিক মালের নাম বা ধরন মিলেছে। অস্পষ্ট অংশ এই মালের মোটে ধরা হয়নি।",
               )}
             </p>
           ) : null}

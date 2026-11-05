@@ -658,3 +658,370 @@ describe("exact local projections", () => {
     expect(result.amounts.constructor).toBeUndefined();
   });
 });
+
+describe("material reports from recorded names", () => {
+  it("does not reuse generic service group aliases in query or suggestion money scopes", () => {
+    const ledger = LedgerSchema.parse({
+      ...context,
+      materialGroups: [
+        { id: "cement", name: "সিমেন্ট", aliases: ["Cement", "ভাড়া"] },
+        context.materialGroups[0],
+      ],
+      entries: [
+        bill("cement", [line("cement-line", "সিমেন্ট", 100)]),
+        {
+          ...bill("transport", [
+            { ...line("transport-line", "ভাড়া", 900), costType: "transport" },
+          ]),
+          account: "other",
+        },
+      ],
+    });
+    const index = buildLedgerSearchIndex(ledger);
+    expect(
+      selectLedgerSearch(index, { material: "group:cement" }).totalCost,
+    ).toBe(100);
+    expect(selectLedgerSearch(index, { query: "ভাড়া" }).totalCost).toBe(900);
+    expect(
+      materialSuggestions(index, "ভাড়া").some(
+        (choice) => choice.token === "group:cement",
+      ),
+    ).toBe(false);
+  });
+  it("keeps numeric whole-bill queries independent of material names containing the same digits", () => {
+    const ledger = LedgerSchema.parse({
+      ...context,
+      materialGroups: [
+        ...context.materialGroups,
+        { id: "brick", name: "ইট100", aliases: ["100"] },
+      ],
+      entries: [
+        bill("bill", [
+          line("cement", "সিমেন্ট", 4000),
+          line("brick", "ইট100", 6000),
+        ]),
+      ],
+    });
+    expect(read(ledger, { query: "100" }).totalCost).toBe(10000);
+    expect(read(ledger, { query: "১০০" }).totalCost).toBe(10000);
+    expect(
+      read(ledger, { query: "100", material: "group:brick" }).totalCost,
+    ).toBe(6000);
+  });
+  it("includes unlinked material/unload/transport names without changing saved values or review state", () => {
+    const ledger = fixture([
+      {
+        ...bill("bn", [line("bn-line", "সিমেন্ট", 101)]),
+        reviewStatus: "needs_review",
+      },
+      {
+        ...bill("en", [line("en-line", "Cement", 103)]),
+        reviewStatus: "needs_review",
+      },
+      ...[
+        "শাহ সিমেন্ট আনলোড",
+        "সিমেন্ট নামানো",
+        "CEMENT delivery",
+        "Cement-Unload",
+      ].map((label, index) => ({
+        ...bill(`support-${index}`, [
+          {
+            ...line(
+              `support-line-${index}`,
+              label,
+              [107, 109, 113, 127][index],
+            ),
+            costType: index === 2 ? "transport" : "unload",
+          },
+        ]),
+        account: "other",
+      })),
+    ]);
+    const before = structuredClone(ledger);
+    const result = read(ledger, { material: "group:cement" });
+    expect(result).toMatchObject({
+      totalCost: 660,
+      costEntryCount: 6,
+      reviewEntryCount: 2,
+      ambiguousEntryCount: 0,
+    });
+    expect(read(ledger, { query: "Cement" }).totalCost).toBe(660);
+    expect(ledger).toEqual(before);
+    expect(
+      ledger.entries.every((entry) =>
+        entry.lines.every((row) => !row.itemId && !row.materialGroupId),
+      ),
+    ).toBe(true);
+  });
+
+  it("uses verified catalog names/brands but never person, work, notes or nearby bills to infer a group", () => {
+    const ledger = LedgerSchema.parse({
+      ...context,
+      people: [{ id: "shop", name: "Cement Crown দোকান", kind: "shop" }],
+      works: [
+        { id: "one", name: "Cement কাজ" },
+        { id: "two", name: "ছাদ" },
+      ],
+      entries: [
+        bill("named", [line("named-line", "নমুনা Crown", 100)]),
+        bill(
+          "generic",
+          [line("generic-line", "অন্য মাল", 900)],
+          "2026-01-15",
+          "Cement",
+        ),
+      ],
+    });
+    expect(read(ledger, { material: "group:cement" }).totalCost).toBe(100);
+    expect(read(ledger, { query: "Cement" }).totalCost).toBe(100);
+    expect(read(ledger, { personId: "shop" }).totalCost).toBe(1000);
+  });
+
+  it("does not infer wage, equipment rental or arbitrary other charges from a material word", () => {
+    const ledger = fixture([
+      bill("cement", [line("cement-line", "সিমেন্ট", 100)]),
+      ...["labour", "rental", "other"].map((costType) => ({
+        ...bill(costType, [
+          {
+            ...line(`${costType}-line`, "সিমেন্ট মিক্সার ভাড়া", 900),
+            costType,
+          },
+        ]),
+        account: costType === "labour" ? "labour" : "other",
+      })),
+    ]);
+    const result = read(ledger, { query: "সিমেন্ট" });
+    expect(result.totalCost).toBe(100);
+    expect(result.entries).toHaveLength(4);
+    expect(result.ambiguousEntryIds).toEqual(["labour", "rental", "other"]);
+    expect(read(ledger, { material: "group:cement" }).totalCost).toBe(100);
+    expect(read(ledger).totalCost).toBe(2800);
+  });
+
+  it("excludes multi-material single amounts from both group and default name-query totals", () => {
+    const ledger = fixture([
+      bill("known", [line("known-line", "সিমেন্ট", 100)]),
+      bill("mixed", [line("mixed-line", "সিমেন্ট ও বালু", 900)]),
+    ]);
+    for (const filters of [
+      { query: "সিমেন্ট" },
+      { material: "group:cement" },
+      { material: "group:sand" },
+    ]) {
+      const result = read(ledger, filters);
+      expect(result.totalCost).toBe(
+        filters.material === "group:sand" ? 0 : 100,
+      );
+      expect(result.groupAmbiguousEntryIds).toEqual(["mixed"]);
+      expect(result.ambiguousEntryIds).toContain("mixed");
+      expect(result.amounts.mixed).toBeUndefined();
+    }
+    expect(read(ledger, { workId: "one" }).totalCost).toBe(1000);
+  });
+
+  it("keeps conflicting metadata visible and includes only a mixed bill's unambiguous part", () => {
+    const ledger = fixture([
+      bill("bill", [
+        line("known", "সিমেন্ট", 100),
+        {
+          ...line("conflict", "মাল", 900, "one", "sand-item"),
+          materialGroupId: "cement",
+        },
+      ]),
+    ]);
+    const result = read(ledger, { material: "group:cement" });
+    expect(result).toMatchObject({
+      totalCost: 100,
+      groupAmbiguousEntryIds: ["bill"],
+      matchedPartEntryIds: ["bill"],
+    });
+    expect(result.amounts.bill).toBe(100);
+    expect(result.titles.bill).toBe("সিমেন্ট");
+    expect(read(ledger, { query: "সিমেন্ট" }).totalCost).toBe(100);
+    expect(read(ledger).totalCost).toBe(1000);
+  });
+
+  it("keeps conflicting identities excluded from exact item and legacy-label scopes too", () => {
+    const ledger = fixture([
+      bill("item-bill", [
+        line("known", "সিমেন্ট", 100, "one", "cement-item"),
+        line("conflict", "বালু", 900, "one", "cement-item"),
+      ]),
+      bill("label-bill", [
+        { ...line("label-conflict", "বালু", 500), materialGroupId: "cement" },
+      ]),
+    ]);
+    const item = read(ledger, { material: "item:cement-item" });
+    expect(item).toMatchObject({
+      totalCost: 100,
+      groupAmbiguousEntryIds: ["item-bill"],
+      matchedPartEntryIds: ["item-bill"],
+    });
+    const label = read(ledger, { material: "label:বালু" });
+    expect(label).toMatchObject({
+      totalCost: 0,
+      groupAmbiguousEntryIds: ["label-bill"],
+      ambiguousEntryIds: ["label-bill"],
+    });
+    expect(label.entries.map((entry) => entry.id)).toEqual(["label-bill"]);
+    expect(read(ledger).totalCost).toBe(1500);
+  });
+
+  it("does not let a matching dealer name assign another brand's material cost", () => {
+    const ledger = LedgerSchema.parse({
+      ...context,
+      people: [{ id: "shop", name: "নমুনা Crown দোকান", kind: "shop" }],
+      items: [
+        ...context.items,
+        {
+          id: "different",
+          name: "অন্য সিমেন্ট",
+          brand: "Otherbrand",
+          materialGroupId: "cement",
+        },
+      ],
+      entries: [
+        bill("crown", [
+          line("crown-line", "সিমেন্ট", 100, "one", "cement-item"),
+        ]),
+        bill("other", [line("other-line", "সিমেন্ট", 900, "one", "different")]),
+      ],
+    });
+    const result = read(ledger, { query: "নমুনা Crown" });
+    expect(result.totalCost).toBe(100);
+    expect(result.ambiguousEntryIds).toContain("other");
+    expect(read(ledger, { personId: "shop" }).totalCost).toBe(1000);
+  });
+
+  it("does not use typo matching to assign unlinked material money", () => {
+    const ledger = fixture([
+      bill("known", [line("known-line", "Cement", 100)]),
+      bill("typo", [line("typo-line", "Cementt", 900)]),
+    ]);
+    const index = buildLedgerSearchIndex(ledger);
+    expect(
+      materialSuggestions(index, "Cementt").some(
+        (choice) => choice.token === "group:cement",
+      ),
+    ).toBe(true);
+    expect(
+      selectLedgerSearch(index, { material: "group:cement" }).totalCost,
+    ).toBe(100);
+  });
+
+  it("preserves date/void/undated/cash distinctions for name-resolved costs", () => {
+    const ledger = fixture([
+      bill("purchase", [line("purchase-line", "Cement", 100)], "2026-01-01"),
+      bill("undated", [line("undated-line", "সিমেন্ট", 10)], null),
+      {
+        ...bill(
+          "return",
+          [line("return-line", "সিমেন্ট ফেরত", 20)],
+          "2026-03-01",
+        ),
+        kind: "expense_credit",
+      },
+      { ...bill("void", [line("void-line", "সিমেন্ট", 900)]), voided: true },
+      {
+        id: "payment",
+        kind: "payment",
+        personId: "shop",
+        note: "সিমেন্ট",
+        allocations: [{ workId: "one", amount: 100 }],
+        paymentParts: [{ amount: 100 }],
+      },
+    ]);
+    const index = buildLedgerSearchIndex(ledger);
+    const result = selectLedgerSearch(index, {
+      material: "group:cement",
+      includeVoided: true,
+    });
+    expect(result).toMatchObject({
+      totalCost: 90,
+      purchases: 110,
+      returns: 20,
+      undatedCost: 10,
+    });
+    expect(
+      result.monthlyRows.map(({ month, total }) => [month, total]),
+    ).toEqual([
+      ["2026-01", 100],
+      ["2026-03", -20],
+    ]);
+    expect(
+      selectLedgerSearch(index, { material: "group:cement", month: "2026-03" }),
+    ).toMatchObject({ totalCost: -20, baseUndatedCost: 10 });
+    expect(
+      selectLedgerSearch(index, {
+        material: "group:cement",
+        from: "2026-02-01",
+      }).totalCost,
+    ).toBe(-20);
+  });
+
+  it("keeps generic linked returns unresolved when any possible origin has conflicting identity", () => {
+    const ledger = fixture([
+      bill("bill", [
+        line("known", "সিমেন্ট", 10000, "one", "cement-item"),
+        line("conflict", "বালু", 5000, "one", "cement-item"),
+      ]),
+      {
+        ...bill("return", [line("return-line", "মাল ফেরত", 5000)]),
+        kind: "expense_credit",
+        relatedEntryId: "bill",
+      },
+    ]);
+    const result = read(ledger, { material: "group:cement" });
+    expect(result).toMatchObject({
+      totalCost: 10000,
+      purchases: 10000,
+      returns: 0,
+    });
+    expect(result.groupAmbiguousEntryIds).toContain("return");
+    expect(result.amounts.return).toBeUndefined();
+    expect(read(ledger).totalCost).toBe(10000);
+  });
+
+  it("attributes a same-group multi-item return only to its group, never a brand or item", () => {
+    const ledger = LedgerSchema.parse({
+      ...context,
+      items: [
+        ...context.items,
+        {
+          id: "other-cement",
+          name: "অন্য সিমেন্ট",
+          brand: "Otherbrand",
+          materialGroupId: "cement",
+        },
+      ],
+      entries: [
+        bill("bill", [
+          line("first", "সিমেন্ট", 10000, "one", "cement-item"),
+          line("second", "সিমেন্ট", 5000, "one", "other-cement"),
+        ]),
+        {
+          ...bill("return", [line("return-line", "মাল ফেরত", 3000)]),
+          kind: "expense_credit",
+          relatedEntryId: "bill",
+        },
+      ],
+    });
+    const before = structuredClone(ledger);
+    expect(read(ledger, { material: "group:cement" })).toMatchObject({
+      totalCost: 12000,
+      returns: 3000,
+      ambiguousEntryCount: 0,
+    });
+    expect(read(ledger, { query: "সিমেন্ট" }).totalCost).toBe(12000);
+    for (const filters of [
+      { query: "নমুনা Crown" },
+      { material: "item:cement-item" },
+    ]) {
+      const result = read(ledger, filters);
+      expect(result.totalCost).toBe(10000);
+      expect(result.amounts.return).toBeUndefined();
+      expect(result.ambiguousEntryIds).toContain("return");
+    }
+    expect(ledger).toEqual(before);
+  });
+});

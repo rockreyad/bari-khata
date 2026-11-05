@@ -1,5 +1,7 @@
 export const ledgerSearchEnglish: Record<string, string> = {
   "খোঁজার হিসাব": "Search totals",
+  "কিছু লেখায় একাধিক মালের নাম বা ধরন মিলেছে। অস্পষ্ট অংশ এই মালের মোটে ধরা হয়নি।":
+    "Some records identify conflicting or multiple materials. The uncertain portion is excluded from this material's total.",
   "মাসে মাসে": "By month",
   কেনা: "Purchases",
   "সব মাস দেখুন": "Show all months",
