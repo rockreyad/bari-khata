@@ -1,4 +1,28 @@
 export const transactionEnglish: Record<string, string> = {
+  "বিলের বাইরে {{amount}} টাকাও রাখি":
+    "Also record the {{amount}} not linked to bills",
+  "বাকি মেটাবেন, নাকি আগাম দিয়েছেন—বেছে নিন।":
+    "Choose whether to pay existing bills or record an advance.",
+  "আগাম দিয়েছেন, নাকি বিল লিখবেন—বেছে নিন।":
+    "Choose whether this was an advance or you need to record a bill.",
+  "আগের বাকির হিসাব মিলিয়ে নিতে হবে।": "The earlier balance needs checking.",
+  "মোট বাকি {{amount}}": "Total due {{amount}}",
+  "খাতা ও কাজ": "Notebook and work",
+  "এই টাকার হিসাব": "How to record this payment",
+  "বেছে নেওয়া খাতায় বাকি নেই।": "There are no unpaid bills in this selection.",
+  "এই নামে কোনো বাকি বিল নেই।": "There are no unpaid bills for this person.",
+  "সব বিল দেখুন": "Show all bills",
+  "বিল লিখি": "Record a bill",
+  "আগাম দিয়েছি": "Paid in advance",
+  "বাড়তি {{amount}} অগ্রিম রাখি": "Keep the extra {{amount}} as an advance",
+  "টাকা দেওয়ার পরে": "After this payment",
+  "আগাম দিলেন {{amount}}": "Advance paid {{amount}}",
+  "বাকি থাকবে {{amount}}": "Remaining due {{amount}}",
+  "অগ্রিম {{amount}}": "Advance {{amount}}",
+  "আগের টাকা মিলিয়ে দেখি": "Check earlier payments",
+  "কোন বিলে কত যাবে": "Which bills this pays",
+  "এই বিলে মেলানো যাবে {{amount}}":
+    "Up to {{amount}} can be linked to this bill",
   "কীভাবে দিয়েছেন": "How did you pay?",
   "কীভাবে পেয়েছেন": "How did you receive it?",
   "নাম ও খাতা": "Name and notebook",

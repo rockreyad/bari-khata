@@ -32,6 +32,7 @@ import { useInlineDraft } from "../entries/useInlineDraft";
 import { QuickSavedDraftSchema } from "../entries/quickEntry";
 import { HouseSavedNotice } from "./HouseSavedNotice";
 import { HouseAttachments } from "./HouseAttachments";
+import { paymentPresentation } from "./paymentPresentation";
 
 const PaymentDraftSchema = z.object({
   id: z.string().min(1).max(150),
@@ -54,9 +55,16 @@ const PaymentDraftSchema = z.object({
   files: QuickSavedDraftSchema.shape.files,
 });
 type Draft = z.infer<typeof PaymentDraftSchema>;
-type PaymentFormIssue = HousePaymentIssue | "invalid_date" | "invalid_intent";
+type PaymentFormIssue =
+  | HousePaymentIssue
+  | "invalid_date"
+  | "invalid_intent"
+  | "choose_payment"
+  | "choose_bills";
 const issueText: Record<PaymentFormIssue, string> = {
   invalid_intent: "টাকা দেওয়ার ধরন বেছে নিন।",
+  choose_payment: "আগাম দিয়েছেন, নাকি বিল লিখবেন—বেছে নিন।",
+  choose_bills: "বাকি মেটাবেন, নাকি আগাম দিয়েছেন—বেছে নিন।",
   invalid_date: "সঠিক তারিখ বেছে নিন।",
   invalid_person: "যাঁকে টাকা দিয়েছেন, তাঁর নাম বেছে নিন।",
   invalid_amount: "সঠিক টাকার অঙ্ক দিন।",
@@ -81,7 +89,7 @@ function amount(value: string) {
 }
 
 export function HousePaymentForm() {
-  const { ledger, save, close, entity, notify } = useNotebook();
+  const { ledger, save, close, entity, notify, go } = useNotebook();
   const { t, money, formatDigits, date } = useLanguageContext();
   const [params] = useSearchParams();
   const initial = useMemo<Draft>(() => {
@@ -102,7 +110,9 @@ export function HousePaymentForm() {
       personName: "",
       newPersonId: crypto.randomUUID(),
       amount: "",
-      workId: params.get("work") ?? defaults?.workId ?? "",
+      workId:
+        params.get("work") ??
+        (intent === "settlement" ? "" : (defaults?.workId ?? "")),
       account:
         AccountSchema.safeParse(params.get("account")).data ??
         (intent !== "settlement" ? (defaults?.account ?? "") : ""),
@@ -206,6 +216,10 @@ export function HousePaymentForm() {
       : {}),
   };
   const plan = planHousePayment(planningLedger, request);
+  const presentation = paymentPresentation(planningLedger, request, plan, {
+    date: draft.date,
+    method: draft.method,
+  });
   const cashConfirmed =
     draft.confirmUnallocatedCash &&
     draft.confirmCashSignature === plan.signature;
@@ -273,7 +287,10 @@ export function HousePaymentForm() {
       ...(key === "personId"
         ? {
             contractId: "",
-            workId: defaults?.workId ?? current.workId,
+            workId:
+              current.intent === "settlement"
+                ? current.workId
+                : (defaults?.workId ?? current.workId),
             account:
               current.intent === "settlement" ? "" : (defaults?.account ?? ""),
             newPersonId: current.newPersonId || crypto.randomUUID(),
@@ -282,20 +299,58 @@ export function HousePaymentForm() {
       ...(key === "intent"
         ? {
             contractId: "",
+            workId:
+              value === "advance"
+                ? current.workId || defaults?.workId || ""
+                : current.workId,
             account: value === "settlement" ? "" : (defaults?.account ?? ""),
           }
         : {}),
     }));
   };
-  const selectedTotal = plan.allocations.reduce(
-    (sum, row) => sum + row.amount,
-    0,
-  );
+  const noMatchingBills =
+    Boolean(person) &&
+    draft.intent === "settlement" &&
+    !presentation.hasScopedBills;
+  const needsPaymentChoice = noMatchingBills && total > 0;
   const showScope =
+    Boolean(person) &&
     draft.intent !== "receivable" &&
-    (draft.intent !== "settlement" ||
-      plan.remainder > 0 ||
+    (draft.intent === "advance" ||
+      (!noMatchingBills &&
+        plan.remainder > 0 &&
+        plan.issues.includes("choose_scope")) ||
       Boolean(draft.workId || draft.account || draft.contractId));
+  const showOutcome =
+    Boolean(person) &&
+    total > 0 &&
+    presentation.canPreview &&
+    !invalidAllocations &&
+    (!plan.requiresCashReview || cashConfirmed) &&
+    (draft.intent === "advance" || plan.remainder === 0 || remainderConfirmed);
+  const showAllBills = () => {
+    setError("");
+    setInvalidField("");
+    update((current) => ({
+      ...current,
+      workId: "",
+      account: "",
+      contractId: "",
+      allocations: null,
+      confirmUnallocatedCash: false,
+      confirmRemainderAdvance: false,
+      confirmRemainderSignature: "",
+      confirmCashSignature: "",
+    }));
+  };
+  const writeBill = async () => {
+    try {
+      await flush();
+      go("/write");
+    } catch {
+      setError(t("অসমাপ্ত লেখা রাখা যায়নি। বন্ধ করার আগে আবার চেষ্টা করুন।"));
+    }
+  };
   const contracts = ledger.contracts.filter(
     (row) =>
       (draft.intent === "settlement" || (policy?.agreement ?? true)) &&
@@ -320,6 +375,10 @@ export function HousePaymentForm() {
       )
         throw new Error("invalid_date");
       if (invalidAllocations) throw new Error("invalid_allocation");
+      if (needsPaymentChoice)
+        throw new Error(
+          presentation.hasOtherBills ? "choose_bills" : "choose_payment",
+        );
       if (draft.personId === "__new__" && !newPerson)
         throw new Error("invalid_person");
       if (plan.requiresCashReview && !cashConfirmed)
@@ -454,13 +513,6 @@ export function HousePaymentForm() {
         />
         <fieldset disabled={!ready || failed || saving}>
           <div className="transaction-card">
-            <TransactionAmount
-              label={t("কত দিয়েছেন")}
-              value={draft.amount}
-              onChange={(value) => change("amount", value)}
-              required
-              error={invalidField === "invalid_amount" ? error : undefined}
-            />
             <label>
               {t("কাকে দিয়েছেন")}
               <AppSelect
@@ -524,33 +576,65 @@ export function HousePaymentForm() {
                 {error}
               </p>
             )}
-            <div
-              className="transaction-choice"
-              role="group"
-              aria-label={t("টাকা দেওয়ার কারণ")}
-            >
-              {(
-                [
-                  ["settlement", "বাকি", "বাকি মেটালাম"],
-                  ["advance", "অগ্রিম", "অগ্রিম — আগে টাকা দিলাম"],
-                ] as const
-              ).map(([value, label, accessible]) => (
-                <button
-                  type="button"
-                  key={value}
-                  aria-label={t(accessible)}
-                  aria-pressed={draft.intent === value}
-                  onClick={() => change("intent", value)}
-                >
-                  {t(label)}
-                </button>
-              ))}
-            </div>
+            {person && (
+              <p className="house-payment-balance">
+                {presentation.beforeDue === null
+                  ? t("আগের বাকির হিসাব মিলিয়ে নিতে হবে।")
+                  : t("মোট বাকি {{amount}}", {
+                      amount: money(presentation.beforeDue),
+                    })}
+              </p>
+            )}
+            <TransactionAmount
+              label={t("কত দিয়েছেন")}
+              value={draft.amount}
+              onChange={(value) => change("amount", value)}
+              required
+              error={invalidField === "invalid_amount" ? error : undefined}
+            />
+            {!noMatchingBills && (
+              <div
+                className="transaction-choice"
+                role="group"
+                aria-label={t("টাকা দেওয়ার কারণ")}
+              >
+                {(
+                  [
+                    ["settlement", "বাকি", "বাকি মেটালাম"],
+                    ["advance", "অগ্রিম", "অগ্রিম — আগে টাকা দিলাম"],
+                  ] as const
+                ).map(([value, label, accessible]) => (
+                  <button
+                    type="button"
+                    key={value}
+                    aria-label={t(accessible)}
+                    aria-pressed={draft.intent === value}
+                    onClick={() => change("intent", value)}
+                  >
+                    {t(label)}
+                  </button>
+                ))}
+              </div>
+            )}
             {draft.intent === "receivable" && (
               <p className="field-hint">{t("টাকা দেওয়ার ধরন বেছে নিন।")}</p>
             )}
             {showScope && (
-              <div className="house-payment-scope">
+              <TransactionDetails
+                summary={t("খাতা ও কাজ")}
+                className="house-payment-scope"
+                defaultOpen={
+                  draft.intent === "advance" ||
+                  (remainderConfirmed &&
+                    plan.issues.includes("choose_scope")) ||
+                  [
+                    "choose_scope",
+                    "invalid_work",
+                    "invalid_account",
+                    "invalid_contract",
+                  ].includes(invalidField)
+                }
+              >
                 <div className="transaction-grid">
                   <label>
                     {t("কোন খাতায়")}
@@ -653,78 +737,210 @@ export function HousePaymentForm() {
                     </AppSelect>
                   </label>
                 )}
-              </div>
+              </TransactionDetails>
             )}
           </div>
-          {person && total > 0 && draft.intent !== "receivable" && (
+          {needsPaymentChoice && (
             <section
-              className="house-payment-preview transaction-summary"
-              aria-label={t("হিসাবের সারাংশ")}
+              className="house-payment-question"
+              aria-label={t("এই টাকার হিসাব")}
             >
-              {invalidAllocations ? (
-                <p className="field-hint" role="status">
-                  {t("বিলের বাকি ও মোট দেওয়া টাকার মধ্যে অঙ্ক লিখুন।")}
-                </p>
-              ) : null}
-              <div className="house-preview-heading">
-                <h2>{t("হিসাবের সারাংশ")}</h2>
-                {draft.intent === "settlement" && choices.length > 0 && (
+              <p>
+                {t(
+                  presentation.hasOtherBills
+                    ? "বেছে নেওয়া খাতায় বাকি নেই।"
+                    : "এই নামে কোনো বাকি বিল নেই।",
+                )}
+              </p>
+              <div className="house-payment-actions">
+                {presentation.hasOtherBills ? (
                   <button
                     type="button"
-                    className="text-button"
-                    onClick={() =>
-                      change(
-                        "allocations",
-                        draft.allocations
-                          ? null
-                          : Object.fromEntries(
-                              choices.map((choice) => [
-                                choice.key,
-                                moneyInputValue(
-                                  plan.allocations.find(
-                                    (row) =>
-                                      row.billId === choice.billId &&
-                                      row.workId === choice.workId,
-                                  )?.amount ?? 0,
-                                ),
-                              ]),
-                            ),
-                      )
-                    }
+                    className="transaction-secondary"
+                    onClick={showAllBills}
                   >
-                    {t(draft.allocations ? "আগের প্রস্তাবে ফিরি" : "বদলাই")}
+                    {t("সব বিল দেখুন")}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="transaction-secondary"
+                    onClick={() => void writeBill()}
+                  >
+                    {t("বিল লিখি")}
                   </button>
                 )}
+                <button
+                  type="button"
+                  className="transaction-secondary"
+                  aria-label={t("অগ্রিম — আগে টাকা দিলাম")}
+                  onClick={() => change("intent", "advance")}
+                >
+                  {t("আগাম দিয়েছি")}
+                </button>
               </div>
-              {draft.allocations ? (
-                <div className="house-allocation-edit">
-                  {choices.map((choice) => (
-                    <label key={choice.key}>
-                      <span>
-                        {formatDigits(choice.name || t("বিল"))}
-                        <small>
-                          {t("বাকি {{amount}}", {
-                            amount: money(choice.outstanding),
+            </section>
+          )}
+          {person &&
+            total > 0 &&
+            draft.intent === "settlement" &&
+            !noMatchingBills &&
+            plan.remainder > 0 && (
+              <div className="house-payment-question">
+                <button
+                  type="button"
+                  className="transaction-secondary house-payment-advance"
+                  aria-pressed={remainderConfirmed}
+                  onClick={() => {
+                    setError("");
+                    setInvalidField("");
+                    update((current) => ({
+                      ...current,
+                      confirmRemainderAdvance: !remainderConfirmed,
+                      confirmRemainderSignature: !remainderConfirmed
+                        ? plan.signature
+                        : "",
+                    }));
+                  }}
+                >
+                  {presentation.excess !== null && presentation.excess > 0
+                    ? t("বাড়তি {{amount}} অগ্রিম রাখি", {
+                        amount: money(presentation.excess),
+                      })
+                    : t("বিলের বাইরে {{amount}} টাকাও রাখি", {
+                        amount: money(plan.remainder),
+                      })}
+                </button>
+              </div>
+            )}
+          {showOutcome && (
+            <div
+              className="house-payment-outcome"
+              role="status"
+              aria-label={t("টাকা দেওয়ার পরে")}
+            >
+              <strong>
+                {draft.intent === "advance"
+                  ? t("আগাম দিলেন {{amount}}", { amount: money(total) })
+                  : t("বাকি থাকবে {{amount}}", {
+                      amount: money(presentation.afterDue ?? 0),
+                    })}
+              </strong>
+              {draft.intent === "settlement" &&
+                presentation.excess !== null &&
+                presentation.excess > 0 && (
+                  <span>
+                    {t("অগ্রিম {{amount}}", {
+                      amount: money(presentation.excess),
+                    })}
+                  </span>
+                )}
+            </div>
+          )}
+          {person &&
+            total > 0 &&
+            draft.intent === "settlement" &&
+            plan.requiresCashReview && (
+              <TransactionDetails
+                summary={t("আগের টাকা মিলিয়ে দেখি")}
+                defaultOpen={
+                  !cashConfirmed || invalidField === "unassigned_cash"
+                }
+              >
+                <p className="field-hint">
+                  {t(
+                    "আগে দেওয়া {{amount}} টাকার বিলের সম্পর্ক জানা নেই। এগুলো অক্ষত আছে।",
+                    { amount: money(plan.existingUnallocatedCash) },
+                  )}
+                </p>
+                <label className="house-check">
+                  <input
+                    type="checkbox"
+                    checked={cashConfirmed}
+                    onChange={(event) =>
+                      update((current) => ({
+                        ...current,
+                        confirmUnallocatedCash: event.target.checked,
+                        confirmCashSignature: event.target.checked
+                          ? planHousePayment(planningLedger, {
+                              ...request,
+                              confirmUnallocatedCash: true,
+                            }).signature
+                          : "",
+                      }))
+                    }
+                  />
+                  <span>{t("দেখেছি—এটি নতুন করে দেওয়া টাকা।")}</span>
+                </label>
+              </TransactionDetails>
+            )}
+          <PaymentMethodField
+            value={draft.method}
+            onChange={(method) => change("method", method)}
+          />
+          {person &&
+            total > 0 &&
+            draft.intent === "settlement" &&
+            choices.length > 0 && (
+              <TransactionDetails
+                summary={t("কোন বিলে কত যাবে")}
+                defaultOpen={
+                  invalidAllocations || invalidField === "invalid_allocation"
+                }
+              >
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() =>
+                    change(
+                      "allocations",
+                      draft.allocations
+                        ? null
+                        : Object.fromEntries(
+                            choices.map((choice) => [
+                              choice.key,
+                              moneyInputValue(
+                                plan.allocations.find(
+                                  (row) =>
+                                    row.billId === choice.billId &&
+                                    row.workId === choice.workId,
+                                )?.amount ?? 0,
+                              ),
+                            ]),
+                          ),
+                    )
+                  }
+                >
+                  {t(draft.allocations ? "আগের প্রস্তাবে ফিরি" : "বদলাই")}
+                </button>
+                {draft.allocations ? (
+                  <div className="house-allocation-edit">
+                    {choices.map((choice) => (
+                      <label key={choice.key}>
+                        <span>
+                          {formatDigits(choice.name || t("বিল"))}
+                          <small>
+                            {t("এই বিলে মেলানো যাবে {{amount}}", {
+                              amount: money(choice.outstanding),
+                            })}
+                          </small>
+                        </span>
+                        <MoneyInput
+                          aria-label={t("এই বিলে দিচ্ছি: {{name}}", {
+                            name: choice.name || t("বিল"),
                           })}
-                        </small>
-                      </span>
-                      <MoneyInput
-                        aria-label={t("এই বিলে দিচ্ছি: {{name}}", {
-                          name: choice.name || t("বিল"),
-                        })}
-                        value={draft.allocations?.[choice.key] ?? ""}
-                        onChange={(event) =>
-                          change("allocations", {
-                            ...draft.allocations,
-                            [choice.key]: event.target.value,
-                          })
-                        }
-                      />
-                    </label>
-                  ))}
-                </div>
-              ) : plan.allocations.length > 0 ? (
-                <TransactionDetails summary={t("বিলের বিস্তারিত")}>
+                          value={draft.allocations?.[choice.key] ?? ""}
+                          onChange={(event) =>
+                            change("allocations", {
+                              ...draft.allocations,
+                              [choice.key]: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                    ))}
+                  </div>
+                ) : (
                   <ul className="house-allocation-preview">
                     {plan.allocations.map((row) => {
                       const choice = choices.find(
@@ -743,97 +959,9 @@ export function HousePaymentForm() {
                       );
                     })}
                   </ul>
-                </TransactionDetails>
-              ) : (
-                <p>
-                  {t(
-                    draft.intent === "advance"
-                      ? "পরের বিলের জন্য অগ্রিম থাকবে।"
-                      : "এই টাকার জন্য মেলানো যায় এমন বিল নেই।",
-                  )}
-                </p>
-              )}
-              <dl aria-live="polite">
-                <div>
-                  <dt>{t("এখন টাকা গেছে")}</dt>
-                  <dd>{money(total)}</dd>
-                </div>
-                {draft.intent === "settlement" && (
-                  <div className="house-result">
-                    <dt>{t("এর পরে দিতে হবে")}</dt>
-                    <dd>
-                      {plan.earnedPayable === null
-                        ? t("যাচাই বাকি")
-                        : money(
-                            Math.max(0, plan.earnedPayable - selectedTotal),
-                          )}
-                    </dd>
-                  </div>
                 )}
-                {plan.remainder > 0 && (
-                  <div>
-                    <dt>{t("অগ্রিম থাকবে")}</dt>
-                    <dd>{money(plan.remainder)}</dd>
-                  </div>
-                )}
-              </dl>
-              {plan.requiresCashReview && (
-                <div className="house-legacy-notice">
-                  <p>
-                    {t(
-                      "আগে দেওয়া {{amount}} টাকার বিলের সম্পর্ক জানা নেই। এগুলো অক্ষত আছে।",
-                      { amount: money(plan.existingUnallocatedCash) },
-                    )}
-                  </p>
-                  <label className="house-check">
-                    <input
-                      type="checkbox"
-                      checked={cashConfirmed}
-                      onChange={(event) =>
-                        update((current) => ({
-                          ...current,
-                          confirmUnallocatedCash: event.target.checked,
-                          confirmCashSignature: event.target.checked
-                            ? planHousePayment(planningLedger, {
-                                ...request,
-                                confirmUnallocatedCash: true,
-                              }).signature
-                            : "",
-                        }))
-                      }
-                    />
-                    <span>{t("দেখেছি—এটি নতুন করে দেওয়া টাকা।")}</span>
-                  </label>
-                </div>
-              )}
-              {draft.intent === "settlement" && plan.remainder > 0 && (
-                <label className="house-check">
-                  <input
-                    type="checkbox"
-                    checked={remainderConfirmed}
-                    onChange={(event) =>
-                      update((current) => ({
-                        ...current,
-                        confirmRemainderAdvance: event.target.checked,
-                        confirmRemainderSignature: event.target.checked
-                          ? plan.signature
-                          : "",
-                      }))
-                    }
-                  />
-                  <span>
-                    {t("বাড়তি {{amount}} পরের বিলের অগ্রিম হিসেবে রাখি", {
-                      amount: money(plan.remainder),
-                    })}
-                  </span>
-                </label>
-              )}
-            </section>
-          )}
-          <PaymentMethodField
-            value={draft.method}
-            onChange={(method) => change("method", method)}
-          />
+              </TransactionDetails>
+            )}
           <TransactionDetails
             summary={t("ভাউচার, নোট ও তারিখ")}
             defaultOpen={invalidField === "invalid_date"}

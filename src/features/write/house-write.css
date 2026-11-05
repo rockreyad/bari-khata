@@ -8,6 +8,61 @@
 .house-payment-preview {
   font-size: 13px;
 }
+.house-payment-balance {
+  margin: -10px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.house-payment-outcome {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px 16px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.house-payment-outcome strong {
+  font-weight: 600;
+}
+.house-payment-outcome span {
+  font-size: 12px;
+}
+.house-payment-question {
+  display: grid;
+  gap: 10px;
+  padding-inline: 4px;
+  min-width: 0;
+}
+.house-payment-question p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.house-payment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.house-payment-actions > button {
+  flex: 1;
+}
+.house-payment-advance {
+  justify-self: start;
+  border-style: solid;
+  text-align: start;
+}
+.house-payment-advance[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 var(--accent);
+}
 .house-preview-heading {
   display: flex;
   justify-content: space-between;
