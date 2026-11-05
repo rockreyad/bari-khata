@@ -8,6 +8,8 @@ import { migrateArchitecture } from "../domain/architectureMigration";
 import {
   LedgerDatabase,
   architectureMigrationKey,
+  validateMigrationReceipts,
+  type ReceiptRow,
   type WorkspaceRow,
 } from "./database";
 import { LedgerRepository, parseBackup } from "./repository";
@@ -56,69 +58,172 @@ afterEach(async () => {
   }
 });
 
-describe("durable architecture conversion", () => {
-  it("upgrades a v1 database atomically with an exact preimage, attachment bytes and reconciliation while keeping drafts and frozen requests", async () => {
-    const { old, row, name } = await oldDatabase();
-    const file = new Blob([new Uint8Array([8, 9, 10])], { type: "image/png" });
-    const receipt = {
+describe("migration receipt validation", () => {
+  function fixture(
+    blob: Blob = new File([new Uint8Array([8, 9, 10])], "নমুনা.png", {
+      type: "image/png",
+    }),
+  ) {
+    const ledger = legacyArchitectureFixture();
+    ledger.entries[0].receipts = [
+      {
+        id: "photo",
+        name: "নমুনা.png",
+        mime: "image/png",
+        size: 3,
+      },
+    ];
+    const receipt: ReceiptRow = {
       key: "real:photo",
       id: "photo",
       workspace: "real",
       entryId: "bill",
       name: "নমুনা.png",
-      mime: file.type,
-      blob: file,
+      mime: "image/png",
+      blob,
       createdAt: at,
       uploadedFor: owner,
     };
-    await old.table("receipts").put(receipt);
-    const frozen = {
-      id: "frozen",
-      workspace: "real",
-      ownerId: owner,
-      generation: 3,
-      baseRevision: 5,
-      ledger: row.ledger,
-      createdAt: at,
-    };
-    await old.table("outbox").put(frozen);
-    const draft = {
-      id: "entry-form",
-      workspace: "real",
-      value: { note: "অসমাপ্ত নমুনা লেখা", file },
-      updatedAt: at,
-    };
-    await old.table("drafts").put(draft);
-    old.close();
-    const upgraded = new LedgerDatabase(name, owner);
-    databases.push(upgraded);
-    const repo = new LedgerRepository(upgraded);
-    const saved = (await repo.read())!;
-    expect(saved.ledger.architectureVersion).toBe(2);
-    expect(saved.ledger.entries).toEqual(row.ledger.entries);
-    expect(saved).toMatchObject({
-      generation: 4,
-      cloudRevision: 5,
-      pending: true,
-      ownerId: owner,
-    });
-    const migration = (await upgraded.migrations.get(
-      architectureMigrationKey("real"),
-    ))!;
-    expect(migration.before).toEqual(row);
-    expect(migration.report.before).toEqual(migration.report.after);
-    expect(
-      new Uint8Array(await migration.receipts[0].blob.arrayBuffer()),
-    ).toEqual(new Uint8Array([8, 9, 10]));
-    expect(await upgraded.outbox.get("frozen")).toEqual(frozen);
-    expect((await upgraded.drafts.get("entry-form"))?.value).toEqual(
-      draft.value,
+    return { ledger, receipt };
+  }
+
+  it("accepts a native camera or file-picker File without changing it", async () => {
+    const { ledger, receipt } = fixture();
+    expect(Object.prototype.toString.call(receipt.blob)).toBe("[object File]");
+    expect(() =>
+      validateMigrationReceipts([receipt], "real", ledger),
+    ).not.toThrow();
+    expect((receipt.blob as File).name).toBe("নমুনা.png");
+    expect(new Uint8Array(await receipt.blob.arrayBuffer())).toEqual(
+      new Uint8Array([8, 9, 10]),
     );
-    upgraded.close();
-    await upgraded.open();
-    expect(await upgraded.migrations.count()).toBe(2);
-    expect((await repo.read())?.generation).toBe(4);
   });
+
+  it.each(["Blob", "File"])(
+    "rejects an object pretending to be a %s",
+    (tag) => {
+      const { ledger, receipt } = fixture();
+      receipt.blob = {
+        [Symbol.toStringTag]: tag,
+        size: 3,
+        type: "image/png",
+        arrayBuffer: async () => new ArrayBuffer(3),
+        slice: () => new Blob(),
+      } as unknown as Blob;
+      expect(() =>
+        validateMigrationReceipts([receipt], "real", ledger),
+      ).toThrow();
+    },
+  );
+
+  it.each([
+    ["entry", { entryId: "another-entry" }],
+    ["workspace", { workspace: "demo" }],
+    ["key", { key: "real:another-photo" }],
+    ["MIME", { mime: "image/jpeg" }],
+    [
+      "size",
+      {
+        blob: new File(["different size"], "নমুনা.png", { type: "image/png" }),
+      },
+    ],
+  ] as const)("rejects File receipt %s mismatches", (_, changes) => {
+    const { ledger, receipt } = fixture();
+    expect(() =>
+      validateMigrationReceipts([{ ...receipt, ...changes }], "real", ledger),
+    ).toThrow();
+  });
+
+  it("rejects duplicate receipt keys", () => {
+    const { ledger, receipt } = fixture();
+    expect(() =>
+      validateMigrationReceipts([receipt, receipt], "real", ledger),
+    ).toThrow();
+  });
+});
+
+describe("durable architecture conversion", () => {
+  it.each([
+    [
+      "Blob",
+      () => new Blob([new Uint8Array([8, 9, 10])], { type: "image/png" }),
+    ],
+    [
+      "File",
+      () =>
+        new File([new Uint8Array([8, 9, 10])], "নমুনা.png", {
+          type: "image/png",
+        }),
+    ],
+  ] as const)(
+    "upgrades a v1 database atomically with a %s attachment, exact preimage and reconciliation while keeping drafts and frozen requests",
+    async (_, createFile) => {
+      const { old, row, name } = await oldDatabase();
+      const file = createFile();
+      const receipt = {
+        key: "real:photo",
+        id: "photo",
+        workspace: "real",
+        entryId: "bill",
+        name: "নমুনা.png",
+        mime: file.type,
+        blob: file,
+        createdAt: at,
+        uploadedFor: owner,
+      };
+      await old.table("receipts").put(receipt);
+      const frozen = {
+        id: "frozen",
+        workspace: "real",
+        ownerId: owner,
+        generation: 3,
+        baseRevision: 5,
+        ledger: row.ledger,
+        createdAt: at,
+      };
+      await old.table("outbox").put(frozen);
+      const draft = {
+        id: "entry-form",
+        workspace: "real",
+        value: { note: "অসমাপ্ত নমুনা লেখা", file },
+        updatedAt: at,
+      };
+      await old.table("drafts").put(draft);
+      const savedDraft = await old.table("drafts").get("entry-form");
+      old.close();
+      const upgraded = new LedgerDatabase(name, owner);
+      databases.push(upgraded);
+      const repo = new LedgerRepository(upgraded);
+      const saved = (await repo.read())!;
+      expect(saved.ledger.architectureVersion).toBe(2);
+      expect(saved.ledger.entries).toEqual(row.ledger.entries);
+      expect(saved).toMatchObject({
+        generation: 4,
+        cloudRevision: 5,
+        pending: true,
+        ownerId: owner,
+      });
+      const migration = (await upgraded.migrations.get(
+        architectureMigrationKey("real"),
+      ))!;
+      expect(migration.before).toEqual(row);
+      expect(migration.report.before).toEqual(migration.report.after);
+      expect(
+        new Uint8Array(await migration.receipts[0].blob.arrayBuffer()),
+      ).toEqual(new Uint8Array([8, 9, 10]));
+      expect(await upgraded.outbox.get("frozen")).toEqual(frozen);
+      expect(await upgraded.drafts.get("entry-form")).toEqual(savedDraft);
+      upgraded.close();
+      await upgraded.open();
+      expect(await upgraded.migrations.count()).toBe(2);
+      expect((await repo.read())?.generation).toBe(4);
+      const reopenedReceipt = (await upgraded.receipts.get("real:photo"))!;
+      expect(reopenedReceipt.name).toBe(receipt.name);
+      expect(new Uint8Array(await reopenedReceipt.blob.arrayBuffer())).toEqual(
+        new Uint8Array([8, 9, 10]),
+      );
+    },
+  );
 
   it("aborts the entire version upgrade on invalid financial data and leaves v1 bytes accessible", async () => {
     const { old, row, name } = await oldDatabase();

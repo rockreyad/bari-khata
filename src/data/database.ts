@@ -110,22 +110,22 @@ const MigrationReceiptSchema = z.object({
   entryId: z.string().min(1).max(200),
   name: z.string().max(300),
   mime: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]),
-  // IndexedDB may return a native Blob from a different window realm.
+  // File uploads and cross-window Blobs share the native Blob storage.
   blob: z.custom<Blob>((value) => {
-    if (
-      !value ||
-      typeof value !== "object" ||
-      Object.prototype.toString.call(value) !== "[object Blob]"
-    )
+    if (!value || typeof value !== "object") return false;
+    try {
+      Blob.prototype.slice.call(value, 0, 0);
+      const blob = value as Blob;
+      return (
+        Number.isSafeInteger(blob.size) &&
+        blob.size >= 0 &&
+        typeof blob.type === "string" &&
+        typeof blob.arrayBuffer === "function" &&
+        typeof blob.slice === "function"
+      );
+    } catch {
       return false;
-    const blob = value as Blob;
-    return (
-      Number.isSafeInteger(blob.size) &&
-      blob.size >= 0 &&
-      typeof blob.type === "string" &&
-      typeof blob.arrayBuffer === "function" &&
-      typeof blob.slice === "function"
-    );
+    }
   }),
   createdAt: z.string(),
   uploadedFor: z.string().nullable(),

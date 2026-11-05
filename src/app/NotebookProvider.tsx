@@ -16,6 +16,7 @@ import { useLedger } from "../data/useLedger";
 import { getActiveOwner } from "../data/database";
 import { useLanguageContext } from "../context/LanguageProvider";
 import { houseWriteUrl } from "./houseRoutes";
+import { PwaUpdateNotice } from "../components/PwaUpdateNotice";
 
 export function NotebookProvider({
   mode,
@@ -64,6 +65,7 @@ export function NotebookProvider({
         >
           {t("আবার চেষ্টা করুন")}
         </button>
+        <PwaUpdateNotice blocked={false} floating />
       </div>
     );
   if (!state.ledger)

@@ -6,7 +6,9 @@
 
 ৫ নভেম্বর ২০২৬-এর প্রকাশ-পূর্ব যাচাইয়ে ২০৬টি test file-এর ২৬৬২টি পরীক্ষা, `npm run build`, `npm run typecheck`, `npm run release:check -- v0.1.3` এবং ছয়টি স্থানীয় backend check সফল হয়েছে। মূল তথ্য অক্ষত রেখে আলাদা পরিবেশে migration rehearsal, পুনরায় চালানোর যাচাই, import/reopen/export ও শর্তসাপেক্ষ rollback-ও সফল। পর্যালোচনায় পাওয়া পুরোনো অস্পষ্ট টাকা বা একই নামের রেকর্ড অনুমান করে বদলানো হয়নি।
 
-একই দিনে production-এ নিচের ছয়টি migration প্রয়োগ ও পরে যাচাই সম্পন্ন হয়েছে। আগে-পরে export হুবহু মেলে; `owner`, `revision`, `document` ও `updated_at` বদলায়নি। আর্থিক row-এ DML চালানো হয়নি। [Release PR #37](https://github.com/rockreyad/bari-khata/pull/37) `main`-এ merge, `v0.1.3` tag এবং production deployment এখনও বাকি। Backup-এর সীমা ও যাচাইয়ের ফল [operator নথিতে](OPERATOR-MIGRATION.md) আছে।
+একই দিনে production-এ নিচের ছয়টি migration প্রয়োগ ও পরে যাচাই সম্পন্ন হয়েছে। Schema পরিবর্তনের আগে-পরে export হুবহু মেলে; `owner`, `revision`, `document` ও `updated_at` বদলায়নি। আর্থিক row-এ DML চালানো হয়নি। [Release PR #37](https://github.com/rockreyad/bari-khata/pull/37) `main`-এ `d0d4bef` commit হিসেবে merge হয়েছে; [v0.1.3](https://github.com/rockreyad/bari-khata/releases/tag/v0.1.3) প্রকাশিত এবং production-এ চালু। পরে চালু Chrome client-এর রূপান্তরিত খাতা প্রত্যাশিত migration-এর সঙ্গে হুবহু মিলেছে। এটি অন্য সব device-এর স্থানীয় তথ্য যাচাইয়ের প্রমাণ নয়। Backup-এর সীমা ও যাচাইয়ের ফল [operator নথিতে](OPERATOR-MIGRATION.md) আছে।
+
+Android-এ পুরোনো স্থানীয় ভাউচার থাকলে upgrade আটকে যাওয়ার সংশোধন [0.1.4-এর নথিতে](releases/2026-11-05-0.1.4.md) আছে।
 
 অন্য পরিবেশ প্রস্তুত করার সময় [তথ্য আনার নির্দেশনা](OPERATOR-MIGRATION.md) অনুযায়ী মূল তথ্যের কপি রেখে রূপান্তর ও হিসাব মেলান। আগে প্রয়োগ করা migration দেখে নিচের বাকি SQL-গুলো ক্রম অনুযায়ী চালাতে হবে, তারপর compatible client প্রকাশ করতে হবে। Production-এ এগুলো ৫ নভেম্বর ২০২৬-এ সম্পন্ন হয়েছে:
 
