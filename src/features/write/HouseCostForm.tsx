@@ -35,6 +35,7 @@ import { useInlineDraft } from "../entries/useInlineDraft";
 import { recordHouseCost } from "./houseCost";
 import { HouseSavedNotice } from "./HouseSavedNotice";
 import { HouseAttachments } from "./HouseAttachments";
+import { TransactionExtras } from "../../components/TransactionExtras";
 import { workDescriptionSuggestions } from "./workDescriptionSuggestions";
 import {
   purchaseSuggestions,
@@ -1186,9 +1187,33 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               </dl>
             </section>
           )}
-          <TransactionDetails
-            summary={t("ভাউচার, নোট ও তারিখ")}
-            defaultOpen={invalidField === "date"}
+          <TransactionExtras
+            hasReceipts={files.length > 0}
+            noteField={
+              <label>
+                {t("বাড়তি কথা")}
+                <textarea
+                  rows={2}
+                  maxLength={10000}
+                  value={draft.note}
+                  onChange={(event) => field("note", event.target.value)}
+                />
+              </label>
+            }
+            dateField={
+              <label>
+                {t("তারিখ")}
+                <AppDatePicker
+                  aria-label={t("তারিখ")}
+                  value={draft.date}
+                  aria-invalid={invalidField === "date"}
+                  aria-describedby={
+                    invalidField === "date" ? errorId : undefined
+                  }
+                  onChange={(event) => field("date", event.target.value)}
+                />
+              </label>
+            }
           >
             <HouseAttachments
               files={files}
@@ -1196,25 +1221,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               onChange={(next) => update({ ...value, files: next })}
               onError={setError}
             />
-            <label>
-              {t("বাড়তি কথা")}
-              <textarea
-                maxLength={10000}
-                value={draft.note}
-                onChange={(event) => field("note", event.target.value)}
-              />
-            </label>
-            <label>
-              {t("তারিখ")}
-              <AppDatePicker
-                aria-label={t("তারিখ")}
-                value={draft.date}
-                aria-invalid={invalidField === "date"}
-                aria-describedby={invalidField === "date" ? errorId : undefined}
-                onChange={(event) => field("date", event.target.value)}
-              />
-            </label>
-          </TransactionDetails>
+          </TransactionExtras>
         </fieldset>
       </form>
     </EntryFrame>

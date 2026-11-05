@@ -49,6 +49,7 @@ import { AppSelect } from "./ui/AppSelect";
 import { AppDatePicker } from "./ui/AppDatePicker";
 import { MoneyInput } from "./ui/MoneyInput";
 import { TransactionAmount, TransactionDetails } from "./TransactionFields";
+import { TransactionExtras } from "./TransactionExtras";
 import { PaymentMethodField } from "./PaymentMethodField";
 import { PersonSchema } from "../domain/model";
 import { Sheet } from "./Sheet";
@@ -1151,6 +1152,7 @@ function SupportedEntrySheet({
       {work.name}
     </option>
   ));
+  const mixedWorkLines = new Set(draft.rows.map((row) => row.workId)).size > 1;
 
   const contextFields = (
     <>
@@ -1308,6 +1310,60 @@ function SupportedEntrySheet({
             ))}
           </AppSelect>
         </label>
+      ) : null}
+      {!isCash &&
+      (original || draft.rows.length > 1) &&
+      !(isLabour && selectedContractId) ? (
+        <div className="entry-line-contexts">
+          {draft.rows.map((row, index) => (
+            <div className="entry-line-context" key={row.id}>
+              {draft.rows.length > 1 ? (
+                <p>{row.name || t("খরচ {{index}}", { index: index + 1 })}</p>
+              ) : null}
+              {draft.rows.length > 1 ? (
+                <label className="field">
+                  <span className="field-label">{t("খাতা")}</span>
+                  <AppSelect
+                    aria-label={t("খরচ {{index}}-এর খাতা", {
+                      index: index + 1,
+                    })}
+                    className="field-input"
+                    value={row.workId}
+                    onChange={(event) =>
+                      rowField(index, "workId", event.target.value)
+                    }
+                  >
+                    {workOptions}
+                  </AppSelect>
+                </label>
+              ) : null}
+              {original && !isLabour ? (
+                <label className="field">
+                  <span className="field-label">{t("খরচের ধরন")}</span>
+                  <AppSelect
+                    className="field-input"
+                    value={row.costType}
+                    onChange={(event) =>
+                      rowField(
+                        index,
+                        "costType",
+                        event.target.value as DraftRow["costType"],
+                      )
+                    }
+                  >
+                    {costTypes
+                      .filter((type) => type !== "labour")
+                      .map((type) => (
+                        <option key={type} value={type}>
+                          {t(costNames[type])}
+                        </option>
+                      ))}
+                  </AppSelect>
+                </label>
+              ) : null}
+            </div>
+          ))}
+        </div>
       ) : null}
     </>
   );
@@ -1519,20 +1575,12 @@ function SupportedEntrySheet({
                     required={!isLabour && row.costType === "material"}
                   />
                 </label>
-                <TransactionDetails
-                  summary={t(
-                    !isLabour && row.costType === "material"
-                      ? "ব্র্যান্ড ও পরিমাণ"
-                      : "আরও তথ্য",
-                  )}
-                  defaultOpen={
-                    !isLabour &&
-                    row.costType === "material" &&
-                    Boolean(row.brand || row.quantity || row.unit)
-                  }
-                  className="entry-line-details"
-                >
-                  {!isLabour && row.costType === "material" ? (
+                {!isLabour && row.costType === "material" ? (
+                  <TransactionDetails
+                    summary={t("ব্র্যান্ড ও পরিমাণ")}
+                    defaultOpen={Boolean(row.brand || row.quantity || row.unit)}
+                    className="entry-line-details"
+                  >
                     <label className="field">
                       <span className="field-label">{t("ব্র্যান্ড")}</span>
                       <input
@@ -1545,37 +1593,7 @@ function SupportedEntrySheet({
                         placeholder={t("ইচ্ছা হলে লিখুন")}
                       />
                     </label>
-                  ) : null}
-                  {original ? (
-                    <>
-                      {!isLabour ? (
-                        <label className="field">
-                          <span className="field-label">{t("খরচের ধরন")}</span>
-                          <AppSelect
-                            className="field-input"
-                            value={row.costType}
-                            onChange={(event) =>
-                              rowField(
-                                index,
-                                "costType",
-                                event.target.value as DraftRow["costType"],
-                              )
-                            }
-                          >
-                            {costTypes
-                              .filter((type) => type !== "labour")
-                              .map((type) => (
-                                <option key={type} value={type}>
-                                  {t(costNames[type])}
-                                </option>
-                              ))}
-                          </AppSelect>
-                        </label>
-                      ) : null}
-                    </>
-                  ) : null}
-                  {!isLabour && row.costType === "material" ? (
-                    <div className="form-grid transaction-grid">
+                    <div className="transaction-grid">
                       <label className="field">
                         <span className="field-label">{t("পরিমাণ")}</span>
                         <NumericInput
@@ -1602,31 +1620,17 @@ function SupportedEntrySheet({
                         />
                       </label>
                     </div>
-                  ) : null}
-                  {!(isLabour && selectedContractId) ? (
-                    <label className="field">
-                      <span className="field-label">
-                        {t("কোন খাতায় রাখবেন")}
-                      </span>
-                      <AppSelect
-                        className="field-input"
-                        value={row.workId}
-                        onChange={(event) =>
-                          rowField(index, "workId", event.target.value)
-                        }
-                      >
-                        {workOptions}
-                      </AppSelect>
-                    </label>
-                  ) : null}
-                  {original && draft.rows.length === 1
-                    ? addCostRowButton
-                    : null}
-                </TransactionDetails>
+                  </TransactionDetails>
+                ) : null}
+                {mixedWorkLines ? (
+                  <p className="entry-line-work-name">
+                    {ledger.works.find((work) => work.id === row.workId)?.name}
+                  </p>
+                ) : null}
               </div>
             ))}
           </div>
-          {!original || draft.rows.length > 1 ? addCostRowButton : null}
+          {addCostRowButton}
           <div
             className={`entry-total ${original && draft.rows.length === 1 ? "entry-edit-single-total" : ""}`}
           >
@@ -1844,7 +1848,7 @@ function SupportedEntrySheet({
       ) : null}
     </>
   );
-  const extraFields = (
+  const dateFields = (
     <>
       <label className="field">
         <span className="field-label">{t("তারিখ")}</span>
@@ -1865,25 +1869,25 @@ function SupportedEntrySheet({
         />
         {t("তারিখ জানা নেই")}
       </label>
-      <label className="field">
-        <span className="field-label">{t("মনে রাখার কথা")}</span>
-        <textarea
-          className="field-input"
-          rows={3}
-          value={draft.note}
-          maxLength={10000}
-          onChange={(event) => field("note", event.target.value)}
-          placeholder={t("কী বাবদ, কোথা থেকে বা অন্য কিছু…")}
-        />
-      </label>
-      <button
-        type="button"
-        className="text-button danger-text"
-        onClick={discard}
-      >
-        {t("অসমাপ্ত লেখা বাদ দিন")}
-      </button>
     </>
+  );
+  const noteField = (
+    <label className="field">
+      <span className="field-label">{t("মনে রাখার কথা")}</span>
+      <textarea
+        className="field-input"
+        rows={2}
+        value={draft.note}
+        maxLength={10000}
+        onChange={(event) => field("note", event.target.value)}
+        placeholder={t("কী বাবদ, কোথা থেকে বা অন্য কিছু…")}
+      />
+    </label>
+  );
+  const discardDraftButton = (
+    <button type="button" className="text-button danger-text" onClick={discard}>
+      {t("অসমাপ্ত লেখা বাদ দিন")}
+    </button>
   );
   const attachmentFields = (
     <div className="entry-edit-attachments">
@@ -2172,23 +2176,28 @@ function SupportedEntrySheet({
                 </summary>
                 <div className="entry-edit-context-fields">{contextFields}</div>
               </details>
-              <TransactionDetails
-                summary={t("ভাউচার, নোট ও তারিখ")}
-                className="entry-edit-extras"
+              <TransactionExtras
+                dateField={dateFields}
+                noteField={noteField}
+                hasReceipts={Boolean(original.receipts.length || files.length)}
               >
                 {attachmentFields}
-                {extraFields}
-              </TransactionDetails>
+              </TransactionExtras>
+              {discardDraftButton}
             </div>
           ) : (
             <>
               {contextFields}
               {amountFields}
               {paymentMethodFields}
-              <TransactionDetails summary={t("ভাউচার, নোট ও তারিখ")}>
+              <TransactionExtras
+                dateField={dateFields}
+                noteField={noteField}
+                hasReceipts={Boolean(files.length)}
+              >
                 {attachmentFields}
-                {extraFields}
-              </TransactionDetails>
+              </TransactionExtras>
+              {discardDraftButton}
             </>
           )}
         </fieldset>

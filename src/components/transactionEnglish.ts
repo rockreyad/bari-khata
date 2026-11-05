@@ -34,6 +34,8 @@ export const transactionEnglish: Record<string, string> = {
   "ভাউচারের ছবি": "Voucher image",
   "ছবি বা PDF": "Photo or PDF",
   "তারিখ ও নোট": "Date and note",
+  "ছবি বা রসিদ": "Photo or receipt",
+  "খরচ {{index}}-এর খাতা": "Notebook for cost {{index}}",
   "মোট টাকা": "Total amount",
   "বিলের বিস্তারিত": "Bill details",
   "টাকা দেওয়ার ধরন": "Payment type",

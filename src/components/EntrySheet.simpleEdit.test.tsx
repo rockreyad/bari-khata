@@ -286,8 +286,8 @@ it("keeps a fully paid simple purchase focused on one amount while preserving it
     screen.queryByRole("checkbox", { name: "পুরো টাকা দেওয়া ছিল" }),
   ).toBeNull();
   const note = screen.getByLabelText("মনে রাখার কথা");
-  expect(note.closest("details")).not.toBeNull();
-  expect(note.closest("details")!.open).toBe(false);
+  expect(note.closest("details")).toBeNull();
+  expect(screen.getByLabelText("তারিখ").closest("details")).toBeNull();
   fireEvent.change(amount, { target: { value: "100" } });
   await userEvent.click(save());
   await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
@@ -300,6 +300,25 @@ it("keeps a fully paid simple purchase focused on one amount while preserving it
   });
   expect(onSave).toHaveBeenCalledOnce();
   page.unmount();
+});
+
+it("translates the compact date, notes and optional receipt area with the real language provider", async () => {
+  const original = purchase("full");
+  await repository(original);
+  savePreferences({ language: "en" });
+  mount(original, billId, vi.fn(), vi.fn());
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("button", { name: "Save" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
+  const extras = screen.getByRole("region", { name: "Date and note" });
+  expect(within(extras).getByText("Photo or receipt")).toBeTruthy();
+  expect(within(extras).getByText("Optional")).toBeTruthy();
+  expect(within(extras).getByLabelText("Date").closest("details")).toBeNull();
+  expect(extras.querySelector("textarea")?.closest("details")).toBeNull();
+  expect(extras.querySelector("details")?.open).toBe(false);
 });
 
 it("does not change an independent partial payment when the common bill amount is edited", async () => {
@@ -373,6 +392,18 @@ it("keeps multirow, unknown-date, note and receipt values through a closed draft
       (details) => (details as HTMLDetailsElement).open,
     ),
   ).toBe(true);
+  const context = screen.getByLabelText("নাম ও খাতা").closest("details")!;
+  for (const [index, workId] of ["sample-one", "sample-two"].entries()) {
+    const work = screen.getByLabelText(`খরচ ${["১", "২"][index]}-এর খাতা`);
+    expect(work.closest("details")).toBe(context);
+    expect(value(work)).toBe(workId);
+  }
+  for (const details of page.container.querySelectorAll(
+    ".entry-line-details",
+  )) {
+    expect(details.querySelector("select")).toBeNull();
+  }
+  expect(screen.queryByText("কোন খাতায় রাখবেন")).toBeNull();
   const amounts = screen.getAllByLabelText(/^মোট দাম/);
   expect(amounts.map(value)).toEqual(["600", "400"]);
   await reveal(amounts[0], user);
@@ -451,10 +482,13 @@ it("preserves split work and multiple payment methods when every optional disclo
   const page = mount(original, cashId, onSave, onClose);
   await ready();
   expect(
-    [...page.container.querySelectorAll("details")].every(
-      (details) => !details.open,
-    ),
+    [
+      ...page.container.querySelectorAll<HTMLDetailsElement>(
+        "details:not(.transaction-extras-receipts)",
+      ),
+    ].every((details) => !details.open),
   ).toBe(true);
+  expect(screen.getByText("ছবি বা রসিদ").closest("details")!.open).toBe(true);
   const parts = screen.getAllByLabelText("এই মাধ্যমে কত টাকা");
   for (const part of parts) await reveal(part, user);
   expect(parts.map(value)).toEqual(["700", "300"]);
@@ -524,17 +558,15 @@ it("reopens brand and quantity drafts, keeps vouchers reachable, and preserves t
   expect(
     screen.getAllByLabelText("ব্র্যান্ড")[0].closest("details")?.open,
   ).toBe(true);
-  const extras = screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!;
-  expect(extras.open).toBe(false);
+  const extras = screen.getByText("ছবি বা রসিদ").closest("details")!;
+  expect(extras.open).toBe(true);
   expect(
     screen
       .getByRole("button", { name: "ভাউচার বা ছবি যোগ করুন", hidden: true })
       .closest("details"),
   ).toBe(extras);
-  expect(screen.getByLabelText("মনে রাখার কথা").closest("details")).toBe(
-    extras,
-  );
-  expect(screen.getByLabelText("তারিখ").closest("details")).toBe(extras);
+  expect(screen.getByLabelText("মনে রাখার কথা").closest("details")).toBeNull();
+  expect(screen.getByLabelText("তারিখ").closest("details")).toBeNull();
   expect(
     screen
       .getByRole("button", { name: "sample.pdf", hidden: true })

@@ -33,6 +33,7 @@ import { useInlineDraft } from "../entries/useInlineDraft";
 import { QuickSavedDraftSchema } from "../entries/quickEntry";
 import { HouseSavedNotice } from "./HouseSavedNotice";
 import { HouseAttachments } from "./HouseAttachments";
+import { TransactionExtras } from "../../components/TransactionExtras";
 import { paymentPresentation } from "./paymentPresentation";
 import { partyDueItems } from "../home/partyDueItems";
 
@@ -1031,43 +1032,45 @@ export function HousePaymentForm() {
                 )}
               </TransactionDetails>
             )}
-          <TransactionDetails
-            summary={t(
-              intent === "advance" ? "ভাউচার ও তারিখ" : "ভাউচার, নোট ও তারিখ",
-            )}
-            defaultOpen={invalidField === "invalid_date"}
-          >
-            <label>
-              {t("তারিখ")}
-              <AppDatePicker
-                aria-label={t("তারিখ")}
-                aria-invalid={invalidField === "invalid_date"}
-                aria-describedby={
-                  invalidField === "invalid_date"
-                    ? "house-payment-error"
-                    : undefined
-                }
-                value={draft.date}
-                onChange={(event) => change("date", event.target.value)}
-              />
-            </label>
-            {intent !== "advance" && (
+          <TransactionExtras
+            hasReceipts={draft.files.length > 0}
+            dateField={
               <label>
-                {t("বাড়তি কথা")}
-                <textarea
-                  value={draft.note}
-                  maxLength={10000}
-                  onChange={(event) => change("note", event.target.value)}
+                {t("তারিখ")}
+                <AppDatePicker
+                  aria-label={t("তারিখ")}
+                  aria-invalid={invalidField === "invalid_date"}
+                  aria-describedby={
+                    invalidField === "invalid_date"
+                      ? "house-payment-error"
+                      : undefined
+                  }
+                  value={draft.date}
+                  onChange={(event) => change("date", event.target.value)}
                 />
               </label>
-            )}
+            }
+            noteField={
+              intent !== "advance" && (
+                <label>
+                  {t("বাড়তি কথা")}
+                  <textarea
+                    rows={2}
+                    value={draft.note}
+                    maxLength={10000}
+                    onChange={(event) => change("note", event.target.value)}
+                  />
+                </label>
+              )
+            }
+          >
             <HouseAttachments
               files={draft.files}
               entryId={draft.id}
               onChange={(files) => change("files", files)}
               onError={setError}
             />
-          </TransactionDetails>
+          </TransactionExtras>
         </fieldset>
       </form>
     </EntryFrame>
