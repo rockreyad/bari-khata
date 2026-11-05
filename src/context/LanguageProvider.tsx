@@ -6,6 +6,7 @@ import {
 export { useLanguageContext } from "./LanguageContext";
 import { entryFlowEnglish, compactCopy } from "./entryFlowEnglish";
 import { worksRefreshEnglish } from "../features/works/worksRefreshEnglish";
+import { ledgerSearchEnglish } from "../features/ledger/ledgerSearchEnglish";
 import { deletionEnglish } from "../components/ui/deletionEnglish";
 import { accountEnglish } from "../features/settings/accountEnglish";
 import { loginRefreshEnglish } from "../features/auth/loginRefreshEnglish";
@@ -75,6 +76,7 @@ const english: Record<string, string> = {
   ...accountEnglish,
   ...deletionEnglish,
   ...worksRefreshEnglish,
+  ...ledgerSearchEnglish,
   ...entryPageEnglish,
   ...cashReportEnglish,
   ...cashOverviewEnglish,
