@@ -79,7 +79,7 @@ export function filtersFromSearch(
     if (params.has(key))
       (next as Record<string, string>)[field] = (params.get(key) ?? "").slice(
         0,
-        field === "query" ? 300 : 200,
+        field === "query" ? 300 : field === "brand" ? 4096 : 200,
       );
   if (!params.has("group")) next.groupId = initialGroupId;
   if (!["all", "needs_review", "confirmed"].includes(next.review))
@@ -268,9 +268,25 @@ function CostAnalyticsPage({
     groupScope,
     availableItems,
   } = derived;
-  const brands = [
-    ...new Set(groupScope.map((row) => row.brand).filter(Boolean)),
-  ].sort();
+  const availableBrands = new Map(
+    groupScope.flatMap((row) =>
+      row.brandIdentity
+        ? [[row.brandIdentity.id, row.brandIdentity] as const]
+        : [],
+    ),
+  );
+  const selectedBrand =
+    filters.brand && filters.brand !== "__unknown__"
+      ? (reportIndex?.brands.resolve(filters.brand) ?? null)
+      : null;
+  if (selectedBrand) availableBrands.set(selectedBrand.id, selectedBrand);
+  const brands = [...availableBrands.values()].sort((a, b) =>
+    a.label.localeCompare(b.label),
+  );
+  const selectedBrandValue =
+    filters.brand === "__unknown__"
+      ? "__unknown__"
+      : (selectedBrand?.id ?? filters.brand);
   const usages = [
     ...new Set(groupScope.map((row) => row.usage).filter(Boolean)),
   ].sort();
@@ -396,7 +412,7 @@ function CostAnalyticsPage({
       label:
         filters.brand === "__unknown__"
           ? t("ব্র্যান্ড দেওয়া নেই")
-          : filters.brand,
+          : (selectedBrand?.label ?? filters.brand),
       field: "brand",
     });
   if (filters.usage)
@@ -883,15 +899,26 @@ function CostAnalyticsPage({
                   <label>
                     {t("ব্র্যান্ড")}
                     <AppSelect
-                      value={filters.brand}
+                      value={selectedBrandValue}
                       onChange={(e) => update({ brand: e.target.value })}
                     >
                       <option value="">{t("সব ব্র্যান্ড")}</option>
+                      {groupScope.some((row) => !row.brandIdentity) ||
+                      filters.brand === "__unknown__" ? (
+                        <option value="__unknown__">
+                          {t("ব্র্যান্ড দেওয়া নেই")}
+                        </option>
+                      ) : null}
                       {brands.map((brand) => (
-                        <option key={brand} value={brand}>
-                          {brand}
+                        <option key={brand.id} value={brand.id}>
+                          {brand.label}
                         </option>
                       ))}
+                      {filters.brand &&
+                      filters.brand !== "__unknown__" &&
+                      !selectedBrand ? (
+                        <option value={filters.brand}>{filters.brand}</option>
+                      ) : null}
                     </AppSelect>
                   </label>
                   <label>
