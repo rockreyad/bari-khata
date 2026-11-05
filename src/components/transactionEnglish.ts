@@ -1,4 +1,10 @@
 export const transactionEnglish: Record<string, string> = {
+  "কীভাবে দিয়েছেন": "How did you pay?",
+  "কীভাবে পেয়েছেন": "How did you receive it?",
+  "নাম ও খাতা": "Name and notebook",
+  "কর্মী নিজের টাকা দিয়েছেন": "The worker paid from their own money",
+  "ভাউচার, নোট ও তারিখ": "Voucher, note and date",
+  "টাকা দেওয়ার ধরন বেছে নিন।": "Choose a payment type.",
   "আরও তথ্য": "More details",
   "ভাউচার যোগ করুন": "Add voucher",
   "ভাউচারের ছবি": "Voucher image",

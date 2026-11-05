@@ -171,49 +171,6 @@ export function PersonEditorFields({
         </div>
       </section>
 
-      <details className="person-editor-disclosure">
-        <summary>
-          <HardHatIcon size={21} aria-hidden="true" />
-          <span>{t("আরও কাজ বা সম্পর্ক")}</span>
-          <CaretDownIcon size={17} aria-hidden="true" />
-        </summary>
-        <div className="person-editor-disclosure-body">
-          <fieldset className="person-editor-work-picker">
-            <legend className="visually-hidden">{t("কাজ বা সম্পর্ক")}</legend>
-            <div className="person-editor-work-options">
-              {contactPresets
-                .filter((preset) => preset.id !== "custom")
-                .map((preset) => {
-                  const roles =
-                    value.roles ??
-                    (value.contactPresetId === "custom"
-                      ? []
-                      : [value.contactPresetId as ContactType]);
-                  return (
-                    <label key={preset.id}>
-                      <input
-                        type="checkbox"
-                        checked={roles.includes(preset.id)}
-                        onChange={(event) =>
-                          onChange({
-                            roles: event.target.checked
-                              ? [...roles, preset.id]
-                              : roles.filter((role) => role !== preset.id),
-                          })
-                        }
-                      />
-                      <span>{t(preset.label)}</span>
-                    </label>
-                  );
-                })}
-            </div>
-          </fieldset>
-          <p>
-            {t("সম্পর্ক না বাছলেও বিল ও টাকা রাখা যাবে। আগের হিসাব বদলাবে না।")}
-          </p>
-        </div>
-      </details>
-
       <details className="person-editor-disclosure person-editor-notebooks">
         <summary>
           <BookOpenIcon size={21} aria-hidden="true" />

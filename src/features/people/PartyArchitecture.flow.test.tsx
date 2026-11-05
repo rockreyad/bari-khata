@@ -18,6 +18,7 @@ import { getScopedRepository } from "../../data/repository";
 import { LedgerSchema, type Ledger } from "../../domain/model";
 import { savePreferences } from "../../lib/preferences";
 import { partyLedger } from "../../domain/partyLedger";
+import { recordHousePayment } from "../../domain/housePayments";
 import { QuickEntrySheet } from "../entries/QuickEntrySheet";
 import { AgreementMilestones } from "../jobs/AgreementMilestones";
 
@@ -198,45 +199,24 @@ it("adds optional agreement milestones, saves status, and reopens without produc
   ).toBeTruthy();
 });
 
-it("records explicitly recoverable money from the payment form and returns it without offsetting the same party's unpaid bills", async () => {
+it("refunds an existing recoverable payment without offsetting the same party's unpaid bills", async () => {
   const initial = fixture();
   const repo = await setup(initial);
   const before = partyLedger(initial, "party");
   const user = userEvent.setup();
-  const first = mount(
-    initial,
-    <QuickEntrySheet
-      options={{
-        kind: "payment",
-        personId: "party",
-        workId: "roof",
-        account: "materials",
-        purpose: "advance",
-      }}
-      presentation="page"
-    />,
+  await repo.save(
+    recordHousePayment(initial, {
+      id: "sample-historical-recoverable",
+      personId: "party",
+      workId: "roof",
+      account: "materials",
+      intent: "receivable",
+      amount: 5000,
+      date: "2026-11-05",
+      method: "cash",
+      note: "নমুনা পুরোনো ফেরত পাওয়ার টাকা",
+    }),
   );
-  await waitFor(() =>
-    expect(
-      (
-        screen
-          .getByLabelText("কত টাকা")
-          .closest("fieldset") as HTMLFieldSetElement
-      ).disabled,
-    ).toBe(false),
-  );
-  await user.selectOptions(
-    screen.getByLabelText("টাকা কীভাবে মিটবে"),
-    "receivable",
-  );
-  await user.type(screen.getByLabelText("কত টাকা"), "50");
-  await user.click(screen.getByRole("button", { name: "রাখুন" }));
-  await waitFor(async () =>
-    expect((await repo.read())!.ledger.entries).toHaveLength(
-      initial.entries.length + 1,
-    ),
-  );
-  first.unmount();
   repo.database.close();
   await repo.database.open();
   const saved = (await repo.read())!.ledger;
@@ -281,11 +261,16 @@ it("records explicitly recoverable money from the payment form and returns it wi
     ),
   );
   second.unmount();
+  repo.database.close();
+  await repo.database.open();
   const refunded = (await repo.read())!.ledger;
   expect(refunded.entries.at(-1)).toMatchObject({
     kind: "refund",
     paymentContext: "receivable",
   });
+  expect(refunded.entries.filter((entry) => entry.kind === "expense")).toEqual(
+    initial.entries.filter((entry) => entry.kind === "expense"),
+  );
   expect(partyLedger(refunded, "party")).toMatchObject({
     payable: before.payable,
     receivable: 3000,

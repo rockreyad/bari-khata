@@ -16,4 +16,7 @@ export const houseCostEnglish: Record<string, string> = {
   অন্যজন: "Someone else",
   "হিসাবের সারাংশ": "Entry summary",
   "তারিখ ও বাড়তি কথা": "Date and notes",
+  "কে দিয়েছেন": "Who paid?",
+  "কে দিয়েছেন, তাঁর নাম বেছে নিন।": "Choose who paid.",
+  "ভাউচার, নোট ও তারিখ": "Receipt, notes and date",
 };

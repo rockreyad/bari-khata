@@ -229,10 +229,11 @@
 }
 .transaction-choice > button,
 .transaction-segments > button {
+  position: relative;
   flex: 1;
   min-height: 44px;
   min-width: 76px;
-  padding: 9px 12px;
+  padding: 10px 12px 13px;
   border-radius: 10px;
   color: var(--muted);
   font-size: 13px;
@@ -254,10 +255,72 @@
 .transaction-segments > button[aria-pressed="true"],
 .transaction-choice > button.selected,
 .transaction-segments > button.selected {
-  background: var(--surface);
+  background: var(--accent-soft);
   color: var(--accent-strong);
   box-shadow: 0 2px 5px #00000008;
   font-weight: 650;
+}
+.transaction-choice > button[aria-pressed="true"]::after,
+.transaction-segments > button[aria-pressed="true"]::after,
+.transaction-methods-options > button[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  inset-inline: 12px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent-strong);
+}
+.transaction-methods {
+  min-width: 0;
+}
+.transaction-methods > .transaction-label {
+  display: block;
+}
+.transaction-methods-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.transaction-methods-options > button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 78px;
+  padding: 12px 5px 15px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.transaction-methods-options > button[aria-pressed="true"] {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  font-weight: 650;
+}
+.transaction-methods-options .payment-brand {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+}
+.transaction-methods-options .payment-brand.bkash {
+  background: #e2136e;
+}
+.transaction-methods-options .payment-brand.bkash img {
+  filter: invert(1);
+}
+.transaction-methods-options > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 .transaction-secondary {
   display: inline-flex;

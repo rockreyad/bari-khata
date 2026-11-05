@@ -132,6 +132,7 @@
   color: var(--text);
 }
 .entry-edit-attachments {
+  display: grid;
   gap: 12px;
 }
 .entry-edit-attachments > .transaction-secondary {
@@ -271,4 +272,25 @@
 .entry-saved-receipt > svg {
   flex: none;
   color: var(--muted);
+}
+
+.entry-editor-form .method-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+.entry-editor-form .method-row > .transaction-methods {
+  grid-column: 1 / -1;
+}
+
+.entry-edit-methods {
+  display: grid;
+  gap: 16px;
+}
+.entry-edit-methods > .text-button {
+  justify-self: start;
+  min-height: 44px;
+}
+.entry-editor-form .method-row .field-input {
+  width: 100%;
 }

@@ -5,6 +5,7 @@ import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { EntryFrame } from "../../components/EntryFrame";
 import { MoneyInput } from "../../components/ui/MoneyInput";
+import { PaymentMethodField } from "../../components/PaymentMethodField";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import {
@@ -53,8 +54,9 @@ const PaymentDraftSchema = z.object({
   files: QuickSavedDraftSchema.shape.files,
 });
 type Draft = z.infer<typeof PaymentDraftSchema>;
-type PaymentFormIssue = HousePaymentIssue | "invalid_date";
+type PaymentFormIssue = HousePaymentIssue | "invalid_date" | "invalid_intent";
 const issueText: Record<PaymentFormIssue, string> = {
+  invalid_intent: "টাকা দেওয়ার ধরন বেছে নিন।",
   invalid_date: "সঠিক তারিখ বেছে নিন।",
   invalid_person: "যাঁকে টাকা দিয়েছেন, তাঁর নাম বেছে নিন।",
   invalid_amount: "সঠিক টাকার অঙ্ক দিন।",
@@ -290,9 +292,10 @@ export function HousePaymentForm() {
     0,
   );
   const showScope =
-    draft.intent !== "settlement" ||
-    plan.remainder > 0 ||
-    Boolean(draft.workId || draft.account || draft.contractId);
+    draft.intent !== "receivable" &&
+    (draft.intent !== "settlement" ||
+      plan.remainder > 0 ||
+      Boolean(draft.workId || draft.account || draft.contractId));
   const contracts = ledger.contracts.filter(
     (row) =>
       (draft.intent === "settlement" || (policy?.agreement ?? true)) &&
@@ -308,6 +311,7 @@ export function HousePaymentForm() {
     setError("");
     setInvalidField("");
     try {
+      if (draft.intent === "receivable") throw new Error("invalid_intent");
       if (total <= 0) throw new Error("invalid_amount");
       const timestamp = Date.parse(`${draft.date}T00:00:00Z`);
       if (
@@ -402,13 +406,7 @@ export function HousePaymentForm() {
     );
   return (
     <EntryFrame
-      title={t(
-        draft.intent === "advance"
-          ? "অগ্রিম দিলাম"
-          : draft.intent === "receivable"
-            ? "জামানত দিলাম"
-            : "টাকা দিলাম",
-      )}
+      title={t(draft.intent === "advance" ? "অগ্রিম দিলাম" : "টাকা দিলাম")}
       className="house-write-page transaction-page"
       busy={saving}
       onClose={() =>
@@ -535,7 +533,6 @@ export function HousePaymentForm() {
                 [
                   ["settlement", "বাকি", "বাকি মেটালাম"],
                   ["advance", "অগ্রিম", "অগ্রিম — আগে টাকা দিলাম"],
-                  ["receivable", "জামানত", "ফেরতযোগ্য জামানত দিলাম"],
                 ] as const
               ).map(([value, label, accessible]) => (
                 <button
@@ -549,6 +546,9 @@ export function HousePaymentForm() {
                 </button>
               ))}
             </div>
+            {draft.intent === "receivable" && (
+              <p className="field-hint">{t("টাকা দেওয়ার ধরন বেছে নিন।")}</p>
+            )}
             {showScope && (
               <div className="house-payment-scope">
                 <div className="transaction-grid">
@@ -656,7 +656,7 @@ export function HousePaymentForm() {
               </div>
             )}
           </div>
-          {person && total > 0 && (
+          {person && total > 0 && draft.intent !== "receivable" && (
             <section
               className="house-payment-preview transaction-summary"
               aria-label={t("হিসাবের সারাংশ")}
@@ -747,11 +747,9 @@ export function HousePaymentForm() {
               ) : (
                 <p>
                   {t(
-                    draft.intent === "receivable"
-                      ? "এই টাকা ফেরত পাওয়ার হিসাবে থাকবে।"
-                      : draft.intent === "advance"
-                        ? "পরের বিলের জন্য অগ্রিম থাকবে।"
-                        : "এই টাকার জন্য মেলানো যায় এমন বিল নেই।",
+                    draft.intent === "advance"
+                      ? "পরের বিলের জন্য অগ্রিম থাকবে।"
+                      : "এই টাকার জন্য মেলানো যায় এমন বিল নেই।",
                   )}
                 </p>
               )}
@@ -774,13 +772,7 @@ export function HousePaymentForm() {
                 )}
                 {plan.remainder > 0 && (
                   <div>
-                    <dt>
-                      {t(
-                        draft.intent === "receivable"
-                          ? "ফেরত পাব"
-                          : "অগ্রিম থাকবে",
-                      )}
-                    </dt>
+                    <dt>{t("অগ্রিম থাকবে")}</dt>
                     <dd>{money(plan.remainder)}</dd>
                   </div>
                 )}
@@ -838,47 +830,28 @@ export function HousePaymentForm() {
               )}
             </section>
           )}
+          <PaymentMethodField
+            value={draft.method}
+            onChange={(method) => change("method", method)}
+          />
           <TransactionDetails
-            summary={t("তারিখ ও নোট")}
+            summary={t("ভাউচার, নোট ও তারিখ")}
             defaultOpen={invalidField === "invalid_date"}
           >
-            <div className="transaction-grid">
-              <label>
-                {t("তারিখ")}
-                <AppDatePicker
-                  aria-label={t("তারিখ")}
-                  aria-invalid={invalidField === "invalid_date"}
-                  aria-describedby={
-                    invalidField === "invalid_date"
-                      ? "house-payment-error"
-                      : undefined
-                  }
-                  value={draft.date}
-                  onChange={(event) => change("date", event.target.value)}
-                />
-              </label>
-              <label>
-                {t("কীভাবে দিয়েছি")}
-                <AppSelect
-                  aria-label={t("কীভাবে দিয়েছি")}
-                  value={draft.method}
-                  onChange={(event) =>
-                    change("method", event.target.value as Draft["method"])
-                  }
-                >
-                  {[
-                    ["cash", "নগদ"],
-                    ["bkash", "বিকাশ"],
-                    ["bank", "ব্যাংক"],
-                    ["other", "অন্যভাবে"],
-                  ].map(([id, label]) => (
-                    <option key={id} value={id}>
-                      {t(label)}
-                    </option>
-                  ))}
-                </AppSelect>
-              </label>
-            </div>
+            <label>
+              {t("তারিখ")}
+              <AppDatePicker
+                aria-label={t("তারিখ")}
+                aria-invalid={invalidField === "invalid_date"}
+                aria-describedby={
+                  invalidField === "invalid_date"
+                    ? "house-payment-error"
+                    : undefined
+                }
+                value={draft.date}
+                onChange={(event) => change("date", event.target.value)}
+              />
+            </label>
             <label>
               {t("বাড়তি কথা")}
               <textarea
@@ -887,13 +860,13 @@ export function HousePaymentForm() {
                 onChange={(event) => change("note", event.target.value)}
               />
             </label>
+            <HouseAttachments
+              files={draft.files}
+              entryId={draft.id}
+              onChange={(files) => change("files", files)}
+              onError={setError}
+            />
           </TransactionDetails>
-          <HouseAttachments
-            files={draft.files}
-            entryId={draft.id}
-            onChange={(files) => change("files", files)}
-            onError={setError}
-          />
         </fieldset>
       </form>
     </EntryFrame>

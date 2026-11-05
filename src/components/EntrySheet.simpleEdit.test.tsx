@@ -9,6 +9,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LanguageProvider } from "../context/LanguageProvider";
@@ -278,9 +279,9 @@ it("keeps a fully paid simple purchase focused on one amount while preserving it
   expect(screen.getAllByLabelText(/^মোট দাম/)).toHaveLength(1);
   const amount = screen.getByLabelText(/^মোট দাম/);
   expect(amount.closest("details:not([open])")).toBeNull();
-  expect(
-    screen.getByLabelText("নাম, খাতা ও তারিখ").closest("details")?.open,
-  ).toBe(false);
+  expect(screen.getByLabelText("নাম ও খাতা").closest("details")?.open).toBe(
+    false,
+  );
   expect(
     screen.queryByRole("checkbox", { name: "পুরো টাকা দেওয়া ছিল" }),
   ).toBeNull();
@@ -457,10 +458,14 @@ it("preserves split work and multiple payment methods when every optional disclo
   const parts = screen.getAllByLabelText("এই মাধ্যমে কত টাকা");
   for (const part of parts) await reveal(part, user);
   expect(parts.map(value)).toEqual(["700", "300"]);
-  expect(screen.getAllByLabelText("টাকা দেওয়ার মাধ্যম").map(value)).toEqual([
-    "cash",
-    "bkash",
-  ]);
+  expect(
+    screen
+      .getAllByRole("group", { name: "কীভাবে দিয়েছেন" })
+      .map(
+        (group) =>
+          within(group).getByRole("button", { pressed: true }).textContent,
+      ),
+  ).toEqual(["নগদ", "বিকাশ"]);
   const splits = screen.getAllByLabelText("টাকা", { exact: true });
   for (const part of splits) await reveal(part, user);
   expect(splits.map(value)).toEqual(["600", "400"]);
@@ -519,17 +524,22 @@ it("reopens brand and quantity drafts, keeps vouchers reachable, and preserves t
   expect(
     screen.getAllByLabelText("ব্র্যান্ড")[0].closest("details")?.open,
   ).toBe(true);
+  const extras = screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!;
+  expect(extras.open).toBe(false);
   expect(
     screen
-      .getByRole("button", { name: "ভাউচার বা ছবি যোগ করুন" })
+      .getByRole("button", { name: "ভাউচার বা ছবি যোগ করুন", hidden: true })
       .closest("details"),
-  ).toBeNull();
+  ).toBe(extras);
+  expect(screen.getByLabelText("মনে রাখার কথা").closest("details")).toBe(
+    extras,
+  );
+  expect(screen.getByLabelText("তারিখ").closest("details")).toBe(extras);
   expect(
-    screen.getByText(/আগের.*ভাউচার রাখা আছে/).closest("details"),
-  ).toBeNull();
-  expect(
-    screen.getByRole("button", { name: "sample.pdf" }).closest("details"),
-  ).toBeNull();
+    screen
+      .getByRole("button", { name: "sample.pdf", hidden: true })
+      .closest("details"),
+  ).toBe(extras);
   fireEvent.change(screen.getAllByLabelText("ব্র্যান্ড")[0], {
     target: { value: "নমুনা নতুন ব্র্যান্ড" },
   });
@@ -619,4 +629,100 @@ it("restores an older edit draft without a brand field without changing the save
   expect(saved.items).toEqual(original.items);
   expect(saved.entries[0].lines).toEqual(original.entries[0].lines);
   expect(saved.entries[0].receipts).toEqual(original.entries[0].receipts);
+});
+
+it("keeps an older work bill's quantity through amount edits without asking for quantity or unit", async () => {
+  const original = LedgerSchema.parse({
+    works: [{ id: "sample-one", name: "নমুনা খাতা" }],
+    people: [{ id: "sample-worker", name: "নমুনা কর্মী", kind: "worker" }],
+    entries: [
+      {
+        id: billId,
+        kind: "expense",
+        account: "labour",
+        personId: "sample-worker",
+        lines: [
+          {
+            id: "sample-work-line",
+            workId: "sample-one",
+            label: "নমুনা প্লাস্টার",
+            costType: "labour",
+            amount: 100000,
+            quantity: "2.5",
+            unit: "দিন",
+          },
+        ],
+      },
+    ],
+  });
+  const repo = await repository(original);
+  const onClose = vi.fn();
+  const onSave = vi.fn(async (next: Ledger) => {
+    await repo.save(next);
+  });
+  const page = mount(original, billId, onSave, onClose);
+  await ready();
+  expect(screen.queryByLabelText("পরিমাণ")).toBeNull();
+  expect(screen.queryByLabelText("একক")).toBeNull();
+  expect(screen.queryByLabelText("ব্র্যান্ড")).toBeNull();
+  fireEvent.change(screen.getByLabelText("মোট দাম"), {
+    target: { value: "900" },
+  });
+  await userEvent.click(save());
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  page.unmount();
+  repo.database.close();
+  await repo.database.open();
+  expect((await repo.read())!.ledger.entries[0].lines).toEqual([
+    { ...original.entries[0].lines[0], amount: 90000 },
+  ]);
+});
+
+it("edits an existing refundable payment with icon methods without changing its saved purpose", async () => {
+  const original = LedgerSchema.parse({
+    works: [{ id: "sample-one", name: "নমুনা খাতা" }],
+    people: [{ id: "sample-shop", name: "নমুনা দোকান", kind: "shop" }],
+    entries: [
+      {
+        id: cashId,
+        kind: "payment",
+        account: "materials",
+        personId: "sample-shop",
+        paymentContext: "receivable",
+        allocations: [{ workId: "sample-one", amount: 100000 }],
+        paymentParts: [{ method: "bank", amount: 100000 }],
+      },
+    ],
+  });
+  const repo = await repository(original);
+  const onClose = vi.fn();
+  const onSave = vi.fn(async (next: Ledger) => {
+    await repo.save(next);
+  });
+  const user = userEvent.setup();
+  const page = mount(original, cashId, onSave, onClose);
+  await ready();
+  expect(screen.queryByText("এই টাকা ফেরত পাব")).toBeNull();
+  const methods = screen.getByRole("group", { name: "কীভাবে দিয়েছেন" });
+  expect(methods.closest("details")).toBeNull();
+  expect(
+    within(methods).getByRole("button", { name: "ব্যাংক", pressed: true }),
+  ).toBeTruthy();
+  await user.click(within(methods).getByRole("button", { name: "বিকাশ" }));
+  fireEvent.change(screen.getByLabelText("টাকার পরিমাণ"), {
+    target: { value: "900" },
+  });
+  await user.click(save());
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  page.unmount();
+  repo.database.close();
+  await repo.database.open();
+  expect((await repo.read())!.ledger.entries).toHaveLength(1);
+  expect((await repo.read())!.ledger.entries[0]).toMatchObject({
+    id: cashId,
+    kind: "payment",
+    paymentContext: "receivable",
+    allocations: [{ workId: "sample-one", amount: 90000 }],
+    paymentParts: [{ method: "bkash", amount: 90000 }],
+  });
 });

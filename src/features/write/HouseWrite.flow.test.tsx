@@ -254,6 +254,7 @@ it("restores brand, quantity, unit, receipt and partial payment after reopening,
   await user.type(screen.getByLabelText(/^একক [০-৯0-9]+$/), "বস্তা");
   await user.click(screen.getByRole("button", { name: "কিছু দিয়েছি" }));
   await user.type(screen.getByLabelText("এখন কত দিয়েছি"), "40");
+  await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
   await user.upload(
     screen.getByLabelText("ভাউচার বা ছবি"),
     new File(["sample image"], "sample.png", { type: "image/png" }),
@@ -436,7 +437,7 @@ it("offers a worker's name for an explicit own-money reimbursement and records m
     }),
   ).toBeNull();
   await user.click(screen.getByRole("button", { name: "অন্যজন দিয়েছেন" }));
-  await user.selectOptions(screen.getByLabelText("কর্মী বা দোকান"), "worker");
+  await user.selectOptions(screen.getByLabelText("কে দিয়েছেন"), "worker");
   expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe(
     "roof",
   );
@@ -574,6 +575,7 @@ it("keeps a purchase draft and attachment on reopening, then stores one cost and
   const first = mount(initial, <HouseCostForm action="purchase" />);
   await ready();
   await cost(user);
+  await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
   await user.upload(
     screen.getByLabelText("ভাউচার বা ছবি"),
     new File(["sample receipt"], "sample.pdf", { type: "application/pdf" }),
@@ -651,6 +653,7 @@ it("records another person's materials as reimbursement owed without inventing w
   await ready();
   await cost(user, "100");
   await user.click(screen.getByRole("button", { name: "অন্যজন দিয়েছেন" }));
+  await user.selectOptions(screen.getByLabelText("কে দিয়েছেন"), "party");
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
   const saved = (await repo.read())!.ledger;
@@ -982,7 +985,7 @@ it("keeps invalid payment drafts and focuses Bengali field errors on every attem
   await user.click(saveButton);
   expect(document.activeElement).toBe(screen.getByRole("alert"));
   await user.type(amountField, "50");
-  await user.click(screen.getByText("তারিখ ও নোট"));
+  await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
   await user.clear(screen.getByLabelText("তারিখ"));
   await user.click(saveButton);
   alert = screen.getByRole("alert");
@@ -1032,5 +1035,102 @@ it("keeps a malformed inline worker draft recoverable instead of crashing the pa
     personName: "নমুনা কর্মী",
     amount: "50",
     newPersonId: " ",
+  });
+});
+
+it("keeps the icon payment method and folded voucher, note and date across reopening", async () => {
+  const initial = withBills(),
+    repo = await setup(initial),
+    user = userEvent.setup();
+  const first = mount(initial, <HousePaymentForm />, payPath);
+  await ready();
+  const methods = screen.getByRole("group", { name: "কীভাবে দিয়েছেন" });
+  await user.click(within(methods).getByRole("button", { name: "ব্যাংক" }));
+  expect(
+    within(methods)
+      .getByRole("button", { name: "ব্যাংক" })
+      .getAttribute("aria-pressed"),
+  ).toBe("true");
+  expect(
+    within(methods)
+      .getByRole("button", { name: "নগদ" })
+      .getAttribute("aria-pressed"),
+  ).toBe("false");
+  const fold = screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!;
+  expect(fold.open).toBe(false);
+  expect(screen.getByLabelText("ভাউচার বা ছবি").closest("details")).toBe(fold);
+  await user.type(screen.getByLabelText("কত দিয়েছেন"), "50");
+  await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
+  await user.type(screen.getByLabelText("বাড়তি কথা"), "নমুনা ব্যাংক হিসাব");
+  await user.upload(
+    screen.getByLabelText("ভাউচার বা ছবি"),
+    new File(["sample receipt"], "sample-bank.pdf", {
+      type: "application/pdf",
+    }),
+  );
+  await waitFor(async () =>
+    expect(
+      await createWorkspaceStorage().readDraft("house-payment:party:roof:all"),
+    ).toMatchObject({
+      method: "bank",
+      amount: "50",
+      note: "নমুনা ব্যাংক হিসাব",
+      files: [expect.objectContaining({ name: "sample-bank.pdf" })],
+    }),
+  );
+  first.unmount();
+  mount(initial, <HousePaymentForm />, payPath);
+  await ready();
+  expect(
+    screen.getByRole("button", { name: "ব্যাংক" }).getAttribute("aria-pressed"),
+  ).toBe("true");
+  expect(screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open).toBe(
+    false,
+  );
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  const saved = (await repo.read())!.ledger;
+  const payment = saved.entries.find((entry) => entry.kind === "payment")!;
+  expect(payment).toMatchObject({
+    note: "নমুনা ব্যাংক হিসাব",
+    paymentParts: [{ method: "bank", amount: 5000 }],
+    receipts: [expect.objectContaining({ name: "sample-bank.pdf" })],
+  });
+  expect(
+    (await repo.getReceipt(payment.receipts[0].id))?.blob.size,
+  ).toBeGreaterThan(0);
+});
+
+it("requires explicit ordinary payment intent before saving an old deposit draft", async () => {
+  const initial = withBills(),
+    repo = await setup(initial),
+    user = userEvent.setup();
+  mount(initial, <HousePaymentForm />, `${payPath}&intent=receivable`);
+  await ready();
+  expect(screen.queryByRole("button", { name: /জামানত/ })).toBeNull();
+  await user.type(screen.getByLabelText("কত দিয়েছেন"), "50");
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  expect(screen.getByRole("alert").textContent).toBe(
+    "টাকা দেওয়ার ধরন বেছে নিন।",
+  );
+  expect(api.save).not.toHaveBeenCalled();
+  await waitFor(async () =>
+    expect(
+      await createWorkspaceStorage().readDraft(
+        "house-payment:party:roof:all:receivable",
+      ),
+    ).toMatchObject({ intent: "receivable", amount: "50" }),
+  );
+  await user.click(screen.getByRole("button", { name: "বাকি মেটালাম" }));
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  const saved = (await repo.read())!.ledger;
+  expect(
+    saved.entries.find((entry) => entry.kind === "payment")?.paymentContext,
+  ).toBe("settlement");
+  expect(summarize(saved)).toMatchObject({
+    cost: 30000,
+    netPaid: 5000,
+    reconciledPayable: 25000,
   });
 });

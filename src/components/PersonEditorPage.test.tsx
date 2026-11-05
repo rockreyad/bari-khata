@@ -599,54 +599,67 @@ it.each([
   },
 );
 
-it("keeps stored identity metadata hidden and preserves independent roles and financial history", async () => {
-  const initial = fixture();
-  initial.people.find((person) => person.id === "worker")!.identityType =
-    "person";
-  const repo = await repository(initial);
-  await createWorkspaceStorage().saveDraft("entity:person:worker:any", {
-    id: "worker",
-    identityType: "organization",
-  });
-  const user = userEvent.setup();
-  const onClose = vi.fn();
-  const onSave = vi.fn(async (ledger: Ledger) => {
-    await repo.save(ledger);
-  });
-  const first = mount(initial, onSave, onClose, "worker");
-  await ready();
-  await user.selectOptions(
-    screen.getByLabelText("কীভাবে যুক্ত"),
-    "craftsperson",
-  );
-  expect(screen.queryByLabelText("ব্যক্তি না প্রতিষ্ঠান")).toBeNull();
-  await user.click(screen.getByText("আরও কাজ বা সম্পর্ক", { exact: true }));
-  await user.click(screen.getByRole("checkbox", { name: "দোকানদার" }));
-  await user.click(screen.getByRole("button", { name: "রাখুন" }));
-  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
-  first.unmount();
-  repo.database.close();
-  await repo.database.open();
-  const saved = (await repo.read())!.ledger;
-  expect(saved.people.find((person) => person.id === "worker")).toMatchObject({
-    roles: ["craftsperson", "supplier"],
-    identityType: "person",
-  });
-  const second = mount(saved, onSave, onClose, "worker");
-  await ready();
-  await user.click(screen.getByText("আরও কাজ বা সম্পর্ক", { exact: true }));
-  expect(
-    (screen.getByRole("checkbox", { name: "দোকানদার" }) as HTMLInputElement)
-      .checked,
-  ).toBe(true);
-  await user.click(screen.getByRole("checkbox", { name: "মিস্ত্রি / কারিগর" }));
-  await user.click(screen.getByRole("button", { name: "রাখুন" }));
-  await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
-  second.unmount();
-  const updated = (await repo.read())!.ledger;
-  expect(updated.people.find((person) => person.id === "worker")).toMatchObject(
-    { roles: ["supplier"], identityType: "person" },
-  );
-  expect(updated.entries).toEqual(initial.entries);
-  expect(updated.contracts).toEqual(initial.contracts);
-});
+it.each([
+  {
+    roles: ["craftsperson", "supplier"] as const,
+    draftRoles: ["craftsperson"] as const,
+  },
+  { roles: ["supplier"] as const, draftRoles: ["supplier"] as const },
+])(
+  "keeps hidden identity and additional roles through stale drafts, primary changes and reopening ($roles)",
+  async ({ roles, draftRoles }) => {
+    const initial = fixture();
+    const worker = initial.people.find((person) => person.id === "worker")!;
+    worker.identityType = "person";
+    worker.contactType = "craftsperson";
+    worker.roles = [...roles];
+    const repo = await repository(initial);
+    await createWorkspaceStorage().saveDraft("entity:person:worker:any", {
+      id: "worker",
+      identityType: "organization",
+      roles: [...draftRoles],
+    });
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const onSave = vi.fn(async (ledger: Ledger) => {
+      await repo.save(ledger);
+    });
+    const first = mount(initial, onSave, onClose, "worker");
+    await ready();
+    expect(screen.queryByLabelText("ব্যক্তি না প্রতিষ্ঠান")).toBeNull();
+    expect(screen.queryByText("আরও কাজ বা সম্পর্ক")).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "দোকানদার" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "রাখুন" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    first.unmount();
+    repo.database.close();
+    await repo.database.open();
+    const saved = (await repo.read())!.ledger;
+    expect(saved.people.find((person) => person.id === "worker")).toMatchObject(
+      {
+        roles: [...roles],
+        identityType: "person",
+      },
+    );
+    const second = mount(saved, onSave, onClose, "worker");
+    await ready();
+    expect(screen.queryByText("আরও কাজ বা সম্পর্ক")).toBeNull();
+    await user.selectOptions(
+      screen.getByLabelText("কীভাবে যুক্ত"),
+      "professional",
+    );
+    await user.click(screen.getByRole("button", { name: "রাখুন" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
+    second.unmount();
+    const updated = (await repo.read())!.ledger;
+    expect(
+      updated.people.find((person) => person.id === "worker"),
+    ).toMatchObject({
+      contactType: "professional",
+      roles: ["supplier", "professional"],
+      identityType: "person",
+    });
+    expect(updated.entries).toEqual(initial.entries);
+    expect(updated.contracts).toEqual(initial.contracts);
+  },
+);

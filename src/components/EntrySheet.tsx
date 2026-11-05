@@ -12,7 +12,6 @@ import {
   type FormEvent,
 } from "react";
 import {
-  CalendarDays,
   Camera,
   Download,
   ChevronRight,
@@ -50,6 +49,7 @@ import { AppSelect } from "./ui/AppSelect";
 import { AppDatePicker } from "./ui/AppDatePicker";
 import { MoneyInput } from "./ui/MoneyInput";
 import { TransactionAmount, TransactionDetails } from "./TransactionFields";
+import { PaymentMethodField } from "./PaymentMethodField";
 import { PersonSchema } from "../domain/model";
 import { Sheet } from "./Sheet";
 import { FormError, useFormError } from "./ui/FormError";
@@ -1151,16 +1151,10 @@ function SupportedEntrySheet({
       {work.name}
     </option>
   ));
-  const methodNames = {
-    cash: "নগদ",
-    bkash: "বিকাশ",
-    bank: "ব্যাংক",
-    other: "অন্য মাধ্যমে",
-  };
 
   const contextFields = (
     <>
-      <div className="form-grid transaction-grid">
+      <div className="transaction-fields">
         <label className="field">
           <span className="field-label">{t("কোন খাতার হিসাব")}</span>
           <AppSelect
@@ -1173,26 +1167,7 @@ function SupportedEntrySheet({
             {workOptions}
           </AppSelect>
         </label>
-        <label className="field">
-          <span className="field-label">{t("তারিখ")}</span>
-          <AppDatePicker
-            className="field-input"
-            type="date"
-            value={draft.date}
-            disabled={draft.unknownDate}
-            onChange={(event) => field("date", event.target.value)}
-            required={!draft.unknownDate}
-          />
-        </label>
       </div>
-      <label className="check-field">
-        <input
-          type="checkbox"
-          checked={draft.unknownDate}
-          onChange={(event) => field("unknownDate", event.target.checked)}
-        />
-        {t("তারিখ জানা নেই")}
-      </label>
       <label className="field">
         <span className="field-label">
           {t(
@@ -1548,9 +1523,13 @@ function SupportedEntrySheet({
                   summary={t(
                     !isLabour && row.costType === "material"
                       ? "ব্র্যান্ড ও পরিমাণ"
-                      : "পরিমাণ",
+                      : "আরও তথ্য",
                   )}
-                  defaultOpen={Boolean(row.brand || row.quantity || row.unit)}
+                  defaultOpen={
+                    !isLabour &&
+                    row.costType === "material" &&
+                    Boolean(row.brand || row.quantity || row.unit)
+                  }
                   className="entry-line-details"
                 >
                   {!isLabour && row.costType === "material" ? (
@@ -1595,33 +1574,35 @@ function SupportedEntrySheet({
                       ) : null}
                     </>
                   ) : null}
-                  <div className="form-grid transaction-grid">
-                    <label className="field">
-                      <span className="field-label">{t("পরিমাণ")}</span>
-                      <NumericInput
-                        className="field-input"
-                        inputMode="decimal"
-                        value={row.quantity}
-                        maxLength={60}
-                        onChange={(event) =>
-                          rowField(index, "quantity", event.target.value)
-                        }
-                        placeholder={t("ইচ্ছা হলে লিখুন")}
-                      />
-                    </label>
-                    <label className="field">
-                      <span className="field-label">{t("একক")}</span>
-                      <input
-                        className="field-input"
-                        value={row.unit}
-                        maxLength={60}
-                        onChange={(event) =>
-                          rowField(index, "unit", event.target.value)
-                        }
-                        placeholder={t("বস্তা, পিস, কেজি…")}
-                      />
-                    </label>
-                  </div>
+                  {!isLabour && row.costType === "material" ? (
+                    <div className="form-grid transaction-grid">
+                      <label className="field">
+                        <span className="field-label">{t("পরিমাণ")}</span>
+                        <NumericInput
+                          className="field-input"
+                          inputMode="decimal"
+                          value={row.quantity}
+                          maxLength={60}
+                          onChange={(event) =>
+                            rowField(index, "quantity", event.target.value)
+                          }
+                          placeholder={t("ইচ্ছা হলে লিখুন")}
+                        />
+                      </label>
+                      <label className="field">
+                        <span className="field-label">{t("একক")}</span>
+                        <input
+                          className="field-input"
+                          value={row.unit}
+                          maxLength={60}
+                          onChange={(event) =>
+                            rowField(index, "unit", event.target.value)
+                          }
+                          placeholder={t("বস্তা, পিস, কেজি…")}
+                        />
+                      </label>
+                    </div>
+                  ) : null}
                   {!(isLabour && selectedContractId) ? (
                     <label className="field">
                       <span className="field-label">
@@ -1668,15 +1649,8 @@ function SupportedEntrySheet({
                   field("paidNow", !event.target.checked);
                 }}
               />
-              {t("কর্মী নিজের টাকা দিয়ে কিনেছেন")}
+              {t("কর্মী নিজের টাকা দিয়েছেন")}
             </label>
-          ) : null}
-          {draft.workerPaid ? (
-            <p className="form-hint muted">
-              {t(
-                "এই খরচ তার নামে জমা হবে। ফেরত দেওয়া টাকা আলাদা হিসাবে থাকবে।",
-              )}
-            </p>
           ) : null}
           {purchasePayment || updatingPurchasePayment ? (
             <section
@@ -1787,40 +1761,23 @@ function SupportedEntrySheet({
   const paymentMethodFields = (
     <>
       {isCash || (!original && draft.paidNow && draft.kind !== "return") ? (
-        <div className="payment-methods">
-          <span className="field-label">
-            {t(
-              draft.kind === "refund"
-                ? "কোন মাধ্যমে পেয়েছেন"
-                : "কোন মাধ্যমে দিয়েছেন",
-            )}
-          </span>
+        <div className="entry-edit-methods">
           {draft.methods.map((part, index) => (
             <div className="method-row" key={index}>
-              <AppSelect
-                className="field-input"
-                aria-label={t("টাকা দেওয়ার মাধ্যম")}
+              <PaymentMethodField
+                label={
+                  draft.kind === "refund" ? t("কীভাবে পেয়েছেন") : undefined
+                }
                 value={part.method}
-                onChange={(event) =>
+                onChange={(method) =>
                   field(
                     "methods",
                     draft.methods.map((item, position) =>
-                      position === index
-                        ? {
-                            ...item,
-                            method: event.target.value as typeof part.method,
-                          }
-                        : item,
+                      position === index ? { ...item, method } : item,
                     ),
                   )
                 }
-              >
-                {Object.entries(methodNames).map(([value, name]) => (
-                  <option key={value} value={value}>
-                    {t(name)}
-                  </option>
-                ))}
-              </AppSelect>
+              />
               {draft.methods.length > 1 ? (
                 <>
                   <MoneyInput
@@ -1890,6 +1847,25 @@ function SupportedEntrySheet({
   const extraFields = (
     <>
       <label className="field">
+        <span className="field-label">{t("তারিখ")}</span>
+        <AppDatePicker
+          className="field-input"
+          type="date"
+          value={draft.date}
+          disabled={draft.unknownDate}
+          onChange={(event) => field("date", event.target.value)}
+          required={!draft.unknownDate}
+        />
+      </label>
+      <label className="check-field">
+        <input
+          type="checkbox"
+          checked={draft.unknownDate}
+          onChange={(event) => field("unknownDate", event.target.checked)}
+        />
+        {t("তারিখ জানা নেই")}
+      </label>
+      <label className="field">
         <span className="field-label">{t("মনে রাখার কথা")}</span>
         <textarea
           className="field-input"
@@ -1910,7 +1886,7 @@ function SupportedEntrySheet({
     </>
   );
   const attachmentFields = (
-    <div className="transaction-card entry-edit-attachments">
+    <div className="entry-edit-attachments">
       <input
         ref={fileInput}
         type="file"
@@ -2018,9 +1994,6 @@ function SupportedEntrySheet({
   const editWorkName = ledger.works.find(
     (work) => work.id === draft.workId,
   )?.name;
-  const editDate = draft.unknownDate
-    ? t("তারিখ জানা নেই")
-    : date(draft.date, { year: "numeric" });
   const editContext = [
     isCash
       ? t(
@@ -2168,10 +2141,11 @@ function SupportedEntrySheet({
                   <span>{t(kindNames[draft.kind])}</span>
                 </div>
                 {amountFields}
+                {paymentMethodFields}
                 {linkedPaymentFields}
               </section>
               <details className="transaction-card entry-edit-context">
-                <summary aria-label={t("নাম, খাতা ও তারিখ")}>
+                <summary aria-label={t("নাম ও খাতা")}>
                   <span className="entry-edit-person-mark" aria-hidden="true">
                     {editPerson?.kind === "shop" ? (
                       <Store size={21} />
@@ -2188,10 +2162,6 @@ function SupportedEntrySheet({
                     <Pencil size={15} aria-hidden="true" />
                   </span>
                   <span className="entry-edit-context-meta">
-                    <span>
-                      <CalendarDays size={14} aria-hidden="true" />
-                      {editDate}
-                    </span>
                     {editContext.map((label, index) => (
                       <span key={index}>{label}</span>
                     ))}
@@ -2199,12 +2169,11 @@ function SupportedEntrySheet({
                 </summary>
                 <div className="entry-edit-context-fields">{contextFields}</div>
               </details>
-              {attachmentFields}
               <TransactionDetails
-                summary={t(isCash ? "মাধ্যম ও নোট" : "নোট")}
+                summary={t("ভাউচার, নোট ও তারিখ")}
                 className="entry-edit-extras"
               >
-                {paymentMethodFields}
+                {attachmentFields}
                 {extraFields}
               </TransactionDetails>
             </div>
@@ -2212,9 +2181,9 @@ function SupportedEntrySheet({
             <>
               {contextFields}
               {amountFields}
-              {attachmentFields}
-              <TransactionDetails summary={t("আরও তথ্য")}>
-                {paymentMethodFields}
+              {paymentMethodFields}
+              <TransactionDetails summary={t("ভাউচার, নোট ও তারিখ")}>
+                {attachmentFields}
                 {extraFields}
               </TransactionDetails>
             </>

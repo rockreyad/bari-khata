@@ -10,7 +10,7 @@ import { AdaptivePopover } from "./AdaptivePopover";
 import { DayPicker } from "react-day-picker";
 import { bn } from "react-day-picker/locale";
 import {
-  CalendarBlankIcon,
+  CaretDownIcon,
   CaretLeftIcon,
   CaretRightIcon,
   XIcon,
@@ -170,13 +170,16 @@ export function AppDatePicker({
             aria-required={required}
             data-control="date"
           >
-            <CalendarBlankIcon size={19} weight="duotone" />
             <span>
               {selected
                 ? formatDigits(shortDate.format(selected))
                 : (placeholder ?? t("তারিখ বেছে নিন"))}
             </span>
-            <span className="date-trigger-dot" />
+            <CaretDownIcon
+              size={17}
+              aria-hidden="true"
+              className="app-select-caret"
+            />
           </button>
         }
       >

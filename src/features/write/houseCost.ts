@@ -1,4 +1,9 @@
-import { LedgerSchema, type Ledger, type Receipt } from "../../domain/model";
+import {
+  LedgerSchema,
+  PersonSchema,
+  type Ledger,
+  type Receipt,
+} from "../../domain/model";
 import { allocatePayment } from "../../domain/partyLedger";
 import { canRecordContactCost } from "../../domain/contactEntryPolicy";
 import { buildQuickEntry, type QuickDraft } from "../entries/quickEntry";
@@ -9,21 +14,40 @@ export function recordHouseCost(
   receipts: Receipt[],
   generalName: string,
 ) {
-  const person = ledger.people.find((row) => row.id === draft.personId);
+  let source = ledger;
+  let resolved = draft;
+  if (draft.payment === "worker" && draft.personId === "__new__") {
+    if (
+      !draft.personName.trim() ||
+      !draft.personNewId ||
+      ledger.people.some((row) => row.id === draft.personNewId)
+    )
+      throw new Error("person");
+    const payer = PersonSchema.parse({
+      id: draft.personNewId,
+      name: draft.personName.trim(),
+      kind: "other",
+      contactType: "custom",
+      roles: [],
+    });
+    source = { ...ledger, people: [...ledger.people, payer] };
+    resolved = { ...draft, personId: payer.id };
+  }
+  const person = source.people.find((row) => row.id === resolved.personId);
   if (
     person &&
     !canRecordContactCost(person, {
-      costType: draft.costType,
-      account: draft.account,
-      reimbursement: draft.payment === "worker",
-      contractId: draft.contractId,
+      costType: resolved.costType,
+      account: resolved.account,
+      reimbursement: resolved.payment === "worker",
+      contractId: resolved.contractId,
     })
   )
     throw new Error("contact_rules");
   // A missing material category is a reporting choice, not an unconfirmed bill.
   const next = buildQuickEntry(
-    ledger,
-    { ...draft, kind: "expense" },
+    source,
+    { ...resolved, kind: "expense" },
     receipts,
     generalName,
   );

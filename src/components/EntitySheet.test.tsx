@@ -420,8 +420,11 @@ it("keeps an entered agreement open and focused while clearing and replacing its
     "এই ধরনের নামে",
   );
   expect(onSave).not.toHaveBeenCalled();
-  await user.click(screen.getByText("আরও কাজ বা সম্পর্ক"));
-  await user.click(screen.getByRole("checkbox", { name: "মিস্ত্রি / কারিগর" }));
+  expect(screen.queryByText("আরও কাজ বা সম্পর্ক")).toBeNull();
+  await user.selectOptions(
+    screen.getByLabelText("কীভাবে যুক্ত"),
+    "craftsperson",
+  );
   expect(input.value).toBe("275");
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(onSave).toHaveBeenCalledOnce());

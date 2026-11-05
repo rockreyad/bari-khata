@@ -22,9 +22,6 @@
 .transaction-form.entry-page-form .entry-more-body {
   margin-top: 0;
 }
-.transaction-form.entry-page-form .entry-more-toggle {
-  justify-self: start;
-}
 .legacy-transaction-attachments .attachment-button {
   display: inline-flex;
   justify-self: start;
@@ -40,4 +37,9 @@
   min-height: 60px;
   height: 60px;
   font-size: 32px;
+}
+
+.legacy-transaction-attachments {
+  display: grid;
+  gap: 12px;
 }

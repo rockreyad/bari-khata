@@ -217,7 +217,7 @@ it.each([
   },
 ])(
   "preserves an entered agreement after changing from $initial to $selected and requires an eligible role before saving",
-  async ({ initialId, presetId, kind }) => {
+  async ({ initialId, presetId }) => {
     const ledger = usedHouse();
     const onSave = vi.fn(async (_next: Ledger) => {});
     const onClose = vi.fn();
@@ -281,17 +281,15 @@ it.each([
       "এই ধরনের নামে",
     );
     expect(onSave).not.toHaveBeenCalled();
-    await user.click(screen.getByText("আরও কাজ বা সম্পর্ক"));
-    await user.click(
-      screen.getByRole("checkbox", { name: "মিস্ত্রি / কারিগর" }),
-    );
+    expect(screen.queryByText("আরও কাজ বা সম্পর্ক")).toBeNull();
+    await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), initialId);
     await user.click(screen.getByRole("button", { name: "রাখুন" }));
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
     const saved = onSave.mock.calls[0][0];
     const person = saved.people.find(
       (person) => person.name === "নমুনা দায়িত্বের ব্যক্তি",
     )!;
-    expect(person.kind).toBe(kind);
+    expect(person.kind).toBe("worker");
     expect(
       saved.contracts.filter((job) => job.personId === person.id),
     ).toHaveLength(1);

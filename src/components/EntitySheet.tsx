@@ -288,7 +288,8 @@ export function EntitySheet({
             if (
               kind === "person" &&
               typeof value === "object" &&
-              !("contactPresetId" in value)
+              !("contactPresetId" in value) &&
+              ("contactKind" in value || "role" in value)
             )
               parsed.data.contactPresetId = contactPresetFrom(
                 parsed.data.contactKind,
@@ -352,12 +353,24 @@ export function EntitySheet({
   const personPreset = contactPresets.find(
     (preset) => preset.id === draft.contactPresetId,
   );
+  const storedPerson =
+    kind === "person" && editId
+      ? ledger.people.find((person) => person.id === editId)
+      : undefined;
+  const storedOtherRoles =
+    storedPerson?.roles?.filter(
+      (role) => role !== contactPresetFor(storedPerson).id,
+    ) ?? [];
+  const personRoles =
+    draft.roles === undefined && !storedOtherRoles.length
+      ? undefined
+      : [...new Set([...(draft.roles ?? []), ...storedOtherRoles])];
   const personRules = PersonSchema.parse({
     id: draft.id,
     name: draft.name || "new",
     kind: draft.contactKind,
     contactType: personPreset?.id,
-    roles: draft.roles,
+    roles: personRoles,
   });
   const allowed =
     kind === "person"
@@ -423,7 +436,7 @@ export function EntitySheet({
           workIds: draft.personWorkIds,
           kind: draft.contactKind,
           contactType: personPreset?.id ?? previous?.contactType,
-          roles: draft.roles,
+          roles: personRoles,
           identityType: previous
             ? previous.identityType
             : draft.identityType || undefined,
@@ -801,22 +814,14 @@ export function EntitySheet({
                         ...current,
                         contactPresetId: preset.id,
                         contactKind: preset.kind,
-                        roles:
-                          current.roles === undefined ||
-                          current.roles.length <= 1
-                            ? preset.id === "custom"
-                              ? []
-                              : [preset.id]
-                            : [
-                                ...new Set([
-                                  ...current.roles.filter(
-                                    (role) => role !== current.contactPresetId,
-                                  ),
-                                  ...(preset.id === "custom"
-                                    ? []
-                                    : [preset.id]),
-                                ]),
-                              ],
+                        roles: [
+                          ...new Set([
+                            ...(current.roles ?? []).filter(
+                              (role) => role !== current.contactPresetId,
+                            ),
+                            ...(preset.id === "custom" ? [] : [preset.id]),
+                          ]),
+                        ],
                         role: t(preset.role),
                         quickActions: [...preset.actions],
                       },

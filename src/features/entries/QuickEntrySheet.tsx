@@ -43,7 +43,7 @@ import { entryPaymentBalance } from "./entryPaymentBalance";
 import { moneyInputValue } from "../../lib/numericFields";
 import "./entry-page.css";
 import "./legacy-transaction.css";
-import { PaymentIcon } from "../../components/ui/Icons";
+import { PaymentMethodField } from "../../components/PaymentMethodField";
 import {
   createWorkspaceStorage,
   type ReceiptInput,
@@ -129,7 +129,6 @@ export function QuickEntrySheet({
       : `${accountDraftKey}${options.contractId ? `:job=${options.contractId}` : ""}${options.milestoneId ? `:milestone=${options.milestoneId}` : ""}`;
   const [draft, setDraft] = useState(() => entryContext(ledger, options));
   const [ready, setReady] = useState(false);
-  const [more, setMore] = useState(false);
   const [creatingWork, setCreatingWork] = useState(false);
   const [files, setFiles] = useState<ReceiptInput[]>([]);
   const [error, setError, errorNotice] = useFormError();
@@ -474,13 +473,17 @@ export function QuickEntrySheet({
   const selectedKind = selectedPerson ? personKind(selectedPerson) : null;
   const canCreateWork = true;
   const intent = paymentIntent(ledger, draft);
+  const legacyReceivable =
+    draft.kind === "payment" && draft.advanceContext === "receivable";
   const needsIntent =
     draft.kind === "payment" &&
-    ((draft.purpose === "settle" && !intent.canSettle) ||
+    (legacyReceivable ||
+      (draft.purpose === "settle" && !intent.canSettle) ||
       (draft.purpose === "wage" && draft.account !== "labour") ||
       (intent.hasJob && ["charge", "wage"].includes(draft.purpose)));
-  const intentMessage =
-    draft.purpose === "wage" && draft.account !== "labour"
+  const intentMessage = legacyReceivable
+    ? "টাকা দেওয়ার ধরন বেছে নিন।"
+    : draft.purpose === "wage" && draft.account !== "labour"
       ? "নতুন বিল নাকি শুধু টাকা দেওয়া, বেছে নিন।"
       : intent.balance === null
         ? "বাকি নিশ্চিত নয়। কাজ বেছে নিন, বা নতুন বিল কিংবা অগ্রিম বেছে নিন।"
@@ -543,7 +546,10 @@ export function QuickEntrySheet({
     financialScopeChosen.current = true;
     jobScopeChosen.current = true;
     setError("");
-    setDraft((current) => changePaymentPurpose(current, purpose));
+    setDraft((current) => ({
+      ...changePaymentPurpose(current, purpose),
+      advanceContext: "advance",
+    }));
   };
   if (creatingWork)
     return (
@@ -633,6 +639,13 @@ export function QuickEntrySheet({
       <form
         id={formId}
         className="entry-form-v3 entry-page-form transaction-form"
+        onInvalid={(event) => {
+          let parent = (event.target as HTMLElement).parentElement;
+          while (parent) {
+            if (parent instanceof HTMLDetailsElement) parent.open = true;
+            parent = parent.parentElement;
+          }
+        }}
         onSubmit={submit}
       >
         <FormError {...errorNotice} id={`${formId}-error`} />
@@ -881,9 +894,15 @@ export function QuickEntrySheet({
               {!intent.hasJob ? (
                 <button
                   type="button"
-                  aria-pressed={["charge", "wage"].includes(draft.purpose)}
+                  aria-pressed={
+                    !legacyReceivable &&
+                    ["charge", "wage"].includes(draft.purpose)
+                  }
                   className={
-                    ["charge", "wage"].includes(draft.purpose) ? "selected" : ""
+                    !legacyReceivable &&
+                    ["charge", "wage"].includes(draft.purpose)
+                      ? "selected"
+                      : ""
                   }
                   onClick={() => choosePurpose("charge")}
                 >
@@ -893,8 +912,12 @@ export function QuickEntrySheet({
               {intent.canSettle ? (
                 <button
                   type="button"
-                  aria-pressed={draft.purpose === "settle"}
-                  className={draft.purpose === "settle" ? "selected" : ""}
+                  aria-pressed={!legacyReceivable && draft.purpose === "settle"}
+                  className={
+                    !legacyReceivable && draft.purpose === "settle"
+                      ? "selected"
+                      : ""
+                  }
                   onClick={() => choosePurpose("settle")}
                 >
                   {t("বাকি মেটাই")}
@@ -902,31 +925,17 @@ export function QuickEntrySheet({
               ) : null}
               <button
                 type="button"
-                aria-pressed={draft.purpose === "advance"}
-                className={draft.purpose === "advance" ? "selected" : ""}
+                aria-pressed={!legacyReceivable && draft.purpose === "advance"}
+                className={
+                  !legacyReceivable && draft.purpose === "advance"
+                    ? "selected"
+                    : ""
+                }
                 onClick={() => choosePurpose("advance")}
               >
                 {t("অগ্রিম")}
               </button>
             </div>
-          ) : null}
-          {draft.kind === "payment" && draft.purpose === "advance" ? (
-            <label>
-              {t("টাকা কীভাবে মিটবে")}
-              <AppSelect
-                aria-label={t("টাকা কীভাবে মিটবে")}
-                value={draft.advanceContext}
-                onChange={(event) =>
-                  field(
-                    "advanceContext",
-                    event.target.value as QuickDraft["advanceContext"],
-                  )
-                }
-              >
-                <option value="advance">{t("পরের বিল থেকে বাদ যাবে")}</option>
-                <option value="receivable">{t("এই টাকা ফেরত পাব")}</option>
-              </AppSelect>
-            </label>
           ) : null}
           {draft.kind === "refund" ? (
             <label>
@@ -1124,8 +1133,12 @@ export function QuickEntrySheet({
                   ) : null}
                   {material || transport ? (
                     <TransactionDetails
-                      summary={t(material ? "ব্র্যান্ড ও পরিমাণ" : "পরিমাণ")}
-                      defaultOpen={Boolean(r.brand || r.quantity || r.unit)}
+                      summary={t(
+                        material ? "ব্র্যান্ড ও পরিমাণ" : "কিসের মাল এনেছেন",
+                      )}
+                      defaultOpen={
+                        material && Boolean(r.brand || r.quantity || r.unit)
+                      }
                     >
                       <section className="line-meta-v3 transaction-fields">
                         {material ? (
@@ -1140,28 +1153,30 @@ export function QuickEntrySheet({
                             />
                           </label>
                         ) : null}
-                        <div className="transaction-grid">
-                          <label>
-                            {t("পরিমাণ")}
-                            <NumericInput
-                              value={r.quantity}
-                              inputMode="decimal"
-                              onChange={(e) =>
-                                changeRow(r.id, { quantity: e.target.value })
-                              }
-                            />
-                          </label>
-                          <label>
-                            {t("একক")}
-                            <input
-                              value={r.unit}
-                              placeholder={t("বস্তা / ফুট")}
-                              onChange={(e) =>
-                                changeRow(r.id, { unit: e.target.value })
-                              }
-                            />
-                          </label>
-                        </div>
+                        {material ? (
+                          <div className="transaction-grid">
+                            <label>
+                              {t("পরিমাণ")}
+                              <NumericInput
+                                value={r.quantity}
+                                inputMode="decimal"
+                                onChange={(e) =>
+                                  changeRow(r.id, { quantity: e.target.value })
+                                }
+                              />
+                            </label>
+                            <label>
+                              {t("একক")}
+                              <input
+                                value={r.unit}
+                                placeholder={t("বস্তা / ফুট")}
+                                onChange={(e) =>
+                                  changeRow(r.id, { unit: e.target.value })
+                                }
+                              />
+                            </label>
+                          </div>
+                        ) : null}
                         <label>
                           {t("মালের ধরন")}
                           <AppSelect
@@ -1347,7 +1362,13 @@ export function QuickEntrySheet({
           ) : null}
           {!cash && !returning ? (
             <section className="payment-state-v3">
-              <span>{t("টাকা দিয়েছেন?")}</span>
+              <span>
+                {t(
+                  draft.payment === "worker"
+                    ? "কর্মী নিজের টাকা দিয়েছেন"
+                    : "টাকা দিয়েছেন?",
+                )}
+              </span>
               <div className="choice-chips">
                 {(["full", "partial", "due"] as const).map((p) => (
                   <button
@@ -1380,7 +1401,10 @@ export function QuickEntrySheet({
               ) : null}
             </section>
           ) : null}
-          {!returning && draft.kind !== "refund" && selectedPerson ? (
+          {!returning &&
+          !legacyReceivable &&
+          draft.kind !== "refund" &&
+          selectedPerson ? (
             agreement ? (
               <section className="entry-contract-progress">
                 <h3>{t("কাজের হিসাব")}</h3>
@@ -1418,86 +1442,62 @@ export function QuickEntrySheet({
           ) : null}
           {cash ||
           (!returning && ["full", "partial"].includes(draft.payment)) ? (
-            <div className="payment-methods compact-methods">
-              {(["cash", "bkash", "bank"] as const).map((method) => (
-                <button
-                  type="button"
-                  key={method}
-                  className={draft.method === method ? "selected" : ""}
-                  aria-pressed={draft.method === method}
-                  onClick={() => field("method", method)}
-                >
-                  <PaymentIcon method={method} size={20} />
-                  <span>
-                    {t(
-                      method === "cash"
-                        ? "নগদ"
-                        : method === "bkash"
-                          ? "বিকাশ"
-                          : "ব্যাংক",
-                    )}
-                  </span>
-                </button>
+            <PaymentMethodField
+              label={draft.kind === "refund" ? t("কীভাবে পেয়েছেন") : undefined}
+              value={draft.method}
+              onChange={(method) => field("method", method)}
+            />
+          ) : null}
+          <TransactionDetails summary={t("ভাউচার, নোট ও তারিখ")}>
+            <div className="legacy-transaction-attachments">
+              <label className="attachment-button transaction-secondary">
+                <CameraIcon size={20} />
+                {t("ভাউচারের ছবি / PDF")}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  multiple
+                  onChange={(e) => {
+                    const incoming = Array.from(e.target.files ?? []);
+                    if (
+                      incoming.some((file) => file.size > 10 * 1024 * 1024) ||
+                      files.length + incoming.length > 20
+                    ) {
+                      setError(
+                        t(
+                          "প্রতিটি ভাউচার ১০ MB-এর মধ্যে রাখুন। সর্বোচ্চ ২০টি।",
+                        ),
+                      );
+                      return;
+                    }
+                    setFiles([
+                      ...files,
+                      ...incoming.map((file) => ({
+                        id: crypto.randomUUID(),
+                        entryId: draft.id,
+                        name: file.name,
+                        file,
+                      })),
+                    ]);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {files.map((f) => (
+                <div className="attachment-row" key={f.id}>
+                  <span>{formatDigits(f.name ?? t("ভাউচার"))}</span>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={t("বাদ দিন")}
+                    onClick={() => setFiles(files.filter((v) => v.id !== f.id))}
+                  >
+                    <TrashIcon size={17} />
+                  </button>
+                </div>
               ))}
             </div>
-          ) : null}
-          <div className="transaction-card legacy-transaction-attachments">
-            <label className="attachment-button transaction-secondary">
-              <CameraIcon size={20} />
-              {t("ভাউচারের ছবি / PDF")}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,application/pdf"
-                multiple
-                onChange={(e) => {
-                  const incoming = Array.from(e.target.files ?? []);
-                  if (
-                    incoming.some((file) => file.size > 10 * 1024 * 1024) ||
-                    files.length + incoming.length > 20
-                  ) {
-                    setError(
-                      t("প্রতিটি ভাউচার ১০ MB-এর মধ্যে রাখুন। সর্বোচ্চ ২০টি।"),
-                    );
-                    return;
-                  }
-                  setFiles([
-                    ...files,
-                    ...incoming.map((file) => ({
-                      id: crypto.randomUUID(),
-                      entryId: draft.id,
-                      name: file.name,
-                      file,
-                    })),
-                  ]);
-                  e.target.value = "";
-                }}
-              />
-            </label>
-            {files.map((f) => (
-              <div className="attachment-row" key={f.id}>
-                <span>{formatDigits(f.name ?? t("ভাউচার"))}</span>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label={t("বাদ দিন")}
-                  onClick={() => setFiles(files.filter((v) => v.id !== f.id))}
-                >
-                  <TrashIcon size={17} />
-                </button>
-              </div>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="entry-more-toggle transaction-secondary"
-            onClick={() => setMore(!more)}
-            aria-expanded={more}
-          >
-            {t(more ? "বাড়তি তথ্য বন্ধ করুন" : "আরও তথ্য যোগ করি")}
-            <CaretDownIcon size={17} />
-          </button>
-          {more ? (
-            <section className="entry-more-body transaction-card">
+            <div className="entry-more-body">
               <div className="field-grid">
                 <label>
                   {t("তারিখ")}
@@ -1547,8 +1547,8 @@ export function QuickEntrySheet({
                   />
                 </label>
               ) : null}
-            </section>
-          ) : null}
+            </div>
+          </TransactionDetails>
         </fieldset>
       </form>
     </Frame>
