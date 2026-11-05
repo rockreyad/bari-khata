@@ -161,10 +161,15 @@ export function WorksPage() {
     (work) => status === "all" || work.status === status,
   );
   const filterRail = useWorkTabRail(status, `works:${language}`);
-  const changeFilter = (key: "q" | "status", value: string) =>
+  const changeFilter = (key: "q" | "status", value: string): void =>
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
+        if (key !== "q") {
+          const latestQuery = searchInput.getCommittedQuery();
+          if (latestQuery) next.set("q", latestQuery);
+          else next.delete("q");
+        }
         if (value && !(key === "status" && value === "all"))
           next.set(key, value);
         else next.delete(key);

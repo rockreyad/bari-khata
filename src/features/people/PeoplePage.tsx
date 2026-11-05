@@ -89,10 +89,15 @@ export function PeoplePage() {
         b.summary.reconciledNetPaid - a.summary.reconciledNetPaid ||
         a.person.name.localeCompare(b.person.name),
     );
-  const filter = (key: string, value: string) =>
+  const filter = (key: string, value: string): void =>
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
+        if (key !== "q") {
+          const latestQuery = search.getCommittedQuery();
+          if (latestQuery) next.set("q", latestQuery);
+          else next.delete("q");
+        }
         if (value && (key === "q" || value !== "all")) next.set(key, value);
         else next.delete(key);
         return next;
@@ -104,6 +109,9 @@ export function PeoplePage() {
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
+        const latestQuery = search.getCommittedQuery();
+        if (latestQuery) next.set("q", latestQuery);
+        else next.delete("q");
         next.delete("type");
         next.delete("role");
         if (type) next.set("contactType", type);

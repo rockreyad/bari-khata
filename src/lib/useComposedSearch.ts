@@ -72,6 +72,7 @@ export function useComposedSearch(
 
   return {
     value: draft.value,
+    getCommittedQuery: () => committed.current,
     inputProps: {
       ref: inputRef,
       value: draft.value,
