@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
   ArrowDownIcon,
@@ -10,6 +10,7 @@ import {
 } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
+import { useComposedSearch } from "../../lib/useComposedSearch";
 import { EntryList } from "../../components/ui/EntryList";
 import { LoadMore } from "../../components/ui/LoadMore";
 import { AppSelect } from "../../components/ui/AppSelect";
@@ -60,14 +61,6 @@ export function LedgerPage() {
     to = validHistoryDate(params.get("to") ?? "");
   const material = params.get("material") ?? "";
   const month = params.get("month") ?? "";
-  const [searchText, setSearchText] = useState(q);
-  const searchInput = useRef<HTMLInputElement>(null);
-  const composing = useRef(false);
-  const committedSearch = useRef(q);
-  useEffect(() => {
-    committedSearch.current = q;
-    if (!composing.current) setSearchText(q);
-  }, [q]);
   const order: HistoryOrder =
     params.get("order") === "oldest" ? "oldest" : "newest";
   const includeVoided = params.get("voided") === "yes";
@@ -120,10 +113,11 @@ export function LedgerPage() {
     () => (index && !material ? materialSuggestions(index, q, 4) : []),
     [index, material, q],
   );
-  const update = (key: string, value: string) => {
+  const update = (key: string, value: string): void => {
     setParams(
       (prev) => {
-        const next = new URLSearchParams(prev);
+        const next =
+          key === "q" ? new URLSearchParams(prev) : currentParams(prev);
         next.delete("page");
         if (key === "q") {
           next.delete("material");
@@ -136,11 +130,23 @@ export function LedgerPage() {
       { replace: true, preventScrollReset: key === "q" },
     );
   };
-  const search = (value: string) => {
-    setSearchText(value);
-    if (value === committedSearch.current) return;
-    committedSearch.current = value;
-    update("q", value);
+  const search = useComposedSearch(q, (value) => update("q", value));
+  const searchInput = search.inputProps.ref;
+  const focusSearch = params.get("focus") === "search";
+  useEffect(() => {
+    if (focusSearch) searchInput.current?.focus({ preventScroll: true });
+  }, [focusSearch, searchInput]);
+  const currentParams = (previous: URLSearchParams): URLSearchParams => {
+    const next = new URLSearchParams(previous);
+    const latestQuery = search.getCommittedQuery();
+    if (latestQuery !== (previous.get("q") ?? "")) {
+      next.delete("page");
+      next.delete("material");
+      next.delete("month");
+    }
+    if (latestQuery) next.set("q", latestQuery);
+    else next.delete("q");
+    return next;
   };
   const contact = ledger.people.find((p) => p.id === person),
     selectedWork = ledger.works.find((w) => w.id === work);
@@ -180,7 +186,8 @@ export function LedgerPage() {
     }
     return overrides;
   }, [selection, result.rows, showAnalytics, ledger, person, work, t]);
-  const chooseMaterial = (choice: MaterialChoice) =>
+  const chooseMaterial = (choice: MaterialChoice) => {
+    search.clear();
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
@@ -192,10 +199,11 @@ export function LedgerPage() {
       },
       { preventScrollReset: true },
     );
+  };
   const chooseMonth = (value: string) =>
     setParams(
       (previous) => {
-        const next = new URLSearchParams(previous);
+        const next = currentParams(previous);
         if (value) next.set("month", value);
         else next.delete("month");
         next.delete("page");
@@ -206,7 +214,7 @@ export function LedgerPage() {
   const clear = () => {
     setParams(
       (prev) => {
-        const next = new URLSearchParams(prev);
+        const next = currentParams(prev);
         [
           "page",
           "person",
@@ -228,8 +236,10 @@ export function LedgerPage() {
   const loadMore = () => {
     setParams(
       (previous) => {
-        const next = new URLSearchParams(previous);
-        next.set("page", String(result.page + 1));
+        const next = currentParams(previous);
+        if (search.getCommittedQuery() === q)
+          next.set("page", String(result.page + 1));
+        else next.delete("page");
         return next;
       },
       { replace: true, preventScrollReset: true },
@@ -269,49 +279,17 @@ export function LedgerPage() {
         <label className="history-search">
           <MagnifyingGlassIcon size={21} />
           <input
-            ref={searchInput}
             type="search"
-            inputMode="search"
-            enterKeyHint="search"
-            autoComplete="off"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
             aria-label={t("হিসাব খুঁজুন")}
             placeholder={t(material ? "আরও খুঁজতে লিখুন" : "কী খুঁজছেন?")}
-            value={searchText}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              setSearchText(value);
-              if (
-                !composing.current &&
-                !(event.nativeEvent as InputEvent).isComposing
-              )
-                search(value);
-            }}
-            onCompositionStart={() => {
-              composing.current = true;
-            }}
-            onCompositionEnd={(event) => {
-              composing.current = false;
-              search(event.currentTarget.value);
-            }}
-            onBlur={(event) => {
-              if (!composing.current) return;
-              composing.current = false;
-              search(event.currentTarget.value);
-            }}
+            {...search.inputProps}
           />
-          {searchText ? (
+          {search.value ? (
             <button
               className="history-clear"
               type="button"
               aria-label={t("খোঁজ মুছুন")}
-              onClick={() => {
-                composing.current = false;
-                search("");
-                searchInput.current?.focus();
-              }}
+              onClick={search.clear}
             >
               <XIcon size={17} />
             </button>
@@ -418,7 +396,7 @@ export function LedgerPage() {
               onClick={() =>
                 setParams(
                   (previous) => {
-                    const next = new URLSearchParams(previous);
+                    const next = currentParams(previous);
                     next.delete("page");
                     next.delete("from");
                     next.delete("to");
