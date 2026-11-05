@@ -265,68 +265,245 @@ it("shows the selected recipient's due before amount entry without injecting the
   ]);
 });
 
-it("offers a bill-writing path for a no-bill payment while preserving its draft and receipt without creating cash", async () => {
+it("reopens an old settlement cash draft on the ordinary route and saves its receipt without inventing a bill or advance", async () => {
   const initial = base();
   const repo = await setup(initial);
   const user = userEvent.setup();
-  mount(initial, <HousePaymentForm />, payPath);
+  const key = "house-payment:party:roof:all";
+  let page = mount(initial, <HousePaymentForm />, payPath);
   await ready();
+  expect(screen.queryByText(/^মোট বাকি /)).toBeNull();
   await user.type(screen.getByLabelText("কত দিয়েছেন"), "50");
-  expect(screen.getByText("এই নামে কোনো বাকি বিল নেই।")).toBeTruthy();
+  expect(screen.queryByText("এই নামে কোনো বাকি বিল নেই।")).toBeNull();
+  expect(screen.queryByRole("button", { name: "বিল লিখি" })).toBeNull();
+  expect(screen.queryByText("আগাম দিয়েছি")).toBeNull();
   expect(screen.queryByText(/^বাকি থাকবে /)).toBeNull();
-  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
-  expect(api.save).not.toHaveBeenCalled();
-  expect((await repo.read())!.ledger.entries).toHaveLength(0);
+  await user.click(
+    within(screen.getByRole("group", { name: "কীভাবে দিয়েছেন" })).getByRole(
+      "button",
+      { name: "ব্যাংক" },
+    ),
+  );
   await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
-  await user.type(screen.getByLabelText("বাড়তি কথা"), "নমুনা বিল লিখব");
+  await user.type(
+    screen.getByLabelText("বাড়তি কথা"),
+    "নমুনা বিল ছাড়া দেওয়া টাকা",
+  );
   await user.upload(
     screen.getByLabelText("ভাউচার বা ছবি"),
-    new File(["sample receipt"], "sample-no-bill.pdf", {
+    new File(["sample no-bill receipt"], "sample-no-bill.pdf", {
       type: "application/pdf",
     }),
   );
-  await user.click(screen.getByRole("button", { name: "বিল লিখি" }));
-  await waitFor(() => expect(api.go).toHaveBeenCalledWith("/write"));
-  expect(
-    await createWorkspaceStorage().readDraft("house-payment:party:roof:all"),
-  ).toMatchObject({
-    personId: "party",
-    amount: "50",
+  let draftId = "";
+  await waitFor(async () => {
+    const saved = await createWorkspaceStorage().readDraft<{
+      id: string;
+      amount: string;
+    }>(key);
+    expect(saved).toMatchObject({
+      personId: "party",
+      amount: "50",
+      intent: "payment",
+      method: "bank",
+      note: "নমুনা বিল ছাড়া দেওয়া টাকা",
+      files: [expect.objectContaining({ name: "sample-no-bill.pdf" })],
+    });
+    draftId = saved!.id;
+  });
+  page.unmount();
+  const oldDraft =
+    await createWorkspaceStorage().readDraft<Record<string, unknown>>(key);
+  await createWorkspaceStorage().saveDraft(key, {
+    ...oldDraft,
     intent: "settlement",
-    note: "নমুনা বিল লিখব",
+  });
+  expect(await createWorkspaceStorage().readDraft(key)).toMatchObject({
+    id: draftId,
+    intent: "settlement",
+    amount: "50",
     files: [expect.objectContaining({ name: "sample-no-bill.pdf" })],
   });
-  expect((await repo.read())!.ledger.entries).toHaveLength(0);
-  expect(api.save).not.toHaveBeenCalled();
-});
-
-it("records a no-bill payment as advance only after an explicit advance choice", async () => {
-  const initial = base();
-  const repo = await setup(initial);
-  const user = userEvent.setup();
-  mount(initial, <HousePaymentForm />, payPath);
+  repo.database.close();
+  await repo.database.open();
+  page = mount((await repo.read())!.ledger, <HousePaymentForm />, payPath);
   await ready();
-  await user.type(screen.getByLabelText("কত দিয়েছেন"), "50");
-  expect(screen.getByText("এই নামে কোনো বাকি বিল নেই।")).toBeTruthy();
-  await user.click(
-    screen.getByRole("button", { name: "অগ্রিম — আগে টাকা দিলাম" }),
+  expect(
+    latinDigits(
+      (screen.getByLabelText("কত দিয়েছেন") as HTMLInputElement).value,
+    ),
+  ).toBe("50");
+  expect(
+    screen.getByRole("button", { name: "ব্যাংক", pressed: true }),
+  ).toBeTruthy();
+  expect(screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open).toBe(
+    false,
   );
-  if (screen.queryByLabelText("কী বাবদ"))
-    await user.selectOptions(screen.getByLabelText("কী বাবদ"), "materials");
+  expect(screen.queryByText(/^মোট বাকি /)).toBeNull();
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  page.unmount();
+  repo.database.close();
+  await repo.database.open();
+  const saved = (await repo.read())!.ledger;
+  expect(saved.entries).toHaveLength(1);
+  expect(saved.entries[0]).toMatchObject({
+    id: draftId,
+    kind: "payment",
+    personId: "party",
+    account: "materials",
+    note: "নমুনা বিল ছাড়া দেওয়া টাকা",
+    paymentParts: [{ method: "bank", amount: 5000 }],
+    receipts: [expect.objectContaining({ name: "sample-no-bill.pdf" })],
+  });
+  expect(saved.entries[0].paymentContext).toBe("settlement");
+  expect(summarize(saved)).toMatchObject({ cost: 0, cashPaid: 5000 });
+  expect(partyLedger(saved, "party")).toMatchObject({
+    explicitAdvance: 0,
+    receivable: 0,
+  });
+  expect(saved.paymentAllocations).toHaveLength(0);
+  expect(saved.entries[0].allocations).toEqual([
+    { workId: "roof", amount: 5000 },
+  ]);
+  expect(
+    await (await repo.getReceipt(saved.entries[0].receipts[0].id))!.blob.text(),
+  ).toBe("sample no-bill receipt");
+  expect(await createWorkspaceStorage().readDraft(key)).toBeNull();
+  expect(api.save).toHaveBeenCalledOnce();
+  expect(api.go).not.toHaveBeenCalled();
+});
+
+it("saves an ordinary worker payment from the party page without requiring a prior bill or associated work", async () => {
+  const initial = LedgerSchema.parse({
+    ...base(),
+    people: [
+      {
+        id: "worker",
+        name: "নমুনা কর্মী",
+        kind: "worker",
+        contactType: "craftsperson",
+        roles: ["craftsperson"],
+        quickActions: ["payment"],
+        workIds: [],
+      },
+    ],
+  });
+  const repo = await setup(initial);
+  const user = userEvent.setup();
+  mount(
+    initial,
+    <HousePaymentForm />,
+    "/write/payment?person=worker&account=labour&back=%2Fparties%2Fworker",
+  );
+  await ready();
+  expect(
+    (screen.getByLabelText("কাকে দিয়েছেন") as HTMLSelectElement).value,
+  ).toBe("worker");
+  expect(screen.queryByText(/^মোট বাকি /)).toBeNull();
+  await user.type(screen.getByLabelText("কত দিয়েছেন"), "200");
+  expect(screen.queryByText("এই নামে কোনো বাকি বিল নেই।")).toBeNull();
+  expect(screen.queryByRole("button", { name: "বিল লিখি" })).toBeNull();
+  expect(screen.queryByText("আগাম দিয়েছি")).toBeNull();
+  expect(screen.queryByText(/^বাকি থাকবে /)).toBeNull();
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  repo.database.close();
+  await repo.database.open();
   const saved = (await repo.read())!.ledger;
   expect(saved.entries).toHaveLength(1);
   expect(saved.entries[0]).toMatchObject({
     kind: "payment",
-    paymentContext: "advance",
+    personId: "worker",
+    account: "labour",
+    paymentParts: [{ amount: 20000 }],
+  });
+  expect(saved.entries[0].paymentContext).toBe("settlement");
+  expect(summarize(saved)).toMatchObject({ cost: 0, cashPaid: 20000 });
+  expect(partyLedger(saved, "worker")).toMatchObject({
+    explicitAdvance: 0,
+    receivable: 0,
+  });
+  expect(saved.people[0].workIds).toEqual([]);
+  expect(saved.paymentAllocations).toHaveLength(0);
+  expect(saved.entries[0].allocations).toHaveLength(1);
+  expect(
+    saved.works.find(
+      (work) => work.id === saved.entries[0].allocations[0].workId,
+    )?.name,
+  ).toBe("সাধারণ খরচ");
+  expect(saved.entries[0].allocations[0].amount).toBe(20000);
+});
+
+it("keeps an archived-contract payment draft editable so its contract can be explicitly cleared before cash is saved", async () => {
+  const initial = LedgerSchema.parse({
+    ...base(),
+    people: [
+      {
+        id: "worker",
+        name: "নমুনা কর্মী",
+        kind: "worker",
+        roles: ["craftsperson"],
+        quickActions: ["payment"],
+      },
+    ],
+    contracts: [
+      {
+        id: "archived-job",
+        personId: "worker",
+        workId: "roof",
+        total: 10000,
+        title: "নমুনা পুরোনো কাজ",
+        archivedAt: "2026-11-04T08:00:00.000Z",
+        removalHistory: [
+          {
+            id: "sample-remove-contract",
+            at: "2026-11-04T08:00:00.000Z",
+            archived: true,
+          },
+        ],
+      },
+    ],
+  });
+  const repo = await setup(initial);
+  const user = userEvent.setup();
+  mount(
+    initial,
+    <HousePaymentForm />,
+    "/write/payment?person=worker&work=roof&account=labour&contract=archived-job",
+  );
+  await ready();
+  await user.type(screen.getByLabelText("কত দিয়েছেন"), "50");
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  expect(screen.getByRole("alert").textContent).toContain("চুক্তি");
+  expect(api.save).not.toHaveBeenCalled();
+  const contract = screen.getByLabelText("কোন কাজের জন্য");
+  expect(contract.closest("details")!.open).toBe(true);
+  await waitFor(async () =>
+    expect(
+      await createWorkspaceStorage().readDraft(
+        "house-payment:worker:roof:archived-job",
+      ),
+    ).toMatchObject({ contractId: "archived-job", amount: "50" }),
+  );
+  await user.selectOptions(contract, "");
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  const saved = (await repo.read())!.ledger;
+  expect(saved.contracts).toEqual(initial.contracts);
+  expect(saved.entries).toHaveLength(1);
+  expect(saved.entries[0]).toMatchObject({
+    kind: "payment",
+    contractId: null,
+    paymentContext: "settlement",
+    account: "labour",
+    personId: "worker",
     paymentParts: [{ amount: 5000 }],
   });
   expect(summarize(saved).cost).toBe(0);
-  expect(partyLedger(saved, "party").advance).toBe(5000);
 });
 
-it("prompts for a mismatched scope instead of projecting the whole-party due as payable in that scope", async () => {
+it("keeps an ordinary cash work assignment and original bill links while showing the actual total balance", async () => {
   const initial = withBills();
   const repo = await setup(initial);
   const user = userEvent.setup();
@@ -337,28 +514,36 @@ it("prompts for a mismatched scope instead of projecting the whole-party due as 
   );
   await ready();
   await user.type(screen.getByLabelText("কত দিয়েছেন"), "50");
-  expect(screen.getByText("বেছে নেওয়া খাতায় বাকি নেই।")).toBeTruthy();
-  expect(screen.queryByText(/^বাকি থাকবে /)).toBeNull();
-  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
-  expect(api.save).not.toHaveBeenCalled();
-  expect((await repo.read())!.ledger.entries).toHaveLength(2);
-  await user.click(screen.getByRole("button", { name: "সব বিল দেখুন" }));
   expect(screen.queryByText("বেছে নেওয়া খাতায় বাকি নেই।")).toBeNull();
+  expect(screen.queryByRole("button", { name: "বিল লিখি" })).toBeNull();
+  expect(screen.queryByText("আগাম দিয়েছি")).toBeNull();
   expect(
     latinDigits(
-      (screen.getByLabelText("কত দিয়েছেন") as HTMLInputElement).value,
+      screen.getByRole("status", { name: "টাকা দেওয়ার পরে" }).textContent ?? "",
     ),
-  ).toBe("50");
+  ).toMatch(/বাকি থাকবে\s+৳\s*250/);
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
   const saved = (await repo.read())!.ledger;
-  expect(saved.entries.at(-1)?.allocations).toEqual([
-    { workId: "roof", amount: 5000 },
-  ]);
+  expect(saved.entries.at(-1)).toMatchObject({
+    kind: "payment",
+    paymentContext: "settlement",
+    account: "materials",
+    personId: "party",
+    allocations: [{ workId: "wall", amount: 5000 }],
+  });
+  expect(saved.entries.filter((entry) => entry.kind === "expense")).toEqual(
+    initial.entries,
+  );
+  expect(saved.paymentAllocations).toHaveLength(0);
   expect(summarize(saved)).toMatchObject({
     cost: 30000,
-    netPaid: 5000,
+    cashPaid: 5000,
     reconciledPayable: 25000,
+  });
+  expect(partyLedger(saved, "party")).toMatchObject({
+    explicitAdvance: 0,
+    billOutstanding: 30000,
   });
 });
 
@@ -658,11 +843,7 @@ it("honors advance intent and configured supplier account and sector when opened
     "/write/payment?person=party&intent=advance",
   );
   await ready();
-  expect(
-    screen
-      .getByRole("button", { name: "অগ্রিম — আগে টাকা দিলাম" })
-      .getAttribute("aria-pressed"),
-  ).toBe("true");
+  expect(screen.getByRole("heading", { name: "অগ্রিম দিলাম" })).toBeTruthy();
   expect(screen.queryByLabelText("কী বাবদ")).toBeNull();
   expect((screen.getByLabelText("কোন খাতায়") as HTMLSelectElement).value).toBe(
     "wall",
@@ -837,11 +1018,56 @@ it("shows a combined payment proposal and saves the selected bills without creat
   });
 });
 
+it("saves ordinary cash above the known bills without relabeling the extra amount as an explicit advance", async () => {
+  const initial = withBills();
+  const repo = await setup(initial);
+  const user = userEvent.setup();
+  mount(initial, <HousePaymentForm />, payPath);
+  await ready();
+  await user.type(screen.getByLabelText("কত দিয়েছেন"), "350");
+  expect(
+    screen.queryByRole("button", { name: /বাড়তি .*অগ্রিম রাখি/ }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: /বিলের বাইরে .*টাকাও রাখি/ }),
+  ).toBeNull();
+  expect(
+    screen.getByRole("status", { name: "টাকা দেওয়ার পরে" }).textContent,
+  ).not.toContain("অগ্রিম");
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  const saved = (await repo.read())!.ledger;
+  expect(saved.entries.filter((entry) => entry.kind === "expense")).toEqual(
+    initial.entries,
+  );
+  expect(
+    saved.entries.filter((entry) => entry.kind === "payment"),
+  ).toMatchObject([
+    { paymentContext: "settlement", paymentParts: [{ amount: 35000 }] },
+  ]);
+  expect(
+    saved.paymentAllocations?.reduce(
+      (sum, allocation) => sum + allocation.amount,
+      0,
+    ),
+  ).toBe(30000);
+  expect(summarize(saved)).toMatchObject({
+    cost: 30000,
+    cashPaid: 35000,
+    reconciledPayable: 0,
+  });
+  expect(partyLedger(saved, "party")).toMatchObject({
+    explicitAdvance: 0,
+    legacyUnclassifiedCredit: 0,
+    ordinaryUnallocatedCash: 5000,
+  });
+});
+
 it("requires explicit acknowledgment before keeping excess cash as advance", async () => {
   const initial = withBills(),
     repo = await setup(initial),
     user = userEvent.setup();
-  mount(initial, <HousePaymentForm />, payPath);
+  mount(initial, <HousePaymentForm />, `${payPath}&intent=settlement`);
   await ready();
   await user.type(screen.getByLabelText("কত দিয়েছেন"), "350");
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
@@ -891,7 +1117,7 @@ it("confirms only the canonical advance when a marked balance correction is also
   ).toBe(10000);
   const repo = await setup(initial);
   const user = userEvent.setup();
-  mount(initial, <HousePaymentForm />, payPath);
+  mount(initial, <HousePaymentForm />, `${payPath}&intent=settlement`);
   await ready();
   expect(latinDigits(screen.getByText(/^মোট বাকি /).textContent ?? "")).toMatch(
     /৳\s*150/,
@@ -930,7 +1156,7 @@ it("rejects a stale proposal atomically and requires a fresh acknowledgment of i
   const initial = withBills(),
     repo = await setup(initial),
     user = userEvent.setup();
-  mount(initial, <HousePaymentForm />, payPath);
+  mount(initial, <HousePaymentForm />, `${payPath}&intent=settlement`);
   await ready();
   await user.type(screen.getByLabelText("কত দিয়েছেন"), "350");
   await user.click(screen.getByRole("button", { name: /বাড়তি .*অগ্রিম রাখি/ }));
@@ -981,7 +1207,7 @@ it("does not silently drop an invalid custom allocation or keep a stale advance 
   const initial = withBills(),
     repo = await setup(initial),
     user = userEvent.setup();
-  mount(initial, <HousePaymentForm />, payPath);
+  mount(initial, <HousePaymentForm />, `${payPath}&intent=settlement`);
   await ready();
   await user.type(screen.getByLabelText("কত দিয়েছেন"), "350");
   await user.click(screen.getByRole("button", { name: /বাড়তি .*অগ্রিম রাখি/ }));
@@ -1014,14 +1240,11 @@ it("adds a new neutral recipient inline when other contacts already exist", asyn
   const initial = base(),
     repo = await setup(initial),
     user = userEvent.setup();
-  mount(initial, <HousePaymentForm />, payPath);
+  mount(initial, <HousePaymentForm />, `${payPath}&intent=advance`);
   await ready();
   await user.selectOptions(screen.getByLabelText("কাকে দিয়েছেন"), "__new__");
   await user.type(screen.getByLabelText("নতুন নাম"), "নমুনা নতুন মানুষ");
   await user.type(screen.getByLabelText("কত দিয়েছেন"), "50");
-  await user.click(
-    screen.getByRole("button", { name: "অগ্রিম — আগে টাকা দিলাম" }),
-  );
   await user.selectOptions(screen.getByLabelText("কী বাবদ"), "materials");
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
@@ -1148,7 +1371,7 @@ it("accepts the review of earlier unassigned cash without recursively clearing i
   });
   const repo = await setup(initial);
   const user = userEvent.setup();
-  mount(initial, <HousePaymentForm />, payPath);
+  mount(initial, <HousePaymentForm />, `${payPath}&intent=settlement`);
   await ready();
   await user.type(screen.getByLabelText("কত দিয়েছেন"), "100");
   const acknowledgment = screen.getByRole("checkbox", {
@@ -1331,7 +1554,7 @@ it("requires explicit ordinary payment intent before saving an old deposit draft
       ),
     ).toMatchObject({ intent: "receivable", amount: "50" }),
   );
-  await user.click(screen.getByRole("button", { name: "বাকি মেটালাম" }));
+  await user.click(screen.getByRole("button", { name: "টাকা দিলাম" }));
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
   const saved = (await repo.read())!.ledger;

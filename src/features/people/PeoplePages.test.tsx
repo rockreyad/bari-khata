@@ -910,6 +910,117 @@ function twoAccountLedger() {
   });
 }
 
+it.each(["/parties/worker", "/parties/worker?work=work"])(
+  "shows ordinary no-bill worker cash only as money paid on %s",
+  (path) => {
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "work", name: "নমুনা খাতা" }],
+      people: [
+        {
+          id: "worker",
+          name: "নমুনা কর্মী",
+          kind: "worker",
+          roles: ["craftsperson"],
+        },
+      ],
+      entries: [
+        {
+          id: "ordinary",
+          kind: "payment",
+          personId: "worker",
+          account: "labour",
+          paymentContext: "settlement",
+          allocations: [{ workId: "work", amount: 100000 }],
+          paymentParts: [{ amount: 100000 }],
+        },
+      ],
+    });
+    state.ledger = ledger;
+    const before = JSON.stringify(ledger);
+    const { container } = renderPage(path);
+    expect(container.querySelector(".contact-summary-hero")?.textContent).toBe(
+      "মোট টাকা দিয়েছি৳1000",
+    );
+    expect(container.querySelector(".contact-summary-metrics")).toBeNull();
+    expect(screen.queryByText("আরও হিসাব")).toBeNull();
+    expect(screen.queryByText("অগ্রিম দিয়েছি")).toBeNull();
+    expect(JSON.stringify(ledger)).toBe(before);
+  },
+);
+
+it.each([
+  {
+    billAccount: "labour",
+    advanceAmount: 5000,
+    ordinaryAmount: 15000,
+    expectedAdvance: 50,
+  },
+  {
+    billAccount: "materials",
+    advanceAmount: 10000,
+    ordinaryAmount: 100000,
+    expectedAdvance: 0,
+  },
+] as const)(
+  "caps advance display within $billAccount without borrowing an advance from another account",
+  ({ billAccount, advanceAmount, ordinaryAmount, expectedAdvance }) => {
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "work", name: "নমুনা খাতা" }],
+      people: [
+        {
+          id: "worker",
+          name: "নমুনা কর্মী",
+          kind: "worker",
+          roles: ["craftsperson"],
+        },
+      ],
+      entries: [
+        {
+          id: "bill",
+          kind: "expense",
+          personId: "worker",
+          account: billAccount,
+          lines: [
+            {
+              id: "bill-line",
+              workId: "work",
+              amount: 10000,
+              costType: billAccount === "labour" ? "labour" : "material",
+            },
+          ],
+        },
+        {
+          id: "ordinary",
+          kind: "payment",
+          personId: "worker",
+          account: "labour",
+          paymentContext: "settlement",
+          allocations: [{ workId: "work", amount: ordinaryAmount }],
+          paymentParts: [{ amount: ordinaryAmount }],
+        },
+        {
+          id: "advance",
+          kind: "payment",
+          personId: "worker",
+          account: billAccount,
+          paymentContext: "advance",
+          allocations: [{ workId: "work", amount: advanceAmount }],
+          paymentParts: [{ amount: advanceAmount }],
+        },
+      ],
+    });
+    state.ledger = ledger;
+    const before = JSON.stringify(ledger);
+    const { container } = renderPage("/parties/worker?work=work");
+    const more =
+      container.querySelector(".contact-reconciliation")?.textContent ?? "";
+    if (expectedAdvance)
+      expect(more).toContain(`অগ্রিম দিয়েছি৳${expectedAdvance}`);
+    else expect(more).not.toContain("অগ্রিম দিয়েছি");
+    expect(JSON.stringify(ledger)).toBe(before);
+  },
+);
+
 it.each(["materials", "labour", "other"])(
   "always shows every account and keeps debt and credit separate despite the legacy %s URL",
   async (account) => {

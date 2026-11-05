@@ -20,6 +20,7 @@ import { AppMenu } from "../../components/ui/AppMenu";
 import {
   allowedContactActions,
   canCreateContactJob,
+  contactAccountLedger,
   contactSummary,
   contactPaymentAccount,
   personKind,
@@ -171,7 +172,7 @@ export function PersonPage() {
               .reduce((sum, work) => sum + work.available, 0),
           0,
         );
-  const uncontractedAdvance = summary.balanceAmbiguous
+  const uncontractedCredit = summary.balanceAmbiguous
     ? 0
     : !workId && summary.owedCorrection !== 0 && summary.reconciledAdvance > 0
       ? summary.reconciledAdvance
@@ -185,6 +186,42 @@ export function PersonPage() {
             workId || undefined,
           ).advance
         : summary.reconciledAdvance;
+  const advanceCash = (["materials", "labour", "other"] as const).reduce(
+    (total, currentAccount) => {
+      const available = (account?.payments ?? [])
+        .filter(
+          (payment) =>
+            !payment.entry.contractId &&
+            payment.entry.account === currentAccount &&
+            (payment.context === "advance" || !payment.context),
+        )
+        .reduce(
+          (sum, payment) =>
+            sum +
+            (workId
+              ? (payment.works.find((work) => work.workId === workId)
+                  ?.available ?? 0)
+              : payment.available),
+          0,
+        );
+      if (!available) return total;
+      const scoped = contactAccountLedger(ledger, person, currentAccount);
+      const credit = personSummary(
+        {
+          ...scoped,
+          entries: scoped.entries.filter((entry) => !entry.contractId),
+        },
+        person.id,
+        workId || undefined,
+      ).advance;
+      return total + Math.min(credit, available);
+    },
+    0,
+  );
+  const uncontractedAdvance =
+    summary.owedCorrection !== 0
+      ? uncontractedCredit
+      : Math.min(uncontractedCredit, advanceCash);
   const jobTotals = jobBalanceTotals(ledger, personContracts);
   const hasJobs = personContracts.some((job) => !job.archivedAt);
   const costMetric =

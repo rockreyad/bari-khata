@@ -216,7 +216,10 @@ export function partyLedger(
     .filter((payment) => payment.context === "receivable")
     .reduce((sum, payment) => sum + payment.available, 0);
   const legacyUnclassifiedCredit = payments
-    .filter((payment) => !payment.context || payment.context === "settlement")
+    .filter((payment) => !payment.context)
+    .reduce((sum, payment) => sum + payment.available, 0);
+  const ordinaryUnallocatedCash = payments
+    .filter((payment) => payment.context === "settlement")
     .reduce((sum, payment) => sum + payment.available, 0);
   const totals = reconciledTotals(ledger, {
     personId,
@@ -246,9 +249,14 @@ export function partyLedger(
     explicitAdvance: advance,
     receivable,
     legacyUnclassifiedCredit,
+    ordinaryUnallocatedCash,
     ambiguousCredit: Math.max(
       0,
-      unallocatedCash - advance - receivable - legacyUnclassifiedCredit,
+      unallocatedCash -
+        advance -
+        receivable -
+        legacyUnclassifiedCredit -
+        ordinaryUnallocatedCash,
     ),
     unclassifiedRefunds: [...unmatchedRefunds.values()].reduce(
       (sum, amount) => sum + amount,

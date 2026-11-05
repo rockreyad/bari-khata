@@ -45,14 +45,6 @@
   font-size: 13px;
   line-height: 1.7;
 }
-.house-payment-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.house-payment-actions > button {
-  flex: 1;
-}
 .house-payment-advance {
   justify-self: start;
   border-style: solid;

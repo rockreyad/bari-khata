@@ -4,11 +4,14 @@ import {
   EntrySchema,
   MoneySchema,
   ReceiptSchema,
+  WorkSchema,
   validateLedger,
   type Account,
   type Ledger,
   type Receipt,
+  type Work,
 } from "./model.js";
+import { saveWorkChange } from "./workActivity.js";
 import { allocatePayment, partyLedger } from "./partyLedger.js";
 import {
   contactEntryPolicy,
@@ -18,7 +21,7 @@ import {
 const RequestSchema = z.object({
   personId: z.string().min(1).max(160),
   amount: MoneySchema.refine((amount) => amount > 0),
-  intent: z.enum(["settlement", "advance", "receivable"]),
+  intent: z.enum(["payment", "settlement", "advance", "receivable"]),
   workId: z.string().min(1).max(160).optional(),
   contractId: z.string().min(1).max(160).nullable().optional(),
   account: AccountSchema.optional(),
@@ -69,7 +72,26 @@ export type HousePaymentPlan = {
   earnedPayable: number | null;
   existingUnallocatedCash: number;
   requiresCashReview: boolean;
+  newWork?: Work;
 };
+
+function generalPaymentWork(ledger: Ledger) {
+  const existing = ledger.works.find(
+    (work) => !work.archivedAt && work.name === "সাধারণ খরচ",
+  );
+  if (existing) return { workId: existing.id };
+  let suffix = 0;
+  let id = "general-payment";
+  while (ledger.works.some((work) => work.id === id))
+    id = `general-payment-${++suffix}`;
+  const newWork = WorkSchema.parse({
+    id,
+    name: "সাধারণ খরচ",
+    color: "blue",
+    icon: "home",
+  });
+  return { workId: newWork.id, newWork };
+}
 
 export function planHousePayment(
   ledger: Ledger,
@@ -145,7 +167,7 @@ export function planHousePayment(
         a.entry.createdAt.localeCompare(b.entry.createdAt) ||
         a.entry.id.localeCompare(b.entry.id),
     );
-  const available = candidates.flatMap((bill) =>
+  let available = candidates.flatMap((bill) =>
     bill.works
       .filter(
         (work) =>
@@ -159,6 +181,10 @@ export function planHousePayment(
       .filter((entry) => summary.unresolvedAdjustmentIds.includes(entry.id))
       .map((entry) => entry.contractId),
   );
+  if (request.intent === "payment")
+    available = available.filter(
+      ({ bill }) => !unresolvedContracts.has(bill.entry.contractId),
+    );
   if (
     request.intent === "settlement" &&
     summary.unresolvedAdjustmentIds.length &&
@@ -200,7 +226,7 @@ export function planHousePayment(
     else group.works.push({ workId, amount });
   };
   let remainder = request.amount;
-  if (request.intent === "settlement") {
+  if (request.intent === "settlement" || request.intent === "payment") {
     const explicit = request.allocations;
     const selected =
       explicit ??
@@ -279,7 +305,8 @@ export function planHousePayment(
           .reduce((total, work) => total + work.available, 0),
       0,
     );
-    empty.requiresCashReview = empty.existingUnallocatedCash > 0;
+    empty.requiresCashReview =
+      request.intent === "settlement" && empty.existingUnallocatedCash > 0;
     if (empty.requiresCashReview && !request.confirmUnallocatedCash)
       issues.push("unassigned_cash");
   }
@@ -300,16 +327,31 @@ export function planHousePayment(
         ]),
       ).values(),
     ];
-    const inferred =
+    const candidateScope =
       inferredScopes.length === 1 ? inferredScopes[0] : undefined;
-    const workId =
+    const inferred =
+      request.intent === "payment" &&
+      policy &&
+      candidateScope &&
+      (!policy.accounts.includes(candidateScope.account) ||
+        (candidateScope.contractId && !policy.agreement))
+        ? undefined
+        : candidateScope;
+    let workId =
       request.workId ??
       contract?.workId ??
       inferred?.workId ??
       (person
         ? getContactEntryDefaults(ledger, person).workId || undefined
         : undefined) ??
-      (activeWorks.length === 1 ? activeWorks[0].id : undefined);
+      (request.intent !== "payment" && activeWorks.length === 1
+        ? activeWorks[0].id
+        : undefined);
+    if (!workId && request.intent === "payment") {
+      const general = generalPaymentWork(ledger);
+      workId = general.workId;
+      empty.newWork = general.newWork;
+    }
     const account =
       request.account ??
       (contract
@@ -333,7 +375,11 @@ export function planHousePayment(
         groupFor(
           account,
           contractId,
-          request.intent === "receivable" ? "receivable" : "advance",
+          request.intent === "receivable"
+            ? "receivable"
+            : request.intent === "payment"
+              ? "settlement"
+              : "advance",
         ),
         workId,
         remainder,
@@ -347,6 +393,7 @@ export function planHousePayment(
     input: financialInput,
     allocations: empty.allocations,
     groups: empty.groups,
+    newWork: empty.newWork,
     available: available.map(({ bill, work }) => [
       bill.entry.id,
       bill.entry.account,
@@ -404,6 +451,9 @@ export function recordHousePayment(
     .max(30)
     .parse(input.receipts ?? []);
   const now = new Date().toISOString();
+  const prepared = plan.newWork
+    ? saveWorkChange(current, plan.newWork, now)
+    : current;
   const rows = plan.groups.map((group, index) =>
     EntrySchema.parse({
       id: plan.groups.length === 1 ? input.id : `${input.id}:${index}`,
@@ -422,8 +472,8 @@ export function recordHousePayment(
     }),
   );
   const next = validateLedger({
-    ...current,
-    entries: [...current.entries, ...rows],
+    ...prepared,
+    entries: [...prepared.entries, ...rows],
   });
   const allocations = plan.groups.flatMap((group, index) =>
     group.allocations.map((allocation, position) => ({
