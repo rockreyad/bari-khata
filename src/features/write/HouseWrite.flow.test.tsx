@@ -334,8 +334,11 @@ it("reopens an old settlement cash draft on the ordinary route and saves its rec
     ),
   );
   await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
+  expect(screen.getByPlaceholderText("কী বাবদ, কোথা থেকে বা অন্য কিছু…")).toBe(
+    screen.getByLabelText("মনে রাখার কথা"),
+  );
   await user.type(
-    screen.getByLabelText("বাড়তি কথা"),
+    screen.getByLabelText("মনে রাখার কথা"),
     "নমুনা বিল ছাড়া দেওয়া টাকা",
   );
   await user.upload(
@@ -1882,10 +1885,10 @@ it("folds date, note and receipts together and restores them alongside the selec
   expect(fold.open).toBe(false);
   expect(screen.getByLabelText("ভাউচার বা ছবি").closest("details")).toBe(fold);
   expect(screen.getByLabelText("তারিখ").closest("details")).toBe(fold);
-  expect(screen.getByLabelText("বাড়তি কথা").closest("details")).toBe(fold);
+  expect(screen.getByLabelText("মনে রাখার কথা").closest("details")).toBe(fold);
   await user.type(screen.getByLabelText("কত দিয়েছেন"), "50");
   await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
-  await user.type(screen.getByLabelText("বাড়তি কথা"), "নমুনা ব্যাংক হিসাব");
+  await user.type(screen.getByLabelText("মনে রাখার কথা"), "নমুনা ব্যাংক হিসাব");
   await user.upload(
     screen.getByLabelText("ভাউচার বা ছবি"),
     new File(["sample receipt"], "sample-bank.pdf", {

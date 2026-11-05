@@ -13,7 +13,6 @@ import {
   type FormEvent,
 } from "react";
 import {
-  Camera,
   Download,
   ChevronRight,
   Pencil,
@@ -51,6 +50,8 @@ import { AppDatePicker } from "./ui/AppDatePicker";
 import { MoneyInput } from "./ui/MoneyInput";
 import { TransactionAmount, TransactionDetails } from "./TransactionFields";
 import { TransactionExtras } from "./TransactionExtras";
+import { TransactionNoteField } from "./TransactionNoteField";
+import { ReceiptPicker } from "./ReceiptPicker";
 import { PaymentMethodField } from "./PaymentMethodField";
 import { PersonSchema } from "../domain/model";
 import { Sheet } from "./Sheet";
@@ -1787,17 +1788,10 @@ function SupportedEntrySheet({
     </>
   );
   const noteField = (
-    <label className="field">
-      <span className="field-label">{t("মনে রাখার কথা")}</span>
-      <textarea
-        className="field-input"
-        rows={2}
-        value={draft.note}
-        maxLength={10000}
-        onChange={(event) => field("note", event.target.value)}
-        placeholder={t("কী বাবদ, কোথা থেকে বা অন্য কিছু…")}
-      />
-    </label>
+    <TransactionNoteField
+      value={draft.note}
+      onChange={(value) => field("note", value)}
+    />
   );
   const discardDraftButton = (
     <button type="button" className="text-button danger-text" onClick={discard}>
@@ -1806,27 +1800,12 @@ function SupportedEntrySheet({
   );
   const attachmentFields = (
     <div className="entry-edit-attachments">
-      <input
+      <ReceiptPicker
         ref={fileInput}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,application/pdf"
-        multiple
-        hidden
         onChange={(event) => {
           void addFiles(event.target.files);
         }}
       />
-      <button
-        type="button"
-        className="transaction-secondary"
-        onClick={() => fileInput.current?.click()}
-      >
-        <Camera size={17} />
-        {t("ভাউচার বা ছবি যোগ করুন")}
-      </button>
-      <p className="form-hint muted">
-        {t("প্রতিটি ছবি বা PDF সর্বোচ্চ ২ MB।")}
-      </p>
       {original?.receipts.length ? (
         <p className="form-hint muted">
           {t("আগের {{count}}টি ভাউচার রাখা আছে।", {

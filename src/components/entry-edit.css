@@ -135,7 +135,7 @@
   justify-self: start;
   min-height: 44px;
 }
-.entry-editor-form .entry-total {
+:root .entry-editor-form .entry-total {
   padding: 16px 0 0;
   border: 0;
   border-top: 1px solid var(--line);
@@ -151,9 +151,6 @@
 .entry-edit-attachments {
   display: grid;
   gap: 12px;
-}
-.entry-edit-attachments > .transaction-secondary {
-  justify-self: start;
 }
 .entry-edit-attachments > p {
   margin: 0;

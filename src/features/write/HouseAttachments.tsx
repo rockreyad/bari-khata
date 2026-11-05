@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { FilePdfIcon, PaperclipIcon, XIcon } from "@phosphor-icons/react";
+import { FilePdfIcon, XIcon } from "@phosphor-icons/react";
+import { ReceiptPicker } from "../../components/ReceiptPicker";
 import type { ReceiptInput } from "../../data/repository";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { NEW_RECEIPT_MAX_BYTES } from "../../lib/attachmentLimits";
@@ -33,48 +34,35 @@ export function HouseAttachments({
   const { t, formatDigits } = useLanguageContext();
   return (
     <div className="house-attachments">
-      <label className="house-attachment-button">
-        <PaperclipIcon size={21} aria-hidden="true" />
-        <span>
-          {t("ভাউচার যোগ করুন")}
-          <small>{t("ছবি বা PDF · সর্বোচ্চ ২ MB")}</small>
-        </span>
-        <input
-          type="file"
-          aria-label={t("ভাউচার বা ছবি")}
-          multiple
-          accept="image/jpeg,image/png,image/webp,application/pdf"
-          onChange={(event) => {
-            const selected = Array.from(event.target.files ?? []);
-            if (
-              selected.length + files.length > 20 ||
-              selected.some(
-                (file) =>
-                  ![
-                    "image/jpeg",
-                    "image/png",
-                    "image/webp",
-                    "application/pdf",
-                  ].includes(file.type) || file.size > NEW_RECEIPT_MAX_BYTES,
-              )
-            ) {
-              onError(
-                t("ছবি বা PDF দিন। প্রতিটি ২ MB-এর মধ্যে, সর্বোচ্চ ২০টি।"),
-              );
-            } else
-              onChange([
-                ...files,
-                ...selected.map((file) => ({
-                  id: crypto.randomUUID(),
-                  entryId,
-                  name: file.name,
-                  file,
-                })),
-              ]);
-            event.target.value = "";
-          }}
-        />
-      </label>
+      <ReceiptPicker
+        onChange={(event) => {
+          const selected = Array.from(event.target.files ?? []);
+          if (
+            selected.length + files.length > 20 ||
+            selected.some(
+              (file) =>
+                ![
+                  "image/jpeg",
+                  "image/png",
+                  "image/webp",
+                  "application/pdf",
+                ].includes(file.type) || file.size > NEW_RECEIPT_MAX_BYTES,
+            )
+          ) {
+            onError(t("ছবি বা PDF দিন। প্রতিটি ২ MB-এর মধ্যে, সর্বোচ্চ ২০টি।"));
+          } else
+            onChange([
+              ...files,
+              ...selected.map((file) => ({
+                id: crypto.randomUUID(),
+                entryId,
+                name: file.name,
+                file,
+              })),
+            ]);
+          event.target.value = "";
+        }}
+      />
       {files.length > 0 && (
         <ul>
           {files.map((file) => (

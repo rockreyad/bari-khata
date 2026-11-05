@@ -150,14 +150,19 @@ it("keeps date, note and payment methods visible while folding optional receipts
   expect(screen.getByLabelText("ভাউচারের ছবি / PDF").closest("details")).toBe(
     optional,
   );
-  expect(screen.getByLabelText("নোট").closest("details")).toBe(optional);
+  expect(screen.getByLabelText("মনে রাখার কথা").closest("details")).toBe(
+    optional,
+  );
+  expect(screen.getByPlaceholderText("কী বাবদ, কোথা থেকে বা অন্য কিছু…")).toBe(
+    screen.getByLabelText("মনে রাখার কথা"),
+  );
   expect(screen.getByLabelText("তারিখ").closest("details")).toBe(optional);
   const methods = screen.getByRole("group", { name: "কীভাবে দিয়েছেন" });
   expect(methods.closest("details")).toBeNull();
   await user.click(within(methods).getByRole("button", { name: "ব্যাংক" }));
   await user.type(screen.getByLabelText("কত টাকা"), "500");
   await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
-  await user.type(screen.getByLabelText("নোট"), "নমুনা অগ্রিম");
+  await user.type(screen.getByLabelText("মনে রাখার কথা"), "নমুনা অগ্রিম");
   await user.upload(
     screen.getByLabelText("ভাউচারের ছবি / PDF"),
     new File(["sample"], "sample-voucher.pdf", { type: "application/pdf" }),

@@ -34,6 +34,7 @@ import { QuickSavedDraftSchema } from "../entries/quickEntry";
 import { HouseSavedNotice } from "./HouseSavedNotice";
 import { HouseAttachments } from "./HouseAttachments";
 import { TransactionExtras } from "../../components/TransactionExtras";
+import { TransactionNoteField } from "../../components/TransactionNoteField";
 import { paymentPresentation } from "./paymentPresentation";
 import { partyDueItems } from "../home/partyDueItems";
 
@@ -1053,15 +1054,10 @@ export function HousePaymentForm() {
             }
             noteField={
               intent !== "advance" && (
-                <label>
-                  {t("বাড়তি কথা")}
-                  <textarea
-                    rows={2}
-                    value={draft.note}
-                    maxLength={10000}
-                    onChange={(event) => change("note", event.target.value)}
-                  />
-                </label>
+                <TransactionNoteField
+                  value={draft.note}
+                  onChange={(value) => change("note", value)}
+                />
               )
             }
           >
