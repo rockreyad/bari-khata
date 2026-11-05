@@ -36,6 +36,7 @@ import { recordHouseCost } from "./houseCost";
 import { HouseSavedNotice } from "./HouseSavedNotice";
 import { HouseAttachments } from "./HouseAttachments";
 import { TransactionExtras } from "../../components/TransactionExtras";
+import { TransactionNoteField } from "../../components/TransactionNoteField";
 import { workDescriptionSuggestions } from "./workDescriptionSuggestions";
 import {
   purchaseSuggestions,
@@ -1191,15 +1192,10 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
             defaultOpen={invalidField === "date"}
             hasReceipts={files.length > 0}
             noteField={
-              <label>
-                {t("বাড়তি কথা")}
-                <textarea
-                  rows={2}
-                  maxLength={10000}
-                  value={draft.note}
-                  onChange={(event) => field("note", event.target.value)}
-                />
-              </label>
+              <TransactionNoteField
+                value={draft.note}
+                onChange={(value) => field("note", value)}
+              />
             }
             dateField={
               <label>

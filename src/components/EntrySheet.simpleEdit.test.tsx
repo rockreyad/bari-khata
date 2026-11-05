@@ -326,7 +326,14 @@ it("translates the compact date, notes and optional receipt area with the real l
     name: "Voucher, note and date",
   }) as HTMLDetailsElement;
   expect(within(extras).getByLabelText("Date").closest("details")).toBe(extras);
-  expect(extras.querySelector("textarea")?.closest("details")).toBe(extras);
+  const note = within(extras).getByLabelText("Notes") as HTMLTextAreaElement;
+  expect(note.closest("details")).toBe(extras);
+  expect(note.placeholder).toBe(
+    "What it was for, where it came from, or anything else…",
+  );
+  expect(note.maxLength).toBe(10000);
+  expect(within(extras).getByLabelText("Receipt or photo")).toBeTruthy();
+  expect(within(extras).getByText("Add voucher")).toBeTruthy();
   expect(extras.open).toBe(false);
   expect(screen.queryByRole("checkbox", { name: "Date unknown" })).toBeNull();
 });
@@ -582,11 +589,9 @@ it("reopens brand and quantity drafts, keeps vouchers reachable, and preserves t
   ).toBe(true);
   const extras = screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!;
   expect(extras.open).toBe(true);
-  expect(
-    screen
-      .getByRole("button", { name: "ভাউচার বা ছবি যোগ করুন", hidden: true })
-      .closest("details"),
-  ).toBe(extras);
+  expect(screen.getByLabelText("ভাউচার বা ছবি").closest("details")).toBe(
+    extras,
+  );
   expect(screen.getByLabelText("মনে রাখার কথা").closest("details")).toBe(
     extras,
   );

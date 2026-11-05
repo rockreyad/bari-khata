@@ -26,6 +26,7 @@ import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { MoneyInput } from "../../components/ui/MoneyInput";
 import { TransactionExtras } from "../../components/TransactionExtras";
+import { TransactionNoteField } from "../../components/TransactionNoteField";
 import { NEW_RECEIPT_MAX_BYTES } from "../../lib/attachmentLimits";
 import {
   TransactionAmount,
@@ -1464,14 +1465,10 @@ export function QuickEntrySheet({
               </label>
             }
             noteField={
-              <label>
-                {t("নোট")}
-                <textarea
-                  rows={2}
-                  value={draft.note}
-                  onChange={(event) => field("note", event.target.value)}
-                />
-              </label>
+              <TransactionNoteField
+                value={draft.note}
+                onChange={(value) => field("note", value)}
+              />
             }
           >
             <div className="legacy-transaction-attachments">
