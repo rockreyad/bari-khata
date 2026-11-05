@@ -333,7 +333,7 @@ it("reopens an old settlement cash draft on the ordinary route and saves its rec
       { name: "ব্যাংক" },
     ),
   );
-  await user.click(screen.getByText("ছবি বা রসিদ"));
+  await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
   await user.type(
     screen.getByLabelText("বাড়তি কথা"),
     "নমুনা বিল ছাড়া দেওয়া টাকা",
@@ -386,7 +386,9 @@ it("reopens an old settlement cash draft on the ordinary route and saves its rec
     screen.getByRole("button", { name: "ব্যাংক", pressed: true }),
   ).toBeTruthy();
   await waitFor(() =>
-    expect(screen.getByText("ছবি বা রসিদ").closest("details")!.open).toBe(true),
+    expect(
+      screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open,
+    ).toBe(true),
   );
   expect(screen.queryByText(/^মোট বাকি /)).toBeNull();
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
@@ -626,7 +628,7 @@ it("restores brand, quantity, unit, receipt and partial payment after reopening,
   await user.type(screen.getByLabelText(/^একক [০-৯0-9]+$/), "বস্তা");
   await user.click(screen.getByRole("button", { name: "কিছু দিয়েছি" }));
   await user.type(screen.getByLabelText("এখন কত দিয়েছি"), "40");
-  await user.click(screen.getByText("ছবি বা রসিদ"));
+  await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
   await user.upload(
     screen.getByLabelText("ভাউচার বা ছবি"),
     new File(["sample image"], "sample.png", { type: "image/png" }),
@@ -978,7 +980,7 @@ it("keeps a purchase draft and attachment on reopening, then stores one cost and
   const first = mount(initial, <HouseCostForm action="purchase" />);
   await ready();
   await cost(user);
-  await user.click(screen.getByText("ছবি বা রসিদ"));
+  await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
   await user.upload(
     screen.getByLabelText("ভাউচার বা ছবি"),
     new File(["sample receipt"], "sample.pdf", { type: "application/pdf" }),
@@ -1858,7 +1860,7 @@ it("keeps a malformed inline worker draft recoverable instead of crashing the pa
   });
 });
 
-it("keeps date and note visible and restores optional receipts alongside the selected payment method", async () => {
+it("folds date, note and receipts together and restores them alongside the selected payment method", async () => {
   const initial = withBills(),
     repo = await setup(initial),
     user = userEvent.setup();
@@ -1876,13 +1878,13 @@ it("keeps date and note visible and restores optional receipts alongside the sel
       .getByRole("button", { name: "ক্যাশ" })
       .getAttribute("aria-pressed"),
   ).toBe("false");
-  const fold = screen.getByText("ছবি বা রসিদ").closest("details")!;
+  const fold = screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!;
   expect(fold.open).toBe(false);
   expect(screen.getByLabelText("ভাউচার বা ছবি").closest("details")).toBe(fold);
-  expect(screen.getByLabelText("তারিখ").closest("details")).toBeNull();
-  expect(screen.getByLabelText("বাড়তি কথা").closest("details")).toBeNull();
+  expect(screen.getByLabelText("তারিখ").closest("details")).toBe(fold);
+  expect(screen.getByLabelText("বাড়তি কথা").closest("details")).toBe(fold);
   await user.type(screen.getByLabelText("কত দিয়েছেন"), "50");
-  await user.click(screen.getByText("ছবি বা রসিদ"));
+  await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
   await user.type(screen.getByLabelText("বাড়তি কথা"), "নমুনা ব্যাংক হিসাব");
   await user.upload(
     screen.getByLabelText("ভাউচার বা ছবি"),
@@ -1907,7 +1909,9 @@ it("keeps date and note visible and restores optional receipts alongside the sel
     screen.getByRole("button", { name: "ব্যাংক" }).getAttribute("aria-pressed"),
   ).toBe("true");
   await waitFor(() =>
-    expect(screen.getByText("ছবি বা রসিদ").closest("details")!.open).toBe(true),
+    expect(
+      screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open,
+    ).toBe(true),
   );
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());

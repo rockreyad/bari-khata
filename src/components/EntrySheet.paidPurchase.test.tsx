@@ -463,9 +463,9 @@ it("keeps a stale automatic draft blocked until latest cash is reviewed and then
   await ready();
   amount("100");
   const note = screen.getByLabelText("মনে রাখার কথা");
-  expect(note.closest("details")).toBeNull();
+  expect(note.closest("details")).not.toBeNull();
   fireEvent.change(note, { target: { value: "নমুনা অসমাপ্ত বিবরণ" } });
-  const receipts = screen.getByText("ছবি বা রসিদ").closest("details")!;
+  const receipts = screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!;
   if (!receipts.open) await userEvent.click(receipts.querySelector("summary")!);
   await userEvent.upload(
     page.container.querySelector<HTMLInputElement>('input[type="file"]')!,

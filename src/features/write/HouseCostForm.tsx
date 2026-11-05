@@ -1188,6 +1188,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
             </section>
           )}
           <TransactionExtras
+            defaultOpen={invalidField === "date"}
             hasReceipts={files.length > 0}
             noteField={
               <label>

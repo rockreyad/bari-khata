@@ -53,17 +53,37 @@ beforeAll(() => {
 });
 afterEach(async () => {
   cleanup();
+  vi.useRealTimers();
   setActiveOwner(null);
   for (const database of databases.splice(0)) await database.delete();
   localStorage.clear();
 });
 
 it.each([
-  { layout: "desktop", compact: false },
-  { layout: "mobile", compact: true },
+  {
+    layout: "desktop",
+    compact: false,
+    initialDate: "2026-11-01",
+    dateState: "known",
+  },
+  {
+    layout: "mobile",
+    compact: true,
+    initialDate: "2026-11-01",
+    dateState: "known",
+  },
+  {
+    layout: "desktop",
+    compact: false,
+    initialDate: null,
+    dateState: "unknown",
+  },
+  { layout: "mobile", compact: true, initialDate: null, dateState: "unknown" },
 ])(
-  "persists the first calendar selection on immediate Save and reopening in $layout layout",
-  async ({ compact }) => {
+  "persists the first calendar selection from a $dateState date on immediate Save and reopening in $layout layout",
+  async ({ compact, initialDate }) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-06T06:00:00.000Z"));
     window.matchMedia = vi.fn((query: string) => ({
       matches: compact,
       media: query,
@@ -89,7 +109,7 @@ it.each([
           kind: "expense",
           account: "materials",
           personId: "shop",
-          date: "2026-11-01",
+          date: initialDate,
           createdAt: "2026-11-01T10:00:00Z",
           updatedAt: "2026-11-01T10:00:00Z",
           lines: [
@@ -146,6 +166,12 @@ it.each([
     const trigger = view.container.querySelector<HTMLButtonElement>(
       '[data-control="date"]',
     )!;
+    expect(trigger.disabled).toBe(false);
+    expect(
+      screen.queryByRole("checkbox", { name: "তারিখ জানা নেই" }),
+    ).toBeNull();
+    if (initialDate === null)
+      expect(trigger.textContent).toContain("তারিখ বেছে নিন");
     reveal(trigger);
     const before = trigger.textContent;
     await user.click(trigger);
@@ -165,7 +191,7 @@ it.each([
     const saved = (await repository.read())!.ledger;
     expect(saved.entries).toHaveLength(2);
     expect(saved.entries[0].date).toBe("2026-11-05");
-    expect(saved.entries[0].revisions.at(-1)?.before.date).toBe("2026-11-01");
+    expect(saved.entries[0].revisions.at(-1)?.before.date).toBe(initialDate);
     expect(saved.entries[1]).toEqual(original.entries[1]);
     expect(await database.drafts.count()).toBe(0);
     view = mount(saved);
