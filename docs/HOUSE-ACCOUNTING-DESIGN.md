@@ -8,18 +8,21 @@
 
 এটি একটি বাড়ি বানানোর খাতা। প্রথম পর্দায় project switcher বা বাধ্যতামূলক চুক্তির form নেই।
 
-| জায়গা                              | বর্তমান কাজ                                                                    |
-| ---------------------------------- | ------------------------------------------------------------------------------ |
-| বাড়ির সারাংশ                       | পাওয়া মাল/হয়ে যাওয়া কাজের খরচ, earned বাকি, দেওয়া টাকা ও সংশ্লিষ্ট credit দেখা |
-| `/write`                           | কী হয়েছে বাছা: মাল কিনেছি, কাজের bill, টাকা দিয়েছি                             |
-| `/write/purchase`, `/write/charge` | নগদ/বাকির bill, আংশিক টাকা, থাকা advance প্রয়োগ বা অন্যের নিজের টাকায় কেনা মাল |
-| `/write/payment`                   | আগে দেখানো bill ও অঙ্কে payment, স্পষ্ট advance অথবা ফেরতযোগ্য জমা             |
-| `/works`                           | কাজের বিভাগ, খরচ ও প্রয়োজন হলে ঐচ্ছিক চুক্তি/ধাপ                               |
-| `/people`                          | স্থায়ী নাম, একাধিক দায়িত্ব, bill, payment, বাকি ও credit                       |
-| `/history`                         | তারিখ ধরে মূল ঘটনা, খোঁজ, ভাউচার ও বিস্তারিত                                   |
-| `/more`, `/settings`               | রিপোর্ট, `/migration`-এ পুরোনো হিসাব যাচাই, backup, ভাষা ও পছন্দ               |
+আগের theme, card, chart, font ও bottom navigation বজায় থাকে। `+` বা Home-এর খরচ লেখার বোতাম একই `Sheet` খোলে; ফোনে এটি নিচের drawer।
 
-চুক্তি ছাড়া গাড়িভাড়া বা একদিনের সেবা লেখা যায়। দায়িত্ব বাছা না থাকলেও নামের সঙ্গে প্রাসঙ্গিক লেনদেন করা যায়। আগের প্রয়োজনীয় entry/job route চালু থাকে। `/write` থেকে আগের অসমাপ্ত `quick-v2:` draft খোলার পথও আছে; নতুন পর্দা এসেছে বলে তা মুছে যায় না।
+| জায়গা                 | কাজ                                                           |
+| --------------------- | ------------------------------------------------------------- |
+| বাড়ির সারাংশ          | আগের summary card, খরচের ভাগ, সাম্প্রতিক হিসাব ও চলমান sector |
+| `+` drawer            | মাল কিনেছি, কাজের bill, অগ্রিম বা বাকি, টাকা দিলাম            |
+| `/sectors`            | বাড়ির বিভাগ: প্লাস্টার, টাইলস, বিদ্যুৎ ইত্যাদি                |
+| `/parties`            | মানুষ/প্রতিষ্ঠানের পরিচয়, দায়িত্ব, নিয়ম, chart ও হিসাব        |
+| `/works`              | party-কে দেওয়া কাজ, ঐচ্ছিক চুক্তি ও ধাপ                       |
+| `/ledger`, `/reports` | আগের লেখা এবং খরচের বিশ্লেষণ                                  |
+| `/settings`           | backup, ভাষা, theme ও account                                 |
+
+`/write/purchase`, `/write/charge`, `/write/payment` form-এর address। `/write` খুললেও একই drawer পাওয়া যায়; আলাদা chooser page নেই। আগের অসমাপ্ত `quick-v2:` লেখা drawer থেকে খোলা যায়। `/people` ও `/jobs`-এর পুরোনো link canonical route-এ যায়। পুরোনো `/works/:id`-এ sector ID থাকলে সেটি `/sectors/:id`-এ যায়; `/works` এখন কাজের তালিকা।
+
+Party তৈরির সময় রাখা ধরন/একাধিক দায়িত্ব, বেছে রাখা বোতাম ও sector form-এ কাজ করে। একই নিয়ম নতুন entry command-এও যাচাই হয়; URL পাল্টে বন্ধ action চালানো যায় না। কাজের চুক্তি করা যাবে কি না, সেটিও party-র নিয়ম মেনে চলে। role বদলালে পুরোনো bill/payment বা ইতিহাস বদলায় না; পুরোনো bill-এর বাকি মেটানোর পথ থাকে। কোনো বাধ্যতামূলক চুক্তির নতুন নিয়ম যোগ হয়নি।
 
 ## ২. বর্তমান তথ্যের একক উৎস
 
@@ -89,7 +92,7 @@ v1/v2 IndexedDB খোলার সময় transaction-এ প্রথমে wor
 
 পুরোনো `max(agreed, billed) - paid` display-এর সঙ্গে নতুন earned due জোর করে সমান করা হয় না। নমুনার আগের ৯০০ অবশিষ্ট এখন earned ২০০ ও unearned commitment ৭০০ দিয়ে ব্যাখ্যা হয়। বাড়তি ৭০০-এর bill বা adjustment তৈরি হয় না।
 
-`createMigrationReview()`, `repository.migrationReview()` এবং `/migration`-এ আগের commitment-ভিত্তিক অঙ্ক, earned অঙ্ক, unclassified cash ও historical balance-এর issue দেখা যায়। মূল লেখা খোলা যায়। চুক্তির ভবিষ্যৎ টাকায় করা অস্পষ্ট adjustment-কে অন্ধভাবে earned discount বা advance করা হয় না; source অক্ষত রেখে যাচাই লাগে।
+`createMigrationReview()`, `repository.migrationReview()` এবং developer-এর `report.json`-এ আগের commitment-ভিত্তিক অঙ্ক, earned অঙ্ক, unclassified cash ও historical balance-এর issue দেখা যায়। source ID দিয়ে মূল লেখা মেলানো যায়। চুক্তির ভবিষ্যৎ টাকায় করা অস্পষ্ট adjustment-কে অন্ধভাবে earned discount বা advance করা হয় না; source অক্ষত রেখে যাচাই লাগে।
 
 এখানে স্থায়ী পার্থক্যের পরিচয় হলো ঐচ্ছিক `adjustment.calculationVersion: 2`। নতুন `appendBalanceAdjustment()` কেবল balance correction-এ earned ভিত্তি ও `expectedBefore` মেলার যাচাই পেরিয়ে এটি লেখে। field-টির default নেই। পুরোনো সক্রিয় contract balance correction-এ marker না থাকলে সেটি review-তেই থাকে—পরে আরও bill লেখা, চুক্তির মোট বদলানো বা ঘটনাক্রম সাজানোর ফলে তার মূল অর্থ জানা গেছে ধরে নেওয়া হয় না। এই অবস্থায় একটি derived অঙ্ক মিলে যাওয়া ambiguity মেটানোর প্রমাণ নয়।
 
@@ -99,12 +102,14 @@ Migration, backup restore বা পুরোনো record সম্পাদন
 
 ## ৯. backup ও অনুমোদিত প্রকাশের runbook
 
+Migration developer-এর দায়িত্ব; ব্যবহারকারীর navigation-এ migration পাতা নেই। private output-সহ command ও exit code [operator runbook-এ](OPERATOR-MIGRATION.md) আছে।
+
 বর্তমান portable backup-এ validated active ledger, বর্তমান ও revision history-তে উল্লেখ থাকা receipt bytes, checksum এবং semantic migration report থাকে। এটি পুরো server/database বা সব browser draft/outbox-এর dump নয়। পূর্ণ প্রকাশ-পূর্ব backup-এর বিকল্প বলে ব্যবহার করা যাবে না।
 
 1. **কোনো production পরিবর্তনের আগে:** `ledger_documents`, `ledger_operations`, share/assistant-এর প্রয়োজনীয় state এবং private receipt storage-এর পূর্ণ consistent backup নিতে হবে। সংশ্লিষ্ট device-এর IndexedDB-তে pending/draft/recovery থাকা কপিও রাখতে হবে। এক device-এর export দিয়ে অন্য device সম্পূর্ণ আছে বলা যাবে না। secrets report-এ নয়; financial export Git-এ বাদ থাকা `private/`-এ।
 2. **কপিতে rehearsal:** `migrateArchitecture()`/entity upgrade/backup restore চালিয়ে source IDs/counts, খরচ, cash, party/work/account ও agreement bridge দেখুন। unknown cash, disputed adjustment এবং missing blob আলাদা করুন। incomplete backup-কে সম্পূর্ণ বলবেন না।
 3. **server guard আগে:** অনুমোদিত প্রকাশে `202611050002_party_ledger_architecture.sql`, `202611050003_shared_payment_allocations.sql`, `202611050004_earned_obligations.sql` ক্রমানুসারে পরীক্ষা ও প্রয়োগ, তারপর client rollout। এখনো production-এ এগুলো প্রয়োগ করা হয়নি। নতুন data পুরোনো client দিয়ে বাদ পড়া server guard আটকায়।
-4. **একাধিক device যাচাই:** dropped response, frozen retry, pending edit, expired login, conflict, shared statement ও receipt download দেখুন। অপ্রেরিত data মুছবেন না। `/migration`-এ দেখা পার্থক্যকে guessed financial row দিয়ে চাপা দেবেন না।
+4. **একাধিক device যাচাই:** dropped response, frozen retry, pending edit, expired login, conflict, shared statement ও receipt download দেখুন। অপ্রেরিত data মুছবেন না। `report.json`-এ দেখা পার্থক্যকে guessed financial row দিয়ে চাপা দেবেন না।
 5. **ফেরার সীমা:** `rollbackArchitectureMigration()` কেবল অপরিবর্তিত generation/document, একই cloud revision এবং frozen request/conflict না থাকলে স্থানীয় source ফেরায়। নতুন লেখা বা নতুন cloud save হলে এটি থামে। পরে ফেরার জন্য compatible client/server এবং সব নতুন লেখা রক্ষা করা recovery পরিকল্পনা লাগবে; পুরোনো snapshot বসিয়ে নতুন facts হারানো নয়।
 6. **শেষে cleanup:** ব্যবহৃত compatibility/history fields বা recovery যাচাই ছাড়া মুছবেন না। historical archive রাখা intentional; সেটি দ্বিতীয় editable ledger নয়। push/PR ও production কাজ স্থানীয় branch-এর অনুমতি থেকে নিজে থেকে অনুমোদিত হয় না।
 
@@ -135,7 +140,7 @@ Migration, backup restore বা পুরোনো record সম্পাদন
 - `src/domain/housePayments.ts`: payment plan, stale-preview check, record এবং advance প্রয়োগ।
 - `src/domain/partyLedger.ts`, `ledger.ts`, `adjustmentMath.ts`, `contractObligations.ts`: bill/credit/cash projection, earned basis ও অস্পষ্ট legacy adjustment।
 - `src/data/entityStorage.ts`, `database.ts`, `repository.ts`, `sync.ts`: entity storage, checksum, transaction, source recovery, backup ও revisioned snapshot transport।
-- `src/domain/architectureMigration.ts`, `migrationReview.ts`, `src/features/import/MigrationReviewPage.tsx`: mapping, source reconciliation ও দৃশ্যমান semantic bridge।
+- `src/domain/architectureMigration.ts`, `migrationReview.ts`, `scripts/migrate-architecture.ts`: mapping, source reconciliation ও developer-এর reconciliation report।
 - `src/features/write/HouseWrite.flow.test.tsx`, `src/domain/housePayments.test.ts`, `src/data/entityStorage.test.ts`, `architectureMigration.test.ts`, `sync.test.ts`, `conflictMigration.test.ts`: পর্দা থেকে রাখা, draft/ভাউচার, storage upgrade, checksum, retry ও conflict-এর প্রমাণ।
 
 ```sh

@@ -37,7 +37,7 @@ export function PersonNotebooks({
   }, [ledger, person, selectedWorkId]);
   if (!works.length) return null;
   const selected = works.find((work) => work.id === selectedWorkId);
-  const label = selected ? formatDigits(selected.name) : t("সব খাতা");
+  const label = selected ? formatDigits(selected.name) : t("সব সেক্টর");
   const close = () => {
     restoreFocus.current = true;
     setOpen(false);
@@ -49,7 +49,7 @@ export function PersonNotebooks({
         ref={trigger}
         type="button"
         className="person-notebook-trigger"
-        aria-label={t("খাতা বেছে দেখুন")}
+        aria-label={t("সেক্টর বেছে দেখুন")}
         aria-description={label}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -61,12 +61,12 @@ export function PersonNotebooks({
       </button>
       {open ? (
         <Sheet
-          title={t("খাতা বেছে দেখুন")}
+          title={t("সেক্টর বেছে দেখুন")}
           subtitle={formatDigits(person.name)}
           onClose={close}
         >
           <div className="person-notebook-options">
-            {[{ id: "", name: t("সব খাতা") }, ...works].map((work) => (
+            {[{ id: "", name: t("সব সেক্টর") }, ...works].map((work) => (
               <button
                 key={work.id}
                 type="button"

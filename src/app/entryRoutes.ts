@@ -11,6 +11,13 @@ const modalKeys = [
   "_purpose",
   "_quick",
 ];
+
+export function canonicalNotebookPath(path: string) {
+  return path
+    .replace(/^\/people(?=\/|$)/, "/parties")
+    .replace(/^\/(?:jobs|contracts)(?=\/|$)/, "/works");
+}
+
 export function entryReturn(path: string | null | undefined, base = "") {
   if (!path || !path.startsWith("/") || path.startsWith("//"))
     return `${base}/`;
@@ -19,25 +26,25 @@ export function entryReturn(path: string | null | undefined, base = "") {
     if (url.origin !== "https://bari.invalid") return `${base}/`;
     if (base && url.pathname !== base && !url.pathname.startsWith(`${base}/`))
       return `${base}/`;
-    const relative = base ? url.pathname.slice(base.length) : url.pathname;
     if (isEntryPage(url.pathname)) return `${base}/`;
-    const jobPage =
-      /^\/jobs(?:\/[^/]+)?$/.test(relative) && relative !== "/jobs/new";
+    const relative = canonicalNotebookPath(
+      base ? url.pathname.slice(base.length) : url.pathname,
+    );
     if (
-      !jobPage &&
       relative !== "/timeline" &&
       !/^\/dues\/?$/.test(relative) &&
-      !/^(?:\/(?:works|people|ledger|history|more|reports|materials|review|settings)(?:\/[^/]*)*|\/)?$/.test(
+      !/^(?:\/(?:sectors|works|parties|ledger|history|more|reports|materials|review|settings)(?:\/[^/]*)*|\/)?$/.test(
         relative,
       )
     )
       return `${base}/`;
     for (const key of modalKeys) url.searchParams.delete(key);
-    return `${url.pathname}${url.search}`;
+    return `${base}${relative}${url.search}${url.hash}`;
   } catch {
     return `${base}/`;
   }
 }
+
 export function entryUrl(
   base: string,
   options: AddOptions = {},
@@ -57,22 +64,20 @@ export function entryUrl(
     milestone: options.milestoneId,
   }))
     if (value) params.set(key, value);
-  const path = options.editId
-    ? `/entries/${encodeURIComponent(options.editId)}/edit`
-    : "/entries/new";
-  return `${base}${path}?${params}`;
+  return `${base}${options.editId ? `/entries/${encodeURIComponent(options.editId)}/edit` : "/entries/new"}?${params}`;
 }
+
 export function contractUrl(
   base: string,
   id?: string,
   workId?: string,
   personId?: string,
-  back = `${base}/`,
+  back = `${base}/works`,
 ) {
   const params = new URLSearchParams({ back: entryReturn(back, base) });
   if (workId) params.set("work", workId);
   if (personId) params.set("person", personId);
-  return `${base}/jobs/${id ? `${encodeURIComponent(id)}/edit` : "new"}?${params}`;
+  return `${base}/works/${id ? `${encodeURIComponent(id)}/edit` : "new"}?${params}`;
 }
 
 export function personUrl(
@@ -80,22 +85,26 @@ export function personUrl(
   id?: string,
   workId?: string,
   personId?: string,
-  back = `${base}/people`,
+  back = `${base}/parties`,
 ) {
   const params = new URLSearchParams({ back: entryReturn(back, base) });
   if (workId) params.set("work", workId);
   if (personId) params.set("person", personId);
-  return `${base}/people/${id ? `${encodeURIComponent(id)}/edit` : "new"}?${params}`;
+  return `${base}/parties/${id ? `${encodeURIComponent(id)}/edit` : "new"}?${params}`;
 }
 
-export function isPersonFormPage(pathname: string) {
-  return /\/people\/(?:new|[^/]+\/edit)\/?$/.test(pathname);
+export function sectorUrl(base: string, id?: string, back = `${base}/sectors`) {
+  return `${base}/sectors/${id ? `${encodeURIComponent(id)}/edit` : "new"}?${new URLSearchParams({ back: entryReturn(back, base) })}`;
 }
 
+export const isPersonFormPage = (pathname: string) =>
+  /\/(?:parties|people)\/(?:new|[^/]+\/edit)\/?$/.test(pathname);
+export const isSectorFormPage = (pathname: string) =>
+  /\/sectors\/(?:new|[^/]+\/edit)\/?$/.test(pathname);
 export function isEntryPage(pathname: string) {
   return (
     /\/write\/(?:purchase|charge|payment)\/?$/.test(pathname) ||
-    /\/(?:entries|contracts|jobs|people)\/(?:new|[^/]+\/edit)\/?$/.test(
+    /\/(?:entries|works|sectors|contracts|jobs|parties|people)\/(?:new|[^/]+\/edit)\/?$/.test(
       pathname,
     )
   );

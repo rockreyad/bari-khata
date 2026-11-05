@@ -174,7 +174,7 @@ export function JobsPage() {
     <div className="jobs-page page-flow">
       <header className="page-heading jobs-heading">
         <div>
-          <p className="eyebrow">{t("মিস্ত্রির কাজের হিসাব")}</p>
+          <p className="eyebrow">{t("কাজের হিসাব")}</p>
           <h1>{t("কাজ")}</h1>
         </div>
         <button
@@ -280,13 +280,13 @@ export function JobsPage() {
           <button
             type="button"
             className="jobs-people-toggle"
-            aria-label={t("মিস্ত্রি ও খাতা")}
+            aria-label={t("পক্ষ ও সেক্টর")}
             aria-expanded={peopleFiltersOpen}
             aria-controls="jobs-people-filters"
             onClick={() => setPeopleDisclosure(!peopleFiltersOpen)}
           >
             <FunnelSimpleIcon size={17} />
-            {t("মিস্ত্রি ও খাতা")}
+            {t("পক্ষ ও সেক্টর")}
             {personId || workId ? (
               <span className="jobs-filter-count" aria-hidden="true">
                 {number(Number(Boolean(personId)) + Number(Boolean(workId)))}
@@ -298,13 +298,13 @@ export function JobsPage() {
         {peopleFiltersOpen ? (
           <div className="jobs-filters" id="jobs-people-filters">
             <label>
-              <span>{t("মিস্ত্রি")}</span>
+              <span>{t("পক্ষ")}</span>
               <AppSelect
-                aria-label={t("মিস্ত্রি")}
+                aria-label={t("পক্ষ")}
                 value={personId}
                 onChange={(event) => update("person", event.target.value)}
               >
-                <option value="">{t("সবাই")}</option>
+                <option value="">{t("সব পক্ষ")}</option>
                 {ledger.people
                   .filter(
                     (person) =>
@@ -319,13 +319,13 @@ export function JobsPage() {
               </AppSelect>
             </label>
             <label>
-              <span>{t("কাজের খাতা")}</span>
+              <span>{t("সেক্টর")}</span>
               <AppSelect
-                aria-label={t("কাজের খাতা")}
+                aria-label={t("সেক্টর")}
                 value={workId}
                 onChange={(event) => update("work", event.target.value)}
               >
-                <option value="">{t("সব খাতা")}</option>
+                <option value="">{t("সব সেক্টর")}</option>
                 {ledger.works
                   .filter((work) => !work.archivedAt)
                   .map((work) => (
@@ -503,7 +503,7 @@ export function JobPage() {
             jobReturn(
               params.get("back"),
               base,
-              `/people/${encodeURIComponent(job.personId)}`,
+              `/parties/${encodeURIComponent(job.personId)}`,
             ),
             { replace: true },
           )
@@ -519,7 +519,7 @@ export function JobPage() {
             <button
               type="button"
               className="text-button job-worker-link"
-              onClick={() => go(`/people/${encodeURIComponent(worker.id)}`)}
+              onClick={() => go(`/parties/${encodeURIComponent(worker.id)}`)}
             >
               {formatDigits(worker.name)}
               <ArrowRightIcon size={14} />

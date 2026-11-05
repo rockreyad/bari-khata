@@ -347,11 +347,9 @@ describe("quick entry creation flow", () => {
     );
     await ready();
     await user.type(screen.getByLabelText("কত টাকা"), "30000");
-    await user.click(
-      screen.getByRole("button", { name: "আগে কাজের খাতা খুলুন" }),
-    );
+    await user.click(screen.getByRole("button", { name: "আগে সেক্টর খুলুন" }));
     await ready();
-    await user.type(screen.getByLabelText("কাজের নাম"), "দরজার কাজ");
+    await user.type(screen.getByLabelText("সেক্টরের নাম"), "দরজার কাজ");
     await user.click(screen.getByRole("button", { name: "রাখুন" }));
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "টাকা দিই" })).toBeTruthy(),
@@ -360,9 +358,9 @@ describe("quick entry creation flow", () => {
       "30000",
     );
     const work = (state.notebook.ledger as Ledger).works[0];
-    expect(
-      (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value,
-    ).toBe(work.id);
+    expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+      work.id,
+    );
     expect(work.activity).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: "রাখুন" }));
     await waitFor(() => expect(state.notebook.close).toHaveBeenCalledTimes(1));
@@ -389,9 +387,7 @@ describe("quick entry creation flow", () => {
     );
     await ready();
     await user.type(screen.getByLabelText("কত টাকা"), "1700");
-    await user.click(
-      screen.getByRole("button", { name: "আগে কাজের খাতা খুলুন" }),
-    );
+    await user.click(screen.getByRole("button", { name: "আগে সেক্টর খুলুন" }));
     await ready();
     await user.click(screen.getByRole("button", { name: "বন্ধ করুন" }));
     await waitFor(() =>
@@ -539,12 +535,12 @@ it.each(["দোকান", "ডিলার"])(
       />,
     );
     await ready();
-    const notebooks = screen.getByRole("combobox", { name: "কাজের খাতা" });
+    const notebooks = screen.getByRole("combobox", { name: "সেক্টর" });
     expect(
       within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "নতুন কাজের খাতা খুলব" }),
+      screen.getByRole("button", { name: "নতুন সেক্টর খুলব" }),
     ).toBeTruthy();
     await user.selectOptions(notebooks, "roof");
     await user.type(screen.getByLabelText("কী কিনলেন"), "সিমেন্ট");
@@ -586,7 +582,7 @@ it.each(["payment", "return"] as const)(
     const user = userEvent.setup();
     render(<QuickEntrySheet options={{ kind, personId: "shop" }} />);
     await ready();
-    const notebooks = screen.getByRole("combobox", { name: "কাজের খাতা" });
+    const notebooks = screen.getByRole("combobox", { name: "সেক্টর" });
     expect(
       within(notebooks).getByRole("option", { name: "ছাদের খাতা" }),
     ).toBeTruthy();
@@ -594,7 +590,7 @@ it.each(["payment", "return"] as const)(
       within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "নতুন কাজের খাতা খুলব" }),
+      screen.getByRole("button", { name: "নতুন সেক্টর খুলব" }),
     ).toBeTruthy();
     await user.selectOptions(notebooks, "roof");
     expect((notebooks as HTMLSelectElement).value).toBe("roof");
@@ -602,18 +598,23 @@ it.each(["payment", "return"] as const)(
   },
 );
 
-it("keeps notebook creation available across contact identities and keeps the unfinished payment when switching to a worker", async () => {
+it("keeps sector creation and the unfinished payment when switching between configured recipients", async () => {
   state.notebook.ledger = LedgerSchema.parse({
     works: [{ id: "roof", name: "ছাদের খাতা" }],
     people: [
       { id: "shop", name: "নমুনা দোকান", kind: "shop" },
-      { id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" },
+      {
+        id: "worker",
+        name: "নমুনা মিস্ত্রি",
+        kind: "worker",
+        roles: ["craftsperson", "supplier"],
+      },
     ],
   });
   const user = userEvent.setup();
   render(<QuickEntrySheet options={{ kind: "payment" }} />);
   await ready();
-  const notebooks = screen.getByRole("combobox", { name: "কাজের খাতা" });
+  const notebooks = screen.getByRole("combobox", { name: "সেক্টর" });
   expect(
     within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
   ).toBeTruthy();
@@ -622,16 +623,12 @@ it("keeps notebook creation available across contact identities and keeps the un
   expect(
     within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
   ).toBeTruthy();
-  expect(
-    screen.getByRole("button", { name: "নতুন কাজের খাতা খুলব" }),
-  ).toBeTruthy();
+  expect(screen.getByRole("button", { name: "নতুন সেক্টর খুলব" })).toBeTruthy();
   await user.selectOptions(screen.getByLabelText("কাকে দিচ্ছেন"), "worker");
   expect(
     within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
   ).toBeTruthy();
-  expect(
-    screen.getByRole("button", { name: "নতুন কাজের খাতা খুলব" }),
-  ).toBeTruthy();
+  expect(screen.getByRole("button", { name: "নতুন সেক্টর খুলব" })).toBeTruthy();
   expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
     "1700",
   );
@@ -847,7 +844,7 @@ it.each([undefined, "settle", "advance"] as const)(
   },
 );
 
-it("keeps all contacts available and retains an explicitly selected labour bill", async () => {
+it("filters unrelated contacts while retaining an explicitly selected labour bill", async () => {
   state.notebook.ledger = LedgerSchema.parse({
     works: [{ id: "door", name: "দরজা" }],
     people: [
@@ -877,7 +874,7 @@ it("keeps all contacts available and retains an explicitly selected labour bill"
     target: { value: "" },
   });
   await user.click(screen.getByRole("button", { name: "মিস্ত্রির টাকা" }));
-  expect(screen.getByRole("option", { name: "দরজার দোকান" })).toBeTruthy();
+  expect(screen.queryByRole("option", { name: "দরজার দোকান" })).toBeNull();
   await user.type(screen.getByLabelText("কত টাকা"), "2000");
   fireEvent.change(screen.getByLabelText("কোন মিস্ত্রি"), {
     target: { value: "worker" },
@@ -1645,7 +1642,14 @@ describe("balance-aware payment choices", () => {
 it("keeps a typed material bill, partial payment and global reason when choosing a worker as payee", async () => {
   state.notebook.ledger = LedgerSchema.parse({
     works: [{ id: "work", name: "নমুনা খাতা" }],
-    people: [{ id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" }],
+    people: [
+      {
+        id: "worker",
+        name: "নমুনা মিস্ত্রি",
+        kind: "worker",
+        roles: ["craftsperson", "supplier"],
+      },
+    ],
     contracts: [
       { id: "worker-job", personId: "worker", workId: "work", total: 100000 },
     ],
@@ -1707,10 +1711,17 @@ it("keeps a typed material bill, partial payment and global reason when choosing
   expect(saved.people[0].kind).toBe("worker");
 });
 
-it("uses an explicit labour expense type consistently for the preview and saved bill after a late shop payee is selected", async () => {
+it("uses an explicit labour expense type consistently after a shop with a configured worker role is selected", async () => {
   state.notebook.ledger = LedgerSchema.parse({
     works: [{ id: "work", name: "নমুনা খাতা" }],
-    people: [{ id: "shop", name: "নমুনা দোকান", kind: "shop" }],
+    people: [
+      {
+        id: "shop",
+        name: "নমুনা দোকান",
+        kind: "shop",
+        roles: ["supplier", "craftsperson"],
+      },
+    ],
   });
   const user = userEvent.setup();
   const view = render(
@@ -1799,9 +1810,9 @@ describe("NARC-131 preferred payment job", () => {
       (screen.getByLabelText("কাজ", { exact: true }) as HTMLSelectElement)
         .value,
     ).toBe("ongoing");
-    expect(
-      (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value,
-    ).toBe("tiles");
+    expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+      "tiles",
+    );
     expect(
       screen.getByRole("button", { name: "অগ্রিম", pressed: true }),
     ).toBeTruthy();
@@ -1829,7 +1840,7 @@ describe("NARC-131 preferred payment job", () => {
     );
     await ready();
     await user.selectOptions(screen.getByLabelText("কাজ", { exact: true }), "");
-    await user.selectOptions(screen.getByLabelText("কাজের খাতা"), "paint");
+    await user.selectOptions(screen.getByLabelText("সেক্টর"), "paint");
     await user.click(screen.getByRole("button", { name: "নতুন বিল ও টাকা" }));
     expect(
       (screen.getByLabelText("কাজ", { exact: true }) as HTMLSelectElement)
@@ -1849,9 +1860,9 @@ describe("NARC-131 preferred payment job", () => {
       (screen.getByLabelText("কাজ", { exact: true }) as HTMLSelectElement)
         .value,
     ).toBe("");
-    expect(
-      (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value,
-    ).toBe("paint");
+    expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+      "paint",
+    );
     expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
       "125",
     );
@@ -1871,7 +1882,7 @@ describe("NARC-131 preferred payment job", () => {
     );
     await ready();
     await user.type(screen.getByLabelText("কত টাকা"), "125");
-    await user.selectOptions(screen.getByLabelText("কাজের খাতা"), "paint");
+    await user.selectOptions(screen.getByLabelText("সেক্টর"), "paint");
     expect(
       (screen.getByLabelText("কাজ", { exact: true }) as HTMLSelectElement)
         .value,

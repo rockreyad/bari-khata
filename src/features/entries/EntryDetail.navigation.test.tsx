@@ -67,7 +67,7 @@ describe("entry detail navigation", () => {
             id: "normal",
             kind: "expense",
             reviewStatus: "needs_review",
-            reviewReason: "কাজের খাতা পরে বেছে নিন।",
+            reviewReason: "সেক্টর পরে বেছে নিন।",
             lines: [
               {
                 id: "line",
@@ -299,9 +299,9 @@ describe("entry detail navigation", () => {
     });
     render(<EntryDetail id="bill" />);
     fireEvent.click(screen.getByRole("button", { name: "বাবুল ইলেকট্রনিক্স" }));
-    expect(go).toHaveBeenLastCalledWith("/people/shop?account=materials");
+    expect(go).toHaveBeenLastCalledWith("/parties/shop?account=materials");
     fireEvent.click(screen.getByRole("button", { name: "বিদ্যুতের কাজ" }));
-    expect(go).toHaveBeenLastCalledWith("/works/electric");
+    expect(go).toHaveBeenLastCalledWith("/sectors/electric");
     fireEvent.click(screen.getByRole("button", { name: "এই নামের সব হিসাব" }));
     expect(go).toHaveBeenLastCalledWith(
       "/ledger?person=shop&account=materials&order=oldest",

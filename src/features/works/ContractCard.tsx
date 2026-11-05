@@ -26,9 +26,9 @@ type HistoryEvent = {
 const fieldNames: Record<keyof ContractSnapshot, string> = {
   title: "কাজের নাম",
   status: "অবস্থা",
-  personId: "মিস্ত্রি",
-  scope: "কাজের খাতা",
-  workId: "কাজের খাতা",
+  personId: "পক্ষ",
+  scope: "সেক্টর",
+  workId: "সেক্টর",
   basis: "মজুরি ঠিক হয়েছে",
   quantity: "পরিমাণ",
   rate: "দর",
@@ -78,7 +78,7 @@ export function ContractHistory({
   function value(snapshot: ContractSnapshot, key: keyof ContractSnapshot) {
     if (key === "workId" || key === "scope")
       return snapshot.scope === "house"
-        ? t("সব খাতা")
+        ? t("সব সেক্টর")
         : formatDigits(
             ledger.works.find((work) => work.id === snapshot.workId)?.name ??
               t("লেখা নেই"),

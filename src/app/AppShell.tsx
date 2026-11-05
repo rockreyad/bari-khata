@@ -14,7 +14,8 @@ import {
   GearSixIcon,
   HouseLineIcon,
   BookBookmarkIcon,
-  DotsThreeOutlineIcon,
+  ChartDonutIcon,
+  ClockCounterClockwiseIcon,
   PlusIcon,
   UsersIcon,
 } from "@phosphor-icons/react";
@@ -24,11 +25,11 @@ import {
   personUrl,
   entryReturn,
   isEntryPage,
+  sectorUrl,
 } from "./entryRoutes";
 import { NotebookNavLink, notebookSectionActive } from "./navigation";
 import { useNotebook, type AddOptions } from "./NotebookProvider";
 import { useLanguageContext } from "../context/LanguageProvider";
-import { MorePage } from "../features/more/MorePage";
 import { HomePage } from "../features/home/HomePage";
 import { WorksPage, WorkPage } from "../features/works/WorksPages";
 import { LedgerPage } from "../features/ledger/LedgerPage";
@@ -37,11 +38,6 @@ import { AccountSchema, CostTypeSchema } from "../domain/model";
 import { QuickActionsSheet } from "../features/entries/QuickActionsSheet";
 import { PwaUpdateNotice } from "../components/PwaUpdateNotice";
 import { useParams } from "react-router";
-const MigrationReviewPage = lazy(() =>
-  import("../features/import/MigrationReviewPage").then((module) => ({
-    default: module.MigrationReviewPage,
-  })),
-);
 const HouseWritePage = lazy(() =>
   import("../features/write/HouseWritePage").then((module) => ({
     default: module.HouseWritePage,
@@ -245,8 +241,52 @@ function PersonRoute() {
     />
   );
 }
+function SectorRoute() {
+  const { workId } = useParams();
+  const { ledger, mode, close, save } = useNotebook();
+  return (
+    <EntitySheet
+      presentation="page"
+      key={workId ?? "new-sector"}
+      kind="work"
+      ledger={ledger}
+      mode={mode}
+      editId={workId}
+      onClose={close}
+      onSave={save}
+    />
+  );
+}
+function LegacyNotebookRoute({ from, to }: { from: string; to: string }) {
+  const { base } = useNotebook();
+  const location = useLocation();
+  const path = base ? location.pathname.slice(base.length) : location.pathname;
+  return (
+    <Navigate
+      replace
+      to={`${base}${to}${path.slice(from.length)}${location.search}${location.hash}`}
+    />
+  );
+}
+function WorkDetailRoute() {
+  const { jobId } = useParams();
+  const { ledger, base } = useNotebook();
+  const location = useLocation();
+  if (
+    !ledger.contracts.some((job) => job.id === jobId) &&
+    ledger.works.some((sector) => sector.id === jobId)
+  )
+    return (
+      <Navigate
+        replace
+        to={`${base}/sectors/${encodeURIComponent(jobId!)}${location.search}${location.hash}`}
+      />
+    );
+  return <JobPage />;
+}
+
 export function AppShell() {
-  const { ledger, state, mode, base, go, close, save } = useNotebook();
+  const { ledger, state, mode, base, quick, go } = useNotebook();
   const { t, formatDigits } = useLanguageContext();
   const [params] = useSearchParams();
   const location = useLocation();
@@ -263,11 +303,12 @@ export function AppShell() {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [location.pathname]);
   const nav = [
-    { to: "/", label: "বাড়ি", icon: HouseLineIcon },
+    { to: "/", label: "এক নজরে", icon: HouseLineIcon },
+    { to: "/sectors", label: "সেক্টর", icon: BookBookmarkIcon },
+    { to: "/ledger", label: "আগের হিসাব", icon: ClockCounterClockwiseIcon },
+    { to: "/parties", label: "পক্ষ", icon: UsersIcon },
     { to: "/works", label: "কাজ", icon: BookBookmarkIcon },
-    { to: "/write", label: "লিখি", icon: PlusIcon },
-    { to: "/people", label: "মানুষ", icon: UsersIcon },
-    { to: "/more", label: "আরও", icon: DotsThreeOutlineIcon },
+    { to: "/reports", label: "রিপোর্ট", icon: ChartDonutIcon },
   ];
   const rawKind = params.get("_add");
   const addKind =
@@ -312,6 +353,10 @@ export function AppShell() {
           {nav.map((item) => (
             <NotebookNavLink key={item.to} {...item} base={base} />
           ))}
+          <button type="button" className="sidebar-add" onClick={quick}>
+            <PlusIcon size={22} weight="bold" aria-hidden="true" />
+            {t("হিসাব লিখি")}
+          </button>
         </nav>
         <div className="sidebar-bottom">
           <div className="private-notebook">
@@ -400,7 +445,18 @@ export function AppShell() {
               </div>
             }
           >
-            {entity === "person" ? (
+            {entity === "work" ? (
+              <Navigate
+                replace
+                to={sectorUrl(
+                  base,
+                  editId,
+                  entryPage
+                    ? (params.get("back") ?? `${base}/sectors`)
+                    : `${location.pathname}${location.search}`,
+                )}
+              />
+            ) : entity === "person" ? (
               <Navigate
                 replace
                 to={personUrl(
@@ -409,7 +465,7 @@ export function AppShell() {
                   options.workId,
                   options.personId,
                   entryPage
-                    ? (params.get("back") ?? `${base}/people`)
+                    ? (params.get("back") ?? `${base}/parties`)
                     : `${location.pathname}${location.search}`,
                 )}
               />
@@ -437,36 +493,56 @@ export function AppShell() {
               <Routes>
                 <Route path="write" element={<HouseWriteChooser />} />
                 <Route path="write/:action" element={<HouseWritePage />} />
-                <Route path="more" element={<MorePage />} />
-                <Route path="migration" element={<MigrationReviewPage />} />
+                <Route
+                  path="more"
+                  element={<Navigate replace to={`${base}/reports`} />}
+                />
+                <Route
+                  path="migration"
+                  element={<Navigate replace to={`${base}/`} />}
+                />
                 <Route path="history" element={<LedgerPage />} />
                 <Route path="entries/new" element={<EntryRoute />} />
                 <Route path="entries/:entryId/edit" element={<EntryRoute />} />
-                <Route path="jobs/new" element={<ContractRoute />} />
-                <Route path="jobs/:jobId/edit" element={<ContractRoute />} />
-                <Route path="jobs/:jobId" element={<JobPage />} />
-                <Route path="jobs" element={<JobsPage />} />
-                <Route path="contracts/new" element={<ContractRoute />} />
+                <Route path="sectors/new" element={<SectorRoute />} />
+                <Route path="sectors/:workId/edit" element={<SectorRoute />} />
+                <Route path="sectors" element={<WorksPage />} />
+                <Route path="sectors/:workId" element={<WorkPage />} />
+                <Route path="works/new" element={<ContractRoute />} />
+                <Route path="works/:jobId/edit" element={<ContractRoute />} />
+                <Route path="works/:jobId" element={<WorkDetailRoute />} />
+                <Route path="works" element={<JobsPage />} />
+                <Route path="parties" element={<PeoplePage />} />
+                <Route path="parties/new" element={<PersonRoute />} />
                 <Route
-                  path="contracts/:contractId/edit"
-                  element={<ContractRoute />}
+                  path="parties/:personId/edit"
+                  element={<PersonRoute />}
+                />
+                <Route path="parties/:personId" element={<PersonPage />} />
+                <Route
+                  path="people/*"
+                  element={<LegacyNotebookRoute from="/people" to="/parties" />}
+                />
+                <Route
+                  path="jobs/*"
+                  element={<LegacyNotebookRoute from="/jobs" to="/works" />}
+                />
+                <Route
+                  path="contracts/*"
+                  element={
+                    <LegacyNotebookRoute from="/contracts" to="/works" />
+                  }
                 />
                 <Route index element={<HomePage />} />
                 <Route path="dues" element={<PayablesPage />} />
-                <Route path="works" element={<WorksPage />} />
-                <Route path="works/:workId" element={<WorkPage />} />
                 <Route path="ledger" element={<LedgerPage />} />
                 <Route path="timeline" element={<TimelinePage />} />
-                <Route path="people" element={<PeoplePage />} />
-                <Route path="people/new" element={<PersonRoute />} />
-                <Route path="people/:personId/edit" element={<PersonRoute />} />
-                <Route path="people/:personId" element={<PersonPage />} />
                 <Route path="reports" element={<Reports />} />
                 <Route path="materials/:groupId" element={<Reports />} />
                 <Route path="review" element={<ReviewPage />} />
                 <Route
                   path="reconcile"
-                  element={<Navigate replace to={`${base}/people`} />}
+                  element={<Navigate replace to={`${base}/parties`} />}
                 />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route
@@ -503,8 +579,33 @@ export function AppShell() {
         </main>
       </div>
       <nav className="mobile-bottom-nav" aria-label={t("প্রধান মেনু")}>
-        {nav.map((item) => (
+        {[nav[0], nav[1]].map((item) => (
           <NotebookNavLink key={item.to} {...item} base={base} />
+        ))}
+        <button
+          type="button"
+          className="mobile-add"
+          onClick={quick}
+          aria-label={t("হিসাব লিখি")}
+        >
+          <span className="mobile-add-icon">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M12 5v14M5 12h14"
+                stroke="currentColor"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </span>
+        </button>
+        {[nav[2], nav[3]].map((item) => (
+          <NotebookNavLink
+            key={item.to}
+            {...item}
+            label={item.to === "/ledger" ? "ইতিহাস" : item.label}
+            base={base}
+          />
         ))}
       </nav>
       <PwaUpdateNotice blocked={updateBlocked} floating />
@@ -512,19 +613,6 @@ export function AppShell() {
         <QuickActionsSheet />
       ) : null}
       <Suspense fallback={null}>
-        {entity === "work" ? (
-          <EntitySheet
-            key={`${entity}:${editId}`}
-            kind={entity}
-            ledger={ledger}
-            mode={mode}
-            editId={editId}
-            defaultWorkId={options.workId}
-            defaultPersonId={options.personId}
-            onClose={close}
-            onSave={save}
-          />
-        ) : null}
         {entity !== "person" && params.get("_entry") ? (
           <EntryDetail key={params.get("_entry")} id={params.get("_entry")!} />
         ) : null}

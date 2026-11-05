@@ -192,6 +192,21 @@ export function contactPresetFor(
   );
 }
 
+export function contactCanHaveAgreement(person: Person) {
+  if (person.archivedAt) return false;
+  if (person.roles === undefined)
+    return (
+      ["worker", "other"].includes(personKind(person)) &&
+      contactPresetFor(person).agreement
+    );
+  return (
+    person.roles.length === 0 ||
+    person.roles.some((role) =>
+      contactPresets.some((preset) => preset.id === role && preset.agreement),
+    )
+  );
+}
+
 export function preservesContactTypes(
   before: Pick<Ledger, "people">,
   after: Pick<Ledger, "people">,

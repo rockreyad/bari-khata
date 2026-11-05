@@ -105,7 +105,7 @@ function mount(
         {component ?? (
           <Routes>
             <Route
-              path="/jobs"
+              path="/works"
               element={
                 <>
                   <JobsPage />
@@ -114,7 +114,7 @@ function mount(
               }
             />
             <Route
-              path="/jobs/:jobId"
+              path="/works/:jobId"
               element={
                 <>
                   <JobPage />
@@ -123,7 +123,7 @@ function mount(
               }
             />
             <Route
-              path="/sample/jobs"
+              path="/sample/works"
               element={
                 <>
                   <JobsPage />
@@ -132,7 +132,7 @@ function mount(
               }
             />
             <Route
-              path="/sample/jobs/:jobId"
+              path="/sample/works/:jobId"
               element={
                 <>
                   <JobPage />
@@ -247,7 +247,7 @@ describe("compact job previews", () => {
         language === "bn" ? "বাকি মেলানো বাকি" : "Balance needs review";
       const preview = mount(
         ledger,
-        "/jobs",
+        "/works",
         language,
         <JobPreview ledger={ledger} contracts={ledger.contracts} />,
       );
@@ -265,7 +265,7 @@ describe("compact job previews", () => {
           : "The amount is too large.",
       );
       preview.unmount();
-      const detail = mount(ledger, "/jobs/job-0", language);
+      const detail = mount(ledger, "/works/job-0", language);
       expect(
         detail.container.querySelector(".job-detail-review dd")?.textContent,
       ).toBe(label);
@@ -311,7 +311,7 @@ describe("compact job previews", () => {
     const before = JSON.stringify(ledger);
     const { container } = mount(
       ledger,
-      "/people/worker",
+      "/parties/worker",
       "bn",
       <JobPreview
         ledger={ledger}
@@ -332,7 +332,7 @@ describe("compact job previews", () => {
     const before = JSON.stringify(ledger);
     const { container } = mount(
       ledger,
-      "/people/worker",
+      "/parties/worker",
       "bn",
       <JobPreview
         ledger={ledger}
@@ -352,10 +352,10 @@ describe("compact job previews", () => {
     expect(container.querySelector("time")).toBeNull();
     fireEvent.click(cards[0]);
     expect(state.go).toHaveBeenLastCalledWith(
-      "/jobs/job-0?back=%2Fpeople%2Fworker",
+      "/works/job-0?back=%2Fparties%2Fworker",
     );
     fireEvent.click(screen.getByRole("button", { name: "সব কাজ" }));
-    expect(state.go).toHaveBeenLastCalledWith("/jobs?person=worker&work=door");
+    expect(state.go).toHaveBeenLastCalledWith("/works?person=worker&work=door");
     fireEvent.click(screen.getByRole("button", { name: "কাজ যোগ করি" }));
     expect(state.entity).toHaveBeenCalledWith(
       "contract",
@@ -369,7 +369,7 @@ describe("compact job previews", () => {
     const ledger = fixture(4);
     const view = mount(
       ledger,
-      "/works/door",
+      "/sectors/door",
       "bn",
       <JobPreview
         ledger={ledger}
@@ -386,7 +386,7 @@ describe("compact job previews", () => {
     view.unmount();
     const empty = mount(
       ledger,
-      "/works/door",
+      "/sectors/door",
       "bn",
       <JobPreview
         ledger={ledger}
@@ -499,7 +499,7 @@ describe("full job list", () => {
       }),
     );
     const before = JSON.stringify(ledger);
-    const { container } = mount(ledger, "/jobs");
+    const { container } = mount(ledger, "/works");
     expect(
       [...container.querySelectorAll(".job-tile-name")].map(
         (title) => title.textContent,
@@ -518,7 +518,7 @@ describe("full job list", () => {
   });
   it("appends twelve jobs at a time and hides load more after the final card", () => {
     const ledger = fixture(16);
-    const { container } = mount(ledger, "/jobs");
+    const { container } = mount(ledger, "/works");
     expect(container.querySelectorAll(".job-snap-card")).toHaveLength(12);
     fireEvent.click(screen.getByRole("button", { name: "আরও দেখুন" }));
     expect(container.querySelectorAll(".job-snap-card")).toHaveLength(16);
@@ -526,7 +526,7 @@ describe("full job list", () => {
   });
   it("validates person/work filters and keeps applicable house work visible in a selected notebook", () => {
     const ledger = fixture(16);
-    const view = mount(ledger, "/jobs?person=worker&work=roof");
+    const view = mount(ledger, "/works?person=worker&work=roof");
     expect(view.container.querySelectorAll(".job-snap-card")).toHaveLength(1);
     expect(view.container.querySelector(".job-tile-name")?.textContent).toBe(
       "কাজের হিসাব",
@@ -539,7 +539,7 @@ describe("full job list", () => {
       "worker",
     );
     view.unmount();
-    const invalid = mount(ledger, "/jobs?person=missing&work=missing");
+    const invalid = mount(ledger, "/works?person=missing&work=missing");
     expect(invalid.container.querySelectorAll(".job-snap-card")).toHaveLength(
       12,
     );
@@ -555,7 +555,7 @@ describe("full job list", () => {
     const ledger = fixture(3);
     ledger.contracts[2].title = "রড ১৬";
     for (const query of ["16", "১৬"]) {
-      const view = mount(ledger, `/jobs?q=${query}`);
+      const view = mount(ledger, `/works?q=${query}`);
       expect(view.container.querySelectorAll(".job-snap-card")).toHaveLength(1);
       expect(view.container.querySelector(".job-tile-name")?.textContent).toBe(
         "রড ১৬",
@@ -594,7 +594,7 @@ describe.each(["bn", "en"] as const)("job details in %s", (language) => {
   it("uses net paid after refunds, excludes historical/cancelled cash from totals and opens exact job entry/edit context", () => {
     const ledger = withPayments();
     const before = JSON.stringify(ledger);
-    const { container } = mount(ledger, "/jobs/job-0", language);
+    const { container } = mount(ledger, "/works/job-0", language);
     expect(
       screen.getByRole("heading", { name: copy[language].title, level: 1 }),
     ).toBeTruthy();
@@ -663,7 +663,7 @@ it("shows overpayment rather than zero remaining in the preview and keeps zero-p
   );
   const preview = mount(
     ledger,
-    "/jobs",
+    "/works",
     "bn",
     <JobPreview ledger={ledger} contracts={ledger.contracts} />,
   );
@@ -671,7 +671,7 @@ it("shows overpayment rather than zero remaining in the preview and keeps zero-p
     preview.container.querySelector(".job-tile-amounts")?.textContent,
   ).toContain("আগে দেওয়া টাকা৳\u202f১,০০০");
   preview.unmount();
-  const page = mount(ledger, "/jobs/job-0");
+  const page = mount(ledger, "/works/job-0");
   expect(page.container.querySelector(".job-extra-paid dd")?.textContent).toBe(
     "৳\u202f১,০০০",
   );
@@ -679,7 +679,7 @@ it("shows overpayment rather than zero remaining in the preview and keeps zero-p
     page.container.querySelectorAll(".job-detail-money dd")[1].textContent,
   ).toBe("৳\u202f০");
   page.unmount();
-  const empty = mount(fixture(1), "/jobs/job-0");
+  const empty = mount(fixture(1), "/works/job-0");
   expect(
     empty.container.querySelectorAll(".job-detail-money dd")[0].textContent,
   ).toBe("৳\u202f০");
@@ -711,7 +711,7 @@ it("paginates only the job's own transactions and excludes a mismatched party ev
       paymentParts: [{ amount: 99900 }],
     }),
   );
-  const { container } = mount(ledger, "/jobs/job-0");
+  const { container } = mount(ledger, "/works/job-0");
   expect(container.querySelectorAll(".history-row")).toHaveLength(12);
   fireEvent.click(screen.getByRole("button", { name: "আরও দেখুন" }));
   expect(container.querySelectorAll(".history-row")).toHaveLength(14);
@@ -756,7 +756,7 @@ it("loads all structured amendments and legacy history and supports keyboard tab
       new Date(Date.UTC(2026, 8, 13 + index)).toISOString(),
     );
   const before = JSON.stringify(ledger);
-  const { container } = mount(ledger, "/jobs/job-0");
+  const { container } = mount(ledger, "/works/job-0");
   const transactions = screen.getByRole("tab", { name: "লেনদেন" });
   const history = screen.getByRole("tab", { name: "পরিবর্তন" });
   transactions.focus();
@@ -798,19 +798,19 @@ it("loads all structured amendments and legacy history and supports keyboard tab
 });
 
 it("handles a missing job without showing another person's records", () => {
-  mount(withPayments(), "/jobs/missing");
+  mount(withPayments(), "/works/missing");
   expect(
     screen.getByRole("heading", { name: "কাজটি পাওয়া যায়নি" }),
   ).toBeTruthy();
   expect(screen.queryByRole("button", { name: "টাকা দিই" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "ফিরুন" }));
-  expect(state.go).toHaveBeenLastCalledWith("/jobs", { replace: true });
+  expect(state.go).toHaveBeenLastCalledWith("/works", { replace: true });
 });
 
 it("keeps a custom job name and sends the specific notebook when paying a work-scoped job", () => {
   const ledger = fixture(3);
   ledger.contracts[2].title = "Door design 2";
-  const { container } = mount(ledger, "/jobs/job-2");
+  const { container } = mount(ledger, "/works/job-2");
   expect(
     screen.getByRole("heading", { name: "Door design ২", level: 1 }),
   ).toBeTruthy();
@@ -843,7 +843,7 @@ it("keeps a newly created job visible before older jobs when the preview already
   const before = JSON.stringify(ledger);
   const { container } = mount(
     ledger,
-    "/people/worker",
+    "/parties/worker",
     "bn",
     <JobPreview
       ledger={ledger}
@@ -856,7 +856,7 @@ it("keeps a newly created job visible before older jobs when the preview already
   expect(cards[0].textContent).toContain("নতুন দরজার কাজ");
   fireEvent.click(cards[0]);
   expect(state.go).toHaveBeenCalledWith(
-    "/jobs/new-job?back=%2Fpeople%2Fworker",
+    "/works/new-job?back=%2Fparties%2Fworker",
   );
   expect(JSON.stringify(ledger)).toBe(before);
 });
@@ -932,7 +932,7 @@ function currentUrl() {
 it("keeps paid state separate from work status and filters unknown, due and completed work independently", () => {
   const ledger = filterFixture();
   const initial = JSON.stringify(ledger);
-  const view = mount(ledger, "/jobs?balance=settled");
+  const view = mount(ledger, "/works?balance=settled");
   expect(view.container.querySelectorAll(".job-snap-card")).toHaveLength(1);
   expect(view.container.querySelector(".job-tile-name")?.textContent).toBe(
     "পুরোনো কাজ",
@@ -963,7 +963,7 @@ it("keeps paid state separate from work status and filters unknown, due and comp
 it("retains search, person, work and payment/status filters after reload and through a detail's Back navigation", () => {
   const ledger = filterFixture();
   const path =
-    "/jobs?person=worker&work=door&q=" +
+    "/works?person=worker&work=door&q=" +
     encodeURIComponent("কাজ") +
     "&status=done&balance=due";
   const first = mount(ledger, path);
@@ -973,10 +973,10 @@ it("retains search, person, work and payment/status filters after reload and thr
   expect(
     (screen.getByLabelText("কাজের অবস্থা") as HTMLSelectElement).value,
   ).toBe("done");
-  expect((screen.getByLabelText("মিস্ত্রি") as HTMLSelectElement).value).toBe(
+  expect((screen.getByLabelText("পক্ষ") as HTMLSelectElement).value).toBe(
     "worker",
   );
-  expect((screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value).toBe(
+  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
     "door",
   );
   expect((screen.getByLabelText("কাজ খুঁজুন") as HTMLInputElement).value).toBe(
@@ -987,7 +987,7 @@ it("retains search, person, work and payment/status filters after reload and thr
   );
   const target = state.go.mock.calls.at(-1)![0] as string;
   const detailUrl = new URL(target, "https://bari.invalid");
-  expect(detailUrl.pathname).toBe("/jobs/done-due");
+  expect(detailUrl.pathname).toBe("/works/done-due");
   expect(
     new URL(
       detailUrl.searchParams.get("back")!,
@@ -1003,7 +1003,7 @@ it("retains search, person, work and payment/status filters after reload and thr
   fireEvent.click(screen.getByRole("button", { name: "ফিরুন" }));
   const [back, options] = state.go.mock.calls.at(-1)!;
   const backUrl = new URL(back, "https://bari.invalid");
-  expect(backUrl.pathname).toBe("/jobs");
+  expect(backUrl.pathname).toBe("/works");
   expect(Object.fromEntries(backUrl.searchParams)).toEqual({
     person: "worker",
     work: "door",
@@ -1017,7 +1017,7 @@ it("retains search, person, work and payment/status filters after reload and thr
 it("preserves sample work origins without a duplicate prefix and returns to that work's filtered tab", () => {
   state.base = "/sample";
   const ledger = fixture(1);
-  const origin = "/sample/works/door?tab=labour&q=steel";
+  const origin = "/sample/sectors/door?tab=labour&q=steel";
   const preview = mount(
     ledger,
     origin,
@@ -1036,27 +1036,30 @@ it("preserves sample work origins without a duplicate prefix and returns to that
     state.go.mock.calls.at(-1)![0],
     "https://bari.invalid",
   );
-  expect(target.pathname).toBe("/jobs/job-0");
+  expect(target.pathname).toBe("/works/job-0");
   expect(target.searchParams.get("back")).toBe(origin);
   preview.unmount();
   mount(ledger, "/sample" + target.pathname + target.search);
   fireEvent.click(screen.getByRole("button", { name: "ফিরুন" }));
-  expect(state.go).toHaveBeenLastCalledWith("/works/door?tab=labour&q=steel", {
-    replace: true,
-  });
+  expect(state.go).toHaveBeenLastCalledWith(
+    "/sectors/door?tab=labour&q=steel",
+    {
+      replace: true,
+    },
+  );
 });
 
 it.each([
   "https://outside.invalid/",
-  "/people/worker",
-  "/sample/jobs/another-job",
+  "/parties/worker",
+  "/sample/works/another-job",
 ])(
   "rejects an unsafe or looping sample origin %s and falls back to its worker",
   (origin) => {
     state.base = "/sample";
-    mount(fixture(1), `/sample/jobs/job-0?back=${encodeURIComponent(origin)}`);
+    mount(fixture(1), `/sample/works/job-0?back=${encodeURIComponent(origin)}`);
     fireEvent.click(screen.getByRole("button", { name: "ফিরুন" }));
-    expect(state.go).toHaveBeenLastCalledWith("/people/worker", {
+    expect(state.go).toHaveBeenLastCalledWith("/parties/worker", {
       replace: true,
     });
   },
@@ -1084,7 +1087,7 @@ it("resets the twelve-card window after a status filter changes and keeps insigh
       }),
     );
   });
-  const { container } = mount(ledger, "/jobs?status=ongoing");
+  const { container } = mount(ledger, "/works?status=ongoing");
   expect(container.querySelectorAll(".job-snap-card")).toHaveLength(12);
   fireEvent.click(screen.getByRole("button", { name: "আরও দেখুন" }));
   expect(container.querySelectorAll(".job-snap-card")).toHaveLength(15);
@@ -1105,7 +1108,7 @@ it("resets the twelve-card window after a status filter changes and keeps insigh
 
 it("reclassifies refunded overpayment exactly and clears only known filters", () => {
   const ledger = filterFixture();
-  const { container } = mount(ledger, "/jobs?balance=overpaid&keep=1");
+  const { container } = mount(ledger, "/works?balance=overpaid&keep=1");
   expect(container.querySelectorAll(".job-snap-card")).toHaveLength(1);
   expect(container.querySelector(".job-tile-amounts")?.textContent).toContain(
     "আগে দেওয়া টাকা৳\u202f১০০",
@@ -1142,7 +1145,7 @@ it("reclassifies refunded overpayment exactly and clears only known filters", ()
 it("requires a reason to change status and saves it against the latest job without changing payment history", async () => {
   const ledger = filterFixture();
   const before = JSON.stringify(ledger);
-  mount(ledger, "/jobs/old-paid");
+  mount(ledger, "/works/old-paid");
   fireEvent.click(screen.getByRole("button", { name: "কাজের অবস্থা বদলাই" }));
   fireEvent.change(screen.getByLabelText("কাজের অবস্থা"), {
     target: { value: "done" },
@@ -1190,7 +1193,7 @@ it("requires a reason to change status and saves it against the latest job witho
 });
 
 it("keeps status changes retryable after a save error", async () => {
-  mount(filterFixture(), "/jobs/old-paid");
+  mount(filterFixture(), "/works/old-paid");
   state.save.mockRejectedValueOnce(new Error("offline"));
   fireEvent.click(screen.getByRole("button", { name: "কাজের অবস্থা বদলাই" }));
   fireEvent.change(screen.getByLabelText("কাজের অবস্থা"), {
@@ -1219,17 +1222,17 @@ it("keeps status changes retryable after a save error", async () => {
 
 it("keeps people/work selectors compact by default and restores active context filters expanded on reload", () => {
   const ledger = filterFixture();
-  const view = mount(ledger, "/jobs");
-  const toggle = screen.getByRole("button", { name: "মিস্ত্রি ও খাতা" });
+  const view = mount(ledger, "/works");
+  const toggle = screen.getByRole("button", { name: "পক্ষ ও সেক্টর" });
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
-  expect(screen.queryByLabelText("মিস্ত্রি")).toBeNull();
-  expect(screen.queryByLabelText("কাজের খাতা")).toBeNull();
+  expect(screen.queryByLabelText("পক্ষ")).toBeNull();
+  expect(screen.queryByLabelText("সেক্টর")).toBeNull();
   expect(screen.getByLabelText("কাজের অবস্থা")).toBeTruthy();
   fireEvent.click(toggle);
-  fireEvent.change(screen.getByLabelText("মিস্ত্রি"), {
+  fireEvent.change(screen.getByLabelText("পক্ষ"), {
     target: { value: "worker" },
   });
-  fireEvent.change(screen.getByLabelText("কাজের খাতা"), {
+  fireEvent.change(screen.getByLabelText("সেক্টর"), {
     target: { value: "door" },
   });
   const path = currentUrl().pathname + currentUrl().search;
@@ -1241,13 +1244,13 @@ it("keeps people/work selectors compact by default and restores active context f
   mount(ledger, path);
   expect(
     screen
-      .getByRole("button", { name: "মিস্ত্রি ও খাতা" })
+      .getByRole("button", { name: "পক্ষ ও সেক্টর" })
       .getAttribute("aria-expanded"),
   ).toBe("true");
-  expect((screen.getByLabelText("মিস্ত্রি") as HTMLSelectElement).value).toBe(
+  expect((screen.getByLabelText("পক্ষ") as HTMLSelectElement).value).toBe(
     "worker",
   );
-  expect((screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value).toBe(
+  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
     "door",
   );
 });
@@ -1265,7 +1268,7 @@ it("keeps cancelled, historical and unmatched cash out of list-card balances", (
       paymentParts: [{ amount: 10000000 }],
     }),
   );
-  const { container } = mount(ledger, "/jobs?person=worker");
+  const { container } = mount(ledger, "/works?person=worker");
   const card = [
     ...container.querySelectorAll<HTMLElement>(".job-snap-card"),
   ].find(

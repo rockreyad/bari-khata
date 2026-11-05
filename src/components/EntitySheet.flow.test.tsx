@@ -155,7 +155,7 @@ it("keeps unknown preset metadata through draft reopen while preventing stale in
   expect(
     (screen.getByLabelText("পরিচয় / কী কাজ করেন") as HTMLInputElement).value,
   ).toBe("নমুনা নিজের পরিচয়");
-  await user.click(screen.getByText("পছন্দের বাটন"));
+  await user.click(screen.getByText("কোন হিসাব রাখবেন"));
   const purchase = screen.getByRole("button", {
     name: "মাল কেনা",
   }) as HTMLButtonElement;
@@ -173,7 +173,7 @@ it("keeps unknown preset metadata through draft reopen while preventing stale in
   });
   view = mount(<EntitySheet {...props} />);
   await ready();
-  await user.click(screen.getByText("পছন্দের বাটন"));
+  await user.click(screen.getByText("কোন হিসাব রাখবেন"));
   expect(
     (screen.getByRole("button", { name: "মাল কেনা" }) as HTMLButtonElement)
       .disabled,
@@ -216,7 +216,7 @@ it.each([
     kind: "driver",
   },
 ])(
-  "keeps an explicitly entered agreement visible and saved once after changing from $initial to $selected",
+  "preserves an entered agreement after changing from $initial to $selected and requires an eligible role before saving",
   async ({ initialId, presetId, kind }) => {
     const ledger = usedHouse();
     const onSave = vi.fn(async (_next: Ledger) => {});
@@ -240,7 +240,7 @@ it.each([
       .getByText("কাজের টাকা", { selector: "summary > span" })
       .closest("summary")!;
     await user.click(agreementSummary);
-    await user.selectOptions(screen.getByLabelText("কাজের খাতা"), "door");
+    await user.selectOptions(screen.getByLabelText("সেক্টর"), "door");
     fireEvent.change(screen.getByLabelText("কাজের টাকা"), {
       target: { value: "1800" },
     });
@@ -254,9 +254,9 @@ it.each([
     expect(screen.getByLabelText("কাজের টাকা").closest("details")!.open).toBe(
       true,
     );
-    expect(
-      (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value,
-    ).toBe("door");
+    expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+      "door",
+    );
     await user.click(screen.getByRole("button", { name: "ফিরুন" }));
     await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
     view.unmount();
@@ -273,9 +273,18 @@ it.each([
     expect(
       (screen.getByLabelText("কাজের টাকা") as HTMLInputElement).value,
     ).toBe("১৮০০");
-    expect(
-      (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value,
-    ).toBe("door");
+    expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+      "door",
+    );
+    await user.click(screen.getByRole("button", { name: "রাখুন" }));
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "এই ধরনের নামে",
+    );
+    expect(onSave).not.toHaveBeenCalled();
+    await user.click(screen.getByText("আরও কাজ বা সম্পর্ক"));
+    await user.click(
+      screen.getByRole("checkbox", { name: "মিস্ত্রি / কারিগর" }),
+    );
     await user.click(screen.getByRole("button", { name: "রাখুন" }));
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
     const saved = onSave.mock.calls[0][0];
@@ -322,9 +331,7 @@ it("creates a full-page 600000-taka whole-house agreement before any work notebo
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(screen.queryByRole("button", { name: "পুরো বাড়ি" })).toBeNull();
   expect(screen.queryByRole("button", { name: "একটি কাজ" })).toBeNull();
-  expect((screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value).toBe(
-    "",
-  );
+  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe("");
   expect(screen.getByRole("option", { name: "পরে বেছে নেব" })).toBeTruthy();
   fireEvent.change(screen.getByLabelText("কাজের নাম"), {
     target: { value: "রাজমিস্ত্রির কাজ" },
@@ -388,9 +395,7 @@ it("adds a new worker with a whole-house contract before there are work notebook
   });
   expect(screen.queryByRole("button", { name: "পুরো বাড়ি" })).toBeNull();
   expect(screen.queryByRole("button", { name: "একটি কাজ" })).toBeNull();
-  expect((screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value).toBe(
-    "",
-  );
+  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe("");
   await userEvent.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
   const next = onSave.mock.calls[0][0];
@@ -980,10 +985,10 @@ it.each(["door", ""] as const)(
     expect(
       screen.queryByRole("group", { name: "কোন কাজের চুক্তি" }),
     ).toBeNull();
-    expect(
-      (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value,
-    ).toBe("door");
-    fireEvent.change(screen.getByLabelText("কাজের খাতা"), {
+    expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+      "door",
+    );
+    fireEvent.change(screen.getByLabelText("সেক্টর"), {
       target: { value: workId },
     });
     fireEvent.change(screen.getByLabelText("কাজের নাম"), {
@@ -1029,7 +1034,7 @@ it("adds an optional job to a new worker using only its chosen notebook and amou
       .closest("summary")!,
   );
   expect(screen.queryByRole("group", { name: "কোন কাজের চুক্তি" })).toBeNull();
-  fireEvent.change(screen.getByLabelText("কাজের খাতা"), {
+  fireEvent.change(screen.getByLabelText("সেক্টর"), {
     target: { value: "door" },
   });
   fireEvent.change(screen.getByLabelText("কাজের টাকা"), {
@@ -1084,11 +1089,11 @@ it.each(["house", "work"] as const)(
     expect((screen.getByLabelText("কাজের নাম") as HTMLInputElement).value).toBe(
       "আগের কাজের নাম",
     );
+    expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+      scope === "work" ? "door" : "",
+    );
     expect(
-      (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value,
-    ).toBe(scope === "work" ? "door" : "");
-    expect(
-      (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).disabled,
+      (screen.getByLabelText("সেক্টর") as HTMLSelectElement).disabled,
     ).toBe(true);
     expect(
       (screen.getByLabelText("কার কাজ") as HTMLSelectElement).disabled,
@@ -1134,12 +1139,10 @@ it("keeps an existing used house job's legacy notebook metadata unchanged instea
     />,
   );
   await ready();
-  expect((screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value).toBe(
-    "",
+  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe("");
+  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).disabled).toBe(
+    true,
   );
-  expect(
-    (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).disabled,
-  ).toBe(true);
   fireEvent.change(screen.getByLabelText("কাজের টাকা"), {
     target: { value: "650000" },
   });
@@ -1190,14 +1193,14 @@ it("blocks a stale used-job identity and recovers it explicitly without losing p
       onClose={vi.fn()}
     />,
   );
-  await screen.findByRole("button", { name: "আগের নাম ও খাতা রাখি" });
+  await screen.findByRole("button", { name: "আগের পক্ষ ও সেক্টর রাখি" });
   expect(
     (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
       .disabled,
   ).toBe(true);
-  expect(
-    (screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).disabled,
-  ).toBe(true);
+  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).disabled).toBe(
+    true,
+  );
   expect((screen.getByLabelText("কার কাজ") as HTMLSelectElement).disabled).toBe(
     true,
   );
@@ -1206,7 +1209,7 @@ it("blocks a stale used-job identity and recovers it explicitly without losing p
   );
   expect(onSave).not.toHaveBeenCalled();
   await userEvent.click(
-    screen.getByRole("button", { name: "আগের নাম ও খাতা রাখি" }),
+    screen.getByRole("button", { name: "আগের পক্ষ ও সেক্টর রাখি" }),
   );
   await ready();
   expect((screen.getByLabelText("কাজের টাকা") as HTMLInputElement).value).toBe(
@@ -1218,9 +1221,7 @@ it("blocks a stale used-job identity and recovers it explicitly without losing p
   expect((screen.getByLabelText("কাজের নাম") as HTMLInputElement).value).toBe(
     "অসমাপ্ত কাজের নাম",
   );
-  expect((screen.getByLabelText("কাজের খাতা") as HTMLSelectElement).value).toBe(
-    "",
-  );
+  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe("");
   expect((screen.getByLabelText("কার কাজ") as HTMLSelectElement).value).toBe(
     "worker",
   );

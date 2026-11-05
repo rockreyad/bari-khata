@@ -67,8 +67,8 @@ export function PeoplePage() {
         (!activeRole || roleKey(person.role) === activeRole) &&
         (status === "all" ||
           (status === "due"
-            ? summary.reconciledPayable > 0
-            : summary.reconciledAdvance > 0)),
+            ? !summary.balanceAmbiguous && summary.reconciledPayable > 0
+            : !summary.balanceAmbiguous && summary.reconciledAdvance > 0)),
     )
     .sort(
       (a, b) =>
@@ -132,17 +132,17 @@ export function PeoplePage() {
     <div className="contacts-page">
       <header className="page-heading">
         <div>
-          <h1>{t("মানুষ ও দোকান")}</h1>
+          <h1>{t("পক্ষ")}</h1>
           <p>{t("কাকে কত দিয়েছি, এক নজরে।")}</p>
         </div>
         <button className="primary-button" onClick={() => entity("person")}>
           <PlusIcon size={19} />
-          {t("নাম যোগ করি")}
+          {t("পক্ষ যোগ করি")}
         </button>
       </header>
-      <button className="people-jobs-link" onClick={() => go("/jobs")}>
+      <button className="people-jobs-link" onClick={() => go("/works")}>
         <HardHatIcon size={21} weight="duotone" />
-        <span>{t("মিস্ত্রির সব কাজ")}</span>
+        <span>{t("সব কাজ")}</span>
         <ArrowRightIcon size={18} />
       </button>
       <div className="contacts-search">
@@ -211,10 +211,7 @@ export function PeoplePage() {
         </div>
       ))}
       {shown.length ? (
-        <section
-          className="contacts-list"
-          aria-label={t("মানুষ ও দোকানের তালিকা")}
-        >
+        <section className="contacts-list" aria-label={t("পক্ষের তালিকা")}>
           <div className="contacts-list-caption">
             <span>{t("নাম")}</span>
             <span>{t("টাকা দিয়েছি")}</span>
@@ -223,7 +220,7 @@ export function PeoplePage() {
             <button
               className="contact-row"
               key={person.id}
-              onClick={() => go(`/people/${encodeURIComponent(person.id)}`)}
+              onClick={() => go(`/parties/${encodeURIComponent(person.id)}`)}
             >
               <PersonMark person={person} />
               <span className="contact-row-name">
@@ -247,7 +244,9 @@ export function PeoplePage() {
                     </span>
                   )}
                 </strong>
-                {summary.reconciledPayable > 0 ? (
+                {summary.balanceAmbiguous ? (
+                  <small className="contact-due">{t("যাচাই বাকি")}</small>
+                ) : summary.reconciledPayable > 0 ? (
                   <small className="contact-due">
                     {t("বাকি {{amount}}", {
                       amount: money(summary.reconciledPayable),

@@ -194,7 +194,7 @@ async function ready() {
 }
 async function preferences(user: ReturnType<typeof userEvent.setup>) {
   const summary = screen
-    .getByText("পছন্দের বাটন", { exact: true })
+    .getByText("কোন হিসাব রাখবেন", { exact: true })
     .closest("summary")!;
   const details = summary.closest("details")!;
   if (!details.open) await user.click(summary);
@@ -211,6 +211,10 @@ it("creates and reopens a shop with optional fields empty and an explicitly empt
   });
   const first = mount(initial, onSave, onClose);
   await ready();
+  expect(
+    screen.getByRole("heading", { level: 1, name: "পক্ষ যোগ করি" }),
+  ).toBeTruthy();
+  expect(screen.getByText("মানুষ বা প্রতিষ্ঠান", { exact: true })).toBeTruthy();
   await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "supplier");
   await user.type(screen.getByLabelText("দোকানের নাম"), "নমুনা নতুন দোকান");
   const actions = await preferences(user);
@@ -243,6 +247,9 @@ it("creates and reopens a shop with optional fields empty and an explicitly empt
 
   const editing = mount(saved, onSave, onClose, shop.id);
   await ready();
+  expect(
+    screen.getByRole("heading", { level: 1, name: "পক্ষের তথ্য" }),
+  ).toBeTruthy();
   expect((screen.getByLabelText("দোকানের নাম") as HTMLInputElement).value).toBe(
     shop.name,
   );
@@ -338,7 +345,7 @@ it("keeps the explicitly selected type after saving and reopening a freely edite
   expect(updated.contracts).toEqual(initial.contracts);
 });
 
-it("uses an explicit unclassified type for shortcuts without rewriting a legacy shop's financial kind or records", async () => {
+it("lets an explicit custom type configure shortcuts without rewriting a legacy shop's financial kind or records", async () => {
   const base = fixture();
   const initial = LedgerSchema.parse({
     ...base,
@@ -393,8 +400,8 @@ it("uses an explicit unclassified type for shortcuts without rewriting a legacy 
   const actions = await preferences(user);
   for (const name of ["মাল কেনা", "মাল ফেরত", "আনার খরচ"]) {
     const button = actions.getByRole("button", { name }) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-    expect(button.getAttribute("aria-pressed")).toBe("false");
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute("aria-pressed")).toBe("true");
     await user.click(button);
     expect(button.getAttribute("aria-pressed")).toBe("false");
   }
@@ -408,9 +415,10 @@ it("uses an explicit unclassified type for shortcuts without rewriting a legacy 
   expect(person).toMatchObject({
     contactType: "custom",
     kind: "shop",
+    roles: ["custom"],
     quickActions: ["payment"],
   });
-  expect(defaultContactAccount(person)).toBe("materials");
+  expect(defaultContactAccount(person)).toBe("other");
   expect(saved.entries).toEqual(initial.entries);
   expect(saved.contracts).toEqual(initial.contracts);
 });
@@ -519,7 +527,11 @@ it.each([
     presetId: "transport",
     actions: ["টাকা দিলাম", "আনার খরচ"],
   },
-  { kind: "নিজের মতো", presetId: "", actions: ["টাকা দিলাম"] },
+  {
+    kind: "নিজের মতো",
+    presetId: "",
+    actions: ["টাকা দিলাম", "মাল কেনা", "মাল ফেরত", "আনার খরচ"],
+  },
 ])(
   "offers appropriate optional actions for $kind on the page",
   async ({ presetId, actions: allowed }) => {

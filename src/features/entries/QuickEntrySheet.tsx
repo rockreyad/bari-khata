@@ -27,6 +27,11 @@ import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { MoneyInput } from "../../components/ui/MoneyInput";
 import { FormError, useFormError } from "../../components/ui/FormError";
 import { personKind } from "../../domain/contacts";
+import {
+  canRecordContactCash,
+  canRecordContactCost,
+  canRecordContactReturn,
+} from "../../domain/contactEntryPolicy";
 import { Sheet } from "../../components/Sheet";
 import { EntryFrame } from "../../components/EntryFrame";
 import { EntryPaymentPreview } from "./EntryPaymentPreview";
@@ -408,7 +413,7 @@ export function QuickEntrySheet({
                 : code === "date"
                   ? "সঠিক তারিখ বেছে নিন।"
                   : code === "work"
-                    ? "কোন কাজের খাতার টাকা, তা বেছে নিন।"
+                    ? "কোন সেক্টরর টাকা, তা বেছে নিন।"
                     : code === "group"
                       ? "নতুন মালের ধরনটির নাম লিখুন।"
                       : code === "account_changed" ||
@@ -422,8 +427,9 @@ export function QuickEntrySheet({
                               ? "মজুরির কাজ ও ব্যক্তির সঙ্গে নির্ধারিত দর মিলছে না।"
                               : code === "removed_entity"
                                 ? "মুছে রাখা নাম, খাতা বা কাজ আগে ফিরিয়ে আনুন।"
-                                : code === "person_kind"
-                                  ? "মালের জন্য দোকান আর মজুরির জন্য মিস্ত্রির নাম বেছে নিন।"
+                                : code === "person_kind" ||
+                                    code === "contact_rules"
+                                  ? "এই নামের নিয়মে এই হিসাব রাখা যাবে না। ধরন বা নাম বদলান।"
                                   : "সঠিক টাকা ও প্রয়োজনীয় তথ্য দিন। হিসাব রাখা যায়নি।",
           ),
         );
@@ -483,7 +489,46 @@ export function QuickEntrySheet({
   const transport = ["transport", "unload"].includes(draft.costType);
   const material = draft.costType === "material";
   const returning = draft.kind === "return";
-  const allowedPeople = ledger.people.filter((person) => !person.archivedAt);
+  const allowedPeople = ledger.people.filter(
+    (person) =>
+      !person.archivedAt &&
+      (cash
+        ? canRecordContactCash(ledger, person, {
+            account: draft.account,
+            contractId: draft.contractId,
+            amount: total || 1,
+            context:
+              draft.purpose === "advance" ? draft.advanceContext : "settlement",
+            refund: draft.kind === "refund",
+            workId: draft.workId || undefined,
+          })
+        : returning
+          ? canRecordContactReturn(ledger, person, {
+              account: draft.account,
+              contractId: draft.contractId,
+              workId: draft.workId || undefined,
+            })
+          : canRecordContactCost(person, {
+              account: labour
+                ? "labour"
+                : charge
+                  ? draft.account
+                  : material
+                    ? "materials"
+                    : "other",
+              costType: labour
+                ? "labour"
+                : charge
+                  ? draft.account === "materials"
+                    ? "material"
+                    : draft.costType === "transport"
+                      ? "transport"
+                      : "other"
+                  : draft.costType,
+              contractId: draft.contractId,
+              reimbursement: draft.payment === "worker",
+            })),
+  );
   const chooseType = (type: QuickDraft["costType"]) => {
     setError("");
     financialScopeChosen.current = true;
@@ -624,9 +669,9 @@ export function QuickEntrySheet({
           ) : null}
           <div className="entry-assignment">
             <label>
-              {t("কাজের খাতা")}
+              {t("সেক্টর")}
               <AppSelect
-                aria-label={t("কাজের খাতা")}
+                aria-label={t("সেক্টর")}
                 aria-invalid={Boolean(error) && invalidField === "work"}
                 aria-describedby={
                   error && invalidField === "work"
@@ -708,8 +753,8 @@ export function QuickEntrySheet({
               <PlusIcon size={17} />
               {t(
                 ledger.works.some((work) => !work.archivedAt)
-                  ? "নতুন কাজের খাতা খুলব"
-                  : "আগে কাজের খাতা খুলুন",
+                  ? "নতুন সেক্টর খুলব"
+                  : "আগে সেক্টর খুলুন",
               )}
             </button>
           ) : null}

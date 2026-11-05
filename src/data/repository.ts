@@ -145,7 +145,7 @@ async function backupFingerprint(text: string) {
   );
 }
 
-async function verifyBackupIntegrity(backup: LedgerBackup) {
+export async function verifyBackupIntegrity(backup: LedgerBackup) {
   if (!backup.integrity) return;
   if (
     (await backupFingerprint(JSON.stringify(backup.ledger))) !==

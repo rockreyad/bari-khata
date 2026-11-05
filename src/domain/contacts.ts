@@ -8,7 +8,11 @@ import type {
 } from "./model.js";
 import { personSummary } from "./ledger.js";
 import { personKind } from "./contactKind.js";
-import { contactRoles, contactPresets } from "./contactTypes.js";
+import {
+  contactRoles,
+  contactPresets,
+  contactCanHaveAgreement,
+} from "./contactTypes.js";
 import { effectiveAccounts } from "./effectiveAccounts.js";
 import { reconciledTotals } from "./adjustmentMath.js";
 export { personKind } from "./contactKind.js";
@@ -40,6 +44,12 @@ export function allowedContactActions(person: Person): ContactAction[] {
 }
 export function availablePartyActions(person: Person): ContactAction[] {
   const roles = contactRoles(person);
+  if (
+    person.roles?.length === 0 ||
+    person.roles?.includes("custom") ||
+    person.contactType === "custom"
+  )
+    return [...contactActionChoices];
   return [
     ...new Set<ContactAction>([
       "payment",
@@ -51,9 +61,21 @@ export function availablePartyActions(person: Person): ContactAction[] {
   ];
 }
 export function canCreateContactJob(person: Person): boolean {
-  return !person.archivedAt;
+  return contactCanHaveAgreement(person);
 }
 export function defaultContactAccount(person: Person): Account {
+  if (person.roles !== undefined) {
+    const roles = contactRoles(person);
+    const preset =
+      contactPresets.find(
+        (item) => item.id === person.contactType && roles.includes(item.id),
+      ) ?? contactPresets.find((item) => item.id === roles[0]);
+    return preset?.kind === "shop"
+      ? "materials"
+      : preset?.kind === "worker"
+        ? "labour"
+        : "other";
+  }
   return personKind(person) === "worker"
     ? "labour"
     : personKind(person) === "driver"

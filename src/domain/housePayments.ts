@@ -10,6 +10,10 @@ import {
   type Receipt,
 } from "./model.js";
 import { allocatePayment, partyLedger } from "./partyLedger.js";
+import {
+  contactEntryPolicy,
+  getContactEntryDefaults,
+} from "./contactEntryPolicy.js";
 
 const RequestSchema = z.object({
   personId: z.string().min(1).max(160),
@@ -40,7 +44,8 @@ export type HousePaymentIssue =
   | "choose_scope"
   | "unassigned_cash"
   | "unresolved_balance"
-  | "invalid_allocation";
+  | "invalid_allocation"
+  | "contact_rules";
 export type HouseBillAllocation = {
   billId: string;
   workId: string;
@@ -103,6 +108,8 @@ export function planHousePayment(
     (row) => row.id === request.personId && !row.archivedAt,
   );
   if (!person) issues.push("invalid_person");
+  const policy = person ? contactEntryPolicy(person) : null;
+  if (policy && !policy.payment) issues.push("contact_rules");
   const activeWorks = ledger.works.filter((row) => !row.archivedAt);
   if (request.workId && !activeWorks.some((work) => work.id === request.workId))
     issues.push("invalid_work");
@@ -299,16 +306,28 @@ export function planHousePayment(
       request.workId ??
       contract?.workId ??
       inferred?.workId ??
+      (person
+        ? getContactEntryDefaults(ledger, person).workId || undefined
+        : undefined) ??
       (activeWorks.length === 1 ? activeWorks[0].id : undefined);
     const account =
       request.account ??
       (contract
         ? "labour"
         : (inferred?.account ??
-          (request.intent === "settlement" ? undefined : "other")));
+          (request.intent === "settlement"
+            ? policy?.accounts.length === 1
+              ? policy.accounts[0]
+              : undefined
+            : policy?.defaultAccount)));
     const contractId = request.contractId ?? inferred?.contractId ?? null;
     if (!workId || !account || (contractId && account !== "labour"))
       issues.push("choose_scope");
+    else if (
+      policy &&
+      (!policy.accounts.includes(account) || (contractId && !policy.agreement))
+    )
+      issues.push("contact_rules");
     else
       addAmount(
         groupFor(
@@ -343,6 +362,7 @@ export function planHousePayment(
       payment.works,
     ]),
     payable: summary.payable,
+    policy: person ? { ...policy, workIds: person.workIds } : null,
   });
   return empty;
 }

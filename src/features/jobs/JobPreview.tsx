@@ -113,7 +113,7 @@ export function JobPreview({
   const params = new URLSearchParams();
   if (personId) params.set("person", personId);
   if (workId) params.set("work", workId);
-  const allPath = `/jobs${params.size ? `?${params}` : ""}`;
+  const allPath = `/works${params.size ? `?${params}` : ""}`;
   return (
     <section className="job-preview" aria-label={t("কাজ")}>
       <header className="job-section-heading">

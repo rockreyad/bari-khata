@@ -11,6 +11,10 @@ import {
 import userEvent from "@testing-library/user-event";
 import { EntitySheet } from "./EntitySheet";
 import { LedgerSchema, type Ledger } from "../domain/model";
+import { contactEntryPolicy } from "../domain/contactEntryPolicy";
+import { planHousePayment } from "../domain/housePayments";
+import { QuickDraftSchema } from "../features/entries/quickEntry";
+import { recordHouseCost } from "../features/write/houseCost";
 vi.mock("../context/LanguageProvider", () => ({
   useLanguageContext: () => ({
     formatDigits: String,
@@ -287,7 +291,7 @@ it.each([
       (screen.getByLabelText("কীভাবে যুক্ত") as HTMLSelectElement).value,
     ).toBe(presetId);
     expect(screen.queryByLabelText("কাজের টাকা") !== null).toBe(agreement);
-    await user.click(screen.getByText("পছন্দের বোতাম"));
+    await user.click(screen.getByText("কোন হিসাব রাখবেন"));
     for (const [action, label] of [
       ["payment", "টাকা দিলাম"],
       ["purchase", "মাল কেনা"],
@@ -342,7 +346,7 @@ it("changes available buttons with the selected relationship without treating fr
   );
   await user.type(screen.getByLabelText("নাম"), "নমুনা সম্পর্ক বদল");
   await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "supplier");
-  await user.click(screen.getByText("পছন্দের বোতাম"));
+  await user.click(screen.getByText("কোন হিসাব রাখবেন"));
   const purchase = screen.getByRole("button", {
     name: "মাল কেনা",
   }) as HTMLButtonElement;
@@ -412,8 +416,79 @@ it("keeps an entered agreement open and focused while clearing and replacing its
   await user.type(input, "275");
   expect(input.value).toBe("275");
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    "এই ধরনের নামে",
+  );
+  expect(onSave).not.toHaveBeenCalled();
+  await user.click(screen.getByText("আরও কাজ বা সম্পর্ক"));
+  await user.click(screen.getByRole("checkbox", { name: "মিস্ত্রি / কারিগর" }));
+  expect(input.value).toBe("275");
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
   expect(onSave.mock.calls[0][0].contracts).toEqual([
     expect.objectContaining({ total: 27500, scope: "house" }),
   ]);
+});
+
+it("lets a neutral contact configure purchase and transport while disabling payment, and applies those choices to new commands", async () => {
+  const user = userEvent.setup();
+  const onSave = vi.fn(async (_ledger: Ledger) => {});
+  render(
+    <EntitySheet
+      kind="person"
+      ledger={LedgerSchema.parse({})}
+      onSave={onSave}
+      onClose={vi.fn()}
+      mode="demo"
+    />,
+  );
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
+  await user.type(screen.getByLabelText("নাম"), "নমুনা নিজের মতো নাম");
+  await user.click(screen.getByText("কোন হিসাব রাখবেন"));
+  for (const name of ["টাকা দিলাম", "মাল কেনা", "মাল ফেরত", "আনার খরচ"]) {
+    const button = screen.getByRole("button", { name }) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+  }
+  await user.click(screen.getByRole("button", { name: "টাকা দিলাম" }));
+  await user.click(screen.getByRole("button", { name: "মাল ফেরত" }));
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+  const saved = onSave.mock.calls[0][0];
+  expect(saved.people[0]).toMatchObject({
+    contactType: "custom",
+    quickActions: ["purchase", "transport"],
+  });
+  expect(contactEntryPolicy(saved.people[0])).toMatchObject({
+    purchase: true,
+    payment: false,
+    chargeCostTypes: ["transport"],
+  });
+  const bill = recordHouseCost(
+    saved,
+    QuickDraftSchema.parse({
+      id: "sample-bill",
+      paymentId: "sample-paid",
+      refundId: "sample-refund",
+      date: "2026-11-05",
+      personId: saved.people[0].id,
+      payment: "due",
+      rows: [{ id: "sample-line", label: "নমুনা মাল", amount: "100" }],
+    }),
+    [],
+    "সাধারণ খরচ",
+  );
+  expect(bill.entries[0].account).toBe("materials");
+  expect(
+    planHousePayment(bill, {
+      personId: saved.people[0].id,
+      amount: 1000,
+      intent: "advance",
+    }).issues,
+  ).toContain("contact_rules");
 });

@@ -18,7 +18,11 @@ import {
   PaymentPurposeSchema,
   type Ledger,
 } from "../../domain/model";
-import { canAssignContact } from "../../domain/contacts";
+import {
+  canRecordContactCash,
+  canRecordContactCost,
+  canRecordContactReturn,
+} from "../../domain/contactEntryPolicy";
 import { saveWorkChange } from "../../domain/workActivity";
 import { parseAmount } from "../../domain/ledger";
 
@@ -245,18 +249,42 @@ export function buildQuickEntry(
           : "other"
         : draft.account;
   const person = next.people.find((p) => p.id === personId);
-  if (
-    person &&
-    !canAssignContact(
-      person,
-      account,
-      [labour ? "labour" : draft.costType],
-      isCash,
-    )
-  )
-    throw new Error("person_kind");
   const contractId =
     account === "labour" && draft.contractId ? draft.contractId : null;
+  if (
+    person &&
+    !(isCash
+      ? canRecordContactCash(current, person, {
+          account,
+          contractId,
+          workId: draft.workId || undefined,
+          amount: positiveAmount(draft.amount),
+          context:
+            draft.purpose === "advance" ? draft.advanceContext : "settlement",
+          refund: draft.kind === "refund",
+        })
+      : draft.kind === "return"
+        ? canRecordContactReturn(current, person, {
+            account,
+            contractId,
+            workId: draft.workId || undefined,
+          })
+        : canRecordContactCost(person, {
+            account,
+            contractId,
+            costType: labour
+              ? "labour"
+              : charge
+                ? account === "materials"
+                  ? "material"
+                  : draft.costType === "transport"
+                    ? "transport"
+                    : "other"
+                : draft.costType,
+            reimbursement: draft.payment === "worker",
+          }))
+  )
+    throw new Error("contact_rules");
   if (
     contractId &&
     !next.contracts.some(
@@ -462,7 +490,7 @@ export function buildQuickEntry(
           draft.rows.some((row) => !row.groupId))
           ? "needs_review"
           : "confirmed",
-      reviewReason: !draft.workId ? "কাজের খাতা পরে বেছে নিন।" : "",
+      reviewReason: !draft.workId ? "সেক্টর পরে বেছে নিন।" : "",
       id: draft.id,
       ...(draft.milestoneId ? { milestoneId: draft.milestoneId } : {}),
       kind: draft.kind === "return" ? "expense_credit" : "expense",

@@ -5,10 +5,14 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LedgerSchema } from "../../domain/model";
 import { QuickActionsSheet } from "./QuickActionsSheet";
-const state = vi.hoisted(() => ({ add: vi.fn() }));
+vi.mock("../write/LegacyEntryDrafts", () => ({
+  LegacyEntryDrafts: () => null,
+}));
+const state = vi.hoisted(() => ({ add: vi.fn(), go: vi.fn() }));
 vi.mock("../../app/NotebookProvider", () => ({
   useNotebook: () => ({
     add: state.add,
+    go: state.go,
     entity: vi.fn(),
     close: vi.fn(),
     ledger: LedgerSchema.parse({
@@ -47,11 +51,15 @@ vi.mock("../../components/Sheet", () => ({
 afterEach(() => {
   cleanup();
   state.add.mockClear();
+  state.go.mockClear();
 });
 describe("configured notebook shortcuts", () => {
   it("shows only chosen actions without unrelated counts and sends exact work/cost preset", async () => {
     const user = userEvent.setup();
     render(<QuickActionsSheet />);
+    await user.click(
+      screen.getByText("পছন্দের সেক্টর", { selector: "summary" }),
+    );
     const card = screen.getByText("বালু কেনা").closest("article")!;
     expect(screen.queryByText("লুকানো")).toBeNull();
     expect(screen.queryByText("সাধারণ")).toBeNull();
@@ -78,6 +86,7 @@ describe("configured notebook shortcuts", () => {
 it("opens the labour preset as contextual payment without forcing earned wages or settlement", async () => {
   render(<QuickActionsSheet />);
   const user = userEvent.setup();
+  await user.click(screen.getByText("পছন্দের সেক্টর", { selector: "summary" }));
   const worker = screen.getByText("মিস্ত্রির খাতা").closest("article")!;
   expect(within(worker).getAllByRole("button")).toHaveLength(1);
   expect(
@@ -107,6 +116,7 @@ it("opens the labour preset as contextual payment without forcing earned wages o
 it("preserves material payment and purchase scopes beside a worker shortcut in a mixed notebook", async () => {
   render(<QuickActionsSheet />);
   const user = userEvent.setup();
+  await user.click(screen.getByText("পছন্দের সেক্টর", { selector: "summary" }));
   const card = screen.getByText("দরজার সব কাজ").closest("article")!;
   expect(within(card).getAllByRole("button")).toHaveLength(4);
   await user.click(
@@ -132,4 +142,42 @@ it("preserves material payment and purchase scopes beside a worker shortcut in a
     account: "materials",
     costType: "material",
   });
+});
+
+it("offers the four homeowner tasks in the drawer and preserves the selected payment intent", async () => {
+  const user = userEvent.setup();
+  render(<QuickActionsSheet />);
+  await user.click(screen.getByRole("button", { name: /^মাল কিনেছি/ }));
+  expect(state.add).toHaveBeenLastCalledWith({
+    kind: "expense",
+    costType: "material",
+    account: "materials",
+  });
+  await user.click(screen.getByRole("button", { name: /^কাজের বিল/ }));
+  expect(state.add).toHaveBeenLastCalledWith({
+    kind: "expense",
+    purpose: "charge",
+    costType: "labour",
+    account: "labour",
+  });
+  await user.click(
+    screen.getByRole("button", {
+      name: "টাকা দিলাম যাকে টাকা দিয়েছেন, তার নামে রাখুন",
+    }),
+  );
+  expect(state.add).toHaveBeenLastCalledWith({
+    kind: "payment",
+    purpose: "settle",
+  });
+  await user.click(screen.getByRole("button", { name: /^অগ্রিম বা বাকি/ }));
+  expect(screen.queryByRole("button", { name: /^মাল কিনেছি/ })).toBeNull();
+  await user.click(screen.getByRole("button", { name: /^অগ্রিম দিই/ }));
+  expect(state.add).toHaveBeenLastCalledWith({
+    kind: "payment",
+    purpose: "advance",
+  });
+  await user.click(screen.getByRole("button", { name: /^বাকি দেখি/ }));
+  expect(state.go).toHaveBeenLastCalledWith("/dues");
+  await user.click(screen.getByRole("button", { name: "সব কাজ" }));
+  expect(screen.getByRole("button", { name: /^মাল কিনেছি/ })).toBeDefined();
 });

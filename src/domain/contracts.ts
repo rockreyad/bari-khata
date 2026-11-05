@@ -7,6 +7,7 @@ import {
   type ContractSnapshot,
   type Ledger,
 } from "./model.js";
+import { contactCanHaveAgreement } from "./contactTypes.js";
 
 export function contractAppliesToWork(
   contract: Pick<Contract, "scope" | "workId">,
@@ -49,6 +50,7 @@ export function saveContractChange(
 ): Ledger {
   const next = ContractSchema.parse(input);
   const previous = ledger.contracts.find((contract) => contract.id === next.id);
+  const person = ledger.people.find((row) => row.id === next.personId);
   const before = previous ? ContractSnapshotSchema.parse(previous) : null;
   const after = ContractSnapshotSchema.parse(next);
   if (previous && !contractChanges(before, after).length) return ledger;
@@ -64,6 +66,12 @@ export function saveContractChange(
     throw new Error(
       "এই চুক্তিতে লেনদেন আছে। অন্য নাম বা কাজের জন্য নতুন চুক্তি করুন।",
     );
+  if (
+    (!previous || previous.personId !== next.personId) &&
+    person &&
+    !contactCanHaveAgreement(person)
+  )
+    throw new Error("এই ধরনের নামে নতুন কাজ রাখা যায় না। অন্য নাম বেছে নিন।");
   if (next.basis !== "fixed") {
     const [whole, fraction = ""] = next.quantity.split(".");
     if (!/^\d+(?:\.\d{1,4})?$/.test(next.quantity) || !next.rate)

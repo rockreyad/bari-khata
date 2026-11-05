@@ -26,7 +26,7 @@ afterEach(async () => {
   localStorage.clear();
 });
 
-it("creates and edits one worker in multiple notebooks, retaining draft choices and saved fields through reopening", async () => {
+it("creates and edits one worker in multiple sectors, retaining draft choices and saved fields through reopening", async () => {
   owner = crypto.randomUUID();
   setActiveOwner(owner);
   const repo = getScopedRepository("real");
@@ -74,8 +74,8 @@ it("creates and edits one worker in multiple notebooks, retaining draft choices 
   });
   await user.clear(initialRole);
   await user.type(initialRole, "ইঞ্জিনিয়ার");
-  expect(screen.getByText("খাতায় রাখি").closest("details")!.open).toBe(false);
-  await user.click(screen.getByText("খাতায় রাখি").closest("summary")!);
+  expect(screen.getByText("সেক্টরে রাখি").closest("details")!.open).toBe(false);
+  await user.click(screen.getByText("সেক্টরে রাখি").closest("summary")!);
   await user.click(screen.getByRole("checkbox", { name: "বাথরুম" }));
   await user.click(screen.getByRole("checkbox", { name: "ইলেকট্রিক" }));
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
@@ -88,6 +88,8 @@ it("creates and edits one worker in multiple notebooks, retaining draft choices 
     name: "মোরশেদ",
     kind: "worker",
     role: "ইঞ্জিনিয়ার",
+    contactType: "professional",
+    roles: ["professional"],
     workIds: ["bathroom", "electric"],
   });
   expect(saved.entries).toEqual([]);
@@ -95,7 +97,7 @@ it("creates and edits one worker in multiple notebooks, retaining draft choices 
 
   const editing = mount(saved, saved.people[0].id);
   await ready();
-  await user.click(screen.getByText("খাতায় রাখি").closest("summary")!);
+  await user.click(screen.getByText("সেক্টরে রাখি").closest("summary")!);
   expect(
     (screen.getByRole("checkbox", { name: "ইলেকট্রিক" }) as HTMLInputElement)
       .checked,
@@ -116,7 +118,7 @@ it("creates and edits one worker in multiple notebooks, retaining draft choices 
   });
   const restored = mount(saved, saved.people[0].id);
   await ready();
-  await user.click(screen.getByText("খাতায় রাখি").closest("summary")!);
+  await user.click(screen.getByText("সেক্টরে রাখি").closest("summary")!);
   expect(
     (screen.getByRole("checkbox", { name: "ইলেকট্রিক" }) as HTMLInputElement)
       .checked,
@@ -136,6 +138,8 @@ it("creates and edits one worker in multiple notebooks, retaining draft choices 
   expect((await repo.read())!.ledger.people[0]).toMatchObject({
     kind: "worker",
     role: "ডিলার",
+    contactType: "professional",
+    roles: ["professional"],
     workIds: ["bathroom"],
   });
   expect(

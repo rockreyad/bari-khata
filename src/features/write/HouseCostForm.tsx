@@ -11,6 +11,11 @@ import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { FormError } from "../../components/ui/FormError";
 import { CostTypeSchema, type CostType } from "../../domain/model";
 import { parseAmount } from "../../domain/ledger";
+import {
+  canRecordContactCost,
+  contactEntryPolicy,
+  getContactEntryDefaults,
+} from "../../domain/contactEntryPolicy";
 import { moneyInputValue } from "../../lib/numericFields";
 import { entryContext } from "../entries/entryContext";
 import { QuickSavedDraftSchema, type QuickDraft } from "../entries/quickEntry";
@@ -41,12 +46,20 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
   const [params] = useSearchParams();
   const initial = useMemo(() => {
     const requested = CostTypeSchema.safeParse(params.get("type")).data;
+    const person = ledger.people.find((row) => row.id === params.get("person"));
+    const policy = person ? contactEntryPolicy(person) : null;
     const costType =
       action === "purchase"
         ? "material"
         : requested && requested !== "material"
           ? requested
-          : "labour";
+          : (policy?.chargeCostTypes[0] ?? "labour");
+    const defaults = person
+      ? getContactEntryDefaults(ledger, person, {
+          workId: params.get("work") ?? undefined,
+          contractId: params.get("contract") ?? undefined,
+        })
+      : null;
     const draft = entryContext(ledger, {
       kind: "expense",
       costType,
@@ -57,7 +70,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
             ? "labour"
             : "other",
       personId: params.get("person") ?? undefined,
-      workId: params.get("work") ?? undefined,
+      workId: params.get("work") ?? defaults?.workId ?? undefined,
       contractId: params.get("contract") ?? undefined,
       milestoneId: params.get("milestone") ?? undefined,
     });
@@ -78,6 +91,23 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
     initial,
   );
   const { draft, files } = value;
+  const person = ledger.people.find((row) => row.id === draft.personId);
+  const policy = person ? contactEntryPolicy(person) : null;
+  const compatible =
+    !person ||
+    canRecordContactCost(person, {
+      costType: draft.costType,
+      account: draft.account,
+      reimbursement: draft.payment === "worker",
+      contractId: draft.contractId,
+    });
+  const costTypes: CostType[] = policy?.chargeCostTypes ?? [
+    "labour",
+    "transport",
+    "unload",
+    "rental",
+    "other",
+  ];
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const lock = useRef(false);
@@ -128,6 +158,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
   const due = total - paid - advanceAmount;
   const contracts = ledger.contracts.filter(
     (row) =>
+      (policy?.agreement ?? true) &&
       !row.archivedAt &&
       row.personId === draft.personId &&
       (row.scope === "house" || !draft.workId || row.workId === draft.workId),
@@ -143,6 +174,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
     setError("");
     try {
       if (staleAdvance) throw new Error("house_advance_changed");
+      if (!compatible) throw new Error("contact_rules");
       if (
         !Number.isSafeInteger(total) ||
         total <= 0 ||
@@ -156,11 +188,13 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
           ...draft,
           kind: "expense" as const,
           payment:
-            paid === 0
-              ? ("due" as const)
-              : paid === total
-                ? ("full" as const)
-                : ("partial" as const),
+            draft.payment === "worker"
+              ? ("worker" as const)
+              : paid === 0
+                ? ("due" as const)
+                : paid === total
+                  ? ("full" as const)
+                  : ("partial" as const),
           paid: moneyInputValue(paid),
         };
         let next = recordHouseCost(
@@ -189,17 +223,19 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
       const code = cause instanceof Error ? cause.message : "";
       setError(
         t(
-          code === "house_advance_changed"
-            ? "আগের অগ্রিম বদলেছে। নতুন প্রস্তাব দেখে আবার বেছে নিন।"
-            : code === "duplicate"
-              ? "এই হিসাব আগেই রাখা হয়েছে। আগের হিসাব খুলে দেখুন।"
-              : code === "person"
-                ? "বাকি কার কাছে থাকবে, তাঁর নাম দিন।"
-                : code === "label"
-                  ? "কী মাল বা কাজের বিল, লিখুন।"
-                  : code === "amount"
-                    ? "সঠিক টাকার অঙ্ক দিন। দেওয়া টাকা ও অগ্রিম যেন বিলের বেশি না হয়।"
-                    : "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
+          code === "contact_rules"
+            ? "এই নামের নিয়মে এই হিসাব রাখা যাবে না। ধরন বা নাম বদলান।"
+            : code === "house_advance_changed"
+              ? "আগের অগ্রিম বদলেছে। নতুন প্রস্তাব দেখে আবার বেছে নিন।"
+              : code === "duplicate"
+                ? "এই হিসাব আগেই রাখা হয়েছে। আগের হিসাব খুলে দেখুন।"
+                : code === "person"
+                  ? "বাকি কার কাছে থাকবে, তাঁর নাম দিন।"
+                  : code === "label"
+                    ? "কী মাল বা কাজের বিল, লিখুন।"
+                    : code === "amount"
+                      ? "সঠিক টাকার অঙ্ক দিন। দেওয়া টাকা ও অগ্রিম যেন বিলের বেশি না হয়।"
+                      : "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
         ),
       );
     } finally {
@@ -259,9 +295,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
     <EntryFrame
       title={t(action === "purchase" ? "মাল কিনেছি" : "কাজের বিল")}
       subtitle={t(
-        action === "purchase"
-          ? "মালের দাম একবারই খরচে যোগ হবে।"
-          : "যতটুকু কাজের পাওনা হয়েছে, শুধু সেই বিল লিখুন।",
+        action === "purchase" ? "কী কিনেছেন, কত দাম" : "কার কাজ, কত বিল",
       )}
       onClose={() => void closeSafely()}
       busy={saving}
@@ -307,11 +341,13 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                   ["unload", "মাল নামানো"],
                   ["rental", "ভাড়া"],
                   ["other", "অন্য কাজ"],
-                ].map(([id, name]) => (
-                  <option key={id} value={id}>
-                    {t(name)}
-                  </option>
-                ))}
+                ]
+                  .filter(([id]) => costTypes.includes(id as CostType))
+                  .map(([id, name]) => (
+                    <option key={id} value={id}>
+                      {t(name)}
+                    </option>
+                  ))}
               </AppSelect>
             </label>
           )}
@@ -408,22 +444,59 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               <AppSelect
                 aria-label={t("কার সঙ্গে হিসাব")}
                 value={draft.personId}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const selected = ledger.people.find(
+                    (row) => row.id === event.target.value,
+                  );
+                  const selectedPolicy = selected
+                    ? contactEntryPolicy(selected)
+                    : null;
+                  const defaults = selected
+                    ? getContactEntryDefaults(ledger, selected, {
+                        workId: draft.workId || undefined,
+                      })
+                    : null;
+                  const costType =
+                    action === "charge" &&
+                    selectedPolicy &&
+                    !selectedPolicy.chargeCostTypes.includes(draft.costType)
+                      ? (selectedPolicy.chargeCostTypes[0] ?? draft.costType)
+                      : draft.costType;
                   update((current) => ({
                     ...current,
                     useAdvance: false,
                     draft: {
                       ...current.draft,
                       personId: event.target.value,
+                      workId: defaults?.workId ?? current.draft.workId,
+                      costType,
+                      account:
+                        costType === "material"
+                          ? "materials"
+                          : costType === "labour"
+                            ? "labour"
+                            : "other",
                       contractId: "",
                       milestoneId: "",
                     },
-                  }))
-                }
+                  }));
+                }}
               >
                 <option value="">{t("নাম না দিলেও হবে")}</option>
                 {ledger.people
-                  .filter((person) => !person.archivedAt)
+                  .filter(
+                    (person) =>
+                      person.id === draft.personId ||
+                      (!person.archivedAt &&
+                        (action === "purchase"
+                          ? canRecordContactCost(person, {
+                              costType: "material",
+                              account: "materials",
+                              reimbursement: draft.payment === "worker",
+                            })
+                          : contactEntryPolicy(person).chargeCostTypes.length >
+                            0)),
+                  )
                   .map((person) => (
                     <option value={person.id} key={person.id}>
                       {formatDigits(person.name)}
@@ -433,9 +506,9 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               </AppSelect>
             </label>
             <label>
-              {t("কোন কাজে")}
+              {t("কোন সেক্টরে")}
               <AppSelect
-                aria-label={t("কোন কাজে")}
+                aria-label={t("কোন সেক্টরে")}
                 value={draft.workId}
                 onChange={(event) =>
                   update((current) => ({
@@ -475,9 +548,9 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
           )}
           {draft.account === "labour" && contracts.length > 0 && (
             <label>
-              {t("কোন চুক্তির কাজ")}
+              {t("কোন কাজের জন্য")}
               <AppSelect
-                aria-label={t("কোন চুক্তির কাজ")}
+                aria-label={t("কোন কাজের জন্য")}
                 value={draft.contractId}
                 onChange={(event) => {
                   const contract = contracts.find(
@@ -574,7 +647,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               <option value="full">{t("পুরোটা দিয়েছি")}</option>
               <option value="partial">{t("কিছু দিয়েছি")}</option>
               <option value="due">{t("পরে দেব")}</option>
-              {action === "purchase" && (
+              {action === "purchase" && (policy?.reimbursement ?? true) && (
                 <option value="worker">
                   {t("অন্য কেউ নিজের টাকায় কিনেছেন")}
                 </option>
@@ -583,9 +656,12 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
           </label>
           {draft.payment === "worker" && (
             <p className="field-hint">
-              {t(
-                "যিনি নিজের টাকা খরচ করেছেন, তাঁর নাম দিন। তাঁকে ফেরত দেওয়ার বাকি থাকবে; এটি মজুরি হবে না।",
-              )}
+              {t("যিনি নিজের টাকায় কিনেছেন, তাঁর নাম দিন।")}
+            </p>
+          )}
+          {!compatible && (
+            <p className="field-hint" role="status">
+              {t("এই নামের নিয়মে এই হিসাব রাখা যাবে না। ধরন বা নাম বদলান।")}
             </p>
           )}
           {draft.payment === "partial" && (

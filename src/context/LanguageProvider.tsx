@@ -52,6 +52,7 @@ import { analyticsEnglish } from "../features/analytics/analyticsEnglish";
 import { formEnglish } from "./formEnglish";
 import { architectureEnglish } from "./architectureEnglish";
 import { houseWriteEnglish } from "../features/write/houseWriteEnglish";
+import { entityNavigationEnglish } from "./entityNavigationEnglish";
 import { appEnglish } from "./appEnglish";
 import {
   applyTheme,
@@ -61,6 +62,7 @@ import {
 } from "../lib/preferences";
 
 const english: Record<string, string> = {
+  ...entityNavigationEnglish,
   ...houseWriteEnglish,
   ...architectureEnglish,
   ...entryFlowEnglish,

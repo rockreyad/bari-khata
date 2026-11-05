@@ -24,24 +24,24 @@ describe("notebook navigation", () => {
     ["/sample/dues/", "/sample", "/", true],
     ["/dues/nonsense", "", "/", false],
     ["/dues-other", "", "/", false],
-    ["/sample/works/door", "/sample", "/works", true],
-    ["/works/door", "", "/works", true],
-    ["/people/shah-alam", "", "/people", true],
-    ["/jobs", "", "/works", true],
-    ["/sample/jobs/job-one", "/sample", "/works", true],
-    ["/jobs-other", "", "/people", false],
+    ["/sample/sectors/door", "/sample", "/sectors", true],
+    ["/sectors/door", "", "/sectors", true],
+    ["/parties/shah-alam", "", "/parties", true],
+    ["/works", "", "/works", true],
+    ["/sample/works/job-one", "/sample", "/works", true],
+    ["/jobs-other", "", "/parties", false],
     ["/materials/cement", "", "/reports", true],
     ["/sample/review", "/sample", "/ledger", true],
     ["/settings/appearance", "", "/settings", true],
     ["/sample/settings/appearance", "/sample", "/settings", true],
     ["/sample/settings/appearance", "/sample", "/", false],
     ["/settings-appearance", "", "/settings", false],
-    ["/people-other", "", "/people", false],
-    ["/works", "", "/", false],
+    ["/people-other", "", "/parties", false],
+    ["/sectors", "", "/", false],
     ["/write/payment", "", "/write", true],
-    ["/sample/history", "/sample", "/more", true],
-    ["/settings/appearance", "", "/more", true],
-    ["/reports", "", "/more", true],
+    ["/sample/history", "/sample", "/ledger", true],
+    ["/settings/appearance", "", "/settings", true],
+    ["/reports", "", "/reports", true],
   ])("matches %s under %s to %s", (path, base, section, expected) => {
     expect(notebookSectionActive(path, base, section)).toBe(expected);
   });
@@ -57,13 +57,13 @@ describe("notebook navigation", () => {
             icon={HouseLineIcon}
           />
           <NotebookNavLink
-            to="/works"
+            to="/sectors"
             base="/sample"
             label="কাজের খাতা"
             icon={NotebookIcon}
           />
           <NotebookNavLink
-            to="/people"
+            to="/parties"
             base="/sample"
             label="ব্যক্তি ও দোকান"
             icon={UsersThreeIcon}

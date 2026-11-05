@@ -44,6 +44,11 @@ import {
 import { preservesBalanceAdjustments } from "../domain/adjustmentHistory.js";
 import { canAssignContact } from "../domain/contacts.js";
 import {
+  canRecordContactCash,
+  canRecordContactCost,
+  canRecordContactReturn,
+} from "../domain/contactEntryPolicy.js";
+import {
   allocatePayment,
   cancelPaymentAllocation,
 } from "../domain/partyLedger.js";
@@ -990,6 +995,29 @@ export function applyMcpCommand(
         fail("validation_error", "wage_total_mismatch");
     }
     const returning = command.type === "record_material_return";
+    if (person) {
+      const party = active(ledger.people, person, "person");
+      const allowed = returning
+        ? canRecordContactReturn(ledger, party, {
+            account,
+            contractId: contract,
+            sourceEntryId: command.related_entry_id,
+            workId: command.work_id,
+          })
+        : lines.every((line) =>
+            canRecordContactCost(party, {
+              account,
+              costType: line.costType,
+              contractId: contract,
+              reimbursement: command.type === "record_procurement",
+            }),
+          );
+      if (!allowed)
+        fail("validation_error", "contact_rules", {
+          person_id: person,
+          account,
+        });
+    }
     if (!returning) checkPayment(command.payment_state, command.payment, total);
     if (
       !person &&
@@ -1112,7 +1140,6 @@ export function applyMcpCommand(
     })) ?? [{ workId: work, amount: command.amount_paisa }];
     if (sum(allocations.map((part) => part.amount)) !== command.amount_paisa)
       fail("validation_error", "allocation_mismatch");
-    checkParty(ledger, command.person_id, command.account, [], true);
     checkContract(
       ledger,
       command.contract_id ?? null,
@@ -1120,6 +1147,29 @@ export function applyMcpCommand(
       command.account,
       allocations.map((part) => part.workId),
     );
+    if (
+      !canRecordContactCash(
+        ledger,
+        active(ledger.people, command.person_id, "person"),
+        {
+          account: command.account,
+          contractId: command.contract_id,
+          amount: command.amount_paisa,
+          context:
+            command.type === "record_advance"
+              ? "advance"
+              : (command.payment_context ?? "settlement"),
+          refund: command.type === "record_cash_refund",
+          reimbursement: command.type === "record_reimbursement",
+          workId: allocations.length === 1 ? allocations[0].workId : undefined,
+        },
+      )
+    )
+      fail("validation_error", "contact_rules", {
+        person_id: command.person_id,
+        account: command.account,
+      });
+    checkParty(ledger, command.person_id, command.account, [], true);
     if (command.payment_purpose_id) {
       const purpose = active(
         ledger.paymentPurposes,

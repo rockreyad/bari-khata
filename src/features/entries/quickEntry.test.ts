@@ -482,8 +482,13 @@ describe("quick homeowner entries", () => {
 });
 
 describe("explicit financial events independent of contact identity", () => {
-  it("keeps a worker's material purchase, transport and returns in the explicitly selected financial category", () => {
+  it("keeps a party's configured material, transport and worker roles in their selected financial category", () => {
     const initial = fixture();
+    initial.people.find((person) => person.id === "worker")!.roles = [
+      "supplier",
+      "craftsperson",
+      "transport",
+    ];
     const before = JSON.stringify(initial);
     for (const change of [
       { kind: "expense", personId: "worker", costType: "material" },
@@ -521,8 +526,12 @@ describe("explicit financial events independent of contact identity", () => {
     expect(personSummary(next, "worker").payable).toBe(150000);
   });
 
-  it("records a labour bill only when explicitly requested for a shop identity", () => {
+  it("records a labour bill for a shop identity with a deliberately configured worker role", () => {
     const initial = fixture();
+    initial.people.find((person) => person.id === "shop")!.roles = [
+      "supplier",
+      "craftsperson",
+    ];
     for (const change of [
       { kind: "expense", personId: "shop", costType: "labour" },
       { kind: "wage", personId: "shop", amount: "500" },
@@ -583,7 +592,15 @@ describe("explicit financial events independent of contact identity", () => {
       { kind: "expense", personId: "driver", costType: "rental" },
       { kind: "return", personId: "driver", costType: "transport" },
     ]) {
-      const explicit = buildQuickEntry(next, draft(change));
+      const configured = LedgerSchema.parse({
+        ...next,
+        people: next.people.map((person) =>
+          person.id === "driver"
+            ? { ...person, roles: ["supplier", "craftsperson", "transport"] }
+            : person,
+        ),
+      });
+      const explicit = buildQuickEntry(configured, draft(change));
       expect(explicit.entries.slice(0, next.entries.length)).toEqual(
         next.entries,
       );
@@ -598,7 +615,7 @@ describe("explicit financial events independent of contact identity", () => {
         personId: "driver",
         lines: [{ amount: 150000, costType: change.costType }],
       });
-      expect(explicit.people).toEqual(next.people);
+      expect(explicit.people).toEqual(configured.people);
     }
   });
 
@@ -1045,8 +1062,32 @@ it.each(["worker", "shop", "driver"] as const)(
     const original = fixture();
     original.people[0].kind = kind;
     for (const account of ["materials", "labour", "other"] as const) {
+      const historical = LedgerSchema.parse({
+        ...original,
+        entries: [
+          {
+            id: `old-${account}`,
+            personId: original.people[0].id,
+            kind: "expense",
+            account,
+            lines: [
+              {
+                id: `line-${account}`,
+                workId: "tiles",
+                amount: 10000,
+                costType:
+                  account === "materials"
+                    ? "material"
+                    : account === "labour"
+                      ? "labour"
+                      : "other",
+              },
+            ],
+          },
+        ],
+      });
       const next = buildQuickEntry(
-        original,
+        historical,
         draft({
           kind: "payment",
           personId: original.people[0].id,
@@ -1054,13 +1095,14 @@ it.each(["worker", "shop", "driver"] as const)(
           amount: "100",
         }),
       );
-      expect(next.entries).toHaveLength(1);
-      expect(next.entries[0]).toMatchObject({
+      expect(next.entries).toHaveLength(2);
+      expect(next.entries[0]).toEqual(historical.entries[0]);
+      expect(next.entries[1]).toMatchObject({
         kind: "payment",
         account,
         personId: original.people[0].id,
       });
-      expect(next.entries[0].lines).toEqual([]);
+      expect(next.entries[1].lines).toEqual([]);
       expect(next.people).toEqual(original.people);
     }
   },
@@ -1070,6 +1112,10 @@ it.each(["existing", "new"] as const)(
   "keeps a %s custom reason on a daily labour bill and its separate partial payment",
   (selection) => {
     const original = fixture();
+    original.people.find((person) => person.id === "shop")!.roles = [
+      "supplier",
+      "craftsperson",
+    ];
     const purposeId = "sample-supervision";
     if (selection === "existing")
       original.paymentPurposes.push({

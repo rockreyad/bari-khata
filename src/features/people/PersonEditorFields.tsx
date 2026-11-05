@@ -44,6 +44,7 @@ export function PersonEditorFields({
   value,
   ledger,
   editing,
+  agreementAllowed,
   allowedActions,
   selectedActions,
   notebookValue,
@@ -56,6 +57,7 @@ export function PersonEditorFields({
   value: PersonEditorValue;
   ledger: Ledger;
   editing: boolean;
+  agreementAllowed: boolean;
   allowedActions: ContactAction[];
   selectedActions: string[];
   notebookValue: string;
@@ -240,13 +242,13 @@ export function PersonEditorFields({
         <summary>
           <BookOpenIcon size={21} aria-hidden="true" />
           <span>
-            {t("খাতায় রাখি")}
+            {t("সেক্টরে রাখি")}
             <small>
               {value.personWorkIds.length
-                ? t("{{count}}টি খাতা বেছে রাখা আছে", {
+                ? t("{{count}}টি সেক্টর বেছে রাখা আছে", {
                     count: number(value.personWorkIds.length),
                   })
-                : t("প্রয়োজন হলে খাতা বেছে নিন")}
+                : t("প্রয়োজন হলে সেক্টর বেছে নিন")}
             </small>
           </span>
           <CaretDownIcon
@@ -257,16 +259,16 @@ export function PersonEditorFields({
         </summary>
         <div className="person-editor-disclosure-body">
           <fieldset className="person-editor-work-picker">
-            <legend className="visually-hidden">{t("কোন কোন খাতায়")}</legend>
+            <legend className="visually-hidden">{t("কোন কোন সেক্টরে")}</legend>
             {works.length > 5 ? (
               <div className="person-editor-search">
                 <MagnifyingGlassIcon size={18} aria-hidden="true" />
                 <input
-                  aria-label={t("খাতা খুঁজুন")}
+                  aria-label={t("সেক্টর খুঁজুন")}
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder={t("খাতা খুঁজুন")}
+                  placeholder={t("সেক্টর খুঁজুন")}
                 />
               </div>
             ) : null}
@@ -301,8 +303,8 @@ export function PersonEditorFields({
               <p className="person-editor-empty">
                 {t(
                   works.length
-                    ? "এই নামে কোনো খাতা নেই।"
-                    : "খাতা যোগ করলে এখানে বেছে নিতে পারবেন।",
+                    ? "এই নামে কোনো সেক্টর নেই।"
+                    : "সেক্টর যোগ করলে এখানে বেছে নিতে পারবেন।",
                 )}
               </p>
             ) : null}
@@ -310,7 +312,7 @@ export function PersonEditorFields({
         </div>
       </details>
 
-      {!editing && (preset.agreement || hasAgreementAmount || agreementOpen) ? (
+      {!editing && (agreementAllowed || hasAgreementAmount || agreementOpen) ? (
         <details
           className="person-editor-disclosure"
           open={agreementOpen}
@@ -330,7 +332,7 @@ export function PersonEditorFields({
           </summary>
           <div className="person-editor-disclosure-body">
             <label>
-              {t("কাজের খাতা")}
+              {t("সেক্টর")}
               <AppSelect
                 value={notebookValue}
                 onChange={(event) => onNotebook(event.target.value)}
@@ -365,8 +367,8 @@ export function PersonEditorFields({
         <summary>
           <SlidersHorizontalIcon size={21} aria-hidden="true" />
           <span>
-            {t("পছন্দের বোতাম")}
-            <small>{t("যে কাজগুলো সামনে রাখতে চান")}</small>
+            {t("কোন হিসাব রাখবেন")}
+            <small>{t("এই পক্ষের জন্য চালু রাখুন")}</small>
           </span>
           <CaretDownIcon
             size={17}
@@ -378,7 +380,7 @@ export function PersonEditorFields({
           <div
             className="person-editor-action-options"
             role="group"
-            aria-label={t("এই নামে কোন বোতাম রাখবেন?")}
+            aria-label={t("কোন হিসাব রাখবেন")}
             aria-describedby={actionRuleId}
           >
             {contactActionChoices.map((action) => (
@@ -403,7 +405,7 @@ export function PersonEditorFields({
             ))}
           </div>
           <p id={actionRuleId}>
-            {t("সম্পর্কের সঙ্গে মেলে এমন বোতামই রাখা যাবে।")}
+            {t("বেছে রাখা কাজগুলোই এই পক্ষের হিসাবে পাওয়া যাবে।")}
           </p>
         </div>
       </details>

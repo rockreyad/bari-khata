@@ -12,6 +12,10 @@ import { AccountSchema, PersonSchema } from "../../domain/model";
 import { parseAmount } from "../../domain/ledger";
 import { partyLedger } from "../../domain/partyLedger";
 import {
+  contactEntryPolicy,
+  getContactEntryDefaults,
+} from "../../domain/contactEntryPolicy";
+import {
   planHousePayment,
   recordHousePayment,
   type HousePaymentRequest,
@@ -57,6 +61,8 @@ const issueText: Record<HousePaymentIssue, string> = {
   invalid_allocation: "বিলের বাকি ও মোট দেওয়া টাকার মধ্যে অঙ্ক লিখুন।",
   unresolved_balance:
     "পুরোনো চুক্তির হিসাব আগে যাচাই করতে হবে। এখন কত পাওনা, তা নিশ্চিত নয়।",
+  contact_rules:
+    "এই নামের নিয়মে এই টাকা দেওয়া রাখা যাবে না। নামের নিয়ম দেখে নিন।",
 };
 function amount(value: string) {
   try {
@@ -70,17 +76,30 @@ export function HousePaymentForm() {
   const { ledger, save, close, entity, notify } = useNotebook();
   const { t, money, formatDigits, date } = useLanguageContext();
   const [params] = useSearchParams();
-  const initial = useMemo<Draft>(
-    () => ({
+  const initial = useMemo<Draft>(() => {
+    const person = ledger.people.find((row) => row.id === params.get("person"));
+    const defaults = person
+      ? getContactEntryDefaults(ledger, person, {
+          workId: params.get("work") ?? undefined,
+        })
+      : null;
+    const requestedIntent = params.get("intent") ?? params.get("purpose");
+    const intent =
+      requestedIntent === "advance" || requestedIntent === "receivable"
+        ? requestedIntent
+        : "settlement";
+    return {
       id: crypto.randomUUID(),
       personId: params.get("person") ?? "",
       personName: "",
       newPersonId: crypto.randomUUID(),
       amount: "",
-      workId: params.get("work") ?? "",
-      account: AccountSchema.safeParse(params.get("account")).data ?? "",
+      workId: params.get("work") ?? defaults?.workId ?? "",
+      account:
+        AccountSchema.safeParse(params.get("account")).data ??
+        (intent !== "settlement" ? (defaults?.account ?? "") : ""),
       contractId: params.get("contract") ?? "",
-      intent: params.get("purpose") === "advance" ? "advance" : "settlement",
+      intent,
       date: todayDhaka(),
       method: "cash",
       note: "",
@@ -90,10 +109,9 @@ export function HousePaymentForm() {
       confirmRemainderSignature: "",
       confirmCashSignature: "",
       files: [],
-    }),
-    [],
-  );
-  const key = `house-payment:${params.get("person") ?? "all"}:${params.get("work") ?? "all"}:${params.get("contract") ?? "all"}`;
+    };
+  }, []);
+  const key = `house-payment:${params.get("person") ?? "all"}:${params.get("work") ?? "all"}:${params.get("contract") ?? "all"}${initial.intent !== "settlement" ? `:${initial.intent}` : ""}`;
   const {
     value: draft,
     update,
@@ -188,6 +206,19 @@ export function HousePaymentForm() {
   const person = planningLedger.people.find(
     (row) => row.id === resolvedPersonId,
   );
+  const policy = person ? contactEntryPolicy(person) : null;
+  const allowedAccounts = (["materials", "labour", "other"] as const).filter(
+    (account) =>
+      !policy ||
+      policy.accounts.includes(account) ||
+      (draft.intent === "settlement" &&
+        summary.bills.some(
+          (bill) => bill.outstanding > 0 && bill.entry.account === account,
+        )),
+  );
+  const showAccount =
+    allowedAccounts.length > 1 ||
+    (draft.account && !allowedAccounts.includes(draft.account));
   const invalidAllocations = Object.values(draft.allocations ?? {}).some(
     (value) => {
       if (!value.trim()) return false;
@@ -199,6 +230,15 @@ export function HousePaymentForm() {
     },
   );
   const change = <K extends keyof Draft>(key: K, value: Draft[K]) => {
+    const selected =
+      key === "personId"
+        ? ledger.people.find((row) => row.id === value)
+        : person;
+    const defaults = selected
+      ? getContactEntryDefaults(ledger, selected, {
+          workId: draft.workId || undefined,
+        })
+      : null;
     setError("");
     update((current) => ({
       ...current,
@@ -223,8 +263,16 @@ export function HousePaymentForm() {
       ...(key === "personId"
         ? {
             contractId: "",
-            account: "",
+            workId: defaults?.workId ?? current.workId,
+            account:
+              current.intent === "settlement" ? "" : (defaults?.account ?? ""),
             newPersonId: current.newPersonId || crypto.randomUUID(),
+          }
+        : {}),
+      ...(key === "intent"
+        ? {
+            contractId: "",
+            account: value === "settlement" ? "" : (defaults?.account ?? ""),
           }
         : {}),
     }));
@@ -239,6 +287,7 @@ export function HousePaymentForm() {
     Boolean(draft.workId || draft.account || draft.contractId);
   const contracts = ledger.contracts.filter(
     (row) =>
+      (draft.intent === "settlement" || (policy?.agreement ?? true)) &&
       !row.archivedAt &&
       row.personId === draft.personId &&
       (!draft.workId || row.scope === "house" || row.workId === draft.workId),
@@ -298,10 +347,11 @@ export function HousePaymentForm() {
       close();
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : "";
+      const issue = code.replace(/^house_payment_/, "");
       setError(
         t(
-          code in issueText
-            ? issueText[code as HousePaymentIssue]
+          issue in issueText
+            ? issueText[issue as HousePaymentIssue]
             : code === "house_payment_confirm_advance"
               ? "বাড়তি টাকা অগ্রিম থাকবে কি না, নিশ্চিত করুন।"
               : "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
@@ -336,7 +386,7 @@ export function HousePaymentForm() {
   return (
     <EntryFrame
       title={t("টাকা দিয়েছি")}
-      subtitle={t("কাকে কত দিলেন লিখুন। কোন বাকি মিটবে, রাখার আগে দেখুন।")}
+      subtitle={t("কাকে কত দিয়েছেন")}
       className="house-write-page"
       busy={saving}
       onClose={() =>
@@ -384,7 +434,11 @@ export function HousePaymentForm() {
             >
               <option value="">{t("নাম বেছে নিন")}</option>
               {ledger.people
-                .filter((person) => !person.archivedAt)
+                .filter(
+                  (person) =>
+                    person.id === draft.personId ||
+                    contactEntryPolicy(person).payment,
+                )
                 .map((person) => (
                   <option key={person.id} value={person.id}>
                     {formatDigits(person.name)}
@@ -564,7 +618,6 @@ export function HousePaymentForm() {
                   </div>
                 )}
               </dl>
-              <p className="field-hint">{t("এতে নতুন খরচ যোগ হবে না।")}</p>
               {plan.requiresCashReview && (
                 <div className="house-legacy-notice">
                   <p>
@@ -620,16 +673,21 @@ export function HousePaymentForm() {
           )}
           {showScope && (
             <div className="house-payment-scope">
-              <p className="field-hint">{t("এই টাকা কোন কাজে লাগবে")}</p>
               <div className="house-field-pair">
                 <label>
-                  {t("কোন কাজে")}
+                  {t("কোন সেক্টরে")}
                   <AppSelect
-                    aria-label={t("কোন কাজে")}
+                    aria-label={t("কোন সেক্টরে")}
                     value={draft.workId}
                     onChange={(event) => change("workId", event.target.value)}
                   >
-                    <option value="">{t("বিল অনুযায়ী")}</option>
+                    <option value="">
+                      {t(
+                        draft.intent === "settlement"
+                          ? "বিল অনুযায়ী"
+                          : "বেছে নিন",
+                      )}
+                    </option>
                     {ledger.works
                       .filter((work) => !work.archivedAt)
                       .map((work) => (
@@ -639,33 +697,56 @@ export function HousePaymentForm() {
                       ))}
                   </AppSelect>
                 </label>
-                <label>
-                  {t("কী বাবদ")}
-                  <AppSelect
-                    aria-label={t("কী বাবদ")}
-                    value={draft.account}
-                    onChange={(event) =>
-                      change("account", event.target.value as Draft["account"])
-                    }
-                  >
-                    <option value="">{t("বিল অনুযায়ী")}</option>
-                    <option value="materials">{t("মালের টাকা")}</option>
-                    <option value="labour">{t("মজুরি")}</option>
-                    <option value="other">{t("অন্য খরচ")}</option>
-                  </AppSelect>
-                </label>
+                {showAccount && (
+                  <label>
+                    {t("কী বাবদ")}
+                    <AppSelect
+                      aria-label={t("কী বাবদ")}
+                      value={draft.account}
+                      onChange={(event) =>
+                        change(
+                          "account",
+                          event.target.value as Draft["account"],
+                        )
+                      }
+                    >
+                      <option value="">
+                        {t(
+                          draft.intent === "settlement"
+                            ? "বিল অনুযায়ী"
+                            : "বেছে নিন",
+                        )}
+                      </option>
+                      {allowedAccounts.includes("materials") && (
+                        <option value="materials">{t("মালের টাকা")}</option>
+                      )}
+                      {allowedAccounts.includes("labour") && (
+                        <option value="labour">{t("মজুরি")}</option>
+                      )}
+                      {allowedAccounts.includes("other") && (
+                        <option value="other">{t("অন্য খরচ")}</option>
+                      )}
+                    </AppSelect>
+                  </label>
+                )}
               </div>
               {contracts.length > 0 && (
                 <label>
-                  {t("কোন চুক্তির কাজ")}
+                  {t("কোন কাজের জন্য")}
                   <AppSelect
-                    aria-label={t("কোন চুক্তির কাজ")}
+                    aria-label={t("কোন কাজের জন্য")}
                     value={draft.contractId}
                     onChange={(event) =>
                       change("contractId", event.target.value)
                     }
                   >
-                    <option value="">{t("বিল অনুযায়ী")}</option>
+                    <option value="">
+                      {t(
+                        draft.intent === "settlement"
+                          ? "বিল অনুযায়ী"
+                          : "বেছে নিন",
+                      )}
+                    </option>
                     {contracts.map((contract) => (
                       <option key={contract.id} value={contract.id}>
                         {formatDigits(contract.title || t("কাজ"))}

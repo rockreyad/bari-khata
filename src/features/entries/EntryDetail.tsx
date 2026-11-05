@@ -54,7 +54,7 @@ const auditLabels: Partial<Record<EntryChangeField, string>> = {
   paymentPurposeId: "কিসের টাকা",
   provenance: "যে সহকারী লিখেছে",
   amount: "টাকার পরিমাণ",
-  workId: "কাজের খাতা",
+  workId: "সেক্টর",
   label: "মালের নাম",
   itemId: "মালের নাম",
   materialGroupId: "মালের ধরন",
@@ -433,7 +433,7 @@ export function EntryDetail({ id }: { id: string }) {
                       label: t("ব্যক্তি বা দোকানের পাতা"),
                       onSelect: () =>
                         go(
-                          `/people/${encodeURIComponent(person.id)}?account=${entry.account}`,
+                          `/parties/${encodeURIComponent(person.id)}?account=${entry.account}`,
                         ),
                     },
                     {
@@ -525,7 +525,7 @@ export function EntryDetail({ id }: { id: string }) {
                 </strong>
               </div>
               <div>
-                <span>{t("কাজের খাতা")}</span>
+                <span>{t("সেক্টর")}</span>
                 <strong>
                   {adjustment.workId
                     ? fieldText("workId", adjustment.workId)
@@ -544,7 +544,7 @@ export function EntryDetail({ id }: { id: string }) {
             aria-label={formatDigits(person.name)}
             onClick={() =>
               go(
-                `/people/${encodeURIComponent(person.id)}?account=${entry.account}`,
+                `/parties/${encodeURIComponent(person.id)}?account=${entry.account}`,
               )
             }
           >
@@ -587,7 +587,7 @@ export function EntryDetail({ id }: { id: string }) {
                       <button
                         className="detail-entity-link-v4"
                         onClick={() =>
-                          go(`/works/${encodeURIComponent(line.workId)}`)
+                          go(`/sectors/${encodeURIComponent(line.workId)}`)
                         }
                       >
                         {formatDigits(
@@ -632,7 +632,7 @@ export function EntryDetail({ id }: { id: string }) {
                 <button
                   className="detail-entity-link-v4"
                   onClick={() =>
-                    go(`/works/${encodeURIComponent(part.workId)}`)
+                    go(`/sectors/${encodeURIComponent(part.workId)}`)
                   }
                 >
                   {formatDigits(

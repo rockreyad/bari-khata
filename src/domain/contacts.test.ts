@@ -15,8 +15,8 @@ import {
 
 describe("contact identities and financial accounts", () => {
   it.each([
-    { contactType: "supplier", kind: "shop", expected: true },
-    { contactType: "transport", kind: "driver", expected: true },
+    { contactType: "supplier", kind: "shop", expected: false },
+    { contactType: "transport", kind: "driver", expected: false },
     { contactType: "craftsperson", kind: "worker", expected: true },
     { contactType: "labour", kind: "worker", expected: true },
     { contactType: "contractor", kind: "worker", expected: true },
@@ -25,13 +25,13 @@ describe("contact identities and financial accounts", () => {
     { contactType: "service", kind: "other", expected: true },
     { contactType: "custom", kind: "other", expected: true },
     { contactType: "custom", kind: "worker", expected: true },
-    { contactType: "custom", kind: "shop", expected: true },
-    { contactType: "custom", kind: "driver", expected: true },
+    { contactType: "custom", kind: "shop", expected: false },
+    { contactType: "custom", kind: "driver", expected: false },
     { contactType: "professional", kind: null, expected: true },
-    { contactType: "supplier", kind: null, expected: true },
-    { contactType: "transport", kind: null, expected: true },
+    { contactType: "supplier", kind: null, expected: false },
+    { contactType: "transport", kind: null, expected: false },
   ])(
-    "allows a new job for $contactType with coarse kind $kind for every active party",
+    "uses stored preset eligibility for $contactType with coarse kind $kind",
     ({ contactType, kind, expected }) => {
       const person = PersonSchema.parse({
         id: "person",

@@ -54,3 +54,41 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+.quick-choice-back {
+  margin-bottom: 16px;
+  min-height: 44px;
+}
+.quick-sector-shortcuts {
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.quick-sector-shortcuts > summary {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.quick-sector-shortcuts .entry-work-shortcuts {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+.quick-sector-shortcuts .entry-work-shortcuts > h3 {
+  display: none;
+}
+.house-draft-list {
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.house-draft-list h2 {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.house-draft-list > button {
+  display: block;
+  text-align: left;
+  min-height: 44px;
+  width: 100%;
+}

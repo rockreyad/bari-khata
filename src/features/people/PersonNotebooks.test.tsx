@@ -82,11 +82,13 @@ it("lets one contact open each linked notebook and return to all notebooks witho
   }
   render(<Filter />);
   const user = userEvent.setup();
-  const select = screen.getByRole("button", { name: "খাতা বেছে দেখুন" });
+  const select = screen.getByRole("button", { name: "সেক্টর বেছে দেখুন" });
   expect(select.textContent).toContain("ইলেকট্রিক");
   expect(screen.queryByRole("heading")).toBeNull();
   await user.click(select);
-  expect(screen.getByRole("dialog", { name: "খাতা বেছে দেখুন" })).toBeTruthy();
+  expect(
+    screen.getByRole("dialog", { name: "সেক্টর বেছে দেখুন" }),
+  ).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "বাথরুম" }));
   expect(onSelect).toHaveBeenLastCalledWith("bathroom");
   expect(onSelect).toHaveBeenCalledTimes(1);
@@ -94,9 +96,9 @@ it("lets one contact open each linked notebook and return to all notebooks witho
   await waitFor(() => expect(document.activeElement).toBe(select));
   expect(screen.queryByRole("dialog")).toBeNull();
   await user.click(select);
-  await user.click(screen.getByRole("button", { name: "সব খাতা" }));
+  await user.click(screen.getByRole("button", { name: "সব সেক্টর" }));
   expect(onSelect).toHaveBeenLastCalledWith("");
-  expect(select.textContent).toContain("সব খাতা");
+  expect(select.textContent).toContain("সব সেক্টর");
   expect(JSON.stringify(ledger)).toBe(before);
 });
 
@@ -119,7 +121,7 @@ it("preserves an explicitly selected notebook outside the contact's relationship
     />,
   );
   const user = userEvent.setup();
-  const select = screen.getByRole("button", { name: "খাতা বেছে দেখুন" });
+  const select = screen.getByRole("button", { name: "সেক্টর বেছে দেখুন" });
   expect(select.textContent).toContain("সরাসরি খোলা অন্য খাতা");
   await user.click(select);
   expect(
@@ -128,7 +130,7 @@ it("preserves an explicitly selected notebook outside the contact's relationship
       pressed: true,
     }),
   ).toBeTruthy();
-  await user.click(screen.getByRole("button", { name: "সব খাতা" }));
+  await user.click(screen.getByRole("button", { name: "সব সেক্টর" }));
   expect(onSelect).toHaveBeenCalledExactlyOnceWith("");
   expect(JSON.stringify(ledger)).toBe(before);
 });
@@ -148,12 +150,12 @@ it("keeps all-notebook scope available when the contact has only one linked note
     />,
   );
   const user = userEvent.setup();
-  const select = screen.getByRole("button", { name: "খাতা বেছে দেখুন" });
-  expect(select.textContent).toContain("সব খাতা");
+  const select = screen.getByRole("button", { name: "সেক্টর বেছে দেখুন" });
+  expect(select.textContent).toContain("সব সেক্টর");
   expect(onSelect).not.toHaveBeenCalled();
   await user.click(select);
   expect(
-    screen.getByRole("button", { name: "সব খাতা", pressed: true }),
+    screen.getByRole("button", { name: "সব সেক্টর", pressed: true }),
   ).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "একমাত্র খাতা" }));
   expect(onSelect).toHaveBeenCalledExactlyOnceWith("only");
@@ -173,7 +175,7 @@ it("shows a valid selected notebook even when the contact has no related noteboo
     />,
   );
   expect(
-    screen.getByRole("button", { name: "খাতা বেছে দেখুন" }).textContent,
+    screen.getByRole("button", { name: "সেক্টর বেছে দেখুন" }).textContent,
   ).toContain("সরাসরি খোলা খাতা");
 });
 
@@ -210,11 +212,11 @@ it.each(["desktop", "mobile"])(
       />,
     );
     const user = userEvent.setup();
-    const trigger = screen.getByRole("button", { name: "খাতা বেছে দেখুন" });
+    const trigger = screen.getByRole("button", { name: "সেক্টর বেছে দেখুন" });
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(trigger.getAttribute("aria-description")).toBe("নমুনা খাতা");
     await user.click(trigger);
-    let dialog = screen.getByRole("dialog", { name: "খাতা বেছে দেখুন" });
+    let dialog = screen.getByRole("dialog", { name: "সেক্টর বেছে দেখুন" });
     expect(within(dialog).getByText("নমুনা মানুষ")).toBeTruthy();
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     await waitFor(() =>
@@ -225,7 +227,7 @@ it.each(["desktop", "mobile"])(
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     await user.click(trigger);
-    dialog = screen.getByRole("dialog", { name: "খাতা বেছে দেখুন" });
+    dialog = screen.getByRole("dialog", { name: "সেক্টর বেছে দেখুন" });
     expect(dialog).toBeTruthy();
     await waitFor(() =>
       expect(dialog.contains(document.activeElement)).toBe(true),
@@ -252,7 +254,7 @@ it("closes an unchanged selection without writing scope again", async () => {
     />,
   );
   const user = userEvent.setup();
-  const trigger = screen.getByRole("button", { name: "খাতা বেছে দেখুন" });
+  const trigger = screen.getByRole("button", { name: "সেক্টর বেছে দেখুন" });
   await user.click(trigger);
   await user.click(
     screen.getByRole("button", { name: "নমুনা খাতা", pressed: true }),

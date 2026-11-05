@@ -570,7 +570,7 @@ function CostAnalyticsPage({
         >
           <div className="history-filter-form">
             <label>
-              {t("কাজের খাতা")}
+              {t("সেক্টর")}
               <AppSelect
                 value={filters.workId}
                 onChange={(e) => update({ workId: e.target.value })}

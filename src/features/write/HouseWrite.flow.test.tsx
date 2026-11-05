@@ -215,6 +215,221 @@ async function cost(
 }
 const payPath = "/write/payment?person=party&work=roof&account=materials";
 
+it("uses a transport contact's configured sector and bill type without offering wages or unrelated contacts", async () => {
+  const initial = LedgerSchema.parse({
+    ...base(),
+    people: [
+      {
+        id: "driver",
+        name: "নমুনা গাড়ি",
+        kind: "driver",
+        contactType: "transport",
+        roles: ["transport"],
+        workIds: ["wall"],
+        quickActions: ["payment", "transport"],
+      },
+      {
+        id: "shop",
+        name: "নমুনা দোকান",
+        kind: "shop",
+        contactType: "supplier",
+        roles: ["supplier"],
+      },
+    ],
+  });
+  const repo = await setup(initial),
+    user = userEvent.setup();
+  mount(
+    initial,
+    <HouseCostForm action="charge" />,
+    "/write/charge?person=driver",
+  );
+  await ready();
+  expect((screen.getByLabelText("কীসের বিল") as HTMLSelectElement).value).toBe(
+    "transport",
+  );
+  expect(
+    within(screen.getByLabelText("কীসের বিল")).queryByRole("option", {
+      name: "মজুরি",
+    }),
+  ).toBeNull();
+  expect(
+    (screen.getByLabelText("কোন সেক্টরে") as HTMLSelectElement).value,
+  ).toBe("wall");
+  expect(
+    within(screen.getByLabelText("কার সঙ্গে হিসাব")).queryByRole("option", {
+      name: "নমুনা দোকান",
+    }),
+  ).toBeNull();
+  expect(screen.queryByLabelText("কোন কাজের জন্য")).toBeNull();
+  await user.type(screen.getByLabelText(/^কাজের বিবরণ/), "নমুনা মাল আনা");
+  await user.type(screen.getByLabelText(/^টাকা [০-৯0-9]+$/), "100");
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  expect((await repo.read())!.ledger.entries).toMatchObject([
+    {
+      account: "other",
+      personId: "driver",
+      contractId: null,
+      lines: [{ workId: "wall", costType: "transport", amount: 10000 }],
+    },
+  ]);
+});
+
+it("offers a worker's name for an explicit own-money reimbursement and records materials only", async () => {
+  const initial = LedgerSchema.parse({
+    ...base(),
+    people: [
+      {
+        id: "worker",
+        name: "নমুনা মিস্ত্রি",
+        kind: "worker",
+        contactType: "craftsperson",
+        roles: ["craftsperson"],
+        quickActions: ["payment"],
+        workIds: ["roof"],
+      },
+    ],
+  });
+  const repo = await setup(initial),
+    user = userEvent.setup();
+  mount(initial, <HouseCostForm action="purchase" />, "/write/purchase");
+  await ready();
+  expect(
+    within(screen.getByLabelText("কার সঙ্গে হিসাব")).queryByRole("option", {
+      name: "নমুনা মিস্ত্রি",
+    }),
+  ).toBeNull();
+  await user.selectOptions(screen.getByLabelText("টাকা মিটিয়েছেন?"), "worker");
+  await user.selectOptions(screen.getByLabelText("কার সঙ্গে হিসাব"), "worker");
+  expect(
+    (screen.getByLabelText("কোন সেক্টরে") as HTMLSelectElement).value,
+  ).toBe("roof");
+  await cost(user);
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  expect((await repo.read())!.ledger.entries).toMatchObject([
+    {
+      kind: "expense",
+      account: "materials",
+      personId: "worker",
+      lines: [{ costType: "material" }],
+    },
+  ]);
+  expect((await repo.read())!.ledger.entries).toHaveLength(1);
+});
+
+it("rejects saving a purchase if its contact rules changed after the form was filled", async () => {
+  const initial = LedgerSchema.parse({
+    ...base(),
+    people: [
+      {
+        id: "party",
+        name: "নমুনা দোকান",
+        kind: "shop",
+        contactType: "supplier",
+        roles: ["supplier"],
+        quickActions: ["purchase", "payment"],
+      },
+    ],
+  });
+  const repo = await setup(initial),
+    user = userEvent.setup();
+  mount(initial, <HouseCostForm action="purchase" />);
+  await ready();
+  await cost(user);
+  api.beforeSave = (current) =>
+    current
+      .save(
+        (ledger) => ({
+          ...ledger,
+          people: ledger.people.map((person) => ({
+            ...person,
+            quickActions: ["payment"],
+          })),
+        }),
+        "real",
+      )
+      .then(() => {});
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    "এই নামের নিয়মে",
+  );
+  expect((await repo.read())!.ledger.entries).toEqual([]);
+  expect(api.close).not.toHaveBeenCalled();
+  expect((screen.getByLabelText(/^মালের নাম/) as HTMLInputElement).value).toBe(
+    "নমুনা কেনা মাল",
+  );
+});
+
+it("honors advance intent and configured supplier account and sector when opened from a shortcut", async () => {
+  const initial = LedgerSchema.parse({
+    ...base(),
+    people: [
+      {
+        id: "party",
+        name: "নমুনা দোকান",
+        kind: "shop",
+        contactType: "supplier",
+        roles: ["supplier"],
+        workIds: ["wall"],
+      },
+    ],
+  });
+  const repo = await setup(initial),
+    user = userEvent.setup();
+  mount(
+    initial,
+    <HousePaymentForm />,
+    "/write/payment?person=party&intent=advance",
+  );
+  await ready();
+  expect(
+    (screen.getByLabelText("টাকা দেওয়ার কারণ") as HTMLSelectElement).value,
+  ).toBe("advance");
+  expect(screen.queryByLabelText("কী বাবদ")).toBeNull();
+  expect(
+    (screen.getByLabelText("কোন সেক্টরে") as HTMLSelectElement).value,
+  ).toBe("wall");
+  await user.type(screen.getByLabelText("কত দিয়েছেন"), "100");
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  expect((await repo.read())!.ledger.entries).toMatchObject([
+    {
+      kind: "payment",
+      account: "materials",
+      paymentContext: "advance",
+      allocations: [{ workId: "wall", amount: 10000 }],
+    },
+  ]);
+});
+
+it("keeps a disabled-payment deep link from saving cash", async () => {
+  const initial = LedgerSchema.parse({
+    ...base(),
+    people: [
+      {
+        id: "party",
+        name: "নমুনা দোকান",
+        kind: "shop",
+        contactType: "supplier",
+        roles: ["supplier"],
+        quickActions: ["purchase"],
+      },
+    ],
+  });
+  const repo = await setup(initial),
+    user = userEvent.setup();
+  mount(initial, <HousePaymentForm />, `${payPath}&purpose=advance`);
+  await ready();
+  await user.type(screen.getByLabelText("কত দিয়েছেন"), "100");
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    "এই নামের নিয়মে",
+  );
+  expect((await repo.read())!.ledger.entries).toEqual([]);
+});
+
 it("keeps a purchase draft and attachment on reopening, then stores one cost and one cash event exactly once", async () => {
   const initial = base(),
     repo = await setup(initial),

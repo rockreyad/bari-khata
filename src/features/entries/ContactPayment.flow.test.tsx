@@ -237,14 +237,14 @@ it.each([
 
     context.ledger = saved;
     const profile = render(
-      <MemoryRouter initialEntries={["/people/helper"]}>
+      <MemoryRouter initialEntries={["/parties/helper"]}>
         <Routes>
-          <Route path="/people/:personId" element={<PersonPage />} />
+          <Route path="/parties/:personId" element={<PersonPage />} />
         </Routes>
       </MemoryRouter>,
     );
     expect(
-      profile.container.querySelector(".person-now-card")?.textContent,
+      profile.getByRole("region", { name: "এই নামের মোট হিসাব" }).textContent,
     ).toContain(`৳${(paid + 10000) / 100}`);
     expect(profile.container.textContent).toContain("নমুনা মাল নামানো");
     const history = profile.container.querySelector(".contact-history")!;

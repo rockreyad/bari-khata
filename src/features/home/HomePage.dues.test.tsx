@@ -149,7 +149,7 @@ function mount(
           <Route path={`${state.base}/dues`} element={<PayablesPage />} />
           <Route path={`${state.base}/ledger`} element={<LedgerPage />} />
           <Route
-            path={`${state.base}/people/:id`}
+            path={`${state.base}/parties/:id`}
             element={<p>Account opened</p>}
           />
         </Routes>

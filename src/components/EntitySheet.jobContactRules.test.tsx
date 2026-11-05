@@ -58,7 +58,7 @@ afterEach(cleanup);
 
 function fixture() {
   return LedgerSchema.parse({
-    works: [{ id: "work", name: "নমুনা কাজের খাতা" }],
+    works: [{ id: "work", name: "নমুনা সেক্টর" }],
     people: [
       {
         id: "worker",
@@ -140,7 +140,7 @@ function fillJob() {
   });
 }
 
-it("offers all active people with a generic job-owner label and saves a professional without changing identity or money", async () => {
+it("offers eligible people with a generic job-owner label and saves a professional without changing identity or money", async () => {
   const ledger = fixture();
   const initial = structuredClone(ledger);
   const { onSave } = await open(ledger);
@@ -150,16 +150,7 @@ it("offers all active people with a generic job-owner label and saves a professi
     within(select)
       .getAllByRole("option")
       .map((option) => (option as HTMLOptionElement).value),
-  ).toEqual([
-    "",
-    "worker",
-    "engineer",
-    "other",
-    "shop",
-    "driver",
-    "custom-shop",
-    "__new__",
-  ]);
+  ).toEqual(["", "worker", "engineer", "other", "__new__"]);
   await userEvent.selectOptions(select, "engineer");
   fillJob();
   await userEvent.click(screen.getByRole("button", { name: "রাখুন" }));
@@ -175,7 +166,7 @@ it("offers all active people with a generic job-owner label and saves a professi
 });
 
 it.each(["shop", "driver", "custom-shop"])(
-  "accepts a restored %s agreement draft without changing its identity",
+  "preserves an ineligible restored %s agreement draft and rejects a new agreement",
   async (personId) => {
     const ledger = fixture();
     const original = structuredClone(ledger);
@@ -189,7 +180,7 @@ it.each(["shop", "driver", "custom-shop"])(
       defaultPersonId: personId,
     });
     const select = screen.getByLabelText("কার কাজ");
-    expect(select.getAttribute("aria-invalid")).toBeNull();
+    expect(select.getAttribute("aria-invalid")).toBe("true");
     expect(
       within(select).queryByRole("option", {
         name: ledger.people.find((person) => person.id === personId)!.name,
@@ -199,12 +190,13 @@ it.each(["shop", "driver", "custom-shop"])(
       (screen.getByLabelText("কাজের টাকা") as HTMLInputElement).value,
     ).toBe("2500");
     fireEvent.submit(container.querySelector("form")!);
-    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
-    expect(onSave.mock.calls[0][0].contracts[0]).toMatchObject({
-      personId,
-      total: 250000,
-    });
-    expect(onSave.mock.calls[0][0].people).toEqual(original.people);
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "এই ধরনের নামে",
+    );
+    expect(onSave).not.toHaveBeenCalled();
+    expect(storage.drafts.get(`entity:contract:new:${personId}`)).toMatchObject(
+      { personId, total: "2500" },
+    );
     expect(ledger).toEqual(original);
   },
 );
@@ -247,7 +239,7 @@ it.each(["shop", "driver"])(
       within(select).queryByRole("option", {
         name: personId === "shop" ? "নমুনা গাড়ি" : "নমুনা দোকান",
       }),
-    ).toBeTruthy();
+    ).toBeNull();
     fireEvent.change(screen.getByLabelText("নোট"), {
       target: { value: "পরের বার দেখে রাখব" },
     });
@@ -269,7 +261,7 @@ it.each(["shop", "driver"])(
   },
 );
 
-it("allows a restored draft to assign an unused agreement to another active party", async () => {
+it("rejects an ineligible restored reassignment and permits an eligible owner for an unused agreement", async () => {
   const ledger = LedgerSchema.parse({
     ...fixture(),
     contracts: [
@@ -299,9 +291,15 @@ it("allows a restored draft to assign an unused agreement to another active part
     within(select).getByRole("option", { name: "নমুনা গাড়ি" }),
   ).toBeTruthy();
   fireEvent.submit(container.querySelector("form")!);
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    "এই ধরনের নামে",
+  );
+  expect(onSave).not.toHaveBeenCalled();
+  await userEvent.selectOptions(select, "engineer");
+  fireEvent.submit(container.querySelector("form")!);
   await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
   expect(onSave.mock.calls[0][0].contracts[0]).toMatchObject({
-    personId: "driver",
+    personId: "engineer",
     notes: "নমুনা অসমাপ্ত নোট",
     total: 100000,
   });

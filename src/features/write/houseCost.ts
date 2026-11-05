@@ -1,5 +1,6 @@
 import { LedgerSchema, type Ledger, type Receipt } from "../../domain/model";
 import { allocatePayment } from "../../domain/partyLedger";
+import { canRecordContactCost } from "../../domain/contactEntryPolicy";
 import { buildQuickEntry, type QuickDraft } from "../entries/quickEntry";
 
 export function recordHouseCost(
@@ -8,6 +9,17 @@ export function recordHouseCost(
   receipts: Receipt[],
   generalName: string,
 ) {
+  const person = ledger.people.find((row) => row.id === draft.personId);
+  if (
+    person &&
+    !canRecordContactCost(person, {
+      costType: draft.costType,
+      account: draft.account,
+      reimbursement: draft.payment === "worker",
+      contractId: draft.contractId,
+    })
+  )
+    throw new Error("contact_rules");
   // A missing material category is a reporting choice, not an unconfirmed bill.
   const next = buildQuickEntry(
     ledger,

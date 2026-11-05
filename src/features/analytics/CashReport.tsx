@@ -297,7 +297,7 @@ export function CashReport({
         >
           <div className="history-filter-form">
             <label>
-              {t("কাজের খাতা")}
+              {t("সেক্টর")}
               <AppSelect
                 value={workId}
                 onChange={(event) => update("work", event.target.value)}

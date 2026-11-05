@@ -15,24 +15,14 @@ export function notebookSectionActive(
     ).replace(/\/+$/, "") || "/";
   if (section === "/") return path === "/" || path === "/dues";
   const aliases =
-    section === "/more"
-      ? [
-          "/more",
-          "/history",
-          "/ledger",
-          "/timeline",
-          "/reports",
-          "/materials",
-          "/review",
-          "/migration",
-          "/settings",
-        ]
-      : section === "/works"
-        ? ["/works", "/jobs", "/contracts"]
-        : section === "/reports"
-          ? [section, "/materials"]
-          : section === "/ledger"
-            ? [section, "/review", "/history"]
+    section === "/reports"
+      ? [section, "/materials", "/more"]
+      : section === "/ledger"
+        ? [section, "/review", "/history", "/timeline"]
+        : section === "/parties"
+          ? [section, "/people"]
+          : section === "/works"
+            ? [section, "/jobs", "/contracts"]
             : [section];
   return aliases.some(
     (prefix) => path === prefix || path.startsWith(`${prefix}/`),
