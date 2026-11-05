@@ -275,3 +275,99 @@ it("matches the actual recorded balance and avoids collisions with existing prev
     }),
   ).toEqual(presentation);
 });
+
+it("shows the selected ongoing contract's promise instead of another completed contract's due", () => {
+  const ledger = LedgerSchema.parse({
+    ...fixture(),
+    contracts: [
+      {
+        id: "ongoing",
+        personId: "party",
+        scope: "house",
+        status: "ongoing",
+        total: 60000000,
+      },
+      {
+        id: "completed",
+        personId: "party",
+        workId: "paint",
+        status: "done",
+        total: 2500000,
+      },
+    ],
+  });
+  const source = structuredClone(ledger);
+  const request = input({
+    intent: "payment",
+    amount: 54150000,
+    account: "labour",
+    contractId: "ongoing",
+    workId: "roof",
+  });
+  expect(partyLedger(ledger, "party").earnedPayable).toBe(2500000);
+  expect(display(ledger, request)).toMatchObject({
+    beforeDue: 60000000,
+    afterDue: 5850000,
+    excess: 0,
+    matchedBillAmount: 0,
+    canPreview: true,
+  });
+  const saved = recordHousePayment(ledger, {
+    ...request,
+    id: "actual",
+    date: "2026-11-05",
+    method: "cash",
+  });
+  expect(saved.entries).toMatchObject([
+    {
+      kind: "payment",
+      contractId: "ongoing",
+      paymentParts: [{ amount: 54150000 }],
+    },
+  ]);
+  expect(partyLedger(saved, "party").earnedPayable).toBe(2500000);
+  expect(ledger).toEqual(source);
+});
+
+it("keeps a bill settlement on the selected contract's earned amount instead of its larger promise", () => {
+  const ledger = LedgerSchema.parse({
+    ...fixture(),
+    entries: [bill("selected-bill", 10000, "roof", "labour", "selected")],
+    contracts: [
+      {
+        id: "selected",
+        personId: "party",
+        workId: "roof",
+        status: "ongoing",
+        total: 1000000,
+      },
+      {
+        id: "other",
+        personId: "party",
+        workId: "paint",
+        status: "done",
+        total: 2500000,
+      },
+    ],
+  });
+  const request = input({
+    intent: "payment",
+    amount: 4000,
+    account: "labour",
+    contractId: "selected",
+    workId: "roof",
+    allocations: [{ billId: "selected-bill", workId: "roof", amount: 4000 }],
+  });
+  expect(
+    paymentPresentation(ledger, request, planHousePayment(ledger, request), {
+      date: "2026-11-05",
+      balanceBasis: "earned",
+    }),
+  ).toMatchObject({
+    beforeDue: 10000,
+    afterDue: 6000,
+    matchedBillAmount: 4000,
+    excess: 0,
+    canPreview: true,
+  });
+});

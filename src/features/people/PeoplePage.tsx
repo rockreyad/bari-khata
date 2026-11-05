@@ -13,6 +13,7 @@ import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { AppMenu } from "../../components/ui/AppMenu";
 import { contactSummary, personKind } from "../../domain/contacts";
+import { contactCommitmentSummary } from "../../domain/contactCommitments";
 import { matchesContact } from "./people";
 import { PersonMark, kindLabels } from "./ContactIdentity";
 import { PeopleRoleTabs } from "./PeopleRoleTabs";
@@ -49,15 +50,29 @@ export function PeoplePage() {
     () =>
       ledger.people
         .filter((person) => !person.archivedAt)
-        .map((person) => ({
-          person,
-          summary: contactSummary(ledger, person),
-        })),
+        .map((person) => {
+          const summary = contactSummary(ledger, person);
+          const commitments = ledger.contracts.some(
+            (contract) => contract.personId === person.id,
+          )
+            ? contactCommitmentSummary(ledger, person.id)
+            : null;
+          return {
+            person,
+            summary,
+            remaining: commitments?.remaining ?? summary.reconciledPayable,
+            extra: commitments?.extra ?? summary.reconciledAdvance,
+            valid: commitments?.valid ?? !summary.balanceAmbiguous,
+            needsReview: commitments
+              ? !commitments.valid || commitments.balanceAmbiguous
+              : summary.balanceAmbiguous,
+          };
+        }),
     [ledger],
   );
   const shown = rows
     .filter(
-      ({ person, summary }) =>
+      ({ person, remaining, extra, valid }) =>
         matchesContact(person, query) &&
         (kind === "all" || personKind(person) === kind) &&
         (!activeType ||
@@ -66,9 +81,7 @@ export function PeoplePage() {
             : activeType === "custom")) &&
         (!activeRole || roleKey(person.role) === activeRole) &&
         (status === "all" ||
-          (status === "due"
-            ? !summary.balanceAmbiguous && summary.reconciledPayable > 0
-            : !summary.balanceAmbiguous && summary.reconciledAdvance > 0)),
+          (status === "due" ? valid && remaining > 0 : valid && extra > 0)),
     )
     .sort(
       (a, b) =>
@@ -216,7 +229,7 @@ export function PeoplePage() {
             <span>{t("নাম")}</span>
             <span>{t("টাকা দিয়েছি")}</span>
           </div>
-          {shown.map(({ person, summary }) => (
+          {shown.map(({ person, summary, remaining, valid, needsReview }) => (
             <button
               className="contact-row"
               key={person.id}
@@ -244,14 +257,18 @@ export function PeoplePage() {
                     </span>
                   )}
                 </strong>
-                {summary.balanceAmbiguous ? (
-                  <small className="contact-due">{t("যাচাই বাকি")}</small>
-                ) : summary.reconciledPayable > 0 ? (
+                {valid && remaining > 0 ? (
                   <small className="contact-due">
-                    {t("বাকি {{amount}}", {
-                      amount: money(summary.reconciledPayable),
-                    })}
+                    {t(
+                      needsReview ? "জানা বাকি {{amount}}" : "বাকি {{amount}}",
+                      {
+                        amount: money(remaining),
+                      },
+                    )}
                   </small>
+                ) : null}
+                {needsReview ? (
+                  <small className="contact-due">{t("যাচাই বাকি")}</small>
                 ) : null}
               </span>
               <ArrowRightIcon className="contact-row-chevron" size={16} />

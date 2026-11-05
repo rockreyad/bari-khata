@@ -100,6 +100,9 @@ export type JobBalance = {
   netPaid: number;
   remaining: number;
   remainingCommitment: number;
+  commitmentExtra: number;
+  commitmentValid: boolean;
+  commitmentState: "due" | "settled" | "overpaid";
   unearnedCommitment: number;
   extra: number;
   state: "due" | "settled" | "overpaid";
@@ -196,6 +199,15 @@ export function jobBalances(ledger: Ledger): Map<string, JobBalance> {
           netPaid: Number(net),
           remaining: Number(remaining),
           remainingCommitment: Number(committed > 0n ? committed : 0n),
+          commitmentExtra: Number(committed < 0n ? -committed : 0n),
+          commitmentValid:
+            !unresolvedJobs.has(job.id) &&
+            net >= -maximum &&
+            net <= maximum &&
+            committed >= -maximum &&
+            committed <= maximum,
+          commitmentState:
+            committed > 0n ? "due" : committed < 0n ? "overpaid" : "settled",
           unearnedCommitment: Number(agreed > earned ? agreed - earned : 0n),
           extra: Number(extra),
           state:

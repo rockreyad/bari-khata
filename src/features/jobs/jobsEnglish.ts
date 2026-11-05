@@ -1,4 +1,5 @@
 export const jobsEnglish: Record<string, string> = {
+  "আর দিতে হবে": "Still to pay",
   "বিল হয়েছে {{amount}}": "Billed {{amount}}",
   "পরিমাণ ও দর অনুযায়ী": "Calculated from quantity and rate",
   "শেষে ঠিক করা টাকা": "Final agreed amount",

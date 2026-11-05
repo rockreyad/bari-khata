@@ -33,6 +33,7 @@ import {
 import { AccountSchema, type Account } from "../../domain/model";
 import { contractAppliesToWork } from "../../domain/contracts";
 import { personSummary } from "../../domain/ledger";
+import { contactCommitmentSummary } from "../../domain/contactCommitments";
 import { partyLedger } from "../../domain/partyLedger";
 import { JobPreview } from "../jobs/JobPreview";
 import { PersonMark, kindLabels } from "./ContactIdentity";
@@ -67,6 +68,15 @@ export function PersonPage() {
   const full = params.get("view") === "history";
   const summary = useMemo(
     () => (person ? contactSummary(ledger, person, workId || undefined) : null),
+    [ledger, person, workId],
+  );
+  const commitments = useMemo(
+    () =>
+      person
+        ? contactCommitmentSummary(ledger, person.id, {
+            workId: workId || undefined,
+          })
+        : null,
     [ledger, person, workId],
   );
   const entries = useMemo(
@@ -200,6 +210,20 @@ export function PersonPage() {
     (c) =>
       c.personId === person.id && (!workId || contractAppliesToWork(c, workId)),
   );
+  const commitmentOverview = personContracts.length ? commitments : null;
+  const remainingKnown = commitmentOverview
+    ? commitmentOverview.valid
+    : !summary.balanceAmbiguous;
+  const balanceNeedsReview =
+    !remainingKnown ||
+    (commitmentOverview?.balanceAmbiguous ?? summary.balanceAmbiguous);
+  const remaining = commitmentOverview?.remaining ?? summary.reconciledPayable;
+  const prominentRemaining = Boolean(
+    commitmentOverview && remainingKnown && remaining > 0,
+  );
+  const correctionEffect = remainingKnown
+    ? (commitmentOverview?.correctionEffect ?? 0)
+    : 0;
   const receivable = !workId
     ? (account?.receivable ?? 0)
     : (account?.payments ?? [])
@@ -265,6 +289,7 @@ export function PersonPage() {
       ? uncontractedCredit
       : Math.min(uncontractedCredit, advanceCash);
   const costMetric =
+    !commitmentOverview &&
     (summary.reconciledCost !== 0 || summary.costCorrection !== 0) &&
     summary.reconciledCost !== summary.reconciledNetPaid
       ? {
@@ -273,11 +298,11 @@ export function PersonPage() {
         }
       : null;
   const metrics = [
-    ...(!summary.balanceAmbiguous && summary.reconciledPayable > 0
+    ...(!prominentRemaining && remainingKnown && remaining > 0
       ? [
           {
             label: "দিতে বাকি",
-            amount: summary.reconciledPayable,
+            amount: remaining,
             tone: "contact-due",
           },
         ]
@@ -287,6 +312,7 @@ export function PersonPage() {
       : []),
   ];
   if (
+    !commitmentOverview &&
     kind === "shop" &&
     summary.confirmedCost > 0 &&
     summary.reconciledAdvance > 0 &&
@@ -297,8 +323,16 @@ export function PersonPage() {
       amount: summary.reconciledAdvance,
       tone: "contact-credit",
     });
+  const displayedAdvance = commitmentOverview
+    ? remainingKnown
+      ? commitmentOverview.extra
+      : 0
+    : uncontractedAdvance;
   const showAdvanceDetails =
-    uncontractedAdvance > 0 && (kind !== "shop" || summary.confirmedCost <= 0);
+    displayedAdvance > 0 &&
+    (Boolean(commitmentOverview) ||
+      kind !== "shop" ||
+      summary.confirmedCost <= 0);
   const showMainActions = actions.some((action) =>
     ["payment", "purchase", "transport", "return"].includes(action),
   );
@@ -374,16 +408,22 @@ export function PersonPage() {
         aria-label={t("এই নামের মোট হিসাব")}
       >
         <div
-          className={`contact-summary-top ${metrics.length ? "has-balance" : ""}`}
+          className={`contact-summary-top ${metrics.length ? "has-balance" : ""} ${prominentRemaining ? "has-remaining" : ""}`}
         >
           <div className="contact-summary-hero">
             <span>{t("মোট টাকা দিয়েছি")}</span>
             <strong>{money(summary.reconciledNetPaid)}</strong>
             {summary.refunds > 0 ? <small>{t("ফেরত বাদে")}</small> : null}
-            {summary.balanceAmbiguous ? (
+            {balanceNeedsReview ? (
               <small role="status">{t("বাকির হিসাব যাচাই বাকি")}</small>
             ) : null}
           </div>
+          {prominentRemaining ? (
+            <div className="contact-remaining-hero">
+              <span>{t(balanceNeedsReview ? "জানা বাকি" : "আর দিতে হবে")}</span>
+              <strong>{money(remaining)}</strong>
+            </div>
+          ) : null}
           {metrics.length ? (
             <dl className="contact-summary-metrics">
               {metrics.map((metric) => (
@@ -501,7 +541,7 @@ export function PersonPage() {
             )}
           </div>
         ) : null}
-        {showAdvanceDetails || costMetric ? (
+        {showAdvanceDetails || costMetric || correctionEffect !== 0 ? (
           <details className="contact-reconciliation">
             <summary>
               {t("আরও হিসাব")}
@@ -511,10 +551,20 @@ export function PersonPage() {
               <dl>
                 <dt>
                   {t(
-                    summary.owedCorrection !== 0 ? "আমার জমা" : "অগ্রিম দিয়েছি",
+                    commitmentOverview
+                      ? "বেশি দিয়েছি"
+                      : summary.owedCorrection !== 0
+                        ? "আমার জমা"
+                        : "অগ্রিম দিয়েছি",
                   )}
                 </dt>
-                <dd>{money(uncontractedAdvance)}</dd>
+                <dd>{money(displayedAdvance)}</dd>
+              </dl>
+            ) : null}
+            {correctionEffect !== 0 ? (
+              <dl className="contact-total-correction">
+                <dt>{t("মোটের সংশোধন")}</dt>
+                <dd>{money(correctionEffect)}</dd>
               </dl>
             ) : null}
             {costMetric ? (

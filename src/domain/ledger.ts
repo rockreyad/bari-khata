@@ -453,6 +453,15 @@ export function contractSummary(ledger: Ledger, contractId: string) {
     billedBalance: Number(billedBalance),
     remaining: Number(billedBalance > 0n ? billedBalance : 0n),
     remainingCommitment: Number(balance > 0n ? balance : 0n),
+    commitmentExtra: Number(balance < 0n ? -balance : 0n),
+    commitmentValid:
+      !entries.some((entry) => unresolved.has(entry.id)) &&
+      Number.isSafeInteger(netPaid) &&
+      Number.isSafeInteger(obligationNetPaid) &&
+      balance <= BigInt(Number.MAX_SAFE_INTEGER) &&
+      balance >= -BigInt(Number.MAX_SAFE_INTEGER),
+    commitmentState:
+      balance > 0n ? "due" : balance < 0n ? "overpaid" : "settled",
     unearnedCommitment: Number(
       BigInt(agreed) > earned ? BigInt(agreed) - earned : 0n,
     ),

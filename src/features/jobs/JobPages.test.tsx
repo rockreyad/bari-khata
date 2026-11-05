@@ -572,7 +572,7 @@ const copy = {
     title: "কাজের হিসাব",
     goal: "৳\u202f৬,০০,০০০",
     paid: "৳\u202f২৫,০০০",
-    remaining: "৳\u202f০",
+    remaining: "৳\u202f৫,৭৫,০০০",
     refund: "৳\u202f৫,০০০",
     edit: "কাজ বদলাই",
     pay: "টাকা দিই",
@@ -583,7 +583,7 @@ const copy = {
     title: "Work details",
     goal: "৳\u202f600,000",
     paid: "৳\u202f25,000",
-    remaining: "৳\u202f0",
+    remaining: "৳\u202f575,000",
     refund: "৳\u202f5,000",
     edit: "Edit job",
     pay: "Pay",
@@ -604,8 +604,11 @@ describe.each(["bn", "en"] as const)("job details in %s", (language) => {
     ).toBe(copy[language].goal);
     const amounts = container.querySelectorAll(".job-detail-money dd");
     expect(amounts[0].textContent).toBe(copy[language].paid);
-    expect(amounts).toHaveLength(1);
-    expect(container.querySelector(".job-detail-due")).toBeNull();
+    expect(amounts).toHaveLength(2);
+    expect(container.querySelector(".job-detail-due dt")?.textContent).toBe(
+      language === "bn" ? "আর দিতে হবে" : "Still to pay",
+    );
+    expect(amounts[1].textContent).toBe(copy[language].remaining);
     expect(container.querySelector(".job-extra-paid")).toBeNull();
     expect(container.querySelector(".balance-progress")).toBeNull();
     expect(container.querySelector(".job-refund-note")?.textContent).toContain(
@@ -672,7 +675,7 @@ it("shows overpayment rather than zero remaining in the preview and keeps zero-p
     <JobPreview ledger={ledger} contracts={ledger.contracts} />,
   );
   expect(
-    preview.container.querySelector(".job-tile-amounts")?.textContent,
+    preview.container.querySelector(".job-card-balance")?.textContent,
   ).toContain("বেশি দিয়েছি৳\u202f১,০০০");
   preview.unmount();
   const page = mount(ledger, "/works/job-0");
@@ -694,6 +697,7 @@ it("shows overpayment rather than zero remaining in the preview and keeps zero-p
 
 it.each([
   {
+    total: 3500000,
     status: "done",
     paid: 3600000,
     billed: null,
@@ -703,6 +707,7 @@ it.each([
     label: "বেশি দিয়েছি",
   },
   {
+    total: 3500000,
     status: "done",
     paid: 1000000,
     billed: null,
@@ -712,6 +717,7 @@ it.each([
     label: "",
   },
   {
+    total: 3500000,
     status: "done",
     paid: 3500000,
     billed: null,
@@ -721,26 +727,58 @@ it.each([
     label: "",
   },
   {
+    total: 3500000,
     status: "ongoing",
     paid: 1000000,
     billed: null,
-    due: 0,
+    due: 2500000,
     extra: 0,
     settled: false,
     label: "",
   },
   {
+    total: 3500000,
     status: "done",
     paid: 2000000,
     billed: 1000000,
-    due: 0,
-    extra: 1000000,
+    due: 1500000,
+    extra: 0,
     settled: false,
-    label: "জমা আছে",
+    label: "",
+  },
+  {
+    total: 60000000,
+    status: "ongoing",
+    paid: 54150000,
+    billed: null,
+    due: 5850000,
+    extra: 0,
+    settled: false,
+    label: "",
+  },
+  {
+    total: 3500000,
+    status: "ongoing",
+    paid: 3500000,
+    billed: null,
+    due: 0,
+    extra: 0,
+    settled: true,
+    label: "",
+  },
+  {
+    total: 3500000,
+    status: "done",
+    paid: 3600000,
+    billed: 4000000,
+    due: 400000,
+    extra: 0,
+    settled: false,
+    label: "",
   },
 ] as const)(
-  "keeps completed/earned money clear for $status paid $paid and bill $billed",
-  async ({ status, paid, billed, due, extra, settled, label }) => {
+  "keeps commitment $total and paid $paid clear for $status with bill $billed",
+  async ({ total, status, paid, billed, due, extra, settled, label }) => {
     const ledger = LedgerSchema.parse({
       works: [{ id: "door", name: "নমুনা খাতা" }],
       people: [{ id: "worker", name: "নমুনা কর্মী", kind: "worker" }],
@@ -750,7 +788,7 @@ it.each([
           personId: "worker",
           workId: "door",
           title: "নমুনা কাজ",
-          total: 3500000,
+          total,
           status,
         },
       ],
@@ -790,7 +828,7 @@ it.each([
     let page = mount(ledger, "/works/job");
     const card = page.container.querySelector(".contract-card")!;
     expect(card.querySelector(".job-detail-total strong")?.textContent).toBe(
-      formatMoney(3500000, "bn"),
+      formatMoney(total, "bn"),
     );
     expect(card.querySelector(".job-detail-paid dd")?.textContent).toBe(
       formatMoney(paid, "bn"),
@@ -836,6 +874,10 @@ it.each([
       <JobPreview ledger={ledger} contracts={ledger.contracts} />,
     );
     const tile = page.container.querySelector(".job-snap-card")!;
+    expect(tile.querySelector(".job-tile-amounts")!.children).toHaveLength(2);
+    expect(
+      tile.querySelector(".job-card-balance")!.closest(".job-tile-amounts"),
+    ).toBeNull();
     expect(tile.querySelector(".job-tile-paid strong")?.textContent).toBe(
       formatMoney(paid, "bn"),
     );
@@ -847,6 +889,17 @@ it.each([
     expect(Boolean(tile.querySelector(".job-tile-settled"))).toBe(settled);
     expect(tile.querySelector(`.job-status-${status}`)).not.toBeNull();
     expect(tile.textContent).not.toContain("আগে দেওয়া টাকা");
+    if (total === 60000000) {
+      page.unmount();
+      const list = mount(ledger, "/works?balance=due");
+      expect(list.container.querySelectorAll(".job-snap-card")).toHaveLength(1);
+      expect(
+        list.container.querySelector(".job-card-balance")?.textContent,
+      ).toContain(formatMoney(5850000, "bn"));
+      expect(
+        list.container.querySelector(".job-status-ongoing"),
+      ).not.toBeNull();
+    }
     expect(JSON.stringify(ledger)).toBe(before);
   },
 );
@@ -1275,7 +1328,7 @@ it("reclassifies refunded overpayment exactly and clears only known filters", ()
   const ledger = filterFixture();
   const { container } = mount(ledger, "/works?balance=overpaid&keep=1");
   expect(container.querySelectorAll(".job-snap-card")).toHaveLength(1);
-  expect(container.querySelector(".job-tile-amounts")?.textContent).toContain(
+  expect(container.querySelector(".job-card-balance")?.textContent).toContain(
     "বেশি দিয়েছি৳\u202f১০০",
   );
   state.ledger = LedgerSchema.parse({
@@ -1443,6 +1496,8 @@ it("keeps cancelled, historical and unmatched cash out of list-card balances", (
   expect(card.querySelector(".job-tile-paid strong")?.textContent).toBe(
     "৳\u202f২৫,০০০",
   );
-  expect(card.querySelector(".job-tile-balance")).toBeNull();
-  expect(card.classList.contains("job-payment-overpaid")).toBe(true);
+  expect(card.querySelector(".job-tile-balance strong")?.textContent).toBe(
+    formatMoney(57500000, "bn"),
+  );
+  expect(card.classList.contains("job-payment-due")).toBe(true);
 });

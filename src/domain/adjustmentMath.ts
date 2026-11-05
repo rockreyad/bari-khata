@@ -41,8 +41,9 @@ type Bucket = {
 function computeReconciliation(
   ledger: Ledger,
   scope: FinancialScope = {},
-  includeUnearnedCommitments = false,
+  basis: "earned" | "commitment" | "legacy-commitment" = "earned",
 ) {
+  const includeUnearnedCommitments = basis !== "earned";
   const accounts = effectiveAccounts(ledger);
   const earnings = contractEarnings(ledger);
   const unresolved = unresolvedContractAdjustmentIds(ledger);
@@ -133,7 +134,7 @@ function computeReconciliation(
   }
   const jobPeople = new Set([...jobs.values()].map((job) => job.personId));
   const balanceAmbiguous =
-    includeUnearnedCommitments &&
+    basis === "legacy-commitment" &&
     [...buckets.values()].some(
       (row) =>
         row.account === "labour" &&
@@ -162,7 +163,7 @@ function computeReconciliation(
     if (scope.account && change.account !== scope.account) continue;
     if (scope.contractId && entry.contractId !== scope.contractId) continue;
     if (scope.workId && change.workId !== scope.workId) continue;
-    if (!includeUnearnedCommitments && unresolved.has(entry.id)) {
+    if (basis !== "legacy-commitment" && unresolved.has(entry.id)) {
       unresolvedInScope.push(entry.id);
       continue;
     }
@@ -192,6 +193,13 @@ function computeReconciliation(
     advance = 0n;
   const people = new Map<string, { payable: bigint; advance: bigint }>();
   const payableGroups = new Map<string, bigint>();
+  const bucketBalances: {
+    personId: string;
+    account: Account;
+    contractId: string | null;
+    remaining: bigint;
+    extra: bigint;
+  }[] = [];
   for (const row of buckets.values()) {
     const job = row.contractId ? jobs.get(row.contractId) : null;
     const agreed = BigInt(job?.total ?? 0);
@@ -204,6 +212,13 @@ function computeReconciliation(
     grossPayable += positive(base);
     grossAdvance += positive(-base);
     const adjusted = base + row.adjustment;
+    bucketBalances.push({
+      personId: row.party,
+      account: row.account,
+      contractId: row.contractId,
+      remaining: positive(adjusted),
+      extra: positive(-adjusted),
+    });
     const group = JSON.stringify([row.party, row.account]);
     const aggregate = people.get(group) ?? { payable: 0n, advance: 0n };
     aggregate.payable += positive(adjusted);
@@ -265,6 +280,7 @@ function computeReconciliation(
       unresolvedAdjustmentIds: unresolvedInScope,
     },
     payableGroups,
+    bucketBalances,
   };
 }
 
@@ -276,7 +292,19 @@ export function legacyCommitmentTotals(
   ledger: Ledger,
   scope: FinancialScope = {},
 ) {
-  return computeReconciliation(ledger, scope, true).totals;
+  return computeReconciliation(ledger, scope, "legacy-commitment").totals;
+}
+
+export function commitmentTotals(ledger: Ledger, scope: FinancialScope = {}) {
+  const result = computeReconciliation(ledger, scope, "commitment");
+  return {
+    ...result.totals,
+    buckets: result.bucketBalances.map((bucket) => ({
+      ...bucket,
+      remaining: exact(bucket.remaining),
+      extra: exact(bucket.extra),
+    })),
+  };
 }
 
 export function reconciledPayableGroups(ledger: Ledger) {

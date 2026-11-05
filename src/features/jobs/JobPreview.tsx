@@ -1,4 +1,4 @@
-import { ArrowRightIcon, HardHatIcon, PlusIcon } from "@phosphor-icons/react";
+import { ArrowRightIcon, PlusIcon } from "@phosphor-icons/react";
 import { useMemo } from "react";
 import { useLocation } from "react-router";
 import { jobDetailUrl } from "../../app/jobRoutes";
@@ -33,41 +33,31 @@ export function JobTile({
     () => balance ?? jobBalances(ledger).get(job.id)!,
     [balance, ledger, job.id],
   );
-  const remaining = summary.extra > 0 ? summary.extra : summary.remaining;
-  const showCredit =
-    !summary.balanceAmbiguous &&
-    summary.extra > 0 &&
-    (summary.earned > 0 || summary.extra !== summary.netPaid);
-  const showBalance =
-    !summary.valid ||
-    summary.balanceAmbiguous ||
-    summary.remaining > 0 ||
-    showCredit ||
-    summary.earned > 0;
+  const remaining =
+    summary.commitmentExtra > 0
+      ? summary.commitmentExtra
+      : summary.remainingCommitment;
   const status = jobStatusKey(job);
   const worker = ledger.people.find((person) => person.id === job.personId);
   return (
     <button
       type="button"
-      className={`job-snap-card job-payment-${summary.balanceAmbiguous ? "review" : summary.state}`}
+      className={`job-snap-card job-payment-${summary.balanceAmbiguous ? "review" : summary.commitmentState}`}
       onClick={onOpen}
     >
-      <span className="job-tile-heading">
-        <span className="job-tile-mark">
-          <HardHatIcon size={21} weight="duotone" />
-        </span>
+      <span className="job-card-heading">
+        <strong className="job-tile-name" title={formatDigits(jobName(job, t))}>
+          {formatDigits(jobName(job, t))}
+        </strong>
         <span className={`job-status job-status-${status}`}>
           <i />
           {t(jobStatusNames[status])}
         </span>
       </span>
-      <strong className="job-tile-name" title={formatDigits(jobName(job, t))}>
-        {formatDigits(jobName(job, t))}
-      </strong>
       {showWorker && worker ? (
         <span className="job-tile-worker">{formatDigits(worker.name)}</span>
       ) : null}
-      <span className="job-tile-amounts" data-balance={showBalance}>
+      <span className="job-tile-amounts">
         <span>
           <small>{t("মোট")}</small>
           <strong>{money(job.total)}</strong>
@@ -76,29 +66,27 @@ export function JobTile({
           <small>{t("দিয়েছি")}</small>
           <strong>{money(summary.netPaid)}</strong>
         </span>
+      </span>
+      <span
+        className={`job-card-balance ${summary.commitmentState === "settled" && summary.commitmentValid ? "job-tile-settled" : "job-tile-balance"}`}
+      >
         {summary.balanceAmbiguous ? (
-          <span className="job-tile-balance">
+          <>
             <small>{t("বাকি")}</small>
             <strong>{t("বাকি মেলানো বাকি")}</strong>
-          </span>
-        ) : summary.earned > 0 && summary.state === "settled" ? (
-          <span className="job-tile-settled">{t("বাকি নেই")}</span>
-        ) : showBalance ? (
-          <span className="job-tile-balance">
+          </>
+        ) : !summary.commitmentValid ? (
+          <strong>{t("টাকার অঙ্ক বেশি হয়েছে।")}</strong>
+        ) : summary.commitmentState === "settled" ? (
+          <strong>{t("বাকি নেই")}</strong>
+        ) : (
+          <>
             <small>
-              {t(
-                showCredit
-                  ? summary.earned >= job.total && job.total > 0
-                    ? "বেশি দিয়েছি"
-                    : "জমা আছে"
-                  : "দিতে বাকি",
-              )}
+              {t(summary.commitmentExtra > 0 ? "বেশি দিয়েছি" : "আর দিতে হবে")}
             </small>
-            <strong>
-              {summary.valid ? money(remaining) : t("টাকার অঙ্ক বেশি হয়েছে।")}
-            </strong>
-          </span>
-        ) : null}
+            <strong>{money(remaining)}</strong>
+          </>
+        )}
       </span>
     </button>
   );

@@ -282,6 +282,7 @@ export function HousePaymentForm() {
   const presentation = paymentPresentation(planningLedger, request, plan, {
     date: draft.date,
     method: draft.method,
+    balanceBasis: settlement ? "earned" : undefined,
   });
   const cashConfirmed =
     draft.confirmUnallocatedCash &&

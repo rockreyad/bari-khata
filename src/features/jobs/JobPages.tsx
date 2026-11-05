@@ -121,13 +121,20 @@ export function JobsPage() {
   const jobs = scoped.filter(
     (job) =>
       (status === "all" || jobStatusKey(job) === status) &&
-      (balance === "all" || balances.get(job.id)?.state === balance),
+      (balance === "all" ||
+        (balances.get(job.id)?.commitmentValid &&
+          balances.get(job.id)?.commitmentState === balance)),
   );
   const counts = scoped.reduce(
     (result, job) => ({
       all: result.all + 1,
       ongoing: result.ongoing + Number(job.status === "ongoing"),
-      due: result.due + Number(balances.get(job.id)?.state === "due"),
+      due:
+        result.due +
+        Number(
+          balances.get(job.id)?.commitmentValid &&
+            balances.get(job.id)?.commitmentState === "due",
+        ),
     }),
     { all: 0, ongoing: 0, due: 0 },
   );

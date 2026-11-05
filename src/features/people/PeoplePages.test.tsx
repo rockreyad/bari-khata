@@ -109,8 +109,8 @@ it("shows unpaid completed work on the profile without repeating a zero due or t
     "৳10000",
   );
   expect(
-    summary.querySelector(".contact-summary-metrics")?.textContent,
-  ).toContain("দিতে বাকি৳25000");
+    summary.querySelector(".contact-remaining-hero")?.textContent,
+  ).toContain("আর দিতে হবে৳25000");
   expect(container.querySelector(".job-snap-card")?.textContent).toContain(
     "৳25000",
   );
@@ -393,7 +393,7 @@ it.each([
     expect(screen.queryByRole("button", { name: "কাজ যোগ করি" })).toBeNull();
     const job = screen.getByRole("button", { name: /পুরোনো কাজ/ });
     expect(job.textContent).toContain("৳400");
-    expect(job.textContent).not.toContain("৳600");
+    expect(job.textContent).toContain("আর দিতে হবে৳600");
     await userEvent.click(job);
     expect(state.go).toHaveBeenCalledWith(
       expect.stringContaining("/works/old-job"),
@@ -426,7 +426,10 @@ it("puts payment before the chart and shows a matching job balance only once", (
   const before = JSON.stringify(state.ledger);
   renderPage();
   const summary = screen.getByRole("region", { name: "এই নামের মোট হিসাব" });
-  expect(within(summary).queryByText("৳600")).toBeNull();
+  expect(within(summary).getAllByText("৳600")).toHaveLength(1);
+  expect(
+    summary.querySelector(".contact-remaining-hero")?.textContent,
+  ).toContain("আর দিতে হবে৳600");
   expect(summary.querySelector(".contact-job-totals")).toBeNull();
   expect(within(summary).queryByText("জমা আছে")).toBeNull();
   const payment = within(summary).getByRole("button", { name: "টাকা দিই" });
@@ -490,7 +493,7 @@ it("keeps credit from an aggregate correction visible when a contact has an agre
   await userEvent.click(screen.getByText("আরও হিসাব"));
   expect(
     container.querySelector(".contact-reconciliation")?.textContent,
-  ).toContain("আমার জমা৳1100");
+  ).toContain("বেশি দিয়েছি৳100");
   expect(
     container.querySelector(".contact-reconciliation")?.textContent,
   ).not.toContain("অগ্রিম দিয়েছি");
@@ -500,7 +503,7 @@ it("keeps credit from an aggregate correction visible when a contact has an agre
   expect(JSON.stringify(ledger)).toBe(before);
 });
 
-it("keeps recorded payments visible as credit without treating a work price as earned debt", () => {
+it("shows the corrected agreed remainder without turning it into an earned bill", () => {
   state.ledger = LedgerSchema.parse({
     works: [{ id: "work", name: "নমুনা কাজ" }],
     people: [{ id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" }],
@@ -548,8 +551,11 @@ it("keeps recorded payments visible as credit without treating a work price as e
     container.querySelector(".contact-summary-metrics .contact-due"),
   ).toBeNull();
   expect(
-    container.querySelector(".contact-reconciliation")?.textContent,
-  ).toContain("আমার জমা৳500");
+    container.querySelector(".contact-remaining-hero")?.textContent,
+  ).toContain("আর দিতে হবে৳500");
+  expect(
+    (state.ledger as Ledger).entries.some((entry) => entry.kind === "expense"),
+  ).toBe(false);
 });
 
 it("keeps a house commitment accessible when its remaining amount happens to equal a selected notebook bill", () => {
@@ -591,7 +597,7 @@ it("keeps a house commitment accessible when its remaining amount happens to equ
   });
   const { container } = renderPage("/parties/worker?work=work");
   expect(
-    container.querySelector(".contact-summary-metrics")?.textContent,
+    container.querySelector(".contact-remaining-hero")?.textContent,
   ).toContain("৳600");
   expect(container.querySelector(".contact-job-totals")).toBeNull();
   expect(container.querySelector(".job-snap-card")).not.toBeNull();

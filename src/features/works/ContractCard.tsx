@@ -266,24 +266,10 @@ export function ContractCard({
 }) {
   const { t, money, date, formatDigits } = useLanguageContext();
   const summary = contractSummary(ledger, contract.id);
-  const extra = summary.advance;
-  const showCredit =
-    !summary.balanceAmbiguous &&
-    extra > 0 &&
-    (summary.earned > 0 || extra !== summary.netPaid);
-  const showBalance =
-    summary.balanceAmbiguous ||
-    summary.remaining > 0 ||
-    showCredit ||
-    summary.earned > 0;
-  const creditLabel =
-    summary.earned >= contract.total && contract.total > 0
-      ? "বেশি দিয়েছি"
-      : "জমা আছে";
-  if (
-    !summary.balanceAmbiguous &&
-    (!Number.isSafeInteger(summary.remaining) || !Number.isSafeInteger(extra))
-  )
+  const extra = summary.commitmentExtra;
+  const remaining = summary.remainingCommitment;
+  const showCredit = !summary.balanceAmbiguous && extra > 0;
+  if (!summary.balanceAmbiguous && !summary.commitmentValid)
     return (
       <p className="form-error" role="alert">
         {t("টাকার অঙ্ক বেশি হয়েছে।")}
@@ -311,7 +297,7 @@ export function ContractCard({
           ) : null}
         </header>
       ) : null}
-      <div className="job-summary-values" data-balance={showBalance}>
+      <div className="job-summary-values" data-balance="true">
         <div className="job-detail-total">
           <span>{t("মোট টাকা")}</span>
           {contract.calculatedTotal != null &&
@@ -327,30 +313,28 @@ export function ContractCard({
             <dt>{t("দিয়েছি")}</dt>
             <dd>{money(summary.netPaid)}</dd>
           </div>
-          {showBalance ? (
-            <div
-              className={
-                summary.balanceAmbiguous
-                  ? "job-detail-review"
-                  : showCredit
-                    ? "job-extra-paid"
-                    : summary.remaining > 0
-                      ? "job-detail-due"
-                      : "job-detail-settled"
-              }
-            >
-              <dt>{t(showCredit ? creditLabel : "দিতে বাকি")}</dt>
-              <dd>
-                {summary.balanceAmbiguous
-                  ? t("বাকি মেলানো বাকি")
-                  : showCredit
-                    ? money(extra)
-                    : summary.remaining > 0
-                      ? money(summary.remaining)
-                      : t("বাকি নেই")}
-              </dd>
-            </div>
-          ) : null}
+          <div
+            className={
+              summary.balanceAmbiguous
+                ? "job-detail-review"
+                : showCredit
+                  ? "job-extra-paid"
+                  : remaining > 0
+                    ? "job-detail-due"
+                    : "job-detail-settled"
+            }
+          >
+            <dt>{t(showCredit ? "বেশি দিয়েছি" : "আর দিতে হবে")}</dt>
+            <dd>
+              {summary.balanceAmbiguous
+                ? t("বাকি মেলানো বাকি")
+                : showCredit
+                  ? money(extra)
+                  : remaining > 0
+                    ? money(remaining)
+                    : t("বাকি নেই")}
+            </dd>
+          </div>
         </dl>
       </div>
       {!summary.balanceAmbiguous &&
