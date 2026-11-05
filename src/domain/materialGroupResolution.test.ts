@@ -138,7 +138,7 @@ describe("read-only material group resolution", () => {
     expect(ledger).toEqual(before);
   });
 
-  it("infers only material, unload and transport names while keeping deliberate metadata links", () => {
+  it("keeps wage, rental and equipment names metadata-only", () => {
     const resolve = buildMaterialGroupResolver(catalog());
     for (const costType of ["material", "unload", "transport"])
       expect(resolve(line("Cement unloading", { costType })).groupId).toBe(
@@ -154,6 +154,127 @@ describe("read-only material group resolution", () => {
         ).groupId,
       ).toBe("cement");
     }
+  });
+
+  it("resolves bounded other processing charges from their own preceding material name", () => {
+    const ledger = catalog();
+    ledger.materialGroups.push(
+      { id: "panel", name: "প্যানেল", aliases: ["Panel", "প্যানেল কাটা"] },
+      { id: "pipe", name: "নল", aliases: ["Pipe"] },
+    );
+    const before = structuredClone(ledger);
+    const resolve = buildMaterialGroupResolver(ledger);
+    for (const label of [
+      "প্যানেল কাটা",
+      "প্যানেল কাটার বিল",
+      "প্যানেলের কাটানোর বিল",
+      "প্যানেল কাটানোর বিল বাবদ ১২ টাকা",
+      "Panel cutting",
+      "Panel breaking",
+    ])
+      expect(resolve(line(label, { costType: "other" }))).toEqual({
+        groupId: "panel",
+        source: "name",
+        ambiguousGroupIds: [],
+      });
+    for (const label of [
+      "নল ভাঙা",
+      "নল ভাঙ্গা",
+      "নলের ভাঙ্গার বিল",
+      "Pipe bending",
+    ])
+      expect(resolve(line(label, { costType: "other" })).groupId).toBe("pipe");
+    expect(ledger).toEqual(before);
+  });
+
+  it("does not infer other processing from equipment, wages, repairs or catalog-only identity", () => {
+    const ledger = catalog();
+    ledger.materialGroups.push(
+      {
+        id: "panel",
+        name: "প্যানেল",
+        aliases: ["Panel", "cutting", "machine"],
+      },
+      { id: "cut-wire", name: "কাটা তার", aliases: [] },
+    );
+    ledger.items[0].name = "Alpha";
+    ledger.items[0].aliases = [];
+    const resolve = buildMaterialGroupResolver(ledger);
+    for (const label of [
+      "প্যানেলের কাজ",
+      "প্যানেল কাটার",
+      "প্যানেল কাটার ব্লেড",
+      "প্যানেল কাটার মজুরি",
+      "প্যানেল ভাঙ্গা মজুরী",
+      "প্যানেল কাটা শ্রমিকদের",
+      "প্যানেল কাটার মেশিন",
+      "প্যানেল ভাঙ্গার মেশিনটি",
+      "প্যানেল কাটা মোটরটি",
+      "প্যানেল কাটার যন্ত্র ভাড়া",
+      "প্যানেল মেরামত ও কাটা",
+      "Panel cutting equipment",
+      "Panel cutting wheel",
+      "Panel cutting blade",
+      "Panel cutting tool",
+      "Panel cutting motor",
+      "Panel cutting widget",
+      "Panel cutting widget bending",
+      "প্যানেল কাটা অজানাযন্ত্রাংশ",
+      "Panel cutting labour",
+      "Panel cutting repair",
+      "Panelwork cutting",
+      "Panel cuttingboard",
+      "Alpha cutting",
+      "Nomo crushing",
+      "cutting sawing",
+      "কাটা তার",
+    ])
+      expect(resolve(line(label, { costType: "other" }))).toEqual({
+        groupId: null,
+        source: null,
+        ambiguousGroupIds: [],
+      });
+    for (const costType of ["labour", "rental"])
+      expect(resolve(line("প্যানেল কাটা", { costType })).groupId).toBeNull();
+    expect(
+      resolve(
+        line("প্যানেল কাটার মজুরি", {
+          costType: "other",
+          materialGroupId: "panel",
+        }),
+      ).groupId,
+    ).toBe("panel");
+    expect(
+      resolve(line("কাটা তার বাঁকানো", { costType: "other" })).groupId,
+    ).toBe("cut-wire");
+  });
+
+  it("preserves full-name and catalog conflicts on eligible processing charges", () => {
+    const ledger = catalog();
+    ledger.materialGroups.push(
+      { id: "panel", name: "প্যানেল", aliases: ["Panel"] },
+      { id: "pipe", name: "নল", aliases: ["Pipe"] },
+    );
+    const resolve = buildMaterialGroupResolver(ledger);
+    expect(resolve(line("প্যানেল ও নল কাটা", { costType: "other" }))).toEqual({
+      groupId: null,
+      source: null,
+      ambiguousGroupIds: ["panel", "pipe"],
+    });
+    expect(
+      resolve(line("Panel Nomo cutting", { costType: "other" })),
+    ).toMatchObject({
+      groupId: null,
+      ambiguousGroupIds: ["cement", "panel"],
+    });
+    expect(
+      resolve(
+        line("Panel cutting", { costType: "other", materialGroupId: "pipe" }),
+      ),
+    ).toMatchObject({
+      groupId: null,
+      ambiguousGroupIds: ["panel", "pipe"],
+    });
   });
 
   it("accepts bounded Bengali possessives only on eligible lines, keeping work-query scope unchanged", () => {
