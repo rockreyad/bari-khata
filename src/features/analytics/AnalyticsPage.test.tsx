@@ -119,7 +119,7 @@ describe("report routes", () => {
       filtersFromSearch(new URLSearchParams("group="), "cement").groupId,
     ).toBe("");
   });
-  it("shows material-only price details and switches explicitly to labour", () => {
+  it("starts with all bill prices and retains explicitly selected labour scope", () => {
     const ledger = LedgerSchema.parse({
       works: [{ id: "roof", name: "ছাদের কাজ" }],
       people: [{ id: "worker", name: "রহিম" }],
@@ -174,12 +174,11 @@ describe("report routes", () => {
         <AnalyticsPage ledger={ledger} />
       </MemoryRouter>,
     );
-    expect(material).toContain("৳2000");
+    expect(material).toContain("৳2800");
     expect(material).toContain("সিমেন্ট");
     expect(material).not.toContain("মালের ধরন দেওয়া নেই");
-    expect(material).not.toContain("৳2800");
-    expect(material).not.toContain("মিস্ত্রির মজুরি");
-    expect(material).not.toContain("ভ্যানের ভাড়া");
+    expect(material).toContain("মিস্ত্রির মজুরি");
+    expect(material).toContain("ভ্যানের ভাড়া");
     const labour = renderToString(
       <MemoryRouter initialEntries={["/reports?section=labour"]}>
         <AnalyticsPage ledger={ledger} />

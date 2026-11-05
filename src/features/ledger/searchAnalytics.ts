@@ -51,6 +51,8 @@ export type LedgerSearchIndex = {
 export type LedgerSearchFilters = HistoryFilters & {
   material?: string;
   month?: string;
+  costLineKeys?: ReadonlySet<string>;
+  costDiscoveryLineKeys?: ReadonlySet<string>;
 };
 export type LedgerSearchResult = {
   entries: Entry[];
@@ -65,6 +67,7 @@ export type LedgerSearchResult = {
   returns: number;
   costEntryCount: number;
   matchedLineCount: number;
+  matchedLineKeys: string[];
   undatedCost: number;
   undatedEntryCount: number;
   baseUndatedCost: number;
@@ -416,6 +419,7 @@ export function selectLedgerSearch(
   const ambiguousEntryIds: string[] = [];
   const partiallyAmbiguousEntryIds: string[] = [];
   const groupAmbiguousEntryIds: string[] = [];
+  const matchedLineKeys: string[] = [];
   const months = new Map<string, MonthBucket>();
   const costEntries = new Set<string>(),
     undatedEntries = new Set<string>(),
@@ -435,6 +439,7 @@ export function selectLedgerSearch(
     const { entry } = document;
     if (
       (!filters.includeVoided && entry.voided) ||
+      (filters.costLineKeys && !document.costs.length) ||
       (filters.personId && entry.personId !== filters.personId) ||
       (filters.workId && !document.workIds.has(filters.workId)) ||
       (filters.account && document.account !== filters.account) ||
@@ -452,10 +457,15 @@ export function selectLedgerSearch(
     const scopeCosts = document.costs.filter(
       ({ line }) =>
         (!filters.workId || line.workId === filters.workId) &&
-        (!filters.costType || line.costType === filters.costType),
+        (!filters.costType || line.costType === filters.costType) &&
+        (!filters.costLineKeys ||
+          filters.costLineKeys.has(`${entry.id}:${line.id}`) ||
+          filters.costDiscoveryLineKeys?.has(`${entry.id}:${line.id}`)),
     );
     const selected = scopeCosts.filter(
       (cost) =>
+        (!filters.costLineKeys ||
+          filters.costLineKeys.has(`${entry.id}:${cost.line.id}`)) &&
         (!material || cost.tokens.has(material.token)) &&
         !groupUncertain(cost) &&
         (material ||
@@ -476,10 +486,13 @@ export function selectLedgerSearch(
           ),
     );
     const ambiguousGroup = Boolean(
-      (groupScope.size || material) &&
       scopeCosts.some(
         (cost) =>
-          groupUncertain(cost) &&
+          (groupUncertain(cost) ||
+            (filters.costDiscoveryLineKeys?.has(
+              `${entry.id}:${cost.line.id}`,
+            ) &&
+              cost.ambiguousGroupIds.size > 0)) &&
           (wholeBillMatch ||
             (matches(cost.searchable, words) &&
               matches(cost.identitySearchable, identityWords))),
@@ -524,7 +537,12 @@ export function selectLedgerSearch(
     if (ambiguousGroup && !entry.voided) groupAmbiguousEntryIds.push(entry.id);
     if (
       document.costs.length &&
-      (words.length || ambiguousReturn || ambiguousGroup) &&
+      (words.length ||
+        ambiguousReturn ||
+        ambiguousGroup ||
+        scopeCosts.some((cost) =>
+          filters.costDiscoveryLineKeys?.has(`${entry.id}:${cost.line.id}`),
+        )) &&
       !selected.length &&
       !entry.voided
     )
@@ -547,6 +565,7 @@ export function selectLedgerSearch(
         costEntries.add(entry.id);
         for (const cost of selected) {
           matchedLineCount++;
+          matchedLineKeys.push(`${entry.id}:${cost.line.id}`);
           if (cost.amount >= 0n) purchases += cost.amount;
           else returns -= cost.amount;
           if (!dated) {
@@ -592,6 +611,7 @@ export function selectLedgerSearch(
     returns: exact(returns),
     costEntryCount: costEntries.size,
     matchedLineCount,
+    matchedLineKeys,
     undatedCost: exact(undatedCost),
     undatedEntryCount: undatedEntries.size,
     baseUndatedCost: exact(baseUndatedCost),
