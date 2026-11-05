@@ -3,6 +3,7 @@ import { effectiveAccounts } from "./effectiveAccounts.js";
 import type { Account, CostType, Entry, Ledger } from "./model.js";
 import { EntryCoreSchema, validateLedger } from "./model.js";
 import { adjustmentBalanceDelta, reconciledTotals } from "./adjustmentMath.js";
+import { cashObligationParts } from "./cashObligations.js";
 
 export const accounts: Account[] = ["materials", "labour", "other"];
 export const costTypes: CostType[] = [
@@ -80,13 +81,22 @@ function accountBalances(
   entries: Entry[],
   effective: Map<string, Account>,
   workId?: string,
+  ledger: Pick<Ledger, "entries" | "paymentAllocations"> = { entries },
 ): Map<string, Balance> {
   const balances = new Map<string, Balance>();
   for (const entry of entries) {
     if (entry.balanceImpact === "historical" || entry.kind === "adjustment")
       continue;
     const isCost = entry.kind === "expense" || entry.kind === "expense_credit";
-    const parts = isCost ? entry.lines : entry.allocations;
+    const amounts = new Map<string, number>();
+    for (const part of entry.allocations)
+      amounts.set(part.workId, (amounts.get(part.workId) ?? 0) + part.amount);
+    const parts = isCost
+      ? entry.lines
+      : [...amounts].map(([workId, amount]) => ({ workId, amount }));
+    const settled = new Map<string, number>();
+    for (const part of cashObligationParts(ledger, entry))
+      settled.set(part.workId, (settled.get(part.workId) ?? 0) + part.amount);
     for (const part of parts) {
       if (workId && part.workId !== workId) continue;
       // Unknown shops cannot settle each other's bills just because both names are blank.
@@ -99,13 +109,19 @@ function accountBalances(
         entry.contractId,
       ]);
       const balance = balances.get(key) ?? emptyBalance();
-      if (isCost)
+      if (isCost) {
         balance.cost +=
           part.amount * (entry.kind === "expense_credit" ? -1 : 1);
-      else if (entry.kind === "payment") balance.paid += part.amount;
-      else balance.refunds += part.amount;
+        balance.balance +=
+          part.amount * (entry.kind === "expense_credit" ? -1 : 1);
+      } else if (entry.kind === "payment") {
+        balance.paid += part.amount;
+        balance.balance -= settled.get(part.workId) ?? 0;
+      } else {
+        balance.refunds += part.amount;
+        balance.balance += settled.get(part.workId) ?? 0;
+      }
       balance.netPaid = balance.paid - balance.refunds;
-      balance.balance = balance.cost - balance.netPaid;
       balance.payable = Math.max(balance.balance, 0);
       balance.advance = Math.max(-balance.balance, 0);
       balances.set(key, balance);
@@ -168,7 +184,12 @@ export function summarize(ledger: Ledger, workId?: string) {
     }
   }
   const balances = [
-    ...accountBalances(entries, effectiveAccounts(ledger), workId).values(),
+    ...accountBalances(
+      entries,
+      effectiveAccounts(ledger),
+      workId,
+      ledger,
+    ).values(),
   ];
   const contracts = ledger.contracts.filter(
     (contract) =>
@@ -233,6 +254,7 @@ export function personSummary(
           entries.filter((entry) => effective.get(entry.id) === account),
           effective,
           workId,
+          ledger,
         ).values(),
       ];
       const confirmed = balances.reduce(
@@ -332,6 +354,8 @@ export function partyAccountBalance(
     ...accountBalances(
       entries.filter((entry) => !entry.voided),
       effective,
+      undefined,
+      ledger,
     ).values(),
   ].reduce(
     (sum, balance) => ({
@@ -372,20 +396,34 @@ export function contractSummary(ledger: Ledger, contractId: string) {
   let adjustment = 0;
   let paid = 0;
   let refunds = 0;
+  let obligationPaid = 0;
+  let obligationRefunds = 0;
   for (const entry of entries) {
     const total = entryTotal(entry);
     if (entry.kind === "expense") billed += total;
     if (entry.kind === "expense_credit") billed -= total;
     if (entry.kind === "payment") paid += total;
     if (entry.kind === "refund") refunds += total;
+    if (entry.kind === "payment" || entry.kind === "refund") {
+      const settled = cashObligationParts(ledger, entry).reduce(
+        (sum, part) => sum + part.amount,
+        0,
+      );
+      if (entry.kind === "payment") obligationPaid += settled;
+      else obligationRefunds += settled;
+    }
     if (entry.kind === "adjustment")
       adjustment += adjustmentBalanceDelta(entry);
   }
   const agreed = contract?.total ?? 0;
   const netPaid = paid - refunds;
+  const obligationNetPaid = obligationPaid - obligationRefunds;
   const balance =
-    BigInt(Math.max(agreed, billed)) + BigInt(adjustment) - BigInt(netPaid);
-  const billedBalance = BigInt(billed) + BigInt(adjustment) - BigInt(netPaid);
+    BigInt(Math.max(agreed, billed)) +
+    BigInt(adjustment) -
+    BigInt(obligationNetPaid);
+  const billedBalance =
+    BigInt(billed) + BigInt(adjustment) - BigInt(obligationNetPaid);
   return {
     contract,
     agreed,
@@ -394,9 +432,10 @@ export function contractSummary(ledger: Ledger, contractId: string) {
     paid,
     refunds,
     netPaid,
+    obligationNetPaid,
     remaining: Number(balance > 0n ? balance : 0n),
     payable: Number(billedBalance > 0n ? billedBalance : 0n),
-    advance: Math.max(netPaid - billed, 0),
+    advance: Math.max(obligationNetPaid - billed, 0),
     entries,
   };
 }

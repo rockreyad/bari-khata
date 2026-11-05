@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import type { InputHTMLAttributes, SelectHTMLAttributes } from "react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -159,7 +160,9 @@ it("keeps an edited professional description and its preset draft through Indexe
   await restored.importBackup(await repository.exportBackup(), {
     replace: true,
   });
-  expect((await restored.read())!.ledger).toEqual(saved);
+  expect((await restored.read())!.ledger).toEqual(
+    migrateArchitecture(saved).ledger,
+  );
 });
 
 it.each(["87000", "85000"])(

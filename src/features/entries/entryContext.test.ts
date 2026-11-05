@@ -302,3 +302,47 @@ it("does not assign a new unlinked job to another job's notebook just because th
     }),
   ).toMatchObject({ contractId: "old", workId: "plaster" });
 });
+
+it("carries only the selected agreement's milestone into a wage bill context", () => {
+  const ledger = LedgerSchema.parse({
+    ...base(),
+    contracts: [
+      { id: "job", personId: "worker", workId: "other", total: 100000 },
+    ],
+    milestones: [
+      { id: "stage", contractId: "job", title: "নমুনা ধাপ", amount: 40000 },
+    ],
+  });
+  const context = entryContext(ledger, {
+    kind: "wage",
+    personId: "worker",
+    workId: "other",
+    contractId: "job",
+    milestoneId: "stage",
+  });
+  expect(context.milestoneId).toBe("stage");
+  const saved = buildQuickEntry(ledger, {
+    ...context,
+    amount: "200",
+    payment: "partial",
+    paid: "50",
+  });
+  expect(saved.entries).toHaveLength(2);
+  expect(saved.entries[0]).toMatchObject({
+    kind: "expense",
+    milestoneId: "stage",
+    contractId: "job",
+  });
+  expect(saved.entries[1]).toMatchObject({
+    kind: "payment",
+    contractId: "job",
+  });
+  expect(saved.entries[1].milestoneId).toBeUndefined();
+  expect(
+    entryContext(ledger, {
+      kind: "wage",
+      personId: "shop",
+      milestoneId: "stage",
+    }).milestoneId,
+  ).toBe("");
+});

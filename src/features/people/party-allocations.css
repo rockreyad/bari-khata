@@ -1,0 +1,100 @@
+.party-allocation-panel,
+.agreement-milestones {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+.party-allocation-panel h2,
+.agreement-milestones h2 {
+  margin: 0 0 14px;
+  font-size: 17px;
+}
+.party-ledger-totals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0 0 12px;
+}
+.party-ledger-totals dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.party-ledger-totals dd {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+.party-bill-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.party-bill-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.party-bill-list button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: start;
+}
+.party-bill-list small,
+.party-allocation-panel label small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.party-bill-list li > span {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+.party-allocation-panel details,
+.agreement-milestones details {
+  margin-top: 16px;
+}
+.party-allocation-panel summary,
+.agreement-milestones summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.party-allocation-panel form,
+.agreement-milestones form {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+}
+.party-allocation-panel label,
+.agreement-milestones label {
+  display: grid;
+  gap: 6px;
+}
+.party-allocation-panel p,
+.agreement-milestones p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.agreement-milestones .milestone-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.agreement-milestones .milestone-item small {
+  color: var(--muted);
+}
+@media (max-width: 420px) {
+  .party-allocation-panel,
+  .agreement-milestones {
+    padding: 16px;
+  }
+  .party-bill-list li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

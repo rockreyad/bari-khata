@@ -1,5 +1,6 @@
 import type { Account, Entry, Ledger } from "./model.js";
 import { effectiveAccounts } from "./effectiveAccounts.js";
+import { cashObligationParts } from "./cashObligations.js";
 
 export type AdjustmentBasis = "paid" | "cost" | "balance";
 export type FinancialScope = {
@@ -87,10 +88,14 @@ function computeReconciliation(ledger: Ledger, scope: FinancialScope = {}) {
     );
     if (cost) row.cost += entry.kind === "expense_credit" ? -amount : amount;
     else if (entry.kind === "payment") {
-      row.paid += amount;
+      row.paid += cashObligationParts(ledger, entry)
+        .filter((part) => !scope.workId || part.workId === scope.workId)
+        .reduce((sum, part) => sum + BigInt(part.amount), 0n);
       actualPaid += amount;
     } else {
-      row.refunds += amount;
+      row.refunds += cashObligationParts(ledger, entry)
+        .filter((part) => !scope.workId || part.workId === scope.workId)
+        .reduce((sum, part) => sum + BigInt(part.amount), 0n);
       actualRefunds += amount;
     }
   }

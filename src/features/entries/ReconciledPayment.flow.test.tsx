@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { migrateArchitecture } from "../../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import type { InputHTMLAttributes, SelectHTMLAttributes } from "react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -266,7 +267,9 @@ it("keeps a professional's reconciled jobs separate from a custom partial labour
   const restoredRepo = new LedgerRepository(restoredDatabase);
   await restoredRepo.ensure("real", LedgerSchema.parse({}));
   await restoredRepo.importBackup(await repo.exportBackup(), { replace: true });
-  expect((await restoredRepo.read())!.ledger).toEqual(settled);
+  expect((await restoredRepo.read())!.ledger).toEqual(
+    migrateArchitecture(settled).ledger,
+  );
 });
 
 it.each([
@@ -375,7 +378,7 @@ it.each([
       replace: true,
     });
     const restored = (await restoredRepo.read())!.ledger;
-    expect(restored).toEqual(saved);
+    expect(restored).toEqual(migrateArchitecture(saved).ledger);
     context.ledger = restored;
     view = mount();
     await ready("রাখুন");

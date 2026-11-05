@@ -1,3 +1,4 @@
+import { migrateArchitecture } from "./architectureMigration";
 import "fake-indexeddb/auto";
 import { expect, it } from "vitest";
 import { LedgerDatabase } from "../data/database";
@@ -146,13 +147,17 @@ it("round-trips agreed terms through IndexedDB and backups and rejects old-clien
     const restore = new LedgerRepository(restoreDatabase);
     await restore.ensure("real", LedgerSchema.parse({}));
     await restore.importBackup(backup, { replace: true });
-    expect((await restore.read())!.ledger).toEqual(changed);
+    expect((await restore.read())!.ledger).toEqual(
+      migrateArchitecture(changed).ledger,
+    );
     const damaged = JSON.parse(backup);
     damaged.ledger.contracts[0].calculatedTotal = 100;
     await expect(
       restore.importBackup(JSON.stringify(damaged), { replace: true }),
     ).rejects.toThrow();
-    expect((await restore.read())!.ledger).toEqual(changed);
+    expect((await restore.read())!.ledger).toEqual(
+      migrateArchitecture(changed).ledger,
+    );
   } finally {
     await database.delete();
     await restoreDatabase.delete();

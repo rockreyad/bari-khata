@@ -154,10 +154,18 @@ export const PersonSchema = z
     phone: z.string().max(60).default("").transform(latinDigits),
     kind: PersonKindSchema.nullable().default(null),
     contactType: ContactTypeSchema.nullable().optional(),
+    roles: z.array(ContactTypeSchema).max(8).optional(),
+    identityType: z.enum(["person", "organization"]).optional(),
     quickActions: z.array(ContactActionSchema).max(4).nullable().default(null),
   })
   .superRefine((person, ctx) => {
     validateRemoval(person, ctx);
+    if (person.roles && new Set(person.roles).size !== person.roles.length)
+      ctx.addIssue({
+        code: "custom",
+        message: "Duplicate party role",
+        path: ["roles"],
+      });
     if (
       person.contactType &&
       !contactTypeMatchesKind(person.contactType, person.kind)
@@ -255,6 +263,42 @@ export const ContractSchema = ContractSnapshotSchema.extend({
     });
 });
 export type Contract = z.infer<typeof ContractSchema>;
+
+export const MilestoneSchema = z.object({
+  id: Id,
+  contractId: Id,
+  title: z.string().trim().min(1).max(300),
+  amount: MoneySchema.refine((amount) => amount > 0),
+  dueOn: WorkDateSchema.default(null),
+  status: z.enum(["planned", "ongoing", "done"]).default("planned"),
+});
+export type Milestone = z.infer<typeof MilestoneSchema>;
+
+export const PaymentAllocationSchema = z
+  .object({
+    id: Id,
+    paymentId: Id,
+    billId: Id,
+    amount: MoneySchema.refine((amount) => amount > 0),
+    workId: Id.optional(),
+    createdAt: z.string().datetime(),
+    cancelledAt: z.string().datetime().optional(),
+    cancellationReason: z.string().trim().min(1).max(2000).optional(),
+  })
+  .superRefine((allocation, ctx) => {
+    if (
+      Boolean(allocation.cancelledAt) !==
+        Boolean(allocation.cancellationReason) ||
+      (allocation.cancelledAt &&
+        Date.parse(allocation.cancelledAt) < Date.parse(allocation.createdAt))
+    )
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Allocation cancellation needs its time and reason after creation",
+      });
+  });
+export type PaymentAllocation = z.infer<typeof PaymentAllocationSchema>;
 
 export const EntryLineSchema = z.object({
   id: Id,
@@ -373,6 +417,8 @@ export const EntryCoreSchema = z
     account: AccountSchema.default("materials"),
     paymentPurposeId: Id.nullable().default(null),
     contractId: Id.nullable().default(null),
+    milestoneId: Id.nullable().optional(),
+    paymentContext: z.enum(["settlement", "advance", "receivable"]).optional(),
     relatedEntryId: Id.nullable().default(null),
     lines: z.array(EntryLineSchema).max(1000).default([]),
     allocations: z
@@ -386,6 +432,23 @@ export const EntryCoreSchema = z
     voided: z.boolean().default(false),
   })
   .superRefine((entry, ctx) => {
+    if (entry.milestoneId && (entry.kind !== "expense" || !entry.contractId))
+      ctx.addIssue({
+        code: "custom",
+        path: ["milestoneId"],
+        message: "A milestone bill needs its agreement",
+      });
+    if (
+      entry.paymentContext &&
+      (!["payment", "refund"].includes(entry.kind) ||
+        (!entry.personId &&
+          !(entry.paymentContext === "settlement" && entry.relatedEntryId)))
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["paymentContext"],
+        message: "A cash context needs a party cash event",
+      });
     if (entry.kind !== "adjustment") {
       if (entry.adjustment != null)
         ctx.addIssue({
@@ -439,6 +502,7 @@ export type Entry = z.infer<typeof EntrySchema>;
 
 const LedgerBaseSchema = z.object({
   schemaVersion: z.literal(1).default(1),
+  architectureVersion: z.literal(2).optional(),
   isDemo: z.boolean().default(false),
   project: z
     .object({
@@ -453,12 +517,19 @@ const LedgerBaseSchema = z.object({
   items: z.array(ItemSchema).max(10000).default([]),
   paymentPurposes: z.array(PaymentPurposeSchema).max(1000).default([]),
   contracts: z.array(ContractSchema).max(10000).default([]),
+  milestones: z.array(MilestoneSchema).max(10000).optional(),
+  paymentAllocations: z.array(PaymentAllocationSchema).max(100000).optional(),
   entries: z.array(EntrySchema).max(100000).default([]),
 });
 
 export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
   const error = (message: string, path: (string | number)[] = []) =>
     ctx.addIssue({ code: "custom", message, path });
+  if (
+    ledger.architectureVersion === 2 &&
+    (!ledger.milestones || !ledger.paymentAllocations)
+  )
+    error("Architecture collections are required for version 2");
   const unique = (records: { id: string }[], name: string) => {
     const ids = new Set<string>();
     records.forEach((row, index) => {
@@ -503,6 +574,34 @@ export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
   );
   const entryIds = unique(ledger.entries, "entries");
   const entriesById = new Map(ledger.entries.map((entry) => [entry.id, entry]));
+  unique(ledger.milestones ?? [], "milestones");
+  const milestones = new Map(
+    (ledger.milestones ?? []).map((row) => [row.id, row]),
+  );
+  const milestoneTotals = new Map<string, bigint>();
+  for (const [index, milestone] of (ledger.milestones ?? []).entries()) {
+    const contract = contractsById.get(milestone.contractId);
+    if (!contract)
+      error("Unknown milestone agreement", ["milestones", index, "contractId"]);
+    const total =
+      (milestoneTotals.get(milestone.contractId) ?? 0n) +
+      BigInt(milestone.amount);
+    milestoneTotals.set(milestone.contractId, total);
+    if (contract && total > BigInt(contract.total))
+      error("Milestones exceed agreement total", [
+        "milestones",
+        index,
+        "amount",
+      ]);
+    if (milestone.dueOn) {
+      const timestamp = Date.parse(`${milestone.dueOn}T00:00:00Z`);
+      if (
+        !Number.isFinite(timestamp) ||
+        new Date(timestamp).toISOString().slice(0, 10) !== milestone.dueOn
+      )
+        error("Invalid milestone date", ["milestones", index, "dueOn"]);
+    }
+  }
   const receiptIds = new Set<string>();
   const kindTotals = {
     expense: 0,
@@ -590,6 +689,25 @@ export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
   ledger.entries.forEach((entry, index) => {
     const path = ["entries", index];
     for (const snapshot of [entry, ...entry.revisions.map((r) => r.before)]) {
+      if (snapshot.milestoneId) {
+        const milestone = milestones.get(snapshot.milestoneId);
+        const agreement = milestone
+          ? contractsById.get(milestone.contractId)
+          : undefined;
+        if (
+          !milestone ||
+          !agreement ||
+          snapshot.contractId !== milestone.contractId ||
+          snapshot.personId !== agreement.personId ||
+          snapshot.account !== "labour" ||
+          (agreement.scope === "work" &&
+            snapshot.lines.some((line) => line.workId !== agreement.workId))
+        )
+          error("Bill must use its milestone agreement", [
+            ...path,
+            "milestoneId",
+          ]);
+      }
       if (snapshot.kind === "adjustment" && snapshot.adjustment) {
         const job = snapshot.contractId
           ? contractsById.get(snapshot.contractId)
@@ -766,6 +884,140 @@ export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
         error("Invalid entry date", [...path, "date"]);
     }
   });
+  unique(ledger.paymentAllocations ?? [], "paymentAllocations");
+  const paidAllocations = new Map<string, bigint>();
+  const billAllocations = new Map<string, bigint>();
+  const billWorkAllocations = new Map<string, bigint>();
+  const paymentWorkAllocations = new Map<string, bigint>();
+  const cashBucketAllocations = new Map<string, bigint>();
+  const cashContextAllocations = new Map<string, bigint>();
+  const cashBuckets = new Map<string, bigint>();
+  const cashContexts = new Map<string, bigint>();
+  const billCredits = new Map<string, bigint>();
+  const billWorkCredits = new Map<string, bigint>();
+  const workKey = (entryId: string, workId: string) =>
+    JSON.stringify([entryId, workId]);
+  const cashKey = (entry: Entry, workId: string) =>
+    JSON.stringify([entry.personId, entry.account, entry.contractId, workId]);
+  const cashContextKey = (entry: Entry, workId: string) =>
+    JSON.stringify([cashKey(entry, workId), entry.paymentContext ?? null]);
+  const add = (map: Map<string, bigint>, key: string, amount: bigint) =>
+    map.set(key, (map.get(key) ?? 0n) + amount);
+  for (const entry of ledger.entries) {
+    if (entry.voided || entry.balanceImpact === "historical") continue;
+    if (entry.kind === "expense_credit" && entry.relatedEntryId) {
+      for (const line of entry.lines) {
+        add(billCredits, entry.relatedEntryId, BigInt(line.amount));
+        add(
+          billWorkCredits,
+          workKey(entry.relatedEntryId, line.workId),
+          BigInt(line.amount),
+        );
+      }
+    }
+    if (entry.kind === "payment" || entry.kind === "refund")
+      for (const part of entry.allocations) {
+        add(
+          cashBuckets,
+          cashKey(entry, part.workId),
+          BigInt(part.amount) * (entry.kind === "refund" ? -1n : 1n),
+        );
+        add(
+          cashContexts,
+          cashContextKey(entry, part.workId),
+          BigInt(part.amount) * (entry.kind === "refund" ? -1n : 1n),
+        );
+      }
+  }
+  for (const [index, allocation] of (
+    ledger.paymentAllocations ?? []
+  ).entries()) {
+    const path = ["paymentAllocations", index];
+    const payment = entriesById.get(allocation.paymentId);
+    const bill = entriesById.get(allocation.billId);
+    if (allocation.cancelledAt) {
+      if (!payment || !bill)
+        error("Cancelled allocation references must be retained", path);
+      continue;
+    }
+    if (
+      !payment ||
+      !bill ||
+      payment.kind !== "payment" ||
+      bill.kind !== "expense" ||
+      payment.voided ||
+      bill.voided ||
+      payment.balanceImpact !== "normal" ||
+      bill.balanceImpact !== "normal" ||
+      payment.reviewStatus !== "confirmed" ||
+      bill.reviewStatus !== "confirmed" ||
+      !payment.personId ||
+      payment.personId !== bill.personId ||
+      payment.account !== bill.account ||
+      payment.contractId !== bill.contractId
+    ) {
+      error(
+        "Allocation needs active confirmed cash and bill for the same party account and agreement",
+        path,
+      );
+      continue;
+    }
+    const works = [...new Set(bill.lines.map((line) => line.workId))];
+    const workId =
+      allocation.workId ?? (works.length === 1 ? works[0] : undefined);
+    if (!workId || !works.includes(workId)) {
+      error("Choose the bill work for this allocation", [...path, "workId"]);
+      continue;
+    }
+    const amount = BigInt(allocation.amount);
+    add(paidAllocations, payment.id, amount);
+    add(billAllocations, bill.id, amount);
+    add(paymentWorkAllocations, workKey(payment.id, workId), amount);
+    add(billWorkAllocations, workKey(bill.id, workId), amount);
+    add(cashBucketAllocations, cashKey(payment, workId), amount);
+    add(cashContextAllocations, cashContextKey(payment, workId), amount);
+    const paymentTotal = payment.paymentParts.reduce(
+      (sum, part) => sum + BigInt(part.amount),
+      0n,
+    );
+    const billTotal =
+      bill.lines.reduce((sum, line) => sum + BigInt(line.amount), 0n) -
+      (billCredits.get(bill.id) ?? 0n);
+    const paymentWork = payment.allocations
+      .filter((part) => part.workId === workId)
+      .reduce((sum, part) => sum + BigInt(part.amount), 0n);
+    const billWork =
+      bill.lines
+        .filter((line) => line.workId === workId)
+        .reduce((sum, line) => sum + BigInt(line.amount), 0n) -
+      (billWorkCredits.get(workKey(bill.id, workId)) ?? 0n);
+    if (
+      paidAllocations.get(payment.id)! > paymentTotal ||
+      billAllocations.get(bill.id)! > billTotal
+    )
+      error("Allocation exceeds available payment or bill", [
+        ...path,
+        "amount",
+      ]);
+    if (
+      paymentWorkAllocations.get(workKey(payment.id, workId))! > paymentWork ||
+      billWorkAllocations.get(workKey(bill.id, workId))! > billWork
+    )
+      error("Allocation exceeds payment or bill work amount", [
+        ...path,
+        "amount",
+      ]);
+    if (
+      cashBucketAllocations.get(cashKey(payment, workId))! >
+      (cashBuckets.get(cashKey(payment, workId)) ?? 0n)
+    )
+      error("Refunded cash cannot be allocated", [...path, "amount"]);
+    if (
+      cashContextAllocations.get(cashContextKey(payment, workId))! >
+      (cashContexts.get(cashContextKey(payment, workId)) ?? 0n)
+    )
+      error("Refunded cash context cannot be allocated", [...path, "amount"]);
+  }
   if (
     Object.values(kindTotals).some((total) => !Number.isSafeInteger(total)) ||
     !Number.isSafeInteger(

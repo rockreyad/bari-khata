@@ -18,7 +18,7 @@ import { PersonMark, kindLabels } from "./ContactIdentity";
 import { PeopleRoleTabs } from "./PeopleRoleTabs";
 import { peopleRoles, roleKey, visibleRoleTabs } from "./peopleRoles";
 import { usePeopleRoleTabs } from "./usePeopleRoleTabs";
-import { contactPresetFor, contactPresets } from "./contactPresets";
+import { contactRoles, contactPresets } from "./contactPresets";
 import "./people.css";
 export function PeoplePage() {
   const { ledger, entity, go, mode } = useNotebook();
@@ -60,7 +60,10 @@ export function PeoplePage() {
       ({ person, summary }) =>
         matchesContact(person, query) &&
         (kind === "all" || personKind(person) === kind) &&
-        (!activeType || contactPresetFor(person).id === activeType) &&
+        (!activeType ||
+          (contactRoles(person).length
+            ? contactRoles(person).includes(activeType as never)
+            : activeType === "custom")) &&
         (!activeRole || roleKey(person.role) === activeRole) &&
         (status === "all" ||
           (status === "due"

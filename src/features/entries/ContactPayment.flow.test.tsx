@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { migrateArchitecture } from "../../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import type { InputHTMLAttributes, SelectHTMLAttributes } from "react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -304,7 +305,9 @@ it.each([
     const restore = new LedgerRepository(restoredDatabase);
     await restore.ensure("real", LedgerSchema.parse({}));
     await restore.importBackup(await repo.exportBackup(), { replace: true });
-    expect((await restore.read())!.ledger).toEqual(saved);
+    expect((await restore.read())!.ledger).toEqual(
+      migrateArchitecture(saved).ledger,
+    );
   },
 );
 

@@ -1,6 +1,6 @@
 import type { Person } from "../../domain/model";
 import { normalizeLabel } from "../../lib/normalizeLabel";
-import { contactPresetFor, contactPresets } from "./contactPresets";
+import { contactRoles, contactPresets } from "./contactPresets";
 
 export const MAX_PEOPLE_ROLE_TABS = 8;
 export type PeopleRole = { key: string; label: string; count: number };
@@ -12,17 +12,19 @@ export function peopleRoles(
     Person,
     "role" | "kind" | "contactType" | "archivedAt"
   > &
-    Partial<Pick<Person, "name">>)[],
+    Partial<Pick<Person, "name" | "roles">>)[],
 ): PeopleRole[] {
   const roles = new Map<string, PeopleRole>();
   for (const person of people) {
     if (person.archivedAt) continue;
-    const preset = contactPresetFor(person);
-    const key = preset.id;
-    const label = key === "custom" ? "ধরন বাছা হয়নি" : preset.label;
-    const existing = roles.get(key);
-    if (existing) existing.count++;
-    else roles.set(key, { key, label, count: 1 });
+    const assigned = contactRoles(person);
+    for (const key of assigned.length ? assigned : ["custom"]) {
+      const preset = contactPresets.find((preset) => preset.id === key)!;
+      const label = key === "custom" ? "ধরন বাছা হয়নি" : preset.label;
+      const existing = roles.get(key);
+      if (existing) existing.count++;
+      else roles.set(key, { key, label, count: 1 });
+    }
   }
   return contactPresets.flatMap((preset) => {
     const type = roles.get(preset.id);

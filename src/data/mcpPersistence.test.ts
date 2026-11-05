@@ -1,3 +1,4 @@
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -118,7 +119,9 @@ describe("MCP provenance in offline storage and backups", () => {
     const target = repository();
     await target.ensure("real", LedgerSchema.parse({}));
     await target.importBackup(backup, { replace: true });
-    expect((await target.read())!.ledger).toEqual(changed);
+    expect((await target.read())!.ledger).toEqual(
+      migrateArchitecture(changed).ledger,
+    );
     expect(
       new Uint8Array(
         await (await target.getReceipt(receipt.id))!.blob.arrayBuffer(),
@@ -253,7 +256,7 @@ describe("historical MCP receipt references", () => {
     let downloads = 0;
     const snapshot: CloudSnapshot = {
       revision: 1,
-      document: detached,
+      document: migrateArchitecture(detached).ledger,
       updatedAt: context.now,
     };
     const transport: CloudTransport = {
@@ -278,7 +281,9 @@ describe("historical MCP receipt references", () => {
     const target = repository();
     await target.ensure("real", LedgerSchema.parse({}));
     await target.importBackup(backup, { replace: true });
-    expect((await target.read())!.ledger).toEqual(detached);
+    expect((await target.read())!.ledger).toEqual(
+      migrateArchitecture(detached).ledger,
+    );
     expect(
       new Uint8Array(
         await (await target.getReceipt(receipt.id))!.blob.arrayBuffer(),

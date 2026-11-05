@@ -32,6 +32,7 @@ import { jobBalanceTotals } from "../jobs/jobView";
 import { PersonMark, kindLabels } from "./ContactIdentity";
 import { StatementSheet } from "./StatementSheet";
 import { phoneLink } from "./people";
+import { PartyAllocationPanel } from "./PartyAllocationPanel";
 import { PersonNotebooks } from "./PersonNotebooks";
 import { TotalAdjustmentSheet } from "../reconciliation/TotalAdjustmentSheet";
 import "./people.css";
@@ -449,6 +450,11 @@ export function PersonPage() {
           </details>
         ) : null}
       </section>
+      <PartyAllocationPanel
+        key={person.id}
+        personId={person.id}
+        archived={removal.archived}
+      />
       <div className="contact-trend-card">
         <SpendingChart
           ledger={chartLedger}

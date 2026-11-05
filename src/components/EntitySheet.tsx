@@ -37,7 +37,7 @@ import { savePersonWithContract } from "../domain/personContract";
 import { saveWorkChange } from "../domain/workActivity";
 import {
   allowedContactActions,
-  availableContactActions,
+  availablePartyActions,
   canCreateContactJob,
   personKind,
 } from "../domain/contacts";
@@ -45,7 +45,9 @@ import {
   contactPresets,
   contactPresetFor,
   contactPresetFrom,
+  contactRoles,
 } from "../features/people/contactPresets";
+import { ContactTypeSchema } from "../domain/contactTypes";
 import { parseAmount } from "../domain/ledger";
 import { Sheet } from "./Sheet";
 import { WorkMark, workIconChoices, workColorChoices } from "./ui/Icons";
@@ -78,6 +80,8 @@ const DraftSchema = z.object({
   completedOn: z.string().nullable().default(null),
   contactKind: z.enum(["worker", "shop", "driver", "other"]).default("other"),
   contactPresetId: z.string().max(100).default("custom"),
+  roles: z.array(ContactTypeSchema).max(8).optional(),
+  identityType: z.enum(["", "person", "organization"]).default(""),
   quickActions: z.array(z.string()).nullable().default(null),
   role: z.string().default(""),
   personWorkIds: z.array(z.string()).max(10000).default([]),
@@ -145,6 +149,7 @@ function initial(
         ...person,
         contactKind: personKind(person),
         contactPresetId: contactPresetFor(person).id,
+        roles: contactRoles(person),
         personWorkIds: person.workIds ?? [],
       });
   }
@@ -349,7 +354,15 @@ export function EntitySheet({
     contactPresets.find((preset) => preset.id === "custom")!;
   const allowed =
     kind === "person"
-      ? availableContactActions(personPreset.kind)
+      ? availablePartyActions(
+          PersonSchema.parse({
+            id: draft.id,
+            name: draft.name || "new",
+            kind: draft.contactKind,
+            contactType: personPreset.id,
+            roles: draft.roles,
+          }),
+        )
       : Object.keys(workActionNames);
   const hasPersonAgreement =
     personPreset.agreement || Boolean(draft.personContractAmount.trim());
@@ -362,6 +375,7 @@ export function EntitySheet({
             name: draft.name || "new",
             kind: draft.contactKind,
             contactType: personPreset.id,
+            roles: draft.roles,
           }),
         )
       : ["expense", "payment"])
@@ -417,6 +431,8 @@ export function EntitySheet({
           workIds: draft.personWorkIds,
           kind: draft.contactKind,
           contactType: personPreset.id,
+          roles: draft.roles,
+          identityType: draft.identityType || undefined,
           quickActions:
             draft.quickActions === null
               ? null
@@ -790,6 +806,22 @@ export function EntitySheet({
                         ...current,
                         contactPresetId: preset.id,
                         contactKind: preset.kind,
+                        roles:
+                          current.roles === undefined ||
+                          current.roles.length <= 1
+                            ? preset.id === "custom"
+                              ? []
+                              : [preset.id]
+                            : [
+                                ...new Set([
+                                  ...current.roles.filter(
+                                    (role) => role !== current.contactPresetId,
+                                  ),
+                                  ...(preset.id === "custom"
+                                    ? []
+                                    : [preset.id]),
+                                ]),
+                              ],
                         role: t(preset.role),
                         quickActions: [...preset.actions],
                       },

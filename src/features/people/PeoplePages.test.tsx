@@ -263,10 +263,10 @@ it.each([
   { kind: "worker", contactType: "professional", eligible: true },
   { kind: "other", contactType: "service", eligible: true },
   { kind: "other", contactType: "custom", eligible: true },
-  { kind: "shop", contactType: "supplier", eligible: false },
-  { kind: "driver", contactType: "transport", eligible: false },
-  { kind: "shop", contactType: "custom", eligible: false },
-  { kind: "driver", contactType: "custom", eligible: false },
+  { kind: "shop", contactType: "supplier", eligible: true },
+  { kind: "driver", contactType: "transport", eligible: true },
+  { kind: "shop", contactType: "custom", eligible: true },
+  { kind: "driver", contactType: "custom", eligible: true },
 ])(
   "offers new work consistently for $contactType with coarse kind $kind",
   async ({ kind, contactType, eligible }) => {
@@ -306,7 +306,7 @@ it.each([
   { kind: "shop", contactType: "supplier" },
   { kind: "driver", contactType: "transport" },
 ])(
-  "keeps a $kind's historic job and payments visible without offering another job",
+  "keeps a $kind's historic job and payments visible while allowing another agreement",
   async ({ kind, contactType }) => {
     const ledger = LedgerSchema.parse({
       works: [{ id: "work", name: "নমুনা খাতা" }],
@@ -335,7 +335,7 @@ it.each([
     const original = structuredClone(ledger);
     state.ledger = ledger;
     renderPage("/people/person");
-    expect(screen.queryByRole("button", { name: "কাজ যোগ করি" })).toBeNull();
+    expect(screen.getByRole("button", { name: "কাজ যোগ করি" })).toBeTruthy();
     const job = screen.getByRole("button", { name: /পুরোনো কাজ/ });
     expect(job.textContent).toContain("৳600");
     await userEvent.click(job);
@@ -602,7 +602,12 @@ describe("minimal people pages", () => {
     const user = userEvent.setup();
     const { container } = renderPage();
     expect(container.querySelectorAll(".history-row")).toHaveLength(5);
-    expect(container.textContent).not.toContain("মিস্ত্রির মাল আলাদা");
+    expect(
+      container.querySelector(".contact-history")?.textContent,
+    ).not.toContain("মিস্ত্রির মাল আলাদা");
+    expect(
+      container.querySelector(".party-allocation-panel")?.textContent,
+    ).toContain("মিস্ত্রির মাল আলাদা");
     expect(screen.queryByRole("button", { name: "মাল কিনলাম" })).toBeNull();
     expect(screen.queryByRole("button", { name: "মাল ফেরত লিখি" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "পুরো হিসাব" }));
@@ -633,8 +638,8 @@ describe("minimal people pages", () => {
       ).toBe(
         screen.getByRole("button", { name: "মাল ফেরত দিই" }).parentElement,
       );
-      expect(screen.queryByRole("button", { name: "কাজ যোগ করি" })).toBeNull();
-      expect(screen.queryByRole("region", { name: "কাজ" })).toBeNull();
+      expect(screen.getByRole("button", { name: "কাজ যোগ করি" })).toBeTruthy();
+      expect(screen.getByRole("region", { name: "কাজ" })).toBeTruthy();
       expect(
         screen.queryByRole("button", { name: "মাল ফেরত লিখি" }),
       ).toBeNull();

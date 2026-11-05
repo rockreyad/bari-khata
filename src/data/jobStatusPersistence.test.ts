@@ -1,3 +1,4 @@
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import { afterEach, expect, it } from "vitest";
 import { LedgerDatabase } from "./database";
@@ -47,7 +48,9 @@ it("rehydrates old disk/backup status as unknown, then saves an audited status w
   const target = repository();
   await target.ensure("real", createEmptyLedger());
   await target.importBackup(JSON.stringify(backup), { replace: true });
-  expect(withoutJobStatus((await target.read())!.ledger)).toEqual(raw);
+  expect(withoutJobStatus((await target.read())!.ledger)).toEqual(
+    withoutJobStatus(migrateArchitecture(raw).ledger),
+  );
   const updated = done(opened);
   await source.save(updated);
   expect((await source.read())!.ledger).toEqual(updated);

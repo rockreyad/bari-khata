@@ -15,11 +15,17 @@ import { AppCombobox } from "../../components/ui/AppCombobox";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { MoneyInput } from "../../components/ui/MoneyInput";
 import { NumericInput } from "../../components/ui/NumericInput";
-import { contactPresets, type ContactPreset } from "./contactPresets";
+import {
+  contactPresets,
+  type ContactPreset,
+  type ContactType,
+} from "./contactPresets";
 import "./person-editor.css";
 
 export type PersonEditorValue = {
   contactKind: PersonKind;
+  roles?: ContactType[];
+  identityType?: "" | "person" | "organization";
   contactPresetId: string;
   name: string;
   role: string;
@@ -103,6 +109,27 @@ export function PersonEditorFields({
         </label>
         <label>
           <span className="person-editor-label">
+            {t("ব্যক্তি না প্রতিষ্ঠান")}
+            <small>{t("ইচ্ছেমতো")}</small>
+          </span>
+          <AppSelect
+            aria-label={t("ব্যক্তি না প্রতিষ্ঠান")}
+            value={value.identityType ?? ""}
+            onChange={(event) =>
+              onChange({
+                identityType: event.target.value
+                  ? (event.target.value as "person" | "organization")
+                  : undefined,
+              })
+            }
+          >
+            <option value="">{t("পরে বেছে নেব")}</option>
+            <option value="person">{t("ব্যক্তি")}</option>
+            <option value="organization">{t("প্রতিষ্ঠান")}</option>
+          </AppSelect>
+        </label>
+        <label>
+          <span className="person-editor-label">
             {t("কীভাবে যুক্ত")}
             <small>{t("ইচ্ছেমতো")}</small>
           </span>
@@ -162,6 +189,52 @@ export function PersonEditorFields({
           <ContactImport onPick={onContactImport} />
         </div>
       </section>
+
+      <details className="person-editor-disclosure">
+        <summary>
+          <HardHatIcon size={21} aria-hidden="true" />
+          <span>
+            {t("আরও কাজ বা সম্পর্ক")}
+            <small>{t("একই নামে একাধিক সম্পর্ক রাখা যায়")}</small>
+          </span>
+          <CaretDownIcon size={17} aria-hidden="true" />
+        </summary>
+        <div className="person-editor-disclosure-body">
+          <fieldset className="person-editor-work-picker">
+            <legend className="visually-hidden">{t("কাজ বা সম্পর্ক")}</legend>
+            <div className="person-editor-work-options">
+              {contactPresets
+                .filter((preset) => preset.id !== "custom")
+                .map((preset) => {
+                  const roles =
+                    value.roles ??
+                    (value.contactPresetId === "custom"
+                      ? []
+                      : [value.contactPresetId as ContactType]);
+                  return (
+                    <label key={preset.id}>
+                      <input
+                        type="checkbox"
+                        checked={roles.includes(preset.id)}
+                        onChange={(event) =>
+                          onChange({
+                            roles: event.target.checked
+                              ? [...roles, preset.id]
+                              : roles.filter((role) => role !== preset.id),
+                          })
+                        }
+                      />
+                      <span>{t(preset.label)}</span>
+                    </label>
+                  );
+                })}
+            </div>
+          </fieldset>
+          <p>
+            {t("সম্পর্ক না বাছলেও বিল ও টাকা রাখা যাবে। আগের হিসাব বদলাবে না।")}
+          </p>
+        </div>
+      </details>
 
       <details className="person-editor-disclosure person-editor-notebooks">
         <summary>

@@ -50,6 +50,7 @@ import { contactPresetsEnglish } from "../features/people/contactPresetsEnglish"
 import { reviewEnglish } from "../features/import/reviewEnglish";
 import { analyticsEnglish } from "../features/analytics/analyticsEnglish";
 import { formEnglish } from "./formEnglish";
+import { architectureEnglish } from "./architectureEnglish";
 import { appEnglish } from "./appEnglish";
 import {
   applyTheme,
@@ -59,6 +60,7 @@ import {
 } from "../lib/preferences";
 
 const english: Record<string, string> = {
+  ...architectureEnglish,
   ...entryFlowEnglish,
   ...v21EntryEnglish,
   ...jobsEnglish,

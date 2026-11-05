@@ -34,6 +34,8 @@ npm run preview
 
 [অ্যাকাউন্টের সেটআপ](docs/REGISTRATION.md) · [রিলিজের নিয়ম](docs/RELEASING.md) · [সব নির্দেশনা](docs/)
 
+[খাতার নতুন গঠন, পুরোনো তথ্য আনা ও ফেরার নিয়ম](docs/ARCHITECTURE-MIGRATION.md)
+
 ## লাইসেন্স
 
 প্রকল্পের নিজস্ব কোড [MIT](LICENSE) লাইসেন্সে প্রকাশিত। তৃতীয় পক্ষের ফন্ট ও আইকনের জন্য [তাদের নিজস্ব শর্ত](docs/ASSETS.md) প্রযোজ্য।

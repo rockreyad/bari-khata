@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import { Blob as NodeBlob, File as NodeFile } from "node:buffer";
 import type { SelectHTMLAttributes } from "react";
@@ -304,7 +305,9 @@ it.each(["100", "1200"])(
     const restored = new LedgerRepository(restoredDatabase);
     await restored.ensure("real", LedgerSchema.parse({}));
     await restored.importBackup(await repo.exportBackup(), { replace: true });
-    expect((await restored.read())!.ledger).toEqual(saved);
+    expect((await restored.read())!.ledger).toEqual(
+      migrateArchitecture(saved).ledger,
+    );
     expect(await (await restored.getReceipt(receiptId))!.blob.text()).toBe(
       "sample voucher",
     );

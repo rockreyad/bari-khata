@@ -42,6 +42,7 @@ import {
   type JobStatus,
 } from "./jobView";
 import "./jobs.css";
+import { AgreementMilestones } from "./AgreementMilestones";
 
 export function JobsPage() {
   const { ledger, go, entity, base } = useNotebook();
@@ -647,6 +648,11 @@ export function JobPage() {
         contract={job}
         showHeading={false}
         showHistory={false}
+      />
+      <AgreementMilestones
+        key={job.id}
+        contractId={job.id}
+        archived={removal.archived || Boolean(worker?.archivedAt)}
       />
       <button
         type="button"

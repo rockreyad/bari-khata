@@ -1,3 +1,4 @@
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it } from "vitest";
 import { LedgerSchema, type Ledger } from "../domain/model";
@@ -124,7 +125,7 @@ describe("reviewed backup merging", () => {
     await target.mergeBackup(backup, options(initial));
     expect((await target.read())!.ownerId).toBe(secondOwner);
     expect((await target.read())!.ledger).toEqual(
-      (await source.read())!.ledger,
+      migrateArchitecture((await source.read())!.ledger).ledger,
     );
     expect((await source.read())!.generation).toBe(0);
     setActiveOwner(firstOwner);

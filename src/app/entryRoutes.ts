@@ -54,6 +54,7 @@ export function entryUrl(
     type: options.costType,
     purpose: options.purpose,
     contract: options.contractId,
+    milestone: options.milestoneId,
   }))
     if (value) params.set(key, value);
   const path = options.editId

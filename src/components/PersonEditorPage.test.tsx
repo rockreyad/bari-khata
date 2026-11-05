@@ -584,3 +584,52 @@ it.each([
     expect((await repo.read())!.ledger).toEqual(ledger);
   },
 );
+
+it("keeps multiple independent roles and identity type after reopening, and removes a role without altering financial history", async () => {
+  const initial = fixture();
+  const repo = await repository(initial);
+  const user = userEvent.setup();
+  const onClose = vi.fn();
+  const onSave = vi.fn(async (ledger: Ledger) => {
+    await repo.save(ledger);
+  });
+  const first = mount(initial, onSave, onClose, "worker");
+  await ready();
+  await user.selectOptions(
+    screen.getByLabelText("কীভাবে যুক্ত"),
+    "craftsperson",
+  );
+  await user.selectOptions(
+    screen.getByLabelText("ব্যক্তি না প্রতিষ্ঠান"),
+    "person",
+  );
+  await user.click(screen.getByText("আরও কাজ বা সম্পর্ক", { exact: true }));
+  await user.click(screen.getByRole("checkbox", { name: "দোকানদার" }));
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  first.unmount();
+  repo.database.close();
+  await repo.database.open();
+  const saved = (await repo.read())!.ledger;
+  expect(saved.people.find((person) => person.id === "worker")).toMatchObject({
+    roles: ["craftsperson", "supplier"],
+    identityType: "person",
+  });
+  const second = mount(saved, onSave, onClose, "worker");
+  await ready();
+  await user.click(screen.getByText("আরও কাজ বা সম্পর্ক", { exact: true }));
+  expect(
+    (screen.getByRole("checkbox", { name: "দোকানদার" }) as HTMLInputElement)
+      .checked,
+  ).toBe(true);
+  await user.click(screen.getByRole("checkbox", { name: "মিস্ত্রি / কারিগর" }));
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
+  second.unmount();
+  const updated = (await repo.read())!.ledger;
+  expect(updated.people.find((person) => person.id === "worker")).toMatchObject(
+    { roles: ["supplier"], identityType: "person" },
+  );
+  expect(updated.entries).toEqual(initial.entries);
+  expect(updated.contracts).toEqual(initial.contracts);
+});

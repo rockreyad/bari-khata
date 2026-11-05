@@ -36,6 +36,10 @@ export const QuickDraftSchema = z.object({
     .enum(["expense", "payment", "refund", "return", "wage"])
     .default("expense"),
   purpose: z.enum(["settle", "advance", "wage", "charge"]).default("settle"),
+  advanceContext: z.enum(["advance", "receivable"]).default("advance"),
+  refundContext: z
+    .enum(["unknown", "settlement", "advance", "receivable"])
+    .default("unknown"),
   date: text(10),
   note: text(10000),
   amount: numericDraftText(),
@@ -51,6 +55,7 @@ export const QuickDraftSchema = z.object({
   paymentPurposeName: text(),
   paymentPurposeNewId: id(),
   contractId: id(),
+  milestoneId: id(),
   costType: z
     .enum(["material", "labour", "transport", "unload", "rental", "other"])
     .default("material"),
@@ -313,6 +318,16 @@ export function buildQuickEntry(
         id,
         kind,
         relatedEntryId,
+        ...(kind === "payment"
+          ? {
+              paymentContext:
+                draft.purpose === "advance"
+                  ? draft.advanceContext
+                  : "settlement",
+            }
+          : draft.refundContext !== "unknown"
+            ? { paymentContext: draft.refundContext }
+            : {}),
         allocations: [{ workId, amount }],
         paymentParts: [{ method: draft.method, amount }],
         receipts: isCash ? receipts : [],
@@ -449,6 +464,7 @@ export function buildQuickEntry(
           : "confirmed",
       reviewReason: !draft.workId ? "কাজের খাতা পরে বেছে নিন।" : "",
       id: draft.id,
+      ...(draft.milestoneId ? { milestoneId: draft.milestoneId } : {}),
       kind: draft.kind === "return" ? "expense_credit" : "expense",
       lines,
       receipts,

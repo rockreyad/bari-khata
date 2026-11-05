@@ -11,6 +11,7 @@ import {
 import type { Account, Ledger, Person } from "../../domain/model";
 import { adjustmentBalanceDelta } from "../../domain/balanceAdjustments";
 import { adjustmentBasisLabels } from "../history/adjustmentDisplay";
+import { cashObligationParts } from "../../domain/cashObligations";
 
 export type StatementOptions = {
   account?: Account;
@@ -43,7 +44,13 @@ export function contactStatement(
       entry.kind === "payment" ? amount : entry.kind === "refund" ? -amount : 0;
     const adjustment =
       entry.kind === "adjustment" ? (entry.adjustment?.delta ?? 0) : 0;
-    if (!historical) balance += charge - paid + adjustmentBalanceDelta(entry);
+    const obligationPaid =
+      cashObligationParts(ledger, entry)
+        .filter((part) => !options.workId || part.workId === options.workId)
+        .reduce((sum, part) => sum + part.amount, 0) *
+      (entry.kind === "refund" ? -1 : 1);
+    if (!historical)
+      balance += charge - obligationPaid + adjustmentBalanceDelta(entry);
     const parts = (entry.lines.length ? entry.lines : entry.allocations).filter(
       (part) => !options.workId || part.workId === options.workId,
     );

@@ -221,3 +221,12 @@ export function contactPresetFrom(kind: PersonKind, description: string) {
     )!
   );
 }
+
+export function contactRoles(
+  person: Pick<Person, "kind" | "role" | "contactType"> &
+    Partial<Pick<Person, "name" | "roles">>,
+): ContactType[] {
+  return person.roles === undefined
+    ? [contactPresetFor(person).id]
+    : person.roles;
+}

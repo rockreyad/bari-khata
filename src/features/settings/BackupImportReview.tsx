@@ -22,6 +22,8 @@ const collectionLabels: Record<BackupCollection, string> = {
   paymentPurposes: "টাকার কারণ",
   contracts: "মিস্ত্রির কাজ",
   entries: "লেনদেন",
+  milestones: "কাজের ধাপ",
+  paymentAllocations: "বিলে টাকার ভাগ",
 };
 
 export function BackupImportReview({
@@ -75,10 +77,37 @@ export function BackupImportReview({
         .filter(Boolean)
         .join(" · ");
     }
-    const record = source[collection].find((value) => value.id === id)!;
+    if (collection === "paymentAllocations") {
+      const allocation = source.paymentAllocations?.find(
+        (value) => value.id === id,
+      );
+      const bill = source.entries.find(
+        (value) => value.id === allocation?.billId,
+      );
+      const payment = source.entries.find(
+        (value) => value.id === allocation?.paymentId,
+      );
+      return allocation
+        ? [
+            money(allocation.amount),
+            bill?.note ||
+              bill?.lines.map((line) => line.label).join(" · ") ||
+              t("বিল"),
+            payment?.date ? date(payment.date) : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : "";
+    }
+    const record = source[collection]?.find((value) => value.id === id);
+    if (!record) return "";
     return [
       "name" in record ? record.name : record.title,
-      "total" in record ? money(record.total) : "",
+      "total" in record
+        ? money(record.total)
+        : "amount" in record
+          ? money(record.amount)
+          : "",
       "phone" in record ? record.phone : "",
       "unit" in record ? record.unit : "",
       "note" in record ? record.note : "",

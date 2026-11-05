@@ -112,7 +112,7 @@ export function QuickEntrySheet({
   const baseDraftKey = `quick-v2:${options.kind ?? "expense"}:${options.workId ?? "all"}:${options.personId ?? "all"}${options.costType ? `:${options.costType}` : ""}`;
   const legacyKey = `${baseDraftKey}${options.purpose ? `:${options.purpose}` : ""}`;
   const accountDraftKey = `${legacyKey}${options.account ? `:account=${options.account}` : ""}`;
-  const key = `${accountDraftKey}${options.contractId ? `:job=${options.contractId}` : ""}`;
+  const key = `${accountDraftKey}${options.contractId ? `:job=${options.contractId}` : ""}${options.milestoneId ? `:milestone=${options.milestoneId}` : ""}`;
   const [draft, setDraft] = useState(() => entryContext(ledger, options));
   const [ready, setReady] = useState(false);
   const [more, setMore] = useState(false);
@@ -169,7 +169,9 @@ export function QuickEntrySheet({
           (!options.account || parsed.draft.account === context.account) &&
           (!options.purpose || parsed.draft.purpose === options.purpose) &&
           (!options.contractId ||
-            parsed.draft.contractId === context.contractId)
+            parsed.draft.contractId === context.contractId) &&
+          (!options.milestoneId ||
+            parsed.draft.milestoneId === context.milestoneId)
         ) {
           hydratedKeys.current.add(candidate);
           hydratedSources.current.set(candidate, draftFingerprint(parsed));
@@ -258,7 +260,7 @@ export function QuickEntrySheet({
         : name === "workId"
           ? entryWorkChange(ledger, d, String(value), jobScopeChosen.current)
           : name === "personId" || (name === "account" && value !== "labour")
-            ? { contractId: "" }
+            ? { contractId: "", milestoneId: "" }
             : {}),
     }));
   };
@@ -751,6 +753,7 @@ export function QuickEntrySheet({
                         return {
                           ...current,
                           ...scope,
+                          milestoneId: "",
                           workId:
                             job?.scope === "work"
                               ? job.workId!
@@ -790,6 +793,30 @@ export function QuickEntrySheet({
               ) : null}
             </section>
           ) : null}
+          {!cash &&
+          draft.kind !== "return" &&
+          draft.contractId &&
+          ledger.milestones?.some(
+            (row) => row.contractId === draft.contractId,
+          ) ? (
+            <label>
+              {t("কাজের ধাপ")}
+              <AppSelect
+                aria-label={t("কাজের ধাপ")}
+                value={draft.milestoneId}
+                onChange={(event) => field("milestoneId", event.target.value)}
+              >
+                <option value="">{t("ধাপ ছাড়াই বিল")}</option>
+                {ledger.milestones
+                  .filter((row) => row.contractId === draft.contractId)
+                  .map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {formatDigits(row.title)} · {money(row.amount)}
+                    </option>
+                  ))}
+              </AppSelect>
+            </label>
+          ) : null}
           {draft.kind === "payment" ? (
             <div
               className="entry-intent-options"
@@ -827,6 +854,44 @@ export function QuickEntrySheet({
                 {t("অগ্রিম")}
               </button>
             </div>
+          ) : null}
+          {draft.kind === "payment" && draft.purpose === "advance" ? (
+            <label>
+              {t("টাকা কীভাবে মিটবে")}
+              <AppSelect
+                aria-label={t("টাকা কীভাবে মিটবে")}
+                value={draft.advanceContext}
+                onChange={(event) =>
+                  field(
+                    "advanceContext",
+                    event.target.value as QuickDraft["advanceContext"],
+                  )
+                }
+              >
+                <option value="advance">{t("পরের বিল থেকে বাদ যাবে")}</option>
+                <option value="receivable">{t("এই টাকা ফেরত পাব")}</option>
+              </AppSelect>
+            </label>
+          ) : null}
+          {draft.kind === "refund" ? (
+            <label>
+              {t("কোন টাকার ফেরত")}
+              <AppSelect
+                aria-label={t("কোন টাকার ফেরত")}
+                value={draft.refundContext}
+                onChange={(event) =>
+                  field(
+                    "refundContext",
+                    event.target.value as QuickDraft["refundContext"],
+                  )
+                }
+              >
+                <option value="unknown">{t("সম্পর্ক জানা নেই")}</option>
+                <option value="settlement">{t("বিলের জন্য দেওয়া টাকা")}</option>
+                <option value="advance">{t("অগ্রিম দেওয়া টাকা")}</option>
+                <option value="receivable">{t("ফেরত পাওয়ার টাকা")}</option>
+              </AppSelect>
+            </label>
           ) : null}
           {needsIntent ? (
             <p className="field-hint" role="status">

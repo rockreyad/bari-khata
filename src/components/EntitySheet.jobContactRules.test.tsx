@@ -140,7 +140,7 @@ function fillJob() {
   });
 }
 
-it("offers only eligible people with a generic job-owner label and saves a professional without changing identity or money", async () => {
+it("offers all active people with a generic job-owner label and saves a professional without changing identity or money", async () => {
   const ledger = fixture();
   const initial = structuredClone(ledger);
   const { onSave } = await open(ledger);
@@ -150,7 +150,16 @@ it("offers only eligible people with a generic job-owner label and saves a profe
     within(select)
       .getAllByRole("option")
       .map((option) => (option as HTMLOptionElement).value),
-  ).toEqual(["", "worker", "engineer", "other", "__new__"]);
+  ).toEqual([
+    "",
+    "worker",
+    "engineer",
+    "other",
+    "shop",
+    "driver",
+    "custom-shop",
+    "__new__",
+  ]);
   await userEvent.selectOptions(select, "engineer");
   fillJob();
   await userEvent.click(screen.getByRole("button", { name: "রাখুন" }));
@@ -166,7 +175,7 @@ it("offers only eligible people with a generic job-owner label and saves a profe
 });
 
 it.each(["shop", "driver", "custom-shop"])(
-  "rejects an ineligible deep-link or restored %s draft without guessing a different payee",
+  "accepts a restored %s agreement draft without changing its identity",
   async (personId) => {
     const ledger = fixture();
     const original = structuredClone(ledger);
@@ -180,26 +189,28 @@ it.each(["shop", "driver", "custom-shop"])(
       defaultPersonId: personId,
     });
     const select = screen.getByLabelText("কার কাজ");
-    expect(select.getAttribute("aria-invalid")).toBe("true");
+    expect(select.getAttribute("aria-invalid")).toBeNull();
     expect(
       within(select).queryByRole("option", {
         name: ledger.people.find((person) => person.id === personId)!.name,
       }),
-    ).toBeNull();
+    ).toBeTruthy();
     expect(
       (screen.getByLabelText("কাজের টাকা") as HTMLInputElement).value,
     ).toBe("2500");
     fireEvent.submit(container.querySelector("form")!);
-    expect((await screen.findByRole("alert")).textContent).toBe(
-      "এই ধরনের নামে নতুন কাজ রাখা যায় না। অন্য নাম বেছে নিন।",
-    );
-    expect(onSave).not.toHaveBeenCalled();
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].contracts[0]).toMatchObject({
+      personId,
+      total: 250000,
+    });
+    expect(onSave.mock.calls[0][0].people).toEqual(original.people);
     expect(ledger).toEqual(original);
   },
 );
 
 it.each(["shop", "driver"])(
-  "retains the original historic %s job and its payments while preventing a switch to another ineligible contact",
+  "retains the original historic %s job and its payments while preserving its locked identity",
   async (personId) => {
     const base = fixture();
     const ledger = LedgerSchema.parse({
@@ -236,7 +247,7 @@ it.each(["shop", "driver"])(
       within(select).queryByRole("option", {
         name: personId === "shop" ? "নমুনা গাড়ি" : "নমুনা দোকান",
       }),
-    ).toBeNull();
+    ).toBeTruthy();
     fireEvent.change(screen.getByLabelText("নোট"), {
       target: { value: "পরের বার দেখে রাখব" },
     });
@@ -258,7 +269,7 @@ it.each(["shop", "driver"])(
   },
 );
 
-it("rejects a restored draft that switches an editable historic job to another ineligible person", async () => {
+it("allows a restored draft to assign an unused agreement to another active party", async () => {
   const ledger = LedgerSchema.parse({
     ...fixture(),
     contracts: [
@@ -285,19 +296,12 @@ it("rejects a restored draft that switches an editable historic job to another i
     within(select).getByRole("option", { name: "নমুনা দোকান" }),
   ).toBeTruthy();
   expect(
-    within(select).queryByRole("option", { name: "নমুনা গাড়ি" }),
-  ).toBeNull();
+    within(select).getByRole("option", { name: "নমুনা গাড়ি" }),
+  ).toBeTruthy();
   fireEvent.submit(container.querySelector("form")!);
-  expect((await screen.findByRole("alert")).textContent).toBe(
-    "এই ধরনের নামে নতুন কাজ রাখা যায় না। অন্য নাম বেছে নিন।",
-  );
-  expect(onSave).not.toHaveBeenCalled();
-  expect(ledger).toEqual(original);
-  await userEvent.selectOptions(select, "shop");
-  await userEvent.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
   expect(onSave.mock.calls[0][0].contracts[0]).toMatchObject({
-    personId: "shop",
+    personId: "driver",
     notes: "নমুনা অসমাপ্ত নোট",
     total: 100000,
   });

@@ -1,3 +1,4 @@
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import { afterEach, expect, it } from "vitest";
 import { LedgerSchema } from "../domain/model";
@@ -126,7 +127,9 @@ it("keeps all charges in a driver's selected account through save, reopen and ba
   const restored = repository();
   await restored.ensure("real", LedgerSchema.parse({}));
   await restored.importBackup(await repo.exportBackup(), { replace: true });
-  expect((await restored.read())!.ledger).toEqual(saved);
+  expect((await restored.read())!.ledger).toEqual(
+    migrateArchitecture(saved).ledger,
+  );
 });
 
 it.each(["driver", "shop", "worker"] as const)(

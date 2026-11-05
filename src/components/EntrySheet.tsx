@@ -737,6 +737,8 @@ function SupportedEntrySheet({
         reviewReason: confirmsReview ? "" : (original?.reviewReason ?? ""),
         source: original?.source ?? null,
         provenance: original?.provenance,
+        milestoneId: original?.milestoneId,
+        paymentContext: original?.paymentContext,
         id: draft.id,
         date: draft.unknownDate ? null : draft.date,
         note: draft.note.trim(),

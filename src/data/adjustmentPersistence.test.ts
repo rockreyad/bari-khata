@@ -1,3 +1,4 @@
+import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
 import { afterEach, expect, it } from "vitest";
 import { EntrySchema, LedgerSchema, type Ledger } from "../domain/model";
@@ -147,7 +148,9 @@ it("keeps paid/cost correction metadata and a work-only adjustment separate from
   expect(await target.mergeBackup(backup, mergeOptions(empty))).toEqual({
     changed: true,
   });
-  expect((await target.read())!.ledger).toEqual(ledger);
+  expect((await target.read())!.ledger).toEqual(
+    migrateArchitecture(ledger).ledger,
+  );
   expect(await target.mergeBackup(backup, mergeOptions(ledger))).toEqual({
     changed: false,
   });
@@ -182,7 +185,9 @@ it("round-trips noncash adjustments and audited void/restore through IndexedDB a
   const target = repository();
   await target.ensure("real", LedgerSchema.parse({}));
   await target.importBackup(backup, { replace: true });
-  expect((await target.read())!.ledger).toEqual(restored);
+  expect((await target.read())!.ledger).toEqual(
+    migrateArchitecture(restored).ledger,
+  );
   expect(await target.mergeBackup(backup, mergeOptions(restored))).toEqual({
     changed: false,
   });

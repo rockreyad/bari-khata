@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  assertSupportedArchitecture,
+  migrateArchitecture,
+  preservesArchitecture,
+  preservesImportedArchitecture,
+} from "../domain/architectureMigration";
 import Dexie from "dexie";
 import {
   planBackupMerge,
@@ -24,6 +30,8 @@ import {
 } from "../domain/model";
 import {
   db,
+  architectureMigrationKey,
+  validateMigrationReceipts,
   getActiveOwner,
   getWorkspaceDatabase,
   LedgerDatabase,
@@ -107,8 +115,17 @@ const allowedTypes = new Set([
   "application/pdf",
 ]);
 const now = () => new Date().toISOString();
+async function backupFingerprint(text: string) {
+  const bytes = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)),
+  );
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
+  );
+}
 
 export function validateLedger(value: unknown): Ledger {
+  assertSupportedArchitecture(value);
   LedgerDocumentShape.parse(value);
   const ledger = validateDomainLedger(value);
   if (!balanceAdjustmentHistoryIsValid(ledger))
@@ -227,6 +244,8 @@ export class LedgerRepository {
             ? change(structuredClone(current.ledger))
             : change,
         );
+        if (!preservesArchitecture(current.ledger, ledger))
+          throw new Error("architecture_data_would_be_lost");
         if (!preservesRemovalHistory(current.ledger, ledger))
           throw new Error("removal_history_would_be_lost");
         if (!preservesContractHistory(current.ledger, ledger))
@@ -274,6 +293,155 @@ export class LedgerRepository {
           pending: mode === "real",
           updatedAt: now(),
         });
+      },
+    );
+  }
+
+  async migrateWorkspace(mode: WorkspaceMode = "real") {
+    return this.database.transaction(
+      "rw",
+      this.database.workspaces,
+      this.database.receipts,
+      this.database.migrations,
+      async () => {
+        const current = await this.read(mode);
+        if (!current) throw new Error("workspace_missing");
+        const migration = migrateArchitecture(current.ledger);
+        if (!migration.changed)
+          return { changed: false, report: migration.report };
+        const id = architectureMigrationKey(mode);
+        const existing = await this.database.migrations.get(id);
+        if (existing)
+          throw new Error("architecture_migration_already_recorded");
+        const at = now();
+        const receipts = await this.database.receipts
+          .where("workspace")
+          .equals(mode)
+          .toArray();
+        validateMigrationReceipts(receipts, mode, migration.ledger);
+        await this.database.migrations.add({
+          id,
+          workspace: mode,
+          source: "local",
+          before: current,
+          receipts,
+          afterLedger: migration.ledger,
+          generationAfter: current.generation + 1,
+          report: migration.report,
+          status: "completed",
+          createdAt: at,
+        });
+        await this.database.workspaces.put({
+          ...current,
+          ledger: migration.ledger,
+          generation: current.generation + 1,
+          pending: current.pending || mode === "real",
+          updatedAt: at,
+        });
+        return { changed: true, report: migration.report };
+      },
+    );
+  }
+
+  async recordIncomingMigration(
+    document: Ledger,
+    current: WorkspaceRow,
+    source: "cloud" | "backup",
+    sourceKey: string,
+    sourceReceipts?: ReceiptRow[],
+  ) {
+    const migration = migrateArchitecture(document);
+    if (migration.changed) {
+      const id = `${architectureMigrationKey(current.id)}:${source}:${sourceKey}`;
+      if (!(await this.database.migrations.get(id))) {
+        const receipts =
+          sourceReceipts ??
+          (await this.database.receipts
+            .where("workspace")
+            .equals(current.id)
+            .toArray());
+        validateMigrationReceipts(receipts, current.id, migration.ledger);
+        await this.database.migrations.add({
+          id,
+          workspace: current.id,
+          source,
+          before: {
+            ...current,
+            ledger: document,
+            ...(source === "cloud"
+              ? { cloudRevision: Number(sourceKey), pending: false }
+              : {}),
+          },
+          receipts,
+          afterLedger: migration.ledger,
+          generationAfter: current.generation + 1,
+          report: migration.report,
+          status: "completed",
+          createdAt: now(),
+        });
+      }
+    }
+    return migration;
+  }
+
+  async rollbackArchitectureMigration(
+    id: string,
+    expected: { ledger: Ledger; generation: number },
+  ) {
+    await this.database.transaction(
+      "rw",
+      this.database.workspaces,
+      this.database.receipts,
+      this.database.outbox,
+      this.database.conflicts,
+      this.database.migrations,
+      async () => {
+        const migration = await this.database.migrations.get(id);
+        if (!migration || migration.status !== "completed")
+          throw new Error("architecture_migration_missing");
+        const current = await this.read(migration.workspace);
+        if (
+          !current ||
+          current.generation !== expected.generation ||
+          !sameBackupLedger(current.ledger, expected.ledger) ||
+          current.generation !== migration.generationAfter ||
+          !sameBackupLedger(current.ledger, migration.afterLedger)
+        )
+          throw new Error("architecture_rollback_has_later_changes");
+        if (current.cloudRevision !== (migration.before.cloudRevision ?? 0))
+          throw new Error("architecture_rollback_already_synced");
+        if (
+          (await this.database.outbox
+            .where("workspace")
+            .equals(current.id)
+            .count()) ||
+          (await this.database.conflicts.get(current.id))
+        )
+          throw new Error("architecture_rollback_sync_pending");
+        const validatedBefore = validateLedger(migration.before.ledger);
+        if (
+          !sameBackupLedger(
+            migrateArchitecture(migration.before.ledger).ledger,
+            migration.afterLedger,
+          )
+        )
+          throw new Error("architecture_migration_invalid");
+        validateMigrationReceipts(
+          migration.receipts,
+          migration.workspace,
+          validatedBefore,
+        );
+        const ledger = migration.before.ledger;
+        // Cloud revisions are concurrency tokens; restoring a document cannot rewind them.
+        await this.database.workspaces.put({
+          ...current,
+          ledger,
+          generation: current.generation + 1,
+          pending: current.id === "real",
+          updatedAt: now(),
+        });
+        await this.database.receipts.bulkPut(migration.receipts);
+        await this.database.migrations.update(id, { status: "rolled-back" });
       },
     );
   }
@@ -335,6 +503,9 @@ export class LedgerRepository {
     if (options.replace !== true)
       throw new Error("restore_confirmation_required");
     const backup = parseBackup(text);
+    const sourceKey = await backupFingerprint(text);
+    const originalLedger = backup.ledger;
+    backup.ledger = migrateArchitecture(originalLedger).ledger;
     const mode = options.mode ?? "real";
     if (backup.ledger.isDemo !== (mode === "demo"))
       throw new Error("workspace_mode_mismatch");
@@ -347,13 +518,25 @@ export class LedgerRepository {
     }));
     await this.database.transaction(
       "rw",
-      this.database.workspaces,
-      this.database.receipts,
-      this.database.outbox,
-      this.database.conflicts,
-      this.database.recoveries,
+      [
+        this.database.workspaces,
+        this.database.receipts,
+        this.database.outbox,
+        this.database.conflicts,
+        this.database.recoveries,
+        this.database.migrations,
+      ],
       async () => {
         const current = await this.read(mode);
+        if (
+          current &&
+          !preservesImportedArchitecture(
+            current.ledger,
+            originalLedger,
+            backup.ledger,
+          )
+        )
+          throw new Error("architecture_data_would_be_lost");
         if (current && !preservesRemovalHistory(current.ledger, backup.ledger))
           throw new Error("removal_history_would_be_lost");
         if (current && !preservesPaymentPurposes(current.ledger, backup.ledger))
@@ -385,6 +568,22 @@ export class LedgerRepository {
             reason: "restore",
             createdAt: now(),
           });
+        await this.recordIncomingMigration(
+          originalLedger,
+          current ?? {
+            id: mode,
+            ledger: originalLedger,
+            generation: 0,
+            cloudRevision: 0,
+            ownerId: this.database.ownerId,
+            pending: false,
+            lastSyncedAt: null,
+            updatedAt: now(),
+          },
+          "backup",
+          sourceKey,
+          receipts,
+        );
         // Keep old receipt blobs for the automatic recovery snapshot.
         await this.database.receipts.bulkPut(receipts);
         await this.database.outbox.where("workspace").equals(mode).delete();
@@ -410,6 +609,7 @@ export class LedgerRepository {
     if (options.confirmed !== true)
       throw new Error("restore_confirmation_required");
     const backup = parseBackup(text);
+    const sourceKey = await backupFingerprint(text);
     const expected = validateLedger(options.expectedLedger);
     const decisions = z
       .record(z.string(), z.enum(["current", "backup"]))
@@ -428,10 +628,13 @@ export class LedgerRepository {
     checkOwner();
     return this.database.transaction(
       "rw",
-      this.database.workspaces,
-      this.database.receipts,
-      this.database.conflicts,
-      this.database.recoveries,
+      [
+        this.database.workspaces,
+        this.database.receipts,
+        this.database.conflicts,
+        this.database.recoveries,
+        this.database.migrations,
+      ],
       async () => {
         checkOwner();
         const current = await this.read(mode);
@@ -450,6 +653,8 @@ export class LedgerRepository {
         if (plan.historyConflict) throw new Error("backup_history_conflict");
         if (!plan.ledger) throw new Error("backup_merge_invalid");
         const ledger = validateLedger(plan.ledger);
+        if (!preservesArchitecture(current.ledger, ledger))
+          throw new Error("architecture_data_would_be_lost");
         if (!preservesRemovalHistory(current.ledger, ledger))
           throw new Error("removal_history_would_be_lost");
         if (!preservesPaymentPurposes(current.ledger, ledger))
@@ -498,6 +703,19 @@ export class LedgerRepository {
         checkOwner();
         if (sameBackupLedger(current.ledger, ledger) && !prepared.length)
           return { changed: false };
+        await this.recordIncomingMigration(
+          backup.ledger,
+          current,
+          "backup",
+          sourceKey,
+          backup.receipts.map((receipt) => ({
+            ...receipt,
+            key: receiptKey(mode, receipt.id),
+            workspace: mode,
+            blob: base64ToBlob(receipt.base64, receipt.mime),
+            uploadedFor: null,
+          })),
+        );
         await this.database.recoveries.add({
           id: crypto.randomUUID(),
           workspace: mode,

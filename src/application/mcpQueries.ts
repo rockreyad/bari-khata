@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { partyLedger } from "../domain/partyLedger.js";
 import { LedgerSchema, type Entry, type Ledger } from "../domain/model.js";
 import {
   summarize,
@@ -141,6 +142,8 @@ export function mcpEntryView(entry: Entry) {
     person_id: entry.personId,
     account: entry.adjustment ? entry.adjustment.account : entry.account,
     contract_id: entry.contractId,
+    milestone_id: entry.milestoneId ?? null,
+    payment_context: entry.paymentContext ?? null,
     related_entry_id: entry.relatedEntryId,
     payment_purpose_id: entry.paymentPurposeId,
     balance_impact: entry.balanceImpact,
@@ -572,6 +575,10 @@ export function queryMcpLedger(
     return {
       ...envelope,
       entry: mcpEntryView(entry),
+      payment_allocations: (ledger.paymentAllocations ?? []).filter(
+        (allocation) =>
+          allocation.paymentId === entry.id || allocation.billId === entry.id,
+      ),
       items,
       total_count: items.length,
       revision_count: entry.revisions.length,
@@ -587,6 +594,9 @@ export function queryMcpLedger(
     return {
       ...envelope,
       contract: summary.contract,
+      milestones: (ledger.milestones ?? []).filter(
+        (milestone) => milestone.contractId === id,
+      ),
       agreed_paisa: summary.agreed,
       billed_paisa: summary.billed,
       paid_paisa: summary.paid,
@@ -680,6 +690,26 @@ export function queryMcpLedger(
         by_cost_type: period.byType,
       },
       current: moneySummary(current),
+      ...(args.person_id
+        ? {
+            bill_settlements: partyLedger(ledger, args.person_id, args.account),
+            payment_allocations: (ledger.paymentAllocations ?? []).filter(
+              (allocation) =>
+                ledger.entries.some(
+                  (entry) =>
+                    entry.id === allocation.paymentId &&
+                    entry.personId === args.person_id,
+                ),
+            ),
+            milestones: (ledger.milestones ?? []).filter((milestone) =>
+              ledger.contracts.some(
+                (contract) =>
+                  contract.id === milestone.contractId &&
+                  contract.personId === args.person_id,
+              ),
+            ),
+          }
+        : {}),
       balance_basis: "current_snapshot",
       unknown_date_count: filteredEntries(ledger, {
         ...args,
