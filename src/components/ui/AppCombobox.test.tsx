@@ -236,4 +236,50 @@ describe("custom free-text suggestions", () => {
     await user.keyboard("{Enter}");
     expect(changed).toHaveBeenCalledExactlyOnceWith("সিমেন্ট");
   });
+  it("keeps Enter with a false native flag inside an active composition and preserves composition callbacks", async () => {
+    const chosen = vi.fn();
+    const started = vi.fn();
+    const ended = vi.fn();
+    render(
+      <AppCombobox
+        aria-label="মাল"
+        suggestions={choices}
+        onSuggestionSelect={chosen}
+        onCompositionStart={started}
+        onCompositionEnd={ended}
+      />,
+    );
+    const input = screen.getByRole("combobox", { name: "মাল" });
+    await userEvent.click(input);
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.compositionStart(input);
+    fireEvent.keyDown(input, { key: "Enter", isComposing: false });
+    expect(chosen).not.toHaveBeenCalled();
+    expect(screen.queryByRole("listbox")).not.toBeNull();
+    expect(started).toHaveBeenCalledTimes(1);
+    fireEvent.compositionEnd(input);
+    expect(ended).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(chosen).toHaveBeenCalledTimes(1);
+  });
+  it("leaves legacy keyCode 229 to the keyboard instead of accepting the active old suggestion", async () => {
+    const chosen = vi.fn();
+    render(
+      <AppCombobox
+        aria-label="মাল"
+        suggestions={choices}
+        onSuggestionSelect={chosen}
+      />,
+    );
+    const input = screen.getByRole("combobox", { name: "মাল" });
+    await userEvent.click(input);
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, {
+      key: "Enter",
+      keyCode: 229,
+      isComposing: false,
+    });
+    expect(chosen).not.toHaveBeenCalled();
+    expect(screen.queryByRole("listbox")).not.toBeNull();
+  });
 });

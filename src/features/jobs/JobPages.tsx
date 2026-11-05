@@ -29,6 +29,7 @@ import {
   saveContractChange,
 } from "../../domain/contracts";
 import { latinDigits } from "../../lib/numerals";
+import { useComposedSearch } from "../../lib/useComposedSearch";
 import { sortHistory } from "../history/history";
 import { ContractCard, ContractHistory } from "../works/ContractCard";
 import { JobTile } from "./JobPreview";
@@ -58,6 +59,9 @@ export function JobsPage() {
     ? params.get("work")!
     : "";
   const query = (params.get("q") ?? "").slice(0, 200);
+  const searchInput = useComposedSearch(query, (value) =>
+    update("q", value.slice(0, 200)),
+  );
   const normalized = latinDigits(query).trim().toLocaleLowerCase();
   const status = ["planned", "ongoing", "done", "unknown"].includes(
     params.get("status") ?? "",
@@ -145,17 +149,24 @@ export function JobsPage() {
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
-        if (value && value !== "all") next.set(key, value);
+        applyCommittedQuery(next);
+        if (value && (key === "q" || value !== "all")) next.set(key, value);
         else next.delete(key);
         return next;
       },
       { replace: true },
     );
   }
+  function applyCommittedQuery(next: URLSearchParams) {
+    const value = searchInput.getCommittedQuery().slice(0, 200);
+    if (value) next.set("q", value);
+    else next.delete("q");
+  }
   function insight(value: "all" | "ongoing" | "due") {
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
+        applyCommittedQuery(next);
         next.delete("status");
         next.delete("balance");
         if (value === "ongoing") next.set("status", "ongoing");
@@ -166,6 +177,7 @@ export function JobsPage() {
     );
   }
   function reset() {
+    searchInput.clear();
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
@@ -176,7 +188,11 @@ export function JobsPage() {
       { replace: true },
     );
   }
-  const origin = location.pathname + location.search;
+  function origin() {
+    const next = new URLSearchParams(params);
+    applyCommittedQuery(next);
+    return location.pathname + (next.size ? `?${next}` : "");
+  }
   return (
     <div className="jobs-page page-flow">
       <header className="page-heading jobs-heading">
@@ -234,9 +250,8 @@ export function JobsPage() {
           <MagnifyingGlassIcon size={20} />
           <input
             aria-label={t("কাজ খুঁজুন")}
-            value={query}
             placeholder={t("কাজের নাম খুঁজুন")}
-            onChange={(event) => update("q", event.target.value)}
+            {...searchInput.inputProps}
           />
         </label>
         <div
@@ -365,7 +380,7 @@ export function JobsPage() {
               job={job}
               balance={balances.get(job.id)}
               showWorker={!personId}
-              onOpen={() => go(jobDetailUrl(job.id, origin, base))}
+              onOpen={() => go(jobDetailUrl(job.id, origin(), base))}
             />
           ))}
         </div>
