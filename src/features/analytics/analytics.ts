@@ -1,6 +1,11 @@
 import { latinDigits } from "../../lib/numerals";
 import { normalizeLabel } from "../../lib/normalizeLabel";
 import { poishaDecimal } from "../../domain/money";
+import {
+  buildBrandResolver,
+  type BrandIdentity,
+  type BrandResolver,
+} from "../../domain/brandResolution";
 import type {
   Account,
   CostType,
@@ -55,6 +60,8 @@ export type CostRow = {
   groupName: string;
   itemName: string;
   brand: string;
+  brandIdentity: BrandIdentity | null;
+  brandResolver: BrandResolver;
   usage: string;
   workName: string;
   personName: string;
@@ -94,6 +101,7 @@ function moneyAmount(amount: number) {
 export function costRows(
   ledger: Ledger,
   index = buildLedgerSearchIndex(ledger),
+  brands = buildBrandResolver(ledger.items.map((item) => item.brand)),
 ): CostRow[] {
   const items = new Map(ledger.items.map((item) => [item.id, item]));
   const groups = new Map(
@@ -133,6 +141,8 @@ export function costRows(
         groupName: group?.name ?? "",
         itemName,
         brand,
+        brandIdentity: brands.resolve(brand),
+        brandResolver: brands,
         usage,
         workName,
         personName,
@@ -162,13 +172,15 @@ export function costRows(
 
 export type CostReportIndex = {
   search: LedgerSearchIndex;
+  brands: BrandResolver;
   rows: CostRow[];
   ambiguousOrigins: Map<string, CostRow[]>;
 };
 
 export function buildCostReportIndex(ledger: Ledger): CostReportIndex {
   const search = buildLedgerSearchIndex(ledger);
-  const rows = costRows(ledger, search);
+  const brands = buildBrandResolver(ledger.items.map((item) => item.brand));
+  const rows = costRows(ledger, search, brands);
   const byLine = new Map(rows.map((row) => [row.line, row]));
   const ambiguousOrigins = new Map<string, CostRow[]>();
   for (const document of search.documents)
@@ -181,7 +193,7 @@ export function buildCostReportIndex(ledger: Ledger): CostReportIndex {
             return row ? [row] : [];
           }),
         );
-  return { search, rows, ambiguousOrigins };
+  return { search, brands, rows, ambiguousOrigins };
 }
 
 export function selectCostReport(
@@ -194,6 +206,7 @@ export function selectCostReport(
   } = {},
 ) {
   const f = { ...emptyFilters, ...filters };
+  const selectedBrand = index.brands.resolve(f.brand);
   const scope = filterCostRows(
     sectionRows(index.rows, options.section ?? "all"),
     { ...f, groupId: "", itemId: "", brand: "", usage: "", query: "" },
@@ -211,7 +224,11 @@ export function selectCostReport(
           : `item:${f.itemId}`,
       )) &&
     (!f.brand ||
-      (f.brand === "__unknown__" ? !row.brand : row.brand === f.brand)) &&
+      (f.brand === "__unknown__"
+        ? !row.brandIdentity
+        : Boolean(
+            selectedBrand && row.brandIdentity?.id === selectedBrand.id,
+          ))) &&
     (!f.usage ||
       (f.usage === "__unknown__" ? !row.usage : row.usage === f.usage));
   const candidates = scope.filter(
@@ -262,6 +279,7 @@ export function filterCostRows(
 ): CostRow[] {
   const f = { ...emptyFilters, ...filters };
   const query = normalizeSearch(f.query);
+  const selectedBrand = rows[0]?.brandResolver.resolve(f.brand);
   return rows.filter(
     (row) =>
       (!f.groupId ||
@@ -274,7 +292,11 @@ export function filterCostRows(
             normalizeSearch(row.itemName) === normalizeSearch(f.itemId.slice(6))
           : (row.item?.id ?? row.line.itemId) === f.itemId)) &&
       (!f.brand ||
-        (f.brand === "__unknown__" ? !row.brand : row.brand === f.brand)) &&
+        (f.brand === "__unknown__"
+          ? !row.brandIdentity
+          : Boolean(
+              selectedBrand && row.brandIdentity?.id === selectedBrand.id,
+            ))) &&
       (!f.usage ||
         (f.usage === "__unknown__" ? !row.usage : row.usage === f.usage)) &&
       (!f.workId || row.line.workId === f.workId) &&
@@ -381,7 +403,10 @@ export function breakdownRows(
         row.itemName || "মালের নাম দেওয়া নেই",
       ],
       work: [row.line.workId, row.workName],
-      brand: [row.brand || "__unknown__", row.brand || "ব্র্যান্ড দেওয়া নেই"],
+      brand: [
+        row.brandIdentity?.id ?? "__unknown__",
+        row.brandIdentity?.label ?? "ব্র্যান্ড দেওয়া নেই",
+      ],
       usage: [row.usage || "__unknown__", row.usage || "ব্যবহার লেখা নেই"],
       costType: [row.line.costType, row.line.costType],
       person: [
