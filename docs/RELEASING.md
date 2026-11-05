@@ -2,9 +2,22 @@
 
 অ্যাপের সংস্করণের একমাত্র উৎস `package.json`-এর `version`। `package-lock.json`-এর দুই জায়গায় একই সংস্করণ থাকতে হবে। Vite এখান থেকেই `VITE_APP_VERSION` বসায়; সেটিংসের নিচে এই সংস্করণ দেখা যায়। এটি `.env` দিয়ে আলাদা করে বদলাবেন না।
 
-`rockreyad/release-0.1.3` branch-এ NARC-133 (#34), NARC-134 (#35), NARC-136 (#36), NARC-135 (#38) ও NARC-131 (#39)—পাঁচটি PR-এর পরিবর্তন একত্র করা হয়েছে। এতে টাকা দেওয়ার হিসাব ও চলমান কাজ আগে বাছা, বাংলা লিখে খোঁজা এবং মানুষ ও দোকানের ধরনভিত্তিক ট্যাব আছে। ৬ নভেম্বর ২০২৬-এর প্যাচের প্রস্তুতির জন্য এই branch রাখা হয়েছে। পরিবর্তন, হাতে পরীক্ষার ধাপ ও যাচাইয়ের কমান্ড [প্যাচের নথিতে](releases/2026-11-04-0.1.3.md) আছে।
+`rockreyad/release-0.1.3` branch-এ NARC-133 (#34), NARC-134 (#35), NARC-136 (#36), NARC-135 (#38), NARC-131 (#39) এবং NARC-137-এর [PR #40](https://github.com/rockreyad/bari-khata/pull/40)-এর পরিবর্তন একত্র করা হয়েছে। এরপর `0d35327` commit-এ টাকা দেওয়ার রেকর্ডের অপ্রয়োজনীয় বিল মেলানোর ঘর সরানো, **ক্যাশ** লেখা এবং মজুরির রিপোর্টে বিল ও দেওয়া টাকা আলাদা দেখানোর সংশোধন এসেছে। খাতা, কর্মী ও কাজের গঠন, বর্তমান ব্যবহার, হাতে পরীক্ষার ধাপ এবং তথ্য আনার নিয়ম [প্যাচের নথিতে](releases/2026-11-04-0.1.3.md) আছে।
 
-প্রকাশের আগে production-এর বাকি migration সময় অনুযায়ী চালাতে হবে: প্রথমে `supabase/migrations/202611040005_identity_independent_contact_accounts.sql`, তারপর `supabase/migrations/202611050001_contact_types.sql`। এই প্রস্তুতিতে production migration, `main`-এ release PR #37 merge বা `v0.1.3` tag দেওয়া হয়নি; পরীক্ষা ও প্রকাশের সময় এগুলো সম্পন্ন করতে হবে।
+৫ নভেম্বর ২০২৬-এর প্রকাশ-পূর্ব যাচাইয়ে ২০৬টি test file-এর ২৬৬২টি পরীক্ষা, `npm run build`, `npm run typecheck`, `npm run release:check -- v0.1.3` এবং ছয়টি স্থানীয় backend check সফল হয়েছে। মূল তথ্য অক্ষত রেখে আলাদা পরিবেশে migration rehearsal, পুনরায় চালানোর যাচাই, import/reopen/export ও শর্তসাপেক্ষ rollback-ও সফল। পর্যালোচনায় পাওয়া পুরোনো অস্পষ্ট টাকা বা একই নামের রেকর্ড অনুমান করে বদলানো হয়নি।
+
+একই দিনে production-এ নিচের ছয়টি migration প্রয়োগ ও পরে যাচাই সম্পন্ন হয়েছে। আগে-পরে export হুবহু মেলে; `owner`, `revision`, `document` ও `updated_at` বদলায়নি। আর্থিক row-এ DML চালানো হয়নি। [Release PR #37](https://github.com/rockreyad/bari-khata/pull/37) `main`-এ merge, `v0.1.3` tag এবং production deployment এখনও বাকি। Backup-এর সীমা ও যাচাইয়ের ফল [operator নথিতে](OPERATOR-MIGRATION.md) আছে।
+
+অন্য পরিবেশ প্রস্তুত করার সময় [তথ্য আনার নির্দেশনা](OPERATOR-MIGRATION.md) অনুযায়ী মূল তথ্যের কপি রেখে রূপান্তর ও হিসাব মেলান। আগে প্রয়োগ করা migration দেখে নিচের বাকি SQL-গুলো ক্রম অনুযায়ী চালাতে হবে, তারপর compatible client প্রকাশ করতে হবে। Production-এ এগুলো ৫ নভেম্বর ২০২৬-এ সম্পন্ন হয়েছে:
+
+1. `supabase/migrations/202611040005_identity_independent_contact_accounts.sql`
+2. `supabase/migrations/202611050001_contact_types.sql`
+3. `supabase/migrations/202611050002_party_ledger_architecture.sql`
+4. `supabase/migrations/202611050003_shared_payment_allocations.sql`
+5. `supabase/migrations/202611050004_earned_obligations.sql`
+6. `supabase/migrations/202611050005_completed_contract_earnings.sql`
+
+অ্যাপের build SQL চালায় না। পুরোনো route, অসমাপ্ত লেখা, source archive ও recovery-এর ব্যবস্থা এই সংস্করণে প্রয়োজনীয়; পরিষ্কার করার সময় এগুলো বাদ দেবেন না। Migration developer-এর কাজ, ব্যবহারকারীর জন্য আলাদা migration পাতা নেই।
 
 ৪ নভেম্বর ২০২৬-এর প্রকাশিত `a286fd5` commit-এর সংস্করণ `0.1.0`; সেটির [release tag `v0.1.0`](https://github.com/rockreyad/bari-khata/releases/tag/v0.1.0)। আপডেটের নতুন বার্তা ও release যাচাইয়ের পরের পরিবর্তন `0.1.1`।
 

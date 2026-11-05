@@ -135,7 +135,13 @@ for (const config of cases) {
       { id: "unrelated", name: "PRIVATE_OTHER_PERSON", kind: "other" },
     ],
     contracts: [
-      { id: "job", personId: "person", workId: "door", total: 100000 },
+      {
+        id: "job",
+        personId: "person",
+        workId: "door",
+        total: 100000,
+        status: "done",
+      },
     ],
     entries: [
       {
