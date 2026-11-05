@@ -231,12 +231,12 @@ describe("quick entry creation flow", () => {
       screen.getByRole("heading", { level: 1, name: "মাল কিনলাম" }),
     ).toBeTruthy();
     await user.type(screen.getByLabelText("কত টাকা"), "2000");
-    await user.click(screen.getByRole("button", { name: "মিস্ত্রির টাকা" }));
+    await user.click(screen.getByRole("button", { name: "কর্মীর টাকা" }));
     expect(
-      screen.getByRole("heading", { level: 1, name: "মিস্ত্রির টাকা" }),
+      screen.getByRole("heading", { level: 1, name: "কর্মীর টাকা" }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "মিস্ত্রির টাকা", pressed: true }),
+      screen.getByRole("button", { name: "কর্মীর টাকা", pressed: true }),
     ).toBeTruthy();
     expect(screen.getByLabelText("কী কাজের মজুরি")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "মাল কেনা" }));
@@ -321,10 +321,10 @@ describe("quick entry creation flow", () => {
     );
     await ready();
     expect(
-      screen.getByRole("heading", { level: 1, name: "মিস্ত্রির টাকা" }),
+      screen.getByRole("heading", { level: 1, name: "কর্মীর টাকা" }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "মিস্ত্রির টাকা", pressed: true }),
+      screen.getByRole("button", { name: "কর্মীর টাকা", pressed: true }),
     ).toBeTruthy();
     expect(
       (screen.getByLabelText("কী কাজের মজুরি") as HTMLInputElement).value,
@@ -347,9 +347,9 @@ describe("quick entry creation flow", () => {
     );
     await ready();
     await user.type(screen.getByLabelText("কত টাকা"), "30000");
-    await user.click(screen.getByRole("button", { name: "আগে সেক্টর খুলুন" }));
+    await user.click(screen.getByRole("button", { name: "আগে খাতা বানান" }));
     await ready();
-    await user.type(screen.getByLabelText("সেক্টরের নাম"), "দরজার কাজ");
+    await user.type(screen.getByLabelText("খাতার নাম"), "দরজার কাজ");
     await user.click(screen.getByRole("button", { name: "রাখুন" }));
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "টাকা দিই" })).toBeTruthy(),
@@ -358,7 +358,7 @@ describe("quick entry creation flow", () => {
       "30000",
     );
     const work = (state.notebook.ledger as Ledger).works[0];
-    expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+    expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe(
       work.id,
     );
     expect(work.activity).toHaveLength(1);
@@ -387,7 +387,7 @@ describe("quick entry creation flow", () => {
     );
     await ready();
     await user.type(screen.getByLabelText("কত টাকা"), "1700");
-    await user.click(screen.getByRole("button", { name: "আগে সেক্টর খুলুন" }));
+    await user.click(screen.getByRole("button", { name: "আগে খাতা বানান" }));
     await ready();
     await user.click(screen.getByRole("button", { name: "বন্ধ করুন" }));
     await waitFor(() =>
@@ -535,12 +535,12 @@ it.each(["দোকান", "ডিলার"])(
       />,
     );
     await ready();
-    const notebooks = screen.getByRole("combobox", { name: "সেক্টর" });
+    const notebooks = screen.getByRole("combobox", { name: "খাতা" });
     expect(
-      within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
+      within(notebooks).getByRole("option", { name: "+ নতুন খাতা বানান" }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "নতুন সেক্টর খুলব" }),
+      screen.getByRole("button", { name: "নতুন খাতা বানান" }),
     ).toBeTruthy();
     await user.selectOptions(notebooks, "roof");
     await user.type(screen.getByLabelText("কী কিনলেন"), "সিমেন্ট");
@@ -582,15 +582,15 @@ it.each(["payment", "return"] as const)(
     const user = userEvent.setup();
     render(<QuickEntrySheet options={{ kind, personId: "shop" }} />);
     await ready();
-    const notebooks = screen.getByRole("combobox", { name: "সেক্টর" });
+    const notebooks = screen.getByRole("combobox", { name: "খাতা" });
     expect(
       within(notebooks).getByRole("option", { name: "ছাদের খাতা" }),
     ).toBeTruthy();
     expect(
-      within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
+      within(notebooks).getByRole("option", { name: "+ নতুন খাতা বানান" }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "নতুন সেক্টর খুলব" }),
+      screen.getByRole("button", { name: "নতুন খাতা বানান" }),
     ).toBeTruthy();
     await user.selectOptions(notebooks, "roof");
     expect((notebooks as HTMLSelectElement).value).toBe("roof");
@@ -614,21 +614,21 @@ it("keeps sector creation and the unfinished payment when switching between conf
   const user = userEvent.setup();
   render(<QuickEntrySheet options={{ kind: "payment" }} />);
   await ready();
-  const notebooks = screen.getByRole("combobox", { name: "সেক্টর" });
+  const notebooks = screen.getByRole("combobox", { name: "খাতা" });
   expect(
-    within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
+    within(notebooks).getByRole("option", { name: "+ নতুন খাতা বানান" }),
   ).toBeTruthy();
   await user.type(screen.getByLabelText("কত টাকা"), "1700");
   await user.selectOptions(screen.getByLabelText("কাকে দিচ্ছেন"), "shop");
   expect(
-    within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
+    within(notebooks).getByRole("option", { name: "+ নতুন খাতা বানান" }),
   ).toBeTruthy();
-  expect(screen.getByRole("button", { name: "নতুন সেক্টর খুলব" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "নতুন খাতা বানান" })).toBeTruthy();
   await user.selectOptions(screen.getByLabelText("কাকে দিচ্ছেন"), "worker");
   expect(
-    within(notebooks).getByRole("option", { name: "+ নতুন খাতা খুলব" }),
+    within(notebooks).getByRole("option", { name: "+ নতুন খাতা বানান" }),
   ).toBeTruthy();
-  expect(screen.getByRole("button", { name: "নতুন সেক্টর খুলব" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "নতুন খাতা বানান" })).toBeTruthy();
   expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
     "1700",
   );
@@ -873,10 +873,10 @@ it("filters unrelated contacts while retaining an explicitly selected labour bil
   fireEvent.change(screen.getByLabelText("কোন দোকান"), {
     target: { value: "" },
   });
-  await user.click(screen.getByRole("button", { name: "মিস্ত্রির টাকা" }));
+  await user.click(screen.getByRole("button", { name: "কর্মীর টাকা" }));
   expect(screen.queryByRole("option", { name: "দরজার দোকান" })).toBeNull();
   await user.type(screen.getByLabelText("কত টাকা"), "2000");
-  fireEvent.change(screen.getByLabelText("কোন মিস্ত্রি"), {
+  fireEvent.change(screen.getByLabelText("কোন কর্মী"), {
     target: { value: "worker" },
   });
   expect(screen.queryByRole("button", { name: "নতুন বিল ও টাকা" })).toBeNull();
@@ -1738,7 +1738,7 @@ it("uses an explicit labour expense type consistently after a shop with a config
   await user.type(screen.getByLabelText("কত টাকা"), "300");
   await user.click(screen.getByRole("button", { name: "টাকা লিখি" }));
   await user.type(screen.getByLabelText("এখন কত দিলেন"), "100");
-  await user.selectOptions(screen.getByLabelText("কোন মিস্ত্রি"), "shop");
+  await user.selectOptions(screen.getByLabelText("কোন কর্মী"), "shop");
   expect(
     view.container.querySelector(".entry-balance-result")?.textContent,
   ).toBe("বাকি থাকবে200");
@@ -1810,7 +1810,7 @@ describe("NARC-131 preferred payment job", () => {
       (screen.getByLabelText("কাজ", { exact: true }) as HTMLSelectElement)
         .value,
     ).toBe("ongoing");
-    expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+    expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe(
       "tiles",
     );
     expect(
@@ -1840,7 +1840,7 @@ describe("NARC-131 preferred payment job", () => {
     );
     await ready();
     await user.selectOptions(screen.getByLabelText("কাজ", { exact: true }), "");
-    await user.selectOptions(screen.getByLabelText("সেক্টর"), "paint");
+    await user.selectOptions(screen.getByLabelText("খাতা"), "paint");
     await user.click(screen.getByRole("button", { name: "নতুন বিল ও টাকা" }));
     expect(
       (screen.getByLabelText("কাজ", { exact: true }) as HTMLSelectElement)
@@ -1860,7 +1860,7 @@ describe("NARC-131 preferred payment job", () => {
       (screen.getByLabelText("কাজ", { exact: true }) as HTMLSelectElement)
         .value,
     ).toBe("");
-    expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+    expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe(
       "paint",
     );
     expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
@@ -1882,7 +1882,7 @@ describe("NARC-131 preferred payment job", () => {
     );
     await ready();
     await user.type(screen.getByLabelText("কত টাকা"), "125");
-    await user.selectOptions(screen.getByLabelText("সেক্টর"), "paint");
+    await user.selectOptions(screen.getByLabelText("খাতা"), "paint");
     expect(
       (screen.getByLabelText("কাজ", { exact: true }) as HTMLSelectElement)
         .value,

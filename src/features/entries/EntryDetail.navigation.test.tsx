@@ -67,7 +67,7 @@ describe("entry detail navigation", () => {
             id: "normal",
             kind: "expense",
             reviewStatus: "needs_review",
-            reviewReason: "সেক্টর পরে বেছে নিন।",
+            reviewReason: "খাতা পরে বেছে নিন।",
             lines: [
               {
                 id: "line",

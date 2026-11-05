@@ -304,9 +304,9 @@ export function AppShell() {
   }, [location.pathname]);
   const nav = [
     { to: "/", label: "এক নজরে", icon: HouseLineIcon },
-    { to: "/sectors", label: "সেক্টর", icon: BookBookmarkIcon },
-    { to: "/ledger", label: "আগের হিসাব", icon: ClockCounterClockwiseIcon },
-    { to: "/parties", label: "পক্ষ", icon: UsersIcon },
+    { to: "/sectors", label: "খাতা", icon: BookBookmarkIcon },
+    { to: "/ledger", label: "রেকর্ড", icon: ClockCounterClockwiseIcon },
+    { to: "/parties", label: "কর্মী", icon: UsersIcon },
     { to: "/works", label: "কাজ", icon: BookBookmarkIcon },
     { to: "/reports", label: "রিপোর্ট", icon: ChartDonutIcon },
   ];
@@ -603,7 +603,7 @@ export function AppShell() {
           <NotebookNavLink
             key={item.to}
             {...item}
-            label={item.to === "/ledger" ? "ইতিহাস" : item.label}
+            label={item.to === "/ledger" ? "রেকর্ড" : item.label}
             base={base}
           />
         ))}

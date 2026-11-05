@@ -1,0 +1,43 @@
+.transaction-form.entry-page-form .entry-fields-v3 {
+  gap: 16px;
+}
+.transaction-form.entry-page-form .entry-assignment {
+  gap: 16px;
+}
+.transaction-form.entry-page-form .purchase-line-v3 {
+  gap: 18px;
+}
+.transaction-form.entry-page-form .purchase-lines-v3 {
+  display: grid;
+  gap: 16px;
+}
+.transaction-form.entry-page-form .line-meta-v3 {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.transaction-form.entry-page-form .line-meta-v3 .field-grid {
+  gap: 16px;
+}
+.transaction-form.entry-page-form .entry-more-body {
+  margin-top: 0;
+}
+.transaction-form.entry-page-form .entry-more-toggle {
+  justify-self: start;
+}
+.legacy-transaction-attachments .attachment-button {
+  display: inline-flex;
+  justify-self: start;
+  width: auto;
+  margin: 0;
+  background: transparent;
+}
+.transaction-form
+  .purchase-line-v3:not(:first-child)
+  .transaction-amount-control
+  .money-control
+  > input {
+  min-height: 60px;
+  height: 60px;
+  font-size: 32px;
+}

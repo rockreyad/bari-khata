@@ -85,6 +85,47 @@ it("records a worker's own materials as a reimbursement due without wages", () =
   ).toBe(true);
 });
 
+it("keeps an explicitly entered unclassified brand and quantity through normalized storage and backup restore", async () => {
+  const first = repo();
+  const initial = cost(fixture(), {
+    payment: "partial",
+    paid: "40",
+    rows: [
+      {
+        id: "branded",
+        label: "নমুনা সিমেন্ট",
+        amount: "200",
+        brand: "নমুনা ব্র্যান্ড",
+        quantity: "2.5",
+        unit: "বস্তা",
+      },
+    ],
+  });
+  await first.ensure("real", initial);
+  first.database.close();
+  await first.database.open();
+  const saved = (await first.read())!.ledger;
+  const bill = saved.entries.find((entry) => entry.kind === "expense")!;
+  expect(bill.lines[0]).toMatchObject({
+    quantity: "2.5",
+    unit: "বস্তা",
+    materialGroupId: null,
+    amount: 20000,
+  });
+  expect(
+    saved.items.find((item) => item.id === bill.lines[0].itemId),
+  ).toMatchObject({ brand: "নমুনা ব্র্যান্ড", materialGroupId: null });
+  const restored = repo();
+  await restored.ensure("real", fixture());
+  await restored.importBackup(await first.exportBackup(), { replace: true });
+  expect((await restored.read())!.ledger).toEqual(saved);
+  expect(summarize((await restored.read())!.ledger)).toMatchObject({
+    cost: 20000,
+    netPaid: 4000,
+    payable: 16000,
+  });
+});
+
 it("matches the paid part of a new bill in the same save so it cannot be offered for payment twice", () => {
   const ledger = cost(fixture(), { payment: "partial", paid: "400" });
   const summary = partyLedger(ledger, "shop");

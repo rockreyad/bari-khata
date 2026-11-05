@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { ArrowLeftIcon, CaretRightIcon } from "@phosphor-icons/react";
 import { useSearchParams } from "react-router";
 import { useNotebook } from "../../app/NotebookProvider";
+import { contactEntryPolicy } from "../../domain/contactEntryPolicy";
 import { LoadMore } from "../../components/ui/LoadMore";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { payableBreakdown, type PayableRow } from "./payableBreakdown";
@@ -10,7 +11,7 @@ import "./payables.css";
 const PAGE_SIZE = 30;
 
 export function PayablesPage() {
-  const { ledger, go, detail } = useNotebook();
+  const { ledger, go, detail, add } = useNotebook();
   const { t, money, formatDigits } = useLanguageContext();
   const [params, setParams] = useSearchParams();
   const { total, rows, people, works, entries } = useMemo(
@@ -100,6 +101,26 @@ export function PayablesPage() {
                     </strong>
                     <CaretRightIcon size={16} aria-hidden="true" />
                   </button>
+                  {person &&
+                    !person.archivedAt &&
+                    contactEntryPolicy(person).payment && (
+                      <button
+                        type="button"
+                        className="home-dues-pay"
+                        aria-label={t("টাকা দিই: {{name}}", {
+                          name: person.name,
+                        })}
+                        onClick={() =>
+                          add({
+                            kind: "payment",
+                            purpose: "settle",
+                            personId: person.id,
+                          })
+                        }
+                      >
+                        {t("টাকা দিই")}
+                      </button>
+                    )}
                 </li>
               );
             })}

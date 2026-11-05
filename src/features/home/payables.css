@@ -35,8 +35,11 @@
   margin: 0;
 }
 .home-dues-total {
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--line);
+  padding: 22px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface-muted);
 }
 .home-dues-total dt {
   color: var(--muted);
@@ -45,7 +48,7 @@
 .home-dues-total dd {
   margin-top: 6px;
   overflow-wrap: anywhere;
-  font-size: 28px;
+  font-size: clamp(28px, 6vw, 38px);
   font-weight: 650;
   line-height: 1.4;
   font-variant-numeric: tabular-nums;
@@ -67,6 +70,27 @@
 }
 .home-dues-list > li + li {
   border-top: 1px solid var(--line);
+}
+.home-dues-list > li {
+  padding-bottom: 12px;
+}
+.home-dues-pay {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  margin-left: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 600;
+}
+.home-dues-pay:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 .home-dues-copy {
   min-width: 0;

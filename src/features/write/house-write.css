@@ -1,75 +1,11 @@
-.house-write-page .entry-page-body {
-  max-width: 760px;
-}
-.house-write-page .entry-page-footer > div {
-  max-width: 712px;
-}
 .house-write-page .entry-page-footer .primary-button {
-  width: 100%;
-}
-.house-form fieldset {
-  border: 0;
-  padding: 0;
-  margin: 0;
-  min-width: 0;
-  display: grid;
-  gap: 18px;
-}
-.house-form label {
-  display: grid;
-  gap: 8px;
-  font-weight: 550;
-  font-size: 12px;
-  min-width: 0;
-}
-.house-form input:not([type="checkbox"]):not([type="file"]),
-.house-form textarea {
-  width: 100%;
-  min-width: 0;
-}
-.house-form textarea {
-  min-height: 88px;
-  resize: vertical;
+  min-height: 52px;
 }
 .house-form .text-button {
   justify-self: start;
-}
-.house-field-pair {
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  background: var(--surface);
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
-.house-cost-lines {
-  display: grid;
-  gap: 18px;
-}
-.house-cost-line {
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  background: var(--surface);
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(110px, 1fr) auto;
-  gap: 12px;
-  align-items: end;
-}
-.house-cost-line > .icon-button {
-  margin-bottom: 8px;
-}
-.house-amount input {
-  font-size: 32px;
-  font-weight: 600;
-  min-height: 66px;
+  min-height: 44px;
 }
 .house-payment-preview {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  padding: 18px;
-  border-radius: 20px;
   font-size: 13px;
 }
 .house-preview-heading {
@@ -80,19 +16,20 @@
   margin-bottom: 12px;
 }
 .house-preview-heading h2 {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--muted);
   margin: 0;
 }
 .house-payment-preview dl {
   margin: 0;
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 .house-payment-preview dl > div {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   align-items: baseline;
 }
 .house-payment-preview dt {
@@ -102,10 +39,11 @@
   margin: 0;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 .house-payment-preview .house-result {
   border-top: 1px solid var(--line);
-  padding-top: 14px;
+  padding-top: 12px;
   margin-top: 4px;
 }
 .house-payment-preview .house-result dt {
@@ -115,7 +53,7 @@
   font-size: 23px;
 }
 .house-allocation-preview {
-  margin: 0 0 20px;
+  margin: 0 0 16px;
   padding: 0 0 16px;
   list-style: none;
   border-bottom: 1px solid var(--line);
@@ -127,12 +65,16 @@
   justify-content: space-between;
   gap: 16px;
 }
+.house-allocation-preview li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .house-allocation-preview small,
 .house-allocation-edit small {
   display: block;
   color: var(--muted);
   margin-top: 3px;
-  font-size: 13px;
+  font-size: 12px;
 }
 .house-allocation-preview strong {
   white-space: nowrap;
@@ -152,69 +94,112 @@
   align-items: flex-start;
   gap: 10px;
   font-weight: 400;
+  min-height: 44px;
+  color: var(--text);
+  line-height: 1.7;
 }
 .house-check input {
-  margin-top: 5px;
+  margin-top: 3px;
   flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
 }
-.house-details {
-  border: 1px solid var(--line);
-  background: var(--surface);
-  border-radius: 18px;
+.house-attachments {
+  min-width: 0;
+}
+.house-attachments .house-attachment-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
   padding: 14px 18px;
+  border: 1px dashed var(--control-border, var(--line));
+  border-radius: 18px;
+  color: var(--accent-strong);
+  background: var(--surface);
+  cursor: pointer;
+  overflow: hidden;
 }
-.house-details > summary {
-  color: var(--muted);
-  padding: 6px 0;
+.house-attachment-button > span {
   font-size: 13px;
+  font-weight: 550;
+}
+.house-attachment-button small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  margin-top: 3px;
+}
+.house-attachment-button input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
   cursor: pointer;
 }
-.house-details[open] {
-  display: grid;
-  gap: 18px;
-}
-.house-details[open] > label,
-.house-details[open] > div {
-  margin-top: 18px;
+.house-attachment-button:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 .house-attachments ul {
   list-style: none;
+  margin: 12px 0 0;
   padding: 0;
+  display: grid;
+  gap: 8px;
 }
 .house-attachments li {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  padding: 8px 0;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 14px;
 }
-.house-attachments li span {
+.house-attachments li > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
   overflow-wrap: anywhere;
+  font-size: 12px;
+  color: var(--muted);
+}
+.house-attachments .icon-button {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.house-attachment-preview {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+.house-attachment-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .house-legacy-notice {
   border-top: 1px solid var(--line);
-  margin-top: 18px;
-  padding-top: 10px;
+  margin-top: 16px;
+  padding-top: 12px;
 }
-.house-payment-scope {
-  display: grid;
-  gap: 14px;
+.house-legacy-notice p {
+  color: var(--muted);
+  line-height: 1.8;
+  margin: 0 0 12px;
 }
 .house-payment-scope > p {
   margin: 0;
-}
-@media (max-width: 540px) {
-  .house-field-pair {
-    grid-template-columns: 1fr;
-    gap: 20px;
-  }
-  .house-cost-line {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .house-cost-line > label:first-child {
-    grid-column: 1 / -1;
-  }
-  .house-payment-preview {
-    padding: 18px;
-  }
 }

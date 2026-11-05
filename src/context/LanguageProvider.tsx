@@ -52,7 +52,9 @@ import { analyticsEnglish } from "../features/analytics/analyticsEnglish";
 import { formEnglish } from "./formEnglish";
 import { architectureEnglish } from "./architectureEnglish";
 import { houseWriteEnglish } from "../features/write/houseWriteEnglish";
+import { houseCostEnglish } from "../features/write/houseCostEnglish";
 import { entityNavigationEnglish } from "./entityNavigationEnglish";
+import { transactionEnglish } from "../components/transactionEnglish";
 import { appEnglish } from "./appEnglish";
 import {
   applyTheme,
@@ -62,7 +64,6 @@ import {
 } from "../lib/preferences";
 
 const english: Record<string, string> = {
-  ...entityNavigationEnglish,
   ...houseWriteEnglish,
   ...architectureEnglish,
   ...entryFlowEnglish,
@@ -189,6 +190,9 @@ const english: Record<string, string> = {
   আলো: "Light",
   অন্ধকার: "Dark",
   "ফোনের মতো": "Use device setting",
+  ...houseCostEnglish,
+  ...transactionEnglish,
+  ...entityNavigationEnglish,
 };
 
 export function LanguageProvider({ children }: { children: ReactNode }) {

@@ -111,27 +111,6 @@ export function PersonEditorFields({
         </label>
         <label>
           <span className="person-editor-label">
-            {t("ব্যক্তি না প্রতিষ্ঠান")}
-            <small>{t("ইচ্ছেমতো")}</small>
-          </span>
-          <AppSelect
-            aria-label={t("ব্যক্তি না প্রতিষ্ঠান")}
-            value={value.identityType ?? ""}
-            onChange={(event) =>
-              onChange({
-                identityType: event.target.value
-                  ? (event.target.value as "person" | "organization")
-                  : undefined,
-              })
-            }
-          >
-            <option value="">{t("পরে বেছে নেব")}</option>
-            <option value="person">{t("ব্যক্তি")}</option>
-            <option value="organization">{t("প্রতিষ্ঠান")}</option>
-          </AppSelect>
-        </label>
-        <label>
-          <span className="person-editor-label">
             {t("কীভাবে যুক্ত")}
             <small>{t("ইচ্ছেমতো")}</small>
           </span>
@@ -195,10 +174,7 @@ export function PersonEditorFields({
       <details className="person-editor-disclosure">
         <summary>
           <HardHatIcon size={21} aria-hidden="true" />
-          <span>
-            {t("আরও কাজ বা সম্পর্ক")}
-            <small>{t("একই নামে একাধিক সম্পর্ক রাখা যায়")}</small>
-          </span>
+          <span>{t("আরও কাজ বা সম্পর্ক")}</span>
           <CaretDownIcon size={17} aria-hidden="true" />
         </summary>
         <div className="person-editor-disclosure-body">
@@ -242,13 +218,13 @@ export function PersonEditorFields({
         <summary>
           <BookOpenIcon size={21} aria-hidden="true" />
           <span>
-            {t("সেক্টরে রাখি")}
+            {t("খাতায় রাখি")}
             <small>
               {value.personWorkIds.length
-                ? t("{{count}}টি সেক্টর বেছে রাখা আছে", {
+                ? t("{{count}}টি খাতা বেছে রাখা আছে", {
                     count: number(value.personWorkIds.length),
                   })
-                : t("প্রয়োজন হলে সেক্টর বেছে নিন")}
+                : t("প্রয়োজন হলে খাতা বেছে নিন")}
             </small>
           </span>
           <CaretDownIcon
@@ -259,16 +235,16 @@ export function PersonEditorFields({
         </summary>
         <div className="person-editor-disclosure-body">
           <fieldset className="person-editor-work-picker">
-            <legend className="visually-hidden">{t("কোন কোন সেক্টরে")}</legend>
+            <legend className="visually-hidden">{t("কোন কোন খাতায়")}</legend>
             {works.length > 5 ? (
               <div className="person-editor-search">
                 <MagnifyingGlassIcon size={18} aria-hidden="true" />
                 <input
-                  aria-label={t("সেক্টর খুঁজুন")}
+                  aria-label={t("খাতা খুঁজুন")}
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder={t("সেক্টর খুঁজুন")}
+                  placeholder={t("খাতা খুঁজুন")}
                 />
               </div>
             ) : null}
@@ -303,8 +279,8 @@ export function PersonEditorFields({
               <p className="person-editor-empty">
                 {t(
                   works.length
-                    ? "এই নামে কোনো সেক্টর নেই।"
-                    : "সেক্টর যোগ করলে এখানে বেছে নিতে পারবেন।",
+                    ? "এই নামে কোনো খাতা নেই।"
+                    : "খাতা যোগ করলে এখানে বেছে নিতে পারবেন।",
                 )}
               </p>
             ) : null}
@@ -332,7 +308,7 @@ export function PersonEditorFields({
           </summary>
           <div className="person-editor-disclosure-body">
             <label>
-              {t("সেক্টর")}
+              {t("খাতা")}
               <AppSelect
                 value={notebookValue}
                 onChange={(event) => onNotebook(event.target.value)}
@@ -368,7 +344,7 @@ export function PersonEditorFields({
           <SlidersHorizontalIcon size={21} aria-hidden="true" />
           <span>
             {t("কোন হিসাব রাখবেন")}
-            <small>{t("এই পক্ষের জন্য চালু রাখুন")}</small>
+            <small>{t("এই কর্মীর জন্য চালু রাখুন")}</small>
           </span>
           <CaretDownIcon
             size={17}
@@ -405,7 +381,7 @@ export function PersonEditorFields({
             ))}
           </div>
           <p id={actionRuleId}>
-            {t("বেছে রাখা কাজগুলোই এই পক্ষের হিসাবে পাওয়া যাবে।")}
+            {t("বেছে রাখা কাজগুলোই এই কর্মীর হিসাবে পাওয়া যাবে।")}
           </p>
         </div>
       </details>

@@ -89,7 +89,7 @@ export function PersonPage() {
       <div className="empty-panel">
         <h1>{t("এই নামটি খাতায় নেই")}</h1>
         <button className="secondary-button" onClick={() => go("/parties")}>
-          {t("পক্ষের তালিকায় ফিরি")}
+          {t("কর্মীর তালিকায় ফিরি")}
         </button>
       </div>
     );
@@ -258,10 +258,10 @@ export function PersonPage() {
   ];
   return (
     <div className="contacts-page contact-detail-page">
-      <nav className="contact-navigation" aria-label={t("পক্ষ")}>
+      <nav className="contact-navigation" aria-label={t("কর্মী")}>
         <button className="back-link" onClick={() => go("/parties")}>
           <ArrowLeftIcon size={18} />
-          {t("পক্ষ")}
+          {t("কর্মী")}
         </button>
         <div className="contact-navigation-actions">
           {href ? (

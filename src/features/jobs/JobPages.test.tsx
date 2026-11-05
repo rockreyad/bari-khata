@@ -973,10 +973,10 @@ it("retains search, person, work and payment/status filters after reload and thr
   expect(
     (screen.getByLabelText("কাজের অবস্থা") as HTMLSelectElement).value,
   ).toBe("done");
-  expect((screen.getByLabelText("পক্ষ") as HTMLSelectElement).value).toBe(
+  expect((screen.getByLabelText("কর্মী") as HTMLSelectElement).value).toBe(
     "worker",
   );
-  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+  expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe(
     "door",
   );
   expect((screen.getByLabelText("কাজ খুঁজুন") as HTMLInputElement).value).toBe(
@@ -1223,16 +1223,16 @@ it("keeps status changes retryable after a save error", async () => {
 it("keeps people/work selectors compact by default and restores active context filters expanded on reload", () => {
   const ledger = filterFixture();
   const view = mount(ledger, "/works");
-  const toggle = screen.getByRole("button", { name: "পক্ষ ও সেক্টর" });
+  const toggle = screen.getByRole("button", { name: "কর্মী ও খাতা" });
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
-  expect(screen.queryByLabelText("পক্ষ")).toBeNull();
-  expect(screen.queryByLabelText("সেক্টর")).toBeNull();
+  expect(screen.queryByLabelText("কর্মী")).toBeNull();
+  expect(screen.queryByLabelText("খাতা")).toBeNull();
   expect(screen.getByLabelText("কাজের অবস্থা")).toBeTruthy();
   fireEvent.click(toggle);
-  fireEvent.change(screen.getByLabelText("পক্ষ"), {
+  fireEvent.change(screen.getByLabelText("কর্মী"), {
     target: { value: "worker" },
   });
-  fireEvent.change(screen.getByLabelText("সেক্টর"), {
+  fireEvent.change(screen.getByLabelText("খাতা"), {
     target: { value: "door" },
   });
   const path = currentUrl().pathname + currentUrl().search;
@@ -1244,13 +1244,13 @@ it("keeps people/work selectors compact by default and restores active context f
   mount(ledger, path);
   expect(
     screen
-      .getByRole("button", { name: "পক্ষ ও সেক্টর" })
+      .getByRole("button", { name: "কর্মী ও খাতা" })
       .getAttribute("aria-expanded"),
   ).toBe("true");
-  expect((screen.getByLabelText("পক্ষ") as HTMLSelectElement).value).toBe(
+  expect((screen.getByLabelText("কর্মী") as HTMLSelectElement).value).toBe(
     "worker",
   );
-  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+  expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe(
     "door",
   );
 });

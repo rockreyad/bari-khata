@@ -54,7 +54,7 @@ const auditLabels: Partial<Record<EntryChangeField, string>> = {
   paymentPurposeId: "কিসের টাকা",
   provenance: "যে সহকারী লিখেছে",
   amount: "টাকার পরিমাণ",
-  workId: "সেক্টর",
+  workId: "খাতা",
   label: "মালের নাম",
   itemId: "মালের নাম",
   materialGroupId: "মালের ধরন",
@@ -525,7 +525,7 @@ export function EntryDetail({ id }: { id: string }) {
                 </strong>
               </div>
               <div>
-                <span>{t("সেক্টর")}</span>
+                <span>{t("খাতা")}</span>
                 <strong>
                   {adjustment.workId
                     ? fieldText("workId", adjustment.workId)

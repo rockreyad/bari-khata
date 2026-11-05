@@ -240,7 +240,7 @@ it.each([
       .getByText("কাজের টাকা", { selector: "summary > span" })
       .closest("summary")!;
     await user.click(agreementSummary);
-    await user.selectOptions(screen.getByLabelText("সেক্টর"), "door");
+    await user.selectOptions(screen.getByLabelText("খাতা"), "door");
     fireEvent.change(screen.getByLabelText("কাজের টাকা"), {
       target: { value: "1800" },
     });
@@ -254,7 +254,7 @@ it.each([
     expect(screen.getByLabelText("কাজের টাকা").closest("details")!.open).toBe(
       true,
     );
-    expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+    expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe(
       "door",
     );
     await user.click(screen.getByRole("button", { name: "ফিরুন" }));
@@ -273,7 +273,7 @@ it.each([
     expect(
       (screen.getByLabelText("কাজের টাকা") as HTMLInputElement).value,
     ).toBe("১৮০০");
-    expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+    expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe(
       "door",
     );
     await user.click(screen.getByRole("button", { name: "রাখুন" }));
@@ -331,7 +331,7 @@ it("creates a full-page 600000-taka whole-house agreement before any work notebo
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(screen.queryByRole("button", { name: "পুরো বাড়ি" })).toBeNull();
   expect(screen.queryByRole("button", { name: "একটি কাজ" })).toBeNull();
-  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe("");
+  expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe("");
   expect(screen.getByRole("option", { name: "পরে বেছে নেব" })).toBeTruthy();
   fireEvent.change(screen.getByLabelText("কাজের নাম"), {
     target: { value: "রাজমিস্ত্রির কাজ" },
@@ -395,7 +395,7 @@ it("adds a new worker with a whole-house contract before there are work notebook
   });
   expect(screen.queryByRole("button", { name: "পুরো বাড়ি" })).toBeNull();
   expect(screen.queryByRole("button", { name: "একটি কাজ" })).toBeNull();
-  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe("");
+  expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe("");
   await userEvent.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
   const next = onSave.mock.calls[0][0];
@@ -985,10 +985,10 @@ it.each(["door", ""] as const)(
     expect(
       screen.queryByRole("group", { name: "কোন কাজের চুক্তি" }),
     ).toBeNull();
-    expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+    expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe(
       "door",
     );
-    fireEvent.change(screen.getByLabelText("সেক্টর"), {
+    fireEvent.change(screen.getByLabelText("খাতা"), {
       target: { value: workId },
     });
     fireEvent.change(screen.getByLabelText("কাজের নাম"), {
@@ -1034,7 +1034,7 @@ it("adds an optional job to a new worker using only its chosen notebook and amou
       .closest("summary")!,
   );
   expect(screen.queryByRole("group", { name: "কোন কাজের চুক্তি" })).toBeNull();
-  fireEvent.change(screen.getByLabelText("সেক্টর"), {
+  fireEvent.change(screen.getByLabelText("খাতা"), {
     target: { value: "door" },
   });
   fireEvent.change(screen.getByLabelText("কাজের টাকা"), {
@@ -1089,12 +1089,12 @@ it.each(["house", "work"] as const)(
     expect((screen.getByLabelText("কাজের নাম") as HTMLInputElement).value).toBe(
       "আগের কাজের নাম",
     );
-    expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe(
+    expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe(
       scope === "work" ? "door" : "",
     );
-    expect(
-      (screen.getByLabelText("সেক্টর") as HTMLSelectElement).disabled,
-    ).toBe(true);
+    expect((screen.getByLabelText("খাতা") as HTMLSelectElement).disabled).toBe(
+      true,
+    );
     expect(
       (screen.getByLabelText("কার কাজ") as HTMLSelectElement).disabled,
     ).toBe(true);
@@ -1139,8 +1139,8 @@ it("keeps an existing used house job's legacy notebook metadata unchanged instea
     />,
   );
   await ready();
-  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe("");
-  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).disabled).toBe(
+  expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe("");
+  expect((screen.getByLabelText("খাতা") as HTMLSelectElement).disabled).toBe(
     true,
   );
   fireEvent.change(screen.getByLabelText("কাজের টাকা"), {
@@ -1193,12 +1193,12 @@ it("blocks a stale used-job identity and recovers it explicitly without losing p
       onClose={vi.fn()}
     />,
   );
-  await screen.findByRole("button", { name: "আগের পক্ষ ও সেক্টর রাখি" });
+  await screen.findByRole("button", { name: "আগের কর্মী ও খাতা রাখি" });
   expect(
     (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
       .disabled,
   ).toBe(true);
-  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).disabled).toBe(
+  expect((screen.getByLabelText("খাতা") as HTMLSelectElement).disabled).toBe(
     true,
   );
   expect((screen.getByLabelText("কার কাজ") as HTMLSelectElement).disabled).toBe(
@@ -1209,7 +1209,7 @@ it("blocks a stale used-job identity and recovers it explicitly without losing p
   );
   expect(onSave).not.toHaveBeenCalled();
   await userEvent.click(
-    screen.getByRole("button", { name: "আগের পক্ষ ও সেক্টর রাখি" }),
+    screen.getByRole("button", { name: "আগের কর্মী ও খাতা রাখি" }),
   );
   await ready();
   expect((screen.getByLabelText("কাজের টাকা") as HTMLInputElement).value).toBe(
@@ -1221,7 +1221,7 @@ it("blocks a stale used-job identity and recovers it explicitly without losing p
   expect((screen.getByLabelText("কাজের নাম") as HTMLInputElement).value).toBe(
     "অসমাপ্ত কাজের নাম",
   );
-  expect((screen.getByLabelText("সেক্টর") as HTMLSelectElement).value).toBe("");
+  expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe("");
   expect((screen.getByLabelText("কার কাজ") as HTMLSelectElement).value).toBe(
     "worker",
   );

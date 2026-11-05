@@ -6,9 +6,14 @@ import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { EntryFrame } from "../../components/EntryFrame";
 import { MoneyInput } from "../../components/ui/MoneyInput";
+import { NumericInput } from "../../components/ui/NumericInput";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
-import { FormError } from "../../components/ui/FormError";
+import { FormError, useFormError } from "../../components/ui/FormError";
+import {
+  TransactionAmount,
+  TransactionDetails,
+} from "../../components/TransactionFields";
 import { CostTypeSchema, type CostType } from "../../domain/model";
 import { parseAmount } from "../../domain/ledger";
 import {
@@ -18,7 +23,11 @@ import {
 } from "../../domain/contactEntryPolicy";
 import { moneyInputValue } from "../../lib/numericFields";
 import { entryContext } from "../entries/entryContext";
-import { QuickSavedDraftSchema, type QuickDraft } from "../entries/quickEntry";
+import {
+  QuickSavedDraftSchema,
+  validQuickDate,
+  type QuickDraft,
+} from "../entries/quickEntry";
 import { useInlineDraft } from "../entries/useInlineDraft";
 import { recordHouseCost } from "./houseCost";
 import { HouseSavedNotice } from "./HouseSavedNotice";
@@ -108,12 +117,14 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
     "rental",
     "other",
   ];
-  const [error, setError] = useState("");
+  const [error, setError, errorNotice] = useFormError();
+  const [invalidField, setInvalidField] = useState("");
   const [saving, setSaving] = useState(false);
   const lock = useRef(false);
   const finished = useRef(false);
   const field = <K extends keyof QuickDraft>(key: K, next: QuickDraft[K]) => {
     setError("");
+    setInvalidField("");
     update((current) => ({
       ...current,
       draft: { ...current.draft, [key]: next },
@@ -172,9 +183,28 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
     lock.current = true;
     setSaving(true);
     setError("");
+    setInvalidField("");
+    let invalidTarget = "";
     try {
+      for (const row of draft.rows) {
+        if (readMoney(row.amount) <= 0) {
+          invalidTarget = `amount:${row.id}`;
+          throw new Error("amount");
+        }
+        if (!row.label.trim()) {
+          invalidTarget = `label:${row.id}`;
+          throw new Error("label");
+        }
+      }
+      if (!validQuickDate(draft.date)) throw new Error("date");
       if (staleAdvance) throw new Error("house_advance_changed");
       if (!compatible) throw new Error("contact_rules");
+      if (
+        ((draft.payment !== "full" || draft.costType === "labour") &&
+          !draft.personId) ||
+        (draft.personId === "__new__" && !draft.personName.trim())
+      )
+        throw new Error("person");
       if (
         !Number.isSafeInteger(total) ||
         total <= 0 ||
@@ -221,6 +251,12 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
       close();
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : "";
+      if (invalidTarget) setInvalidField(invalidTarget);
+      else if (code === "person" || code === "contact_rules")
+        setInvalidField("person");
+      else if (code === "date") setInvalidField("date");
+      else if (code === "amount" && draft.payment === "partial")
+        setInvalidField("paid");
       setError(
         t(
           code === "contact_rules"
@@ -229,13 +265,15 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               ? "আগের অগ্রিম বদলেছে। নতুন প্রস্তাব দেখে আবার বেছে নিন।"
               : code === "duplicate"
                 ? "এই হিসাব আগেই রাখা হয়েছে। আগের হিসাব খুলে দেখুন।"
-                : code === "person"
-                  ? "বাকি কার কাছে থাকবে, তাঁর নাম দিন।"
-                  : code === "label"
-                    ? "কী মাল বা কাজের বিল, লিখুন।"
-                    : code === "amount"
-                      ? "সঠিক টাকার অঙ্ক দিন। দেওয়া টাকা ও অগ্রিম যেন বিলের বেশি না হয়।"
-                      : "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
+                : code === "date"
+                  ? "সঠিক তারিখ বেছে নিন।"
+                  : code === "person"
+                    ? "বাকি কার কাছে থাকবে, তাঁর নাম দিন।"
+                    : code === "label"
+                      ? "কী মাল বা কাজের বিল, লিখুন।"
+                      : code === "amount"
+                        ? "সঠিক টাকার অঙ্ক দিন। দেওয়া টাকা ও অগ্রিম যেন বিলের বেশি না হয়।"
+                        : "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
         ),
       );
     } finally {
@@ -291,33 +329,58 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
       setError(t("অসমাপ্ত লেখা রাখা যায়নি। বন্ধ করার আগে আবার চেষ্টা করুন।"));
     }
   };
+  const rowField = (
+    rowId: string,
+    key: keyof QuickDraft["rows"][number],
+    next: string,
+  ) => {
+    setError("");
+    setInvalidField("");
+    update((current) => ({
+      ...current,
+      draft: {
+        ...current.draft,
+        rows: current.draft.rows.map((row) =>
+          row.id === rowId ? { ...row, [key]: next } : row,
+        ),
+      },
+    }));
+  };
+  const errorId = "house-cost-error";
+  const personLabel = action === "purchase" ? "কর্মী বা দোকান" : "কর্মী";
+  const personInvalid = invalidField === "person";
   return (
     <EntryFrame
       title={t(action === "purchase" ? "মাল কিনেছি" : "কাজের বিল")}
-      subtitle={t(
-        action === "purchase" ? "কী কিনেছেন, কত দাম" : "কার কাজ, কত বিল",
-      )}
       onClose={() => void closeSafely()}
       busy={saving}
-      className="house-write-page"
+      className="transaction-page"
       footer={
-        <button
-          className="primary-button"
-          form="house-cost-form"
-          type="submit"
-          disabled={!ready || failed || saving}
-        >
-          {t(saving ? "রাখছি…" : "হিসাব রাখুন")}
-        </button>
+        <div className="transaction-submit">
+          <div>
+            <small>{t("মোট টাকা")}</small>
+            <strong>{money(Number.isSafeInteger(total) ? total : 0)}</strong>
+          </div>
+          <button
+            className="primary-button"
+            form="house-cost-form"
+            type="submit"
+            disabled={!ready || failed || saving}
+          >
+            {t(saving ? "রাখছি…" : "হিসাব রাখুন")}
+          </button>
+        </div>
       }
     >
       <form
         id="house-cost-form"
-        className="house-form"
+        className="transaction-form"
+        noValidate
         onSubmit={(event) => void submit(event)}
       >
         <FormError
-          id="house-cost-error"
+          {...errorNotice}
+          id={errorId}
           message={
             failed
               ? t(
@@ -327,81 +390,146 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
           }
         />
         <fieldset disabled={!ready || failed || saving}>
-          {action === "charge" && (
-            <label>
-              {t("কীসের বিল")}
-              <AppSelect
-                aria-label={t("কীসের বিল")}
-                value={draft.costType}
-                onChange={(event) => chooseType(event.target.value as CostType)}
-              >
-                {[
-                  ["labour", "মজুরি"],
-                  ["transport", "গাড়িভাড়া"],
-                  ["unload", "মাল নামানো"],
-                  ["rental", "ভাড়া"],
-                  ["other", "অন্য কাজ"],
-                ]
-                  .filter(([id]) => costTypes.includes(id as CostType))
-                  .map(([id, name]) => (
-                    <option key={id} value={id}>
-                      {t(name)}
-                    </option>
-                  ))}
-              </AppSelect>
-            </label>
-          )}
-          <div className="house-cost-lines">
+          <div className="transaction-line-list">
             {draft.rows.map((row, index) => (
-              <div className="house-cost-line" key={row.id}>
-                <label>
-                  {t(action === "purchase" ? "কী মাল" : "কী কাজ হয়েছে")}
-                  <input
-                    aria-label={t(
-                      action === "purchase"
-                        ? "মালের নাম {{number}}"
-                        : "কাজের বিবরণ {{number}}",
-                      { number: formatDigits(index + 1) },
+              <section
+                className="transaction-line"
+                key={row.id}
+                aria-label={t(
+                  action === "purchase" ? "মাল {{number}}" : "কাজ {{number}}",
+                  { number: formatDigits(index + 1) },
+                )}
+              >
+                {index === 0 ? (
+                  <TransactionAmount
+                    label={t(
+                      action === "purchase" ? "মালের দাম" : "বিলের টাকা",
                     )}
-                    required
-                    maxLength={200}
-                    value={row.label}
-                    onChange={(event) =>
-                      field(
-                        "rows",
-                        draft.rows.map((item) =>
-                          item.id === row.id
-                            ? { ...item, label: event.target.value }
-                            : item,
-                        ),
-                      )
-                    }
-                  />
-                </label>
-                <label>
-                  {t(action === "purchase" ? "মালের দাম" : "বিলের টাকা")}
-                  <MoneyInput
-                    aria-label={t("টাকা {{number}}", {
-                      number: formatDigits(index + 1),
-                    })}
-                    required
+                    inputLabel={t(
+                      action === "purchase"
+                        ? "মালের দাম {{number}}"
+                        : "বিলের টাকা {{number}}",
+                      {
+                        number: formatDigits(index + 1),
+                      },
+                    )}
+                    id={`house-cost-amount-${row.id}`}
                     value={row.amount}
-                    onChange={(event) =>
-                      field(
-                        "rows",
-                        draft.rows.map((item) =>
-                          item.id === row.id
-                            ? { ...item, amount: event.target.value }
-                            : item,
-                        ),
-                      )
+                    onChange={(next) => rowField(row.id, "amount", next)}
+                    required
+                    error={
+                      invalidField === `amount:${row.id}` ? error : undefined
                     }
                   />
-                </label>
-                {draft.rows.length > 1 && (
+                ) : null}
+                <div
+                  className={
+                    index > 0 ? "transaction-grid" : "transaction-fields"
+                  }
+                >
+                  <label>
+                    {t(action === "purchase" ? "কী কিনেছেন" : "কী কাজ হয়েছে")}
+                    <input
+                      aria-label={t(
+                        action === "purchase"
+                          ? "মালের নাম {{number}}"
+                          : "কাজের বিবরণ {{number}}",
+                        { number: formatDigits(index + 1) },
+                      )}
+                      required
+                      maxLength={200}
+                      value={row.label}
+                      aria-invalid={invalidField === `label:${row.id}`}
+                      aria-describedby={
+                        invalidField === `label:${row.id}` ? errorId : undefined
+                      }
+                      onChange={(event) =>
+                        rowField(row.id, "label", event.target.value)
+                      }
+                    />
+                  </label>
+                  {index > 0 ? (
+                    <label>
+                      {t(action === "purchase" ? "মালের দাম" : "বিলের টাকা")}
+                      <MoneyInput
+                        aria-label={t(
+                          action === "purchase"
+                            ? "মালের দাম {{number}}"
+                            : "বিলের টাকা {{number}}",
+                          {
+                            number: formatDigits(index + 1),
+                          },
+                        )}
+                        required
+                        value={row.amount}
+                        aria-invalid={invalidField === `amount:${row.id}`}
+                        aria-describedby={
+                          invalidField === `amount:${row.id}`
+                            ? errorId
+                            : undefined
+                        }
+                        onChange={(event) =>
+                          rowField(row.id, "amount", event.target.value)
+                        }
+                      />
+                    </label>
+                  ) : null}
+                </div>
+                <TransactionDetails
+                  summary={t(
+                    action === "purchase" ? "ব্র্যান্ড ও পরিমাণ" : "পরিমাণ",
+                  )}
+                  defaultOpen={Boolean(row.brand || row.quantity || row.unit)}
+                >
+                  {action === "purchase" ? (
+                    <label>
+                      {t("ব্র্যান্ড")}
+                      <input
+                        aria-label={t("ব্র্যান্ড {{number}}", {
+                          number: formatDigits(index + 1),
+                        })}
+                        maxLength={200}
+                        value={row.brand}
+                        onChange={(event) =>
+                          rowField(row.id, "brand", event.target.value)
+                        }
+                      />
+                    </label>
+                  ) : null}
+                  <div className="transaction-grid">
+                    <label>
+                      {t("পরিমাণ")}
+                      <NumericInput
+                        aria-label={t("পরিমাণ {{number}}", {
+                          number: formatDigits(index + 1),
+                        })}
+                        maxLength={60}
+                        value={row.quantity}
+                        onChange={(event) =>
+                          rowField(row.id, "quantity", event.target.value)
+                        }
+                      />
+                    </label>
+                    <label>
+                      {t("একক")}
+                      <input
+                        aria-label={t("একক {{number}}", {
+                          number: formatDigits(index + 1),
+                        })}
+                        maxLength={60}
+                        value={row.unit}
+                        onChange={(event) =>
+                          rowField(row.id, "unit", event.target.value)
+                        }
+                        placeholder={t("যেমন: বস্তা, টি, দিন")}
+                      />
+                    </label>
+                  </div>
+                </TransactionDetails>
+                {draft.rows.length > 1 ? (
                   <button
                     type="button"
-                    className="icon-button"
+                    className="transaction-secondary"
                     aria-label={t("এই সারি সরান")}
                     onClick={() =>
                       field(
@@ -410,15 +538,16 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                       )
                     }
                   >
-                    <TrashIcon size={19} />
+                    <TrashIcon size={17} />
+                    {t("সরান")}
                   </button>
-                )}
-              </div>
+                ) : null}
+              </section>
             ))}
           </div>
           <button
             type="button"
-            className="text-button"
+            className="transaction-secondary"
             onClick={() =>
               field("rows", [
                 ...draft.rows,
@@ -427,6 +556,9 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                   id: crypto.randomUUID(),
                   label: "",
                   amount: "",
+                  brand: "",
+                  quantity: "",
+                  unit: "",
                 },
               ])
             }
@@ -434,16 +566,14 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
             <PlusIcon size={17} />
             {t(action === "purchase" ? "আরও মাল" : "আরও কাজ")}
           </button>
-          <div className="house-field-pair">
+          <div className="transaction-grid">
             <label>
-              {t(
-                draft.payment === "worker"
-                  ? "কাকে ফেরত দেবেন"
-                  : "কার সঙ্গে হিসাব",
-              )}
+              {t(personLabel)}
               <AppSelect
-                aria-label={t("কার সঙ্গে হিসাব")}
+                aria-label={t(personLabel)}
                 value={draft.personId}
+                aria-invalid={personInvalid}
+                aria-describedby={personInvalid ? errorId : undefined}
                 onChange={(event) => {
                   const selected = ledger.people.find(
                     (row) => row.id === event.target.value,
@@ -462,6 +592,8 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                     !selectedPolicy.chargeCostTypes.includes(draft.costType)
                       ? (selectedPolicy.chargeCostTypes[0] ?? draft.costType)
                       : draft.costType;
+                  setError("");
+                  setInvalidField("");
                   update((current) => ({
                     ...current,
                     useAdvance: false,
@@ -482,33 +614,35 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                   }));
                 }}
               >
-                <option value="">{t("নাম না দিলেও হবে")}</option>
+                <option value="">
+                  {t(action === "purchase" ? "না দিলেও হবে" : "কর্মী বেছে নিন")}
+                </option>
                 {ledger.people
                   .filter(
-                    (person) =>
-                      person.id === draft.personId ||
-                      (!person.archivedAt &&
+                    (row) =>
+                      row.id === draft.personId ||
+                      (!row.archivedAt &&
                         (action === "purchase"
-                          ? canRecordContactCost(person, {
+                          ? canRecordContactCost(row, {
                               costType: "material",
                               account: "materials",
                               reimbursement: draft.payment === "worker",
                             })
-                          : contactEntryPolicy(person).chargeCostTypes.length >
+                          : contactEntryPolicy(row).chargeCostTypes.length >
                             0)),
                   )
-                  .map((person) => (
-                    <option value={person.id} key={person.id}>
-                      {formatDigits(person.name)}
+                  .map((row) => (
+                    <option value={row.id} key={row.id}>
+                      {formatDigits(row.name)}
                     </option>
                   ))}
                 <option value="__new__">{t("+ নাম লিখব")}</option>
               </AppSelect>
             </label>
             <label>
-              {t("কোন সেক্টরে")}
+              {t("খাতা")}
               <AppSelect
-                aria-label={t("কোন সেক্টরে")}
+                aria-label={t("খাতা")}
                 value={draft.workId}
                 onChange={(event) =>
                   update((current) => ({
@@ -534,7 +668,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               </AppSelect>
             </label>
           </div>
-          {draft.personId === "__new__" && (
+          {draft.personId === "__new__" ? (
             <label>
               {t("নাম")}
               <input
@@ -542,69 +676,152 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                 required
                 maxLength={200}
                 value={draft.personName}
+                aria-invalid={personInvalid}
+                aria-describedby={personInvalid ? errorId : undefined}
                 onChange={(event) => field("personName", event.target.value)}
               />
             </label>
-          )}
-          {draft.account === "labour" && contracts.length > 0 && (
+          ) : null}
+          {action === "charge" ? (
             <label>
-              {t("কোন কাজের জন্য")}
+              {t("কীসের বিল")}
               <AppSelect
-                aria-label={t("কোন কাজের জন্য")}
-                value={draft.contractId}
-                onChange={(event) => {
-                  const contract = contracts.find(
-                    (row) => row.id === event.target.value,
-                  );
-                  update((current) => ({
-                    ...current,
-                    useAdvance: false,
-                    draft: {
-                      ...current.draft,
-                      contractId: event.target.value,
-                      milestoneId: "",
-                      workId:
-                        contract?.scope === "work"
-                          ? contract.workId!
-                          : current.draft.workId,
-                    },
-                  }));
-                }}
+                aria-label={t("কীসের বিল")}
+                value={draft.costType}
+                onChange={(event) => chooseType(event.target.value as CostType)}
               >
-                <option value="">{t("চুক্তি ছাড়াই")}</option>
-                {contracts.map((contract) => (
-                  <option key={contract.id} value={contract.id}>
-                    {formatDigits(contract.title || t("কাজ"))}
-                  </option>
-                ))}
+                {[
+                  ["labour", "মজুরি"],
+                  ["transport", "গাড়িভাড়া"],
+                  ["unload", "মাল নামানো"],
+                  ["rental", "ভাড়া"],
+                  ["other", "অন্য কাজ"],
+                ]
+                  .filter(([id]) => costTypes.includes(id as CostType))
+                  .map(([id, label]) => (
+                    <option key={id} value={id}>
+                      {t(label)}
+                    </option>
+                  ))}
               </AppSelect>
             </label>
-          )}
-          {milestones.length > 0 && (
-            <label>
-              {t("কাজের ধাপ")}
-              <AppSelect
-                aria-label={t("কাজের ধাপ")}
-                value={draft.milestoneId}
-                onChange={(event) => field("milestoneId", event.target.value)}
-              >
-                <option value="">{t("ধাপ ছাড়াই বিল")}</option>
-                {milestones.map((step) => (
-                  <option key={step.id} value={step.id}>
-                    {formatDigits(step.title)}
-                  </option>
-                ))}
-              </AppSelect>
-            </label>
-          )}
+          ) : null}
+          {draft.account === "labour" && contracts.length > 0 ? (
+            <TransactionDetails
+              summary={t("কাজ ও ধাপ")}
+              defaultOpen={Boolean(draft.contractId)}
+            >
+              <label>
+                {t("কোন কাজের জন্য")}
+                <AppSelect
+                  aria-label={t("কোন কাজের জন্য")}
+                  value={draft.contractId}
+                  onChange={(event) => {
+                    const contract = contracts.find(
+                      (row) => row.id === event.target.value,
+                    );
+                    update((current) => ({
+                      ...current,
+                      useAdvance: false,
+                      draft: {
+                        ...current.draft,
+                        contractId: event.target.value,
+                        milestoneId: "",
+                        workId:
+                          contract?.scope === "work"
+                            ? contract.workId!
+                            : current.draft.workId,
+                      },
+                    }));
+                  }}
+                >
+                  <option value="">{t("চুক্তি ছাড়াই")}</option>
+                  {contracts.map((contract) => (
+                    <option key={contract.id} value={contract.id}>
+                      {formatDigits(contract.title || t("কাজ"))}
+                    </option>
+                  ))}
+                </AppSelect>
+              </label>
+              {milestones.length > 0 ? (
+                <label>
+                  {t("কাজের ধাপ")}
+                  <AppSelect
+                    aria-label={t("কাজের ধাপ")}
+                    value={draft.milestoneId}
+                    onChange={(event) =>
+                      field("milestoneId", event.target.value)
+                    }
+                  >
+                    <option value="">{t("ধাপ ছাড়াই বিল")}</option>
+                    {milestones.map((step) => (
+                      <option key={step.id} value={step.id}>
+                        {formatDigits(step.title)}
+                      </option>
+                    ))}
+                  </AppSelect>
+                </label>
+              ) : null}
+            </TransactionDetails>
+          ) : null}
+          <div className="transaction-fields">
+            <span className="transaction-label">{t("টাকা মিটিয়েছেন?")}</span>
+            <div
+              className="transaction-segments"
+              role="group"
+              aria-label={t("টাকা মিটিয়েছেন?")}
+            >
+              {(
+                [
+                  ["full", "পুরোটা", "পুরোটা দিয়েছি"],
+                  ["partial", "কিছু", "কিছু দিয়েছি"],
+                  ["due", "পরে দেব", "পরে দেব"],
+                  ...(action === "purchase" && (policy?.reimbursement ?? true)
+                    ? [["worker", "অন্যজন", "অন্যজন দিয়েছেন"]]
+                    : []),
+                ] as [QuickDraft["payment"], string, string][]
+              ).map(([id, label, accessibleLabel]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={draft.payment === id ? "selected" : ""}
+                  aria-pressed={draft.payment === id}
+                  aria-label={t(accessibleLabel)}
+                  onClick={() => field("payment", id)}
+                >
+                  {t(label)}
+                </button>
+              ))}
+            </div>
+            {draft.payment === "worker" ? (
+              <p className="field-hint">
+                {t("যিনি নিজের টাকায় কিনেছেন, তাঁর নাম দিন।")}
+              </p>
+            ) : null}
+            {draft.payment === "partial" ? (
+              <label>
+                {t("এখন কত দিয়েছি")}
+                <MoneyInput
+                  aria-label={t("এখন কত দিয়েছি")}
+                  required
+                  value={draft.paid}
+                  aria-invalid={invalidField === "paid"}
+                  aria-describedby={
+                    invalidField === "paid" ? errorId : undefined
+                  }
+                  onChange={(event) => field("paid", event.target.value)}
+                />
+              </label>
+            ) : null}
+          </div>
           {staleAdvance ? (
-            <div className="house-legacy-notice">
+            <div className="transaction-card">
               <p role="status">
                 {t("আগের অগ্রিম বদলেছে। নতুন প্রস্তাব দেখে আবার বেছে নিন।")}
               </p>
               <button
                 type="button"
-                className="text-button"
+                className="transaction-secondary"
                 onClick={() =>
                   update({ ...value, useAdvance: false, advanceSignature: "" })
                 }
@@ -613,8 +830,8 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               </button>
             </div>
           ) : null}
-          {advance && advance.applied > 0 && (
-            <label className="house-check">
+          {advance && advance.applied > 0 ? (
+            <label className="transaction-check">
               <input
                 type="checkbox"
                 checked={advanceAccepted}
@@ -634,104 +851,81 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                 })}
               </span>
             </label>
-          )}
-          <label>
-            {t("টাকা মিটিয়েছেন?")}
-            <AppSelect
-              aria-label={t("টাকা মিটিয়েছেন?")}
-              value={draft.payment}
-              onChange={(event) =>
-                field("payment", event.target.value as QuickDraft["payment"])
-              }
-            >
-              <option value="full">{t("পুরোটা দিয়েছি")}</option>
-              <option value="partial">{t("কিছু দিয়েছি")}</option>
-              <option value="due">{t("পরে দেব")}</option>
-              {action === "purchase" && (policy?.reimbursement ?? true) && (
-                <option value="worker">
-                  {t("অন্য কেউ নিজের টাকায় কিনেছেন")}
-                </option>
-              )}
-            </AppSelect>
-          </label>
-          {draft.payment === "worker" && (
-            <p className="field-hint">
-              {t("যিনি নিজের টাকায় কিনেছেন, তাঁর নাম দিন।")}
-            </p>
-          )}
-          {!compatible && (
+          ) : null}
+          {!compatible ? (
             <p className="field-hint" role="status">
               {t("এই নামের নিয়মে এই হিসাব রাখা যাবে না। ধরন বা নাম বদলান।")}
             </p>
-          )}
-          {draft.payment === "partial" && (
-            <label>
-              {t("এখন কত দিয়েছি")}
-              <MoneyInput
-                aria-label={t("এখন কত দিয়েছি")}
-                required
-                value={draft.paid}
-                onChange={(event) => field("paid", event.target.value)}
-              />
-            </label>
-          )}
-          <section
-            className="house-payment-preview"
-            aria-label={t("রাখলে যা হবে")}
-            aria-live="polite"
-          >
-            <dl>
-              <div>
-                <dt>{t("খরচে যোগ হবে")}</dt>
-                <dd>{money(Number.isSafeInteger(total) ? total : 0)}</dd>
-              </div>
-              {advanceAmount > 0 && (
+          ) : null}
+          {total > 0 && (
+            <section
+              className="transaction-summary"
+              aria-label={t("হিসাবের সারাংশ")}
+              aria-live="polite"
+            >
+              <dl>
                 <div>
-                  <dt>{t("আগের অগ্রিম লাগবে")}</dt>
-                  <dd>{money(advanceAmount)}</dd>
+                  <dt>{t("এখন টাকা গেছে")}</dt>
+                  <dd>{money(paid)}</dd>
                 </div>
-              )}
-              <div>
-                <dt>{t("এখন টাকা গেছে")}</dt>
-                <dd>{money(paid)}</dd>
-              </div>
-              <div className="house-result">
-                <dt>{t("এই বিলে বাকি থাকবে")}</dt>
-                <dd>{money(Math.max(0, due))}</dd>
-              </div>
-            </dl>
-          </section>
-          <details className="house-details">
-            <summary>{t("তারিখ, ভাউচার ও বাড়তি কথা")}</summary>
-            <label>
-              {t("তারিখ")}
-              <AppDatePicker
-                aria-label={t("তারিখ")}
-                value={draft.date}
-                onChange={(event) => field("date", event.target.value)}
-              />
-            </label>
-            <label>
-              {t("কীভাবে দিয়েছি")}
-              <AppSelect
-                aria-label={t("কীভাবে দিয়েছি")}
-                value={draft.method}
-                onChange={(event) =>
-                  field("method", event.target.value as QuickDraft["method"])
-                }
-              >
-                {[
-                  ["cash", "নগদ"],
-                  ["bkash", "বিকাশ"],
-                  ["bank", "ব্যাংক"],
-                  ["other", "অন্যভাবে"],
-                ].map(([id, label]) => (
-                  <option key={id} value={id}>
-                    {t(label)}
-                  </option>
-                ))}
-              </AppSelect>
-            </label>
+                {advanceAmount > 0 ? (
+                  <div>
+                    <dt>{t("আগের অগ্রিম লাগবে")}</dt>
+                    <dd>{money(advanceAmount)}</dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>{t("এই বিলে বাকি থাকবে")}</dt>
+                  <dd>{money(Math.max(0, due))}</dd>
+                </div>
+              </dl>
+            </section>
+          )}
+          <HouseAttachments
+            files={files}
+            entryId={draft.id}
+            onChange={(next) => update({ ...value, files: next })}
+            onError={setError}
+          />
+          <TransactionDetails
+            summary={t("তারিখ ও বাড়তি কথা")}
+            defaultOpen={invalidField === "date"}
+          >
+            <div className="transaction-grid">
+              <label>
+                {t("তারিখ")}
+                <AppDatePicker
+                  aria-label={t("তারিখ")}
+                  value={draft.date}
+                  aria-invalid={invalidField === "date"}
+                  aria-describedby={
+                    invalidField === "date" ? errorId : undefined
+                  }
+                  onChange={(event) => field("date", event.target.value)}
+                />
+              </label>
+              <label>
+                {t("কীভাবে দিয়েছি")}
+                <AppSelect
+                  aria-label={t("কীভাবে দিয়েছি")}
+                  value={draft.method}
+                  onChange={(event) =>
+                    field("method", event.target.value as QuickDraft["method"])
+                  }
+                >
+                  {[
+                    ["cash", "নগদ"],
+                    ["bkash", "বিকাশ"],
+                    ["bank", "ব্যাংক"],
+                    ["other", "অন্যভাবে"],
+                  ].map(([id, label]) => (
+                    <option key={id} value={id}>
+                      {t(label)}
+                    </option>
+                  ))}
+                </AppSelect>
+              </label>
+            </div>
             <label>
               {t("বাড়তি কথা")}
               <textarea
@@ -740,13 +934,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                 onChange={(event) => field("note", event.target.value)}
               />
             </label>
-            <HouseAttachments
-              files={files}
-              entryId={draft.id}
-              onChange={(files) => update({ ...value, files })}
-              onError={setError}
-            />
-          </details>
+          </TransactionDetails>
         </fieldset>
       </form>
     </EntryFrame>

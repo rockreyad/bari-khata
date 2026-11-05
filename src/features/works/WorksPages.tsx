@@ -74,8 +74,7 @@ function workDueRows(balance: WorkBalances) {
     return balance.reconciledPayable > 0
       ? [
           {
-            label:
-              balance.sharedOutstanding > 0 ? "এই সেক্টরে বাকি" : "মোট বাকি",
+            label: balance.sharedOutstanding > 0 ? "এই খাতায় বাকি" : "মোট বাকি",
             amount: balance.reconciledPayable,
           },
         ]
@@ -174,10 +173,10 @@ export function WorksPage() {
   return (
     <div className="page-flow works-directory">
       <header className="page-heading works-directory-heading">
-        <h1>{t("সেক্টর")}</h1>
+        <h1>{t("খাতা")}</h1>
         <button className="primary-button" onClick={() => entity("work")}>
           <PlusIcon size={19} />
-          {t("নতুন সেক্টর")}
+          {t("নতুন খাতা বানান")}
         </button>
       </header>
       <button
@@ -191,8 +190,8 @@ export function WorksPage() {
         <label className="works-search">
           <MagnifyingGlassIcon size={20} aria-hidden="true" />
           <input
-            aria-label={t("সেক্টর খুঁজুন")}
-            placeholder={t("সেক্টরের নাম লিখুন")}
+            aria-label={t("খাতা খুঁজুন")}
+            placeholder={t("খাতার নাম লিখুন")}
             value={search}
             onChange={(event) => changeFilter("q", event.target.value)}
           />
@@ -279,7 +278,7 @@ export function WorksPage() {
       {!works.length ? (
         <div className="empty-panel works-directory-empty">
           <FolderOpenIcon size={36} weight="duotone" />
-          <h3>{t("কোনো সেক্টর পাওয়া যায়নি")}</h3>
+          <h3>{t("কোনো খাতা পাওয়া যায়নি")}</h3>
           {search || status !== "all" ? (
             <button
               className="text-button"
@@ -292,7 +291,7 @@ export function WorksPage() {
                 })
               }
             >
-              {t("সব সেক্টর দেখুন")}
+              {t("সব খাতা দেখুন")}
             </button>
           ) : null}
         </div>
@@ -395,7 +394,7 @@ export function WorkPage() {
     return (
       <div className="empty-panel">
         <h2>{t("খাতা পাওয়া যায়নি")}</h2>
-        <button onClick={() => go("/sectors")}>{t("সব সেক্টর")}</button>
+        <button onClick={() => go("/sectors")}>{t("সব খাতা")}</button>
       </div>
     );
   const s = summarize(ledger, work.id);
@@ -500,7 +499,7 @@ export function WorkPage() {
     <div className="page-flow work-page-v3">
       <button className="back-link" onClick={() => go("/sectors")}>
         <ArrowLeftIcon size={17} />
-        {t("সেক্টর")}
+        {t("খাতা")}
       </button>
       <header className="page-heading">
         <div className="work-title">
@@ -517,7 +516,7 @@ export function WorkPage() {
           trigger={
             <button
               className="icon-button"
-              aria-label={t("সেক্টরের আরও কাজ")}
+              aria-label={t("খাতার আরও কাজ")}
               ref={removal.triggerRef}
             >
               <DotsThreeIcon size={25} />
@@ -525,7 +524,7 @@ export function WorkPage() {
           }
           items={[
             {
-              label: t("সেক্টরের তথ্য বদলাই"),
+              label: t("খাতার তথ্য বদলাই"),
               onSelect: () => entity("work", work.id),
               disabled: removal.archived,
             },
@@ -539,7 +538,7 @@ export function WorkPage() {
       </header>
       {removal.notice}
       {removal.dialog}
-      <section className="work-overview" aria-label={t("এই সেক্টরের হিসাব")}>
+      <section className="work-overview" aria-label={t("এই খাতার হিসাব")}>
         <div className="work-overview-total">
           <div>
             <span>{t("মোট টাকা দিয়েছি")}</span>
@@ -581,7 +580,7 @@ export function WorkPage() {
         {balance.valid && balance.sharedOutstanding > 0 ? (
           <details className="work-shared-dues">
             <summary className="work-known-due work-shared-due">
-              <span>{t("সব সেক্টর মিলিয়ে কাজের বাকি")}</span>
+              <span>{t("সব খাতা মিলিয়ে কাজের বাকি")}</span>
               <strong>
                 {money(balance.sharedOutstanding)}{" "}
                 <CaretRightIcon size={15} aria-hidden="true" />
@@ -645,7 +644,7 @@ export function WorkPage() {
           ref={tabRail.ref}
           className="work-tabs-v3 work-tabs-scroll"
           role="group"
-          aria-label={t("সেক্টরের লেনদেন বেছে দেখুন")}
+          aria-label={t("খাতার লেনদেন বেছে দেখুন")}
         >
           {(
             [
@@ -748,7 +747,7 @@ export function WorkPage() {
                       <strong>
                         {t(
                           event.before
-                            ? "সেক্টরের তথ্য বদলেছে"
+                            ? "খাতার তথ্য বদলেছে"
                             : "খাতা খোলা হয়েছে",
                         )}
                       </strong>
@@ -943,12 +942,12 @@ export function WorkPage() {
           <section className="panel">
             <div className="section-heading">
               <h2>
-                {t(tab === "all" ? "এই সেক্টরের লেনদেন" : "সাম্প্রতিক হিসাব")}
+                {t(tab === "all" ? "এই খাতার লেনদেন" : "সাম্প্রতিক হিসাব")}
               </h2>
               <button className="text-button" onClick={() => go(historyPath)}>
                 {t(
                   tab === "transport" || tab === "other"
-                    ? "এই সেক্টরের সব লেনদেন"
+                    ? "এই খাতার সব লেনদেন"
                     : "পুরো হিসাব",
                 )}
                 <ArrowRightIcon size={15} />

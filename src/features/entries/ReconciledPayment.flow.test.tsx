@@ -187,7 +187,7 @@ it("keeps a professional's reconciled jobs separate from a custom partial labour
   let view = render(<QuickEntrySheet presentation="page" options={options} />);
   await ready("রাখুন");
   await user.click(screen.getByRole("button", { name: "নতুন বিল ও টাকা" }));
-  await user.selectOptions(screen.getByLabelText("সেক্টর"), "roof");
+  await user.selectOptions(screen.getByLabelText("খাতা"), "roof");
   await user.selectOptions(screen.getByLabelText("কিসের টাকা"), "__new__");
   await user.type(screen.getByLabelText("কিসের টাকা লিখুন"), "নমুনা নকশা দেখা");
   await user.selectOptions(screen.getByLabelText("কোন হিসাবের অংশ"), "labour");
@@ -257,7 +257,7 @@ it("keeps a professional's reconciled jobs separate from a custom partial labour
     (screen.getByRole("button", { name: "রাখুন" }) as HTMLButtonElement)
       .disabled,
   ).toBe(false);
-  await user.selectOptions(screen.getByLabelText("সেক্টর"), "roof");
+  await user.selectOptions(screen.getByLabelText("খাতা"), "roof");
   await user.selectOptions(screen.getByLabelText("কাজ"), "");
   expect(
     screen.queryByText(
@@ -351,7 +351,7 @@ it.each([
       );
     view = mount();
     await ready("রাখুন");
-    await user.selectOptions(screen.getByLabelText("সেক্টর"), "roof");
+    await user.selectOptions(screen.getByLabelText("খাতা"), "roof");
     await user.selectOptions(screen.getByLabelText("কাজ"), "");
     expect(screen.queryByRole("button", { name: "বাকি মেটাই" })).toBeNull();
     await user.click(screen.getByRole("button", { name: label }));
@@ -413,7 +413,7 @@ it.each([
     context.ledger = restored;
     view = mount();
     await ready("রাখুন");
-    await user.selectOptions(screen.getByLabelText("সেক্টর"), "roof");
+    await user.selectOptions(screen.getByLabelText("খাতা"), "roof");
     await user.selectOptions(screen.getByLabelText("কাজ"), "");
     await user.click(screen.getByRole("button", { name: "অগ্রিম" }));
     await user.type(screen.getByLabelText("কত টাকা"), "50");

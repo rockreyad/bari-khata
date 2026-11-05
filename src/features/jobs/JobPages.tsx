@@ -280,13 +280,13 @@ export function JobsPage() {
           <button
             type="button"
             className="jobs-people-toggle"
-            aria-label={t("পক্ষ ও সেক্টর")}
+            aria-label={t("কর্মী ও খাতা")}
             aria-expanded={peopleFiltersOpen}
             aria-controls="jobs-people-filters"
             onClick={() => setPeopleDisclosure(!peopleFiltersOpen)}
           >
             <FunnelSimpleIcon size={17} />
-            {t("পক্ষ ও সেক্টর")}
+            {t("কর্মী ও খাতা")}
             {personId || workId ? (
               <span className="jobs-filter-count" aria-hidden="true">
                 {number(Number(Boolean(personId)) + Number(Boolean(workId)))}
@@ -298,13 +298,13 @@ export function JobsPage() {
         {peopleFiltersOpen ? (
           <div className="jobs-filters" id="jobs-people-filters">
             <label>
-              <span>{t("পক্ষ")}</span>
+              <span>{t("কর্মী")}</span>
               <AppSelect
-                aria-label={t("পক্ষ")}
+                aria-label={t("কর্মী")}
                 value={personId}
                 onChange={(event) => update("person", event.target.value)}
               >
-                <option value="">{t("সব পক্ষ")}</option>
+                <option value="">{t("সব কর্মী")}</option>
                 {ledger.people
                   .filter(
                     (person) =>
@@ -319,13 +319,13 @@ export function JobsPage() {
               </AppSelect>
             </label>
             <label>
-              <span>{t("সেক্টর")}</span>
+              <span>{t("খাতা")}</span>
               <AppSelect
-                aria-label={t("সেক্টর")}
+                aria-label={t("খাতা")}
                 value={workId}
                 onChange={(event) => update("work", event.target.value)}
               >
-                <option value="">{t("সব সেক্টর")}</option>
+                <option value="">{t("সব খাতা")}</option>
                 {ledger.works
                   .filter((work) => !work.archivedAt)
                   .map((work) => (

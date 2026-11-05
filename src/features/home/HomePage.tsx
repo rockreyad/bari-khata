@@ -204,9 +204,9 @@ export function HomePage() {
       </section>
       <section>
         <div className="section-heading">
-          <h2>{t("চলমান সেক্টর")}</h2>
+          <h2>{t("চলমান খাতা")}</h2>
           <button className="text-button" onClick={() => go("/sectors")}>
-            {t("সব সেক্টর")}
+            {t("সব খাতা")}
             <ArrowRightIcon size={16} />
           </button>
         </div>
@@ -226,8 +226,8 @@ export function HomePage() {
             <PlusIcon size={28} />
             {t(
               ledger.works.some((work) => !work.archivedAt)
-                ? "এখন কোনো সেক্টরে কাজ চলছে না।"
-                : "সেক্টর যোগ করি",
+                ? "এখন কোনো খাতায় কাজ চলছে না।"
+                : "নতুন খাতা বানান",
             )}
           </button>
         )}

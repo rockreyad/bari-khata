@@ -389,7 +389,7 @@ export function EntitySheet({
     setError("");
     try {
       if (identityMismatch)
-        throw new Error(t("এই কাজে হিসাব আছে। পক্ষ ও সেক্টর বদলানো যাবে না।"));
+        throw new Error(t("এই কাজে হিসাব আছে। কর্মী ও খাতা বদলানো যাবে না।"));
       let next = structuredClone(ledger);
       if (kind !== "contract" && !draft.name.trim())
         throw new Error(t("নাম লিখুন।"));
@@ -424,7 +424,9 @@ export function EntitySheet({
           kind: draft.contactKind,
           contactType: personPreset?.id ?? previous?.contactType,
           roles: draft.roles,
-          identityType: draft.identityType || undefined,
+          identityType: previous
+            ? previous.identityType
+            : draft.identityType || undefined,
           quickActions:
             draft.quickActions === null
               ? null
@@ -576,7 +578,7 @@ export function EntitySheet({
     (!originalPerson || originalPerson.archivedAt)
   )
     return (
-      <Frame title={t("পক্ষের তথ্য")} onClose={() => void close()}>
+      <Frame title={t("কর্মীর তথ্য")} onClose={() => void close()}>
         <FormError {...errorNotice} className="form-error" />
         <p className="entity-notice" role="status">
           {t(
@@ -594,19 +596,19 @@ export function EntitySheet({
             className: "person-editor-page",
             subtitle: editId
               ? formatDigits(originalPerson?.name ?? "")
-              : t("মানুষ বা প্রতিষ্ঠান"),
+              : undefined,
             busy: saving,
           }
         : {})}
       title={t(
         kind === "work"
           ? editId
-            ? "সেক্টরের তথ্য"
-            : "সেক্টর যোগ করি"
+            ? "খাতার তথ্য"
+            : "নতুন খাতা বানান"
           : kind === "person"
             ? editId
-              ? "পক্ষের তথ্য"
-              : "পক্ষ যোগ করি"
+              ? "কর্মীর তথ্য"
+              : "নতুন কর্মী"
             : editId
               ? "কাজ বদলাই"
               : "নতুন কাজ",
@@ -641,12 +643,12 @@ export function EntitySheet({
               <div className="work-preview">
                 <WorkMark icon={draft.icon} color={draft.color} size={29} />
                 <div>
-                  <strong>{draft.name || t("আপনার সেক্টর")}</strong>
+                  <strong>{draft.name || t("আপনার খাতা")}</strong>
                   <span>{t("যেভাবে চিনতে সুবিধা হয়, সেভাবে সাজান।")}</span>
                 </div>
               </div>
               <label>
-                {t("সেক্টরের নাম")}
+                {t("খাতার নাম")}
                 <input
                   autoFocus
                   placeholder={t("যেমন: বাথরুমের কাজ")}
@@ -835,18 +837,18 @@ export function EntitySheet({
             <>
               {identityMismatch ? (
                 <div className="entity-notice" role="alert">
-                  <p>{t("এই কাজে হিসাব আছে। পক্ষ ও সেক্টর বদলানো যাবে না।")}</p>
+                  <p>{t("এই কাজে হিসাব আছে। কর্মী ও খাতা বদলানো যাবে না।")}</p>
                   <button
                     type="button"
                     className="secondary-button"
                     onClick={restoreIdentity}
                   >
-                    {t("আগের পক্ষ ও সেক্টর রাখি")}
+                    {t("আগের কর্মী ও খাতা রাখি")}
                   </button>
                 </div>
               ) : identityLocked ? (
                 <p className="field-hint">
-                  {t("এই কাজে হিসাব আছে। পক্ষ ও সেক্টর বদলানো যাবে না।")}
+                  {t("এই কাজে হিসাব আছে। কর্মী ও খাতা বদলানো যাবে না।")}
                 </p>
               ) : null}
               <label>
@@ -880,7 +882,7 @@ export function EntitySheet({
                 </AppSelect>
               </label>
               <label>
-                {t("সেক্টর")}
+                {t("খাতা")}
                 <AppSelect
                   value={notebookValue}
                   onChange={(event) => chooseNotebook(event.target.value)}

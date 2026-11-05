@@ -428,12 +428,12 @@ export function buildQuickEntry(
           );
       }
       let itemId: string | null = null;
-      if (groupId) {
+      if (groupId || row.brand.trim()) {
         const match = next.items.find(
           (item) =>
             latinDigits(item.name) === latinDigits(row.label.trim()) &&
             latinDigits(item.brand) === latinDigits(row.brand.trim()) &&
-            item.materialGroupId === groupId &&
+            item.materialGroupId === (groupId || null) &&
             latinDigits(item.usage) === latinDigits(row.usage.trim()),
         );
         if (match) itemId = match.id;
@@ -444,7 +444,7 @@ export function buildQuickEntry(
               id: itemId,
               name: row.label.trim(),
               brand: row.brand.trim(),
-              materialGroupId: groupId,
+              materialGroupId: groupId || null,
               usage: row.usage.trim(),
               unit: row.unit.trim(),
             }),
@@ -490,7 +490,7 @@ export function buildQuickEntry(
           draft.rows.some((row) => !row.groupId))
           ? "needs_review"
           : "confirmed",
-      reviewReason: !draft.workId ? "সেক্টর পরে বেছে নিন।" : "",
+      reviewReason: !draft.workId ? "খাতা পরে বেছে নিন।" : "",
       id: draft.id,
       ...(draft.milestoneId ? { milestoneId: draft.milestoneId } : {}),
       kind: draft.kind === "return" ? "expense_credit" : "expense",

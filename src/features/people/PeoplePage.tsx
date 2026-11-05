@@ -132,12 +132,12 @@ export function PeoplePage() {
     <div className="contacts-page">
       <header className="page-heading">
         <div>
-          <h1>{t("পক্ষ")}</h1>
+          <h1>{t("কর্মী")}</h1>
           <p>{t("কাকে কত দিয়েছি, এক নজরে।")}</p>
         </div>
         <button className="primary-button" onClick={() => entity("person")}>
           <PlusIcon size={19} />
-          {t("পক্ষ যোগ করি")}
+          {t("নতুন কর্মী")}
         </button>
       </header>
       <button className="people-jobs-link" onClick={() => go("/works")}>
@@ -211,7 +211,7 @@ export function PeoplePage() {
         </div>
       ))}
       {shown.length ? (
-        <section className="contacts-list" aria-label={t("পক্ষের তালিকা")}>
+        <section className="contacts-list" aria-label={t("কর্মীর তালিকা")}>
           <div className="contacts-list-caption">
             <span>{t("নাম")}</span>
             <span>{t("টাকা দিয়েছি")}</span>

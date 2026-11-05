@@ -121,14 +121,14 @@ it.each(["", "/sample"])(
     const nav = within(screen.getByRole("navigation", { name: "প্রধান মেনু" }));
     expect(nav.getAllByRole("link").map((link) => link.textContent)).toEqual([
       "এক নজরে",
-      "সেক্টর",
-      "ইতিহাস",
-      "পক্ষ",
+      "খাতা",
+      "রেকর্ড",
+      "কর্মী",
     ]);
-    expect(nav.getByRole("link", { name: "সেক্টর" }).getAttribute("href")).toBe(
+    expect(nav.getByRole("link", { name: "খাতা" }).getAttribute("href")).toBe(
       `${base}/sectors`,
     );
-    expect(nav.getByRole("link", { name: "পক্ষ" }).getAttribute("href")).toBe(
+    expect(nav.getByRole("link", { name: "কর্মী" }).getAttribute("href")).toBe(
       `${base}/parties`,
     );
     fireEvent.click(nav.getByRole("button", { name: "হিসাব লিখি" }));
@@ -203,7 +203,7 @@ it.each(["/ledger", "/history"])(
     await screen.findByRole("heading", { name: "House history" });
     expect(
       within(screen.getByRole("navigation", { name: "প্রধান মেনু" }))
-        .getByRole("link", { name: "ইতিহাস" })
+        .getByRole("link", { name: "রেকর্ড" })
         .getAttribute("aria-current"),
     ).toBe("page");
   },

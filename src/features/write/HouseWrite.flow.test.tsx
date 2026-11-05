@@ -34,6 +34,7 @@ import { EntrySchema, LedgerSchema, type Ledger } from "../../domain/model";
 import { partyLedger } from "../../domain/partyLedger";
 import { summarize } from "../../domain/ledger";
 import { savePreferences } from "../../lib/preferences";
+import { latinDigits } from "../../lib/numerals";
 import { HouseCostForm } from "./HouseCostForm";
 import { HousePaymentForm } from "./HousePaymentForm";
 
@@ -43,9 +44,17 @@ const nativeFiles = await vi.hoisted(async () => {
   vi.stubGlobal("File", File);
   return { Blob, File };
 });
+const NativeURL = URL;
 beforeEach(() => {
   vi.stubGlobal("Blob", nativeFiles.Blob);
   vi.stubGlobal("File", nativeFiles.File);
+  vi.stubGlobal(
+    "URL",
+    class extends NativeURL {
+      static createObjectURL = vi.fn(() => "blob:sample-receipt");
+      static revokeObjectURL = vi.fn();
+    },
+  );
 });
 vi.mock("../../components/ui/AppSelect", () => ({
   AppSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => (
@@ -211,9 +220,135 @@ async function cost(
   label = "নমুনা কেনা মাল",
 ) {
   await user.type(screen.getByLabelText(/^মালের নাম/), label);
-  await user.type(screen.getByLabelText(/^টাকা [০-৯0-9]+$/), amount);
+  await user.type(screen.getByLabelText(/^মালের দাম [০-৯0-9]+$/), amount);
 }
 const payPath = "/write/payment?person=party&work=roof&account=materials";
+
+it("restores brand, quantity, unit, receipt and partial payment after reopening, then saves the calculator amount once", async () => {
+  const initial = base(),
+    repo = await setup(initial),
+    user = userEvent.setup();
+  const view = mount(initial, <HouseCostForm action="purchase" />);
+  await ready();
+  await user.click(
+    screen.getByRole("button", { name: "হিসাব করার ক্যালকুলেটর" }),
+  );
+  fireEvent.change(screen.getByLabelText("ক্যালকুলেটরের হিসাব"), {
+    target: { value: "150 + 50" },
+  });
+  await user.click(screen.getByRole("button", { name: "এই টাকা লিখি" }));
+  expect(
+    latinDigits(
+      (screen.getByLabelText(/^মালের দাম [০-৯0-9]+$/) as HTMLInputElement)
+        .value,
+    ),
+  ).toBe("200");
+  await user.type(screen.getByLabelText(/^মালের নাম/), "নমুনা সিমেন্ট");
+  await user.click(screen.getByText("ব্র্যান্ড ও পরিমাণ"));
+  const brandInput = screen.getByLabelText(/^ব্র্যান্ড [০-৯0-9]+$/);
+  await user.type(brandInput, "প্রথম নমুনা");
+  await user.clear(brandInput);
+  expect((brandInput.closest("details") as HTMLDetailsElement).open).toBe(true);
+  await user.type(brandInput, "নমুনা ব্র্যান্ড");
+  await user.type(screen.getByLabelText(/^পরিমাণ [০-৯0-9]+$/), "2.5");
+  await user.type(screen.getByLabelText(/^একক [০-৯0-9]+$/), "বস্তা");
+  await user.click(screen.getByRole("button", { name: "কিছু দিয়েছি" }));
+  await user.type(screen.getByLabelText("এখন কত দিয়েছি"), "40");
+  await user.upload(
+    screen.getByLabelText("ভাউচার বা ছবি"),
+    new File(["sample image"], "sample.png", { type: "image/png" }),
+  );
+  await waitFor(async () =>
+    expect(
+      await createWorkspaceStorage().readDraft(
+        "house-cost:purchase:party:roof:none:none",
+      ),
+    ).toMatchObject({
+      draft: {
+        rows: [
+          expect.objectContaining({
+            brand: "নমুনা ব্র্যান্ড",
+            quantity: "2.5",
+            unit: "বস্তা",
+          }),
+        ],
+        payment: "partial",
+        paid: "40",
+      },
+      files: [expect.objectContaining({ name: "sample.png" })],
+    }),
+  );
+  view.unmount();
+  repo.database.close();
+  await repo.database.open();
+  mount((await repo.read())!.ledger, <HouseCostForm action="purchase" />);
+  await ready();
+  expect(
+    (screen.getByLabelText(/^ব্র্যান্ড [০-৯0-9]+$/) as HTMLInputElement).value,
+  ).toBe("নমুনা ব্র্যান্ড");
+  expect(
+    latinDigits(
+      (screen.getByLabelText(/^পরিমাণ [০-৯0-9]+$/) as HTMLInputElement).value,
+    ),
+  ).toBe("2.5");
+  expect(
+    (screen.getByLabelText(/^একক [০-৯0-9]+$/) as HTMLInputElement).value,
+  ).toBe("বস্তা");
+  expect(
+    screen.getByRole("button", { name: "কিছু দিয়েছি", pressed: true }),
+  ).toBeTruthy();
+  expect(screen.getByText("sample.png")).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  const saved = (await repo.read())!.ledger;
+  const bill = saved.entries.find((entry) => entry.kind === "expense")!;
+  expect(bill.lines[0]).toMatchObject({
+    amount: 20000,
+    quantity: "2.5",
+    unit: "বস্তা",
+    materialGroupId: null,
+  });
+  expect(
+    saved.items.find((item) => item.id === bill.lines[0].itemId),
+  ).toMatchObject({ brand: "নমুনা ব্র্যান্ড", materialGroupId: null });
+  expect(summarize(saved)).toMatchObject({
+    cost: 20000,
+    netPaid: 4000,
+    reconciledPayable: 16000,
+  });
+  expect((await repo.getReceipt(bill.receipts[0].id))!.blob.size).toBe(12);
+});
+
+it("focuses Bengali validation on each failed attempt and marks the offending cost field without saving money", async () => {
+  const initial = base(),
+    repo = await setup(initial),
+    user = userEvent.setup();
+  mount(initial, <HouseCostForm action="purchase" />);
+  await ready();
+  const amountInput = screen.getByLabelText(/^মালের দাম [০-৯0-9]+$/);
+  const labelInput = screen.getByLabelText(/^মালের নাম/);
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  let error = await screen.findByRole("alert");
+  expect(document.activeElement).toBe(error);
+  expect(amountInput.getAttribute("aria-invalid")).toBe("true");
+  expect(
+    document.getElementById(amountInput.getAttribute("aria-describedby")!)
+      ?.textContent,
+  ).toBe(error.textContent);
+  await user.click(labelInput);
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  error = await screen.findByRole("alert");
+  expect(document.activeElement).toBe(error);
+  await user.type(amountInput, "20");
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    "কী মাল বা কাজের বিল",
+  );
+  expect(labelInput.getAttribute("aria-invalid")).toBe("true");
+  expect(labelInput.getAttribute("aria-describedby")).toBe("house-cost-error");
+  expect(api.save).not.toHaveBeenCalled();
+  expect((await repo.read())!.ledger.entries).toEqual([]);
+});
 
 it("uses a transport contact's configured sector and bill type without offering wages or unrelated contacts", async () => {
   const initial = LedgerSchema.parse({
@@ -253,17 +388,17 @@ it("uses a transport contact's configured sector and bill type without offering 
       name: "মজুরি",
     }),
   ).toBeNull();
+  expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe(
+    "wall",
+  );
   expect(
-    (screen.getByLabelText("কোন সেক্টরে") as HTMLSelectElement).value,
-  ).toBe("wall");
-  expect(
-    within(screen.getByLabelText("কার সঙ্গে হিসাব")).queryByRole("option", {
+    within(screen.getByLabelText("কর্মী")).queryByRole("option", {
       name: "নমুনা দোকান",
     }),
   ).toBeNull();
   expect(screen.queryByLabelText("কোন কাজের জন্য")).toBeNull();
   await user.type(screen.getByLabelText(/^কাজের বিবরণ/), "নমুনা মাল আনা");
-  await user.type(screen.getByLabelText(/^টাকা [০-৯0-9]+$/), "100");
+  await user.type(screen.getByLabelText(/^বিলের টাকা [০-৯0-9]+$/), "100");
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
   expect((await repo.read())!.ledger.entries).toMatchObject([
@@ -296,15 +431,15 @@ it("offers a worker's name for an explicit own-money reimbursement and records m
   mount(initial, <HouseCostForm action="purchase" />, "/write/purchase");
   await ready();
   expect(
-    within(screen.getByLabelText("কার সঙ্গে হিসাব")).queryByRole("option", {
+    within(screen.getByLabelText("কর্মী বা দোকান")).queryByRole("option", {
       name: "নমুনা মিস্ত্রি",
     }),
   ).toBeNull();
-  await user.selectOptions(screen.getByLabelText("টাকা মিটিয়েছেন?"), "worker");
-  await user.selectOptions(screen.getByLabelText("কার সঙ্গে হিসাব"), "worker");
-  expect(
-    (screen.getByLabelText("কোন সেক্টরে") as HTMLSelectElement).value,
-  ).toBe("roof");
+  await user.click(screen.getByRole("button", { name: "অন্যজন দিয়েছেন" }));
+  await user.selectOptions(screen.getByLabelText("কর্মী বা দোকান"), "worker");
+  expect((screen.getByLabelText("খাতা") as HTMLSelectElement).value).toBe(
+    "roof",
+  );
   await cost(user);
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
@@ -385,12 +520,14 @@ it("honors advance intent and configured supplier account and sector when opened
   );
   await ready();
   expect(
-    (screen.getByLabelText("টাকা দেওয়ার কারণ") as HTMLSelectElement).value,
-  ).toBe("advance");
+    screen
+      .getByRole("button", { name: "অগ্রিম — আগে টাকা দিলাম" })
+      .getAttribute("aria-pressed"),
+  ).toBe("true");
   expect(screen.queryByLabelText("কী বাবদ")).toBeNull();
-  expect(
-    (screen.getByLabelText("কোন সেক্টরে") as HTMLSelectElement).value,
-  ).toBe("wall");
+  expect((screen.getByLabelText("কোন খাতায়") as HTMLSelectElement).value).toBe(
+    "wall",
+  );
   await user.type(screen.getByLabelText("কত দিয়েছেন"), "100");
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
@@ -437,7 +574,6 @@ it("keeps a purchase draft and attachment on reopening, then stores one cost and
   const first = mount(initial, <HouseCostForm action="purchase" />);
   await ready();
   await cost(user);
-  await user.click(screen.getByText("তারিখ, ভাউচার ও বাড়তি কথা"));
   await user.upload(
     screen.getByLabelText("ভাউচার বা ছবি"),
     new File(["sample receipt"], "sample.pdf", { type: "application/pdf" }),
@@ -488,9 +624,9 @@ it("combines an existing advance and new partial cash on a purchase without coun
   await ready();
   await cost(user, "100");
   await user.click(screen.getByRole("checkbox", { name: /আগে দেওয়া অগ্রিম/ }));
-  await user.selectOptions(screen.getByLabelText("টাকা মিটিয়েছেন?"), "partial");
+  await user.click(screen.getByRole("button", { name: "কিছু দিয়েছি" }));
   await user.type(screen.getByLabelText("এখন কত দিয়েছি"), "20");
-  const preview = screen.getByRole("region", { name: "রাখলে যা হবে" });
+  const preview = screen.getByRole("region", { name: "হিসাবের সারাংশ" });
   expect(preview.textContent).toContain("৩০");
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
@@ -514,7 +650,7 @@ it("records another person's materials as reimbursement owed without inventing w
   mount(initial, <HouseCostForm action="purchase" />);
   await ready();
   await cost(user, "100");
-  await user.selectOptions(screen.getByLabelText("টাকা মিটিয়েছেন?"), "worker");
+  await user.click(screen.getByRole("button", { name: "অন্যজন দিয়েছেন" }));
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
   const saved = (await repo.read())!.ledger;
@@ -538,7 +674,8 @@ it("shows a combined payment proposal and saves the selected bills without creat
   mount(initial, <HousePaymentForm />, payPath);
   await ready();
   await user.type(screen.getByLabelText("কত দিয়েছেন"), "150");
-  const preview = screen.getByRole("region", { name: "রাখলে যা হবে" });
+  const preview = screen.getByRole("region", { name: "হিসাবের সারাংশ" });
+  await user.click(within(preview).getByText("বিলের বিস্তারিত"));
   expect(within(preview).getByText("নমুনা পুরোনো বিল")).toBeTruthy();
   expect(within(preview).getByText("নমুনা পরের বিল")).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
@@ -669,9 +806,8 @@ it("adds a new neutral recipient inline when other contacts already exist", asyn
   await user.selectOptions(screen.getByLabelText("কাকে দিয়েছেন"), "__new__");
   await user.type(screen.getByLabelText("নতুন নাম"), "নমুনা নতুন মানুষ");
   await user.type(screen.getByLabelText("কত দিয়েছেন"), "50");
-  await user.selectOptions(
-    screen.getByLabelText("টাকা দেওয়ার কারণ"),
-    "advance",
+  await user.click(
+    screen.getByRole("button", { name: "অগ্রিম — আগে টাকা দিলাম" }),
   );
   await user.selectOptions(screen.getByLabelText("কী বাবদ"), "materials");
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
@@ -740,7 +876,7 @@ it.each(["purchase", "payment"] as const)(
     expect(
       (
         screen.getByLabelText(
-          action === "payment" ? "কত দিয়েছেন" : /^টাকা [০-৯0-9]+$/,
+          action === "payment" ? "কত দিয়েছেন" : /^মালের দাম [০-৯0-9]+$/,
         ) as HTMLInputElement
       ).value,
     ).toBe("");
@@ -826,5 +962,75 @@ it("accepts the review of earlier unassigned cash without recursively clearing i
     cost: 30000,
     netPaid: 12000,
     reconciledPayable: 18000,
+  });
+});
+
+it("keeps invalid payment drafts and focuses Bengali field errors on every attempt", async () => {
+  const initial = withBills(),
+    repo = await setup(initial),
+    user = userEvent.setup();
+  mount(initial, <HousePaymentForm />, payPath);
+  await ready();
+  const saveButton = screen.getByRole("button", { name: "হিসাব রাখুন" });
+  await user.click(saveButton);
+  let alert = screen.getByRole("alert");
+  expect(alert.textContent).toBe("সঠিক টাকার অঙ্ক দিন।");
+  expect(document.activeElement).toBe(alert);
+  const amountField = screen.getByLabelText("কত দিয়েছেন");
+  expect(amountField.getAttribute("aria-invalid")).toBe("true");
+  await user.click(amountField);
+  await user.click(saveButton);
+  expect(document.activeElement).toBe(screen.getByRole("alert"));
+  await user.type(amountField, "50");
+  await user.click(screen.getByText("তারিখ ও নোট"));
+  await user.clear(screen.getByLabelText("তারিখ"));
+  await user.click(saveButton);
+  alert = screen.getByRole("alert");
+  expect(alert.textContent).toBe("সঠিক তারিখ বেছে নিন।");
+  expect(document.activeElement).toBe(alert);
+  expect(screen.getByLabelText("তারিখ").getAttribute("aria-invalid")).toBe(
+    "true",
+  );
+  expect(api.save).not.toHaveBeenCalled();
+  expect((await repo.read())!.ledger.entries).toHaveLength(
+    initial.entries.length,
+  );
+});
+
+it("keeps a malformed inline worker draft recoverable instead of crashing the payment form", async () => {
+  const initial = withBills(),
+    repo = await setup(initial),
+    user = userEvent.setup();
+  const first = mount(initial, <HousePaymentForm />, payPath);
+  await ready();
+  await user.selectOptions(screen.getByLabelText("কাকে দিয়েছেন"), "__new__");
+  await user.type(screen.getByLabelText("নতুন নাম"), "নমুনা কর্মী");
+  await user.type(screen.getByLabelText("কত দিয়েছেন"), "50");
+  const storage = createWorkspaceStorage();
+  const key = "house-payment:party:roof:all";
+  let saved: Record<string, unknown> | null = null;
+  await waitFor(async () => {
+    saved = (await storage.readDraft(key)) as Record<string, unknown>;
+    expect(saved?.amount).toBe("50");
+  });
+  first.unmount();
+  await storage.saveDraft(key, { ...saved!, newPersonId: " " });
+  mount(initial, <HousePaymentForm />, payPath);
+  await ready();
+  expect((screen.getByLabelText("নতুন নাম") as HTMLInputElement).value).toBe(
+    "নমুনা কর্মী",
+  );
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  expect(screen.getByRole("alert").textContent).toBe(
+    "যাঁকে টাকা দিয়েছেন, তাঁর নাম বেছে নিন।",
+  );
+  expect(api.save).not.toHaveBeenCalled();
+  expect((await repo.read())!.ledger.entries).toHaveLength(
+    initial.entries.length,
+  );
+  expect(await storage.readDraft(key)).toMatchObject({
+    personName: "নমুনা কর্মী",
+    amount: "50",
+    newPersonId: " ",
   });
 });

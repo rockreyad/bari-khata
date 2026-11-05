@@ -212,9 +212,11 @@ it("creates and reopens a shop with optional fields empty and an explicitly empt
   const first = mount(initial, onSave, onClose);
   await ready();
   expect(
-    screen.getByRole("heading", { level: 1, name: "পক্ষ যোগ করি" }),
+    screen.getByRole("heading", { level: 1, name: "নতুন কর্মী" }),
   ).toBeTruthy();
-  expect(screen.getByText("মানুষ বা প্রতিষ্ঠান", { exact: true })).toBeTruthy();
+  expect(screen.queryByText("মানুষ বা প্রতিষ্ঠান", { exact: true })).toBeNull();
+  expect(screen.queryByLabelText("ব্যক্তি না প্রতিষ্ঠান")).toBeNull();
+  expect(screen.queryByText("একই নামে একাধিক সম্পর্ক রাখা যায়")).toBeNull();
   await user.selectOptions(screen.getByLabelText("কীভাবে যুক্ত"), "supplier");
   await user.type(screen.getByLabelText("দোকানের নাম"), "নমুনা নতুন দোকান");
   const actions = await preferences(user);
@@ -248,7 +250,7 @@ it("creates and reopens a shop with optional fields empty and an explicitly empt
   const editing = mount(saved, onSave, onClose, shop.id);
   await ready();
   expect(
-    screen.getByRole("heading", { level: 1, name: "পক্ষের তথ্য" }),
+    screen.getByRole("heading", { level: 1, name: "কর্মীর তথ্য" }),
   ).toBeTruthy();
   expect((screen.getByLabelText("দোকানের নাম") as HTMLInputElement).value).toBe(
     shop.name,
@@ -597,9 +599,15 @@ it.each([
   },
 );
 
-it("keeps multiple independent roles and identity type after reopening, and removes a role without altering financial history", async () => {
+it("keeps stored identity metadata hidden and preserves independent roles and financial history", async () => {
   const initial = fixture();
+  initial.people.find((person) => person.id === "worker")!.identityType =
+    "person";
   const repo = await repository(initial);
+  await createWorkspaceStorage().saveDraft("entity:person:worker:any", {
+    id: "worker",
+    identityType: "organization",
+  });
   const user = userEvent.setup();
   const onClose = vi.fn();
   const onSave = vi.fn(async (ledger: Ledger) => {
@@ -611,10 +619,7 @@ it("keeps multiple independent roles and identity type after reopening, and remo
     screen.getByLabelText("কীভাবে যুক্ত"),
     "craftsperson",
   );
-  await user.selectOptions(
-    screen.getByLabelText("ব্যক্তি না প্রতিষ্ঠান"),
-    "person",
-  );
+  expect(screen.queryByLabelText("ব্যক্তি না প্রতিষ্ঠান")).toBeNull();
   await user.click(screen.getByText("আরও কাজ বা সম্পর্ক", { exact: true }));
   await user.click(screen.getByRole("checkbox", { name: "দোকানদার" }));
   await user.click(screen.getByRole("button", { name: "রাখুন" }));

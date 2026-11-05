@@ -74,8 +74,8 @@ it("creates and edits one worker in multiple sectors, retaining draft choices an
   });
   await user.clear(initialRole);
   await user.type(initialRole, "ইঞ্জিনিয়ার");
-  expect(screen.getByText("সেক্টরে রাখি").closest("details")!.open).toBe(false);
-  await user.click(screen.getByText("সেক্টরে রাখি").closest("summary")!);
+  expect(screen.getByText("খাতায় রাখি").closest("details")!.open).toBe(false);
+  await user.click(screen.getByText("খাতায় রাখি").closest("summary")!);
   await user.click(screen.getByRole("checkbox", { name: "বাথরুম" }));
   await user.click(screen.getByRole("checkbox", { name: "ইলেকট্রিক" }));
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
@@ -97,7 +97,7 @@ it("creates and edits one worker in multiple sectors, retaining draft choices an
 
   const editing = mount(saved, saved.people[0].id);
   await ready();
-  await user.click(screen.getByText("সেক্টরে রাখি").closest("summary")!);
+  await user.click(screen.getByText("খাতায় রাখি").closest("summary")!);
   expect(
     (screen.getByRole("checkbox", { name: "ইলেকট্রিক" }) as HTMLInputElement)
       .checked,
@@ -118,7 +118,7 @@ it("creates and edits one worker in multiple sectors, retaining draft choices an
   });
   const restored = mount(saved, saved.people[0].id);
   await ready();
-  await user.click(screen.getByText("সেক্টরে রাখি").closest("summary")!);
+  await user.click(screen.getByText("খাতায় রাখি").closest("summary")!);
   expect(
     (screen.getByRole("checkbox", { name: "ইলেকট্রিক" }) as HTMLInputElement)
       .checked,

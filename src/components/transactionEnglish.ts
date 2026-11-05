@@ -1,0 +1,20 @@
+export const transactionEnglish: Record<string, string> = {
+  "আরও তথ্য": "More details",
+  "ভাউচার যোগ করুন": "Add voucher",
+  "ভাউচারের ছবি": "Voucher image",
+  "ছবি বা PDF": "Photo or PDF",
+  "তারিখ ও নোট": "Date and note",
+  "মোট টাকা": "Total amount",
+  "বিলের বিস্তারিত": "Bill details",
+  "টাকা দেওয়ার ধরন": "Payment type",
+  জামানত: "Deposit",
+  "হিসাবের খাতায়": "Notebook",
+  "অগ্রিম দিলাম": "Advance payment",
+  "অগ্রিম — আগে টাকা দিলাম": "Advance — paid before the bill",
+  "সঠিক তারিখ বেছে নিন।": "Choose a valid date.",
+  "জামানত দিলাম": "Deposit payment",
+  "টাকা দিই: {{name}}": "Pay {{name}}",
+  "হিসাবের সারাংশ": "Summary",
+  "কর্মী ও কাজের সঙ্গে চুক্তিটি মিলছে না।":
+    "The agreement does not match this worker and work.",
+};

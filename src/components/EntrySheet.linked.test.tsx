@@ -160,7 +160,7 @@ it.each([
       );
     if (work !== "general")
       fireEvent.change(
-        screen.getByRole("combobox", { name: "কোন কাজের হিসাব" }),
+        screen.getByRole("combobox", { name: "কোন খাতার হিসাব" }),
         { target: { value: work } },
       );
     await user.click(screen.getByRole("button", { name: "সংরক্ষণ করুন" }));
@@ -221,7 +221,7 @@ it.each([
     expect(
       (
         screen.getByRole("combobox", {
-          name: "কোন কাজের হিসাব",
+          name: "কোন খাতার হিসাব",
         }) as HTMLSelectElement
       ).value,
     ).toBe(work);

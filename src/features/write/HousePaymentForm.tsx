@@ -7,7 +7,11 @@ import { EntryFrame } from "../../components/EntryFrame";
 import { MoneyInput } from "../../components/ui/MoneyInput";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
-import { FormError } from "../../components/ui/FormError";
+import {
+  TransactionAmount,
+  TransactionDetails,
+} from "../../components/TransactionFields";
+import { FormError, useFormError } from "../../components/ui/FormError";
 import { AccountSchema, PersonSchema } from "../../domain/model";
 import { parseAmount } from "../../domain/ledger";
 import { partyLedger } from "../../domain/partyLedger";
@@ -49,11 +53,13 @@ const PaymentDraftSchema = z.object({
   files: QuickSavedDraftSchema.shape.files,
 });
 type Draft = z.infer<typeof PaymentDraftSchema>;
-const issueText: Record<HousePaymentIssue, string> = {
+type PaymentFormIssue = HousePaymentIssue | "invalid_date";
+const issueText: Record<PaymentFormIssue, string> = {
+  invalid_date: "সঠিক তারিখ বেছে নিন।",
   invalid_person: "যাঁকে টাকা দিয়েছেন, তাঁর নাম বেছে নিন।",
   invalid_amount: "সঠিক টাকার অঙ্ক দিন।",
   invalid_work: "টাকা কোন কাজে দেওয়া হয়েছে, বেছে নিন।",
-  invalid_contract: "ব্যক্তি ও কাজের সঙ্গে চুক্তিটি মিলছে না।",
+  invalid_contract: "কর্মী ও কাজের সঙ্গে চুক্তিটি মিলছে না।",
   invalid_account: "কোন খরচের টাকা, বেছে নিন।",
   choose_scope: "বাড়তি বা আগাম টাকা কোন কাজে লাগবে, নিচে বেছে নিন।",
   unassigned_cash:
@@ -120,7 +126,8 @@ export function HousePaymentForm() {
     ready,
     failed,
   } = useInlineDraft(key, PaymentDraftSchema, initial);
-  const [error, setError] = useState("");
+  const [error, setError, errorNotice] = useFormError();
+  const [invalidField, setInvalidField] = useState("");
   const [saving, setSaving] = useState(false);
   const lock = useRef(false);
   const finished = useRef(false);
@@ -130,13 +137,13 @@ export function HousePaymentForm() {
       draft.personId === "__new__" &&
       draft.personName.trim() &&
       draft.newPersonId
-        ? PersonSchema.parse({
+        ? (PersonSchema.safeParse({
             id: draft.newPersonId,
             name: draft.personName.trim(),
             kind: "other",
             contactType: "custom",
             roles: [],
-          })
+          }).data ?? null)
         : null,
     [draft.personId, draft.personName, draft.newPersonId],
   );
@@ -240,6 +247,7 @@ export function HousePaymentForm() {
         })
       : null;
     setError("");
+    setInvalidField("");
     update((current) => ({
       ...current,
       [key]: value,
@@ -298,7 +306,15 @@ export function HousePaymentForm() {
     lock.current = true;
     setSaving(true);
     setError("");
+    setInvalidField("");
     try {
+      if (total <= 0) throw new Error("invalid_amount");
+      const timestamp = Date.parse(`${draft.date}T00:00:00Z`);
+      if (
+        !Number.isFinite(timestamp) ||
+        new Date(timestamp).toISOString().slice(0, 10) !== draft.date
+      )
+        throw new Error("invalid_date");
       if (invalidAllocations) throw new Error("invalid_allocation");
       if (draft.personId === "__new__" && !newPerson)
         throw new Error("invalid_person");
@@ -348,10 +364,11 @@ export function HousePaymentForm() {
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : "";
       const issue = code.replace(/^house_payment_/, "");
+      setInvalidField(issue);
       setError(
         t(
           issue in issueText
-            ? issueText[issue as HousePaymentIssue]
+            ? issueText[issue as PaymentFormIssue]
             : code === "house_payment_confirm_advance"
               ? "বাড়তি টাকা অগ্রিম থাকবে কি না, নিশ্চিত করুন।"
               : "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
@@ -385,9 +402,14 @@ export function HousePaymentForm() {
     );
   return (
     <EntryFrame
-      title={t("টাকা দিয়েছি")}
-      subtitle={t("কাকে কত দিয়েছেন")}
-      className="house-write-page"
+      title={t(
+        draft.intent === "advance"
+          ? "অগ্রিম দিলাম"
+          : draft.intent === "receivable"
+            ? "জামানত দিলাম"
+            : "টাকা দিলাম",
+      )}
+      className="house-write-page transaction-page"
       busy={saving}
       onClose={() =>
         void flush()
@@ -399,23 +421,31 @@ export function HousePaymentForm() {
           )
       }
       footer={
-        <button
-          className="primary-button"
-          form="house-payment-form"
-          type="submit"
-          disabled={!ready || failed || saving}
-        >
-          {t(saving ? "রাখছি…" : "হিসাব রাখুন")}
-        </button>
+        <div className="transaction-submit">
+          <div>
+            <small>{t("মোট টাকা")}</small>
+            <strong>{money(total)}</strong>
+          </div>
+          <button
+            className="primary-button"
+            form="house-payment-form"
+            type="submit"
+            disabled={!ready || failed || saving}
+          >
+            {t(saving ? "রাখছি…" : "হিসাব রাখুন")}
+          </button>
+        </div>
       }
     >
       <form
         id="house-payment-form"
-        className="house-form"
+        className="house-form transaction-form"
+        noValidate
         onSubmit={(event) => void submit(event)}
       >
         <FormError
           id="house-payment-error"
+          occurrence={errorNotice.occurrence}
           message={
             failed
               ? t(
@@ -425,76 +455,211 @@ export function HousePaymentForm() {
           }
         />
         <fieldset disabled={!ready || failed || saving}>
-          <label>
-            {t("কাকে দিয়েছেন")}
-            <AppSelect
-              aria-label={t("কাকে দিয়েছেন")}
-              value={draft.personId}
-              onChange={(event) => change("personId", event.target.value)}
-            >
-              <option value="">{t("নাম বেছে নিন")}</option>
-              {ledger.people
-                .filter(
-                  (person) =>
-                    person.id === draft.personId ||
-                    contactEntryPolicy(person).payment,
-                )
-                .map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {formatDigits(person.name)}
-                  </option>
-                ))}
-              <option value="__new__">{t("+ নাম লিখব")}</option>
-            </AppSelect>
-          </label>
-          {draft.personId === "__new__" ? (
-            <label>
-              {t("নাম")}
-              <input
-                aria-label={t("নতুন নাম")}
-                required
-                maxLength={200}
-                value={draft.personName}
-                onChange={(event) => change("personName", event.target.value)}
-              />
-            </label>
-          ) : null}
-          {!ledger.people.some((person) => !person.archivedAt) && (
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => void flush().then(() => entity("person"))}
-            >
-              {t("আগে নাম যোগ করুন")}
-            </button>
-          )}
-          <label className="house-amount">
-            {t("কত দিয়েছেন")}
-            <MoneyInput
-              aria-label={t("কত দিয়েছেন")}
-              required
+          <div className="transaction-card">
+            <TransactionAmount
+              label={t("কত দিয়েছেন")}
               value={draft.amount}
-              onChange={(event) => change("amount", event.target.value)}
+              onChange={(value) => change("amount", value)}
+              required
+              error={invalidField === "invalid_amount" ? error : undefined}
             />
-          </label>
-          <label>
-            {t("টাকা দেওয়ার কারণ")}
-            <AppSelect
+            <label>
+              {t("কাকে দিয়েছেন")}
+              <AppSelect
+                aria-label={t("কাকে দিয়েছেন")}
+                aria-invalid={invalidField === "invalid_person"}
+                aria-describedby={
+                  invalidField === "invalid_person"
+                    ? "house-payment-person-error"
+                    : undefined
+                }
+                value={draft.personId}
+                onChange={(event) => change("personId", event.target.value)}
+              >
+                <option value="">{t("নাম বেছে নিন")}</option>
+                {ledger.people
+                  .filter(
+                    (person) =>
+                      person.id === draft.personId ||
+                      contactEntryPolicy(person).payment,
+                  )
+                  .map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {formatDigits(person.name)}
+                    </option>
+                  ))}
+                <option value="__new__">{t("+ নাম লিখব")}</option>
+              </AppSelect>
+            </label>
+            {draft.personId === "__new__" ? (
+              <label>
+                {t("নাম")}
+                <input
+                  aria-label={t("নতুন নাম")}
+                  aria-invalid={invalidField === "invalid_person"}
+                  aria-describedby={
+                    invalidField === "invalid_person"
+                      ? "house-payment-person-error"
+                      : undefined
+                  }
+                  required
+                  maxLength={200}
+                  value={draft.personName}
+                  onChange={(event) => change("personName", event.target.value)}
+                />
+              </label>
+            ) : null}
+            {!ledger.people.some((person) => !person.archivedAt) && (
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => void flush().then(() => entity("person"))}
+              >
+                {t("আগে নাম যোগ করুন")}
+              </button>
+            )}
+            {invalidField === "invalid_person" && (
+              <p
+                id="house-payment-person-error"
+                className="transaction-field-error"
+              >
+                {error}
+              </p>
+            )}
+            <div
+              className="transaction-choice"
+              role="group"
               aria-label={t("টাকা দেওয়ার কারণ")}
-              value={draft.intent}
-              onChange={(event) =>
-                change("intent", event.target.value as Draft["intent"])
-              }
             >
-              <option value="settlement">{t("বাকি মেটালাম")}</option>
-              <option value="advance">{t("আগে টাকা দিলাম")}</option>
-              <option value="receivable">{t("ফেরতযোগ্য জামানত দিলাম")}</option>
-            </AppSelect>
-          </label>
+              {(
+                [
+                  ["settlement", "বাকি", "বাকি মেটালাম"],
+                  ["advance", "অগ্রিম", "অগ্রিম — আগে টাকা দিলাম"],
+                  ["receivable", "জামানত", "ফেরতযোগ্য জামানত দিলাম"],
+                ] as const
+              ).map(([value, label, accessible]) => (
+                <button
+                  type="button"
+                  key={value}
+                  aria-label={t(accessible)}
+                  aria-pressed={draft.intent === value}
+                  onClick={() => change("intent", value)}
+                >
+                  {t(label)}
+                </button>
+              ))}
+            </div>
+            {showScope && (
+              <div className="house-payment-scope">
+                <div className="transaction-grid">
+                  <label>
+                    {t("কোন খাতায়")}
+                    <AppSelect
+                      aria-label={t("কোন খাতায়")}
+                      aria-invalid={
+                        invalidField === "invalid_work" ||
+                        (invalidField === "choose_scope" && !draft.workId)
+                      }
+                      aria-describedby={
+                        invalidField === "invalid_work" ||
+                        invalidField === "choose_scope"
+                          ? "house-payment-error"
+                          : undefined
+                      }
+                      value={draft.workId}
+                      onChange={(event) => change("workId", event.target.value)}
+                    >
+                      <option value="">
+                        {t(
+                          draft.intent === "settlement"
+                            ? "বিল অনুযায়ী"
+                            : "বেছে নিন",
+                        )}
+                      </option>
+                      {ledger.works
+                        .filter((work) => !work.archivedAt)
+                        .map((work) => (
+                          <option key={work.id} value={work.id}>
+                            {formatDigits(work.name)}
+                          </option>
+                        ))}
+                    </AppSelect>
+                  </label>
+                  {showAccount && (
+                    <label>
+                      {t("কী বাবদ")}
+                      <AppSelect
+                        aria-label={t("কী বাবদ")}
+                        aria-invalid={
+                          invalidField === "invalid_account" ||
+                          (invalidField === "choose_scope" && !draft.account)
+                        }
+                        aria-describedby={
+                          invalidField === "invalid_account" ||
+                          invalidField === "choose_scope"
+                            ? "house-payment-error"
+                            : undefined
+                        }
+                        value={draft.account}
+                        onChange={(event) =>
+                          change(
+                            "account",
+                            event.target.value as Draft["account"],
+                          )
+                        }
+                      >
+                        <option value="">
+                          {t(
+                            draft.intent === "settlement"
+                              ? "বিল অনুযায়ী"
+                              : "বেছে নিন",
+                          )}
+                        </option>
+                        {allowedAccounts.includes("materials") && (
+                          <option value="materials">{t("মালের টাকা")}</option>
+                        )}
+                        {allowedAccounts.includes("labour") && (
+                          <option value="labour">{t("মজুরি")}</option>
+                        )}
+                        {allowedAccounts.includes("other") && (
+                          <option value="other">{t("অন্য খরচ")}</option>
+                        )}
+                      </AppSelect>
+                    </label>
+                  )}
+                </div>
+                {contracts.length > 0 && (
+                  <label>
+                    {t("কোন কাজের জন্য")}
+                    <AppSelect
+                      aria-label={t("কোন কাজের জন্য")}
+                      value={draft.contractId}
+                      onChange={(event) =>
+                        change("contractId", event.target.value)
+                      }
+                    >
+                      <option value="">
+                        {t(
+                          draft.intent === "settlement"
+                            ? "বিল অনুযায়ী"
+                            : "বেছে নিন",
+                        )}
+                      </option>
+                      {contracts.map((contract) => (
+                        <option key={contract.id} value={contract.id}>
+                          {formatDigits(contract.title || t("কাজ"))}
+                        </option>
+                      ))}
+                    </AppSelect>
+                  </label>
+                )}
+              </div>
+            )}
+          </div>
           {person && total > 0 && (
             <section
-              className="house-payment-preview"
-              aria-label={t("রাখলে যা হবে")}
+              className="house-payment-preview transaction-summary"
+              aria-label={t("হিসাবের সারাংশ")}
             >
               {invalidAllocations ? (
                 <p className="field-hint" role="status">
@@ -502,7 +667,7 @@ export function HousePaymentForm() {
                 </p>
               ) : null}
               <div className="house-preview-heading">
-                <h2>{t("রাখলে যা হবে")}</h2>
+                <h2>{t("হিসাবের সারাংশ")}</h2>
                 {draft.intent === "settlement" && choices.length > 0 && (
                   <button
                     type="button"
@@ -559,24 +724,26 @@ export function HousePaymentForm() {
                   ))}
                 </div>
               ) : plan.allocations.length > 0 ? (
-                <ul className="house-allocation-preview">
-                  {plan.allocations.map((row) => {
-                    const choice = choices.find(
-                      (choice) =>
-                        choice.billId === row.billId &&
-                        choice.workId === row.workId,
-                    );
-                    return (
-                      <li key={JSON.stringify([row.billId, row.workId])}>
-                        <span>
-                          {formatDigits(choice?.name || t("বিল"))}
-                          {choice?.date && <small>{date(choice.date)}</small>}
-                        </span>
-                        <strong>{money(row.amount)}</strong>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <TransactionDetails summary={t("বিলের বিস্তারিত")}>
+                  <ul className="house-allocation-preview">
+                    {plan.allocations.map((row) => {
+                      const choice = choices.find(
+                        (choice) =>
+                          choice.billId === row.billId &&
+                          choice.workId === row.workId,
+                      );
+                      return (
+                        <li key={JSON.stringify([row.billId, row.workId])}>
+                          <span>
+                            {formatDigits(choice?.name || t("বিল"))}
+                            {choice?.date && <small>{date(choice.date)}</small>}
+                          </span>
+                          <strong>{money(row.amount)}</strong>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </TransactionDetails>
               ) : (
                 <p>
                   {t(
@@ -671,132 +838,47 @@ export function HousePaymentForm() {
               )}
             </section>
           )}
-          {showScope && (
-            <div className="house-payment-scope">
-              <div className="house-field-pair">
-                <label>
-                  {t("কোন সেক্টরে")}
-                  <AppSelect
-                    aria-label={t("কোন সেক্টরে")}
-                    value={draft.workId}
-                    onChange={(event) => change("workId", event.target.value)}
-                  >
-                    <option value="">
-                      {t(
-                        draft.intent === "settlement"
-                          ? "বিল অনুযায়ী"
-                          : "বেছে নিন",
-                      )}
+          <TransactionDetails
+            summary={t("তারিখ ও নোট")}
+            defaultOpen={invalidField === "invalid_date"}
+          >
+            <div className="transaction-grid">
+              <label>
+                {t("তারিখ")}
+                <AppDatePicker
+                  aria-label={t("তারিখ")}
+                  aria-invalid={invalidField === "invalid_date"}
+                  aria-describedby={
+                    invalidField === "invalid_date"
+                      ? "house-payment-error"
+                      : undefined
+                  }
+                  value={draft.date}
+                  onChange={(event) => change("date", event.target.value)}
+                />
+              </label>
+              <label>
+                {t("কীভাবে দিয়েছি")}
+                <AppSelect
+                  aria-label={t("কীভাবে দিয়েছি")}
+                  value={draft.method}
+                  onChange={(event) =>
+                    change("method", event.target.value as Draft["method"])
+                  }
+                >
+                  {[
+                    ["cash", "নগদ"],
+                    ["bkash", "বিকাশ"],
+                    ["bank", "ব্যাংক"],
+                    ["other", "অন্যভাবে"],
+                  ].map(([id, label]) => (
+                    <option key={id} value={id}>
+                      {t(label)}
                     </option>
-                    {ledger.works
-                      .filter((work) => !work.archivedAt)
-                      .map((work) => (
-                        <option key={work.id} value={work.id}>
-                          {formatDigits(work.name)}
-                        </option>
-                      ))}
-                  </AppSelect>
-                </label>
-                {showAccount && (
-                  <label>
-                    {t("কী বাবদ")}
-                    <AppSelect
-                      aria-label={t("কী বাবদ")}
-                      value={draft.account}
-                      onChange={(event) =>
-                        change(
-                          "account",
-                          event.target.value as Draft["account"],
-                        )
-                      }
-                    >
-                      <option value="">
-                        {t(
-                          draft.intent === "settlement"
-                            ? "বিল অনুযায়ী"
-                            : "বেছে নিন",
-                        )}
-                      </option>
-                      {allowedAccounts.includes("materials") && (
-                        <option value="materials">{t("মালের টাকা")}</option>
-                      )}
-                      {allowedAccounts.includes("labour") && (
-                        <option value="labour">{t("মজুরি")}</option>
-                      )}
-                      {allowedAccounts.includes("other") && (
-                        <option value="other">{t("অন্য খরচ")}</option>
-                      )}
-                    </AppSelect>
-                  </label>
-                )}
-              </div>
-              {contracts.length > 0 && (
-                <label>
-                  {t("কোন কাজের জন্য")}
-                  <AppSelect
-                    aria-label={t("কোন কাজের জন্য")}
-                    value={draft.contractId}
-                    onChange={(event) =>
-                      change("contractId", event.target.value)
-                    }
-                  >
-                    <option value="">
-                      {t(
-                        draft.intent === "settlement"
-                          ? "বিল অনুযায়ী"
-                          : "বেছে নিন",
-                      )}
-                    </option>
-                    {contracts.map((contract) => (
-                      <option key={contract.id} value={contract.id}>
-                        {formatDigits(contract.title || t("কাজ"))}
-                      </option>
-                    ))}
-                  </AppSelect>
-                </label>
-              )}
+                  ))}
+                </AppSelect>
+              </label>
             </div>
-          )}
-          {draft.personId &&
-            total > 0 &&
-            plan.issues
-              .filter((issue) => issue !== "unassigned_cash")
-              .map((issue) => (
-                <p className="field-hint" key={issue} role="status">
-                  {t(issueText[issue])}
-                </p>
-              ))}
-          <details className="house-details">
-            <summary>{t("তারিখ, ভাউচার ও বাড়তি কথা")}</summary>
-            <label>
-              {t("তারিখ")}
-              <AppDatePicker
-                aria-label={t("তারিখ")}
-                value={draft.date}
-                onChange={(event) => change("date", event.target.value)}
-              />
-            </label>
-            <label>
-              {t("কীভাবে দিয়েছি")}
-              <AppSelect
-                aria-label={t("কীভাবে দিয়েছি")}
-                value={draft.method}
-                onChange={(event) =>
-                  change("method", event.target.value as Draft["method"])
-                }
-              >
-                {[
-                  ["cash", "নগদ"],
-                  ["bkash", "বিকাশ"],
-                  ["bank", "ব্যাংক"],
-                  ["other", "অন্যভাবে"],
-                ].map(([id, label]) => (
-                  <option key={id} value={id}>
-                    {t(label)}
-                  </option>
-                ))}
-              </AppSelect>
-            </label>
             <label>
               {t("বাড়তি কথা")}
               <textarea
@@ -805,13 +887,13 @@ export function HousePaymentForm() {
                 onChange={(event) => change("note", event.target.value)}
               />
             </label>
-            <HouseAttachments
-              files={draft.files}
-              entryId={draft.id}
-              onChange={(files) => change("files", files)}
-              onError={setError}
-            />
-          </details>
+          </TransactionDetails>
+          <HouseAttachments
+            files={draft.files}
+            entryId={draft.id}
+            onChange={(files) => change("files", files)}
+            onError={setError}
+          />
         </fieldset>
       </form>
     </EntryFrame>

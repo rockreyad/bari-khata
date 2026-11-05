@@ -25,6 +25,10 @@ import { EntitySheet } from "../../components/EntitySheet";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { MoneyInput } from "../../components/ui/MoneyInput";
+import {
+  TransactionAmount,
+  TransactionDetails,
+} from "../../components/TransactionFields";
 import { FormError, useFormError } from "../../components/ui/FormError";
 import { personKind } from "../../domain/contacts";
 import {
@@ -38,6 +42,7 @@ import { EntryPaymentPreview } from "./EntryPaymentPreview";
 import { entryPaymentBalance } from "./entryPaymentBalance";
 import { moneyInputValue } from "../../lib/numericFields";
 import "./entry-page.css";
+import "./legacy-transaction.css";
 import { PaymentIcon } from "../../components/ui/Icons";
 import {
   createWorkspaceStorage,
@@ -413,7 +418,7 @@ export function QuickEntrySheet({
                 : code === "date"
                   ? "সঠিক তারিখ বেছে নিন।"
                   : code === "work"
-                    ? "কোন সেক্টরর টাকা, তা বেছে নিন।"
+                    ? "কোন খাতার টাকা, তা বেছে নিন।"
                     : code === "group"
                       ? "নতুন মালের ধরনটির নাম লিখুন।"
                       : code === "account_changed" ||
@@ -598,20 +603,21 @@ export function QuickEntrySheet({
         : transport
           ? "গাড়িভাড়া দিই"
           : labour
-            ? "মিস্ত্রির টাকা"
+            ? "কর্মীর টাকা"
             : material
               ? "মাল কিনলাম"
               : "খরচ লিখি";
   return (
     <Frame
       title={t(title)}
+      className="transaction-page legacy-transaction-page"
       onClose={() => void requestClose()}
       footer={
-        <div className="save-bar">
-          <span>
-            {t(returning ? "ফেরতের দাম" : "এখন দিচ্ছি")}
+        <div className="transaction-submit">
+          <div>
+            <small>{t(returning ? "ফেরতের দাম" : "এখন দিচ্ছি")}</small>
             <strong>{money(returning ? total : paidNow)}</strong>
-          </span>
+          </div>
           <button
             className="primary-button"
             form={formId}
@@ -626,7 +632,7 @@ export function QuickEntrySheet({
     >
       <form
         id={formId}
-        className="entry-form-v3 entry-page-form"
+        className="entry-form-v3 entry-page-form transaction-form"
         onSubmit={submit}
       >
         <FormError {...errorNotice} id={`${formId}-error`} />
@@ -640,7 +646,7 @@ export function QuickEntrySheet({
               {(
                 [
                   ["material", "মাল কেনা", PackageIcon],
-                  ["labour", "মিস্ত্রির টাকা", HardHatIcon],
+                  ["labour", "কর্মীর টাকা", HardHatIcon],
                   ["transport", "গাড়িভাড়া", TruckIcon],
                 ] as const
               ).map(([type, label, Icon]) => {
@@ -667,11 +673,11 @@ export function QuickEntrySheet({
               {t("মুছে রাখা নাম, খাতা বা কাজ আগে ফিরিয়ে আনুন।")}
             </p>
           ) : null}
-          <div className="entry-assignment">
+          <div className="entry-assignment transaction-card transaction-grid">
             <label>
-              {t("সেক্টর")}
+              {t("খাতা")}
               <AppSelect
-                aria-label={t("সেক্টর")}
+                aria-label={t("খাতা")}
                 aria-invalid={Boolean(error) && invalidField === "work"}
                 aria-describedby={
                   error && invalidField === "work"
@@ -696,7 +702,7 @@ export function QuickEntrySheet({
                     </option>
                   ))}
                 {canCreateWork ? (
-                  <option value="__new__">{t("+ নতুন খাতা খুলব")}</option>
+                  <option value="__new__">{t("+ নতুন খাতা বানান")}</option>
                 ) : null}
               </AppSelect>
             </label>
@@ -705,7 +711,7 @@ export function QuickEntrySheet({
                 cash || wage || charge
                   ? "কাকে দিচ্ছেন"
                   : labour
-                    ? "কোন মিস্ত্রি"
+                    ? "কোন কর্মী"
                     : transport
                       ? "গাড়ির লোক / শ্রমিক"
                       : material
@@ -753,8 +759,8 @@ export function QuickEntrySheet({
               <PlusIcon size={17} />
               {t(
                 ledger.works.some((work) => !work.archivedAt)
-                  ? "নতুন সেক্টর খুলব"
-                  : "আগে সেক্টর খুলুন",
+                  ? "নতুন খাতা বানান"
+                  : "আগে খাতা বানান",
               )}
             </button>
           ) : null}
@@ -764,7 +770,7 @@ export function QuickEntrySheet({
                 cash
                   ? "নাম"
                   : labour
-                    ? "মিস্ত্রির নাম"
+                    ? "কর্মীর নাম"
                     : transport
                       ? "নাম"
                       : material
@@ -868,7 +874,7 @@ export function QuickEntrySheet({
           ) : null}
           {draft.kind === "payment" ? (
             <div
-              className="entry-intent-options"
+              className="entry-intent-options transaction-choice"
               role="group"
               aria-label={t("টাকার কারণ")}
             >
@@ -974,7 +980,7 @@ export function QuickEntrySheet({
           {(wage || charge) && draft.account === "labour" ? (
             <section className="entry-wage-basis">
               <div
-                className="entry-intent-options"
+                className="entry-intent-options transaction-choice"
                 role="group"
                 aria-label={t("মজুরির হিসাব")}
               >
@@ -1034,44 +1040,27 @@ export function QuickEntrySheet({
             </section>
           ) : null}
           {cash || wage || charge ? (
-            <label className="entry-amount-label">
-              {t("কত টাকা")}
-              <div className="entry-amount-wrap">
-                <span>৳</span>
-                <MoneyInput
-                  autoFocus
-                  inputMode="decimal"
-                  aria-label={t("কত টাকা")}
-                  placeholder="0"
-                  value={
-                    wage && draft.wageBasis === "day"
-                      ? moneyInputValue(total)
-                      : draft.amount
-                  }
-                  readOnly={wage && draft.wageBasis === "day"}
-                  onChange={(e) => field("amount", e.target.value)}
-                />
-              </div>
-            </label>
+            <div className="transaction-card">
+              <TransactionAmount
+                label={t("কত টাকা")}
+                value={
+                  wage && draft.wageBasis === "day"
+                    ? moneyInputValue(total)
+                    : draft.amount
+                }
+                disabled={wage && draft.wageBasis === "day"}
+                onChange={(value) => field("amount", value)}
+              />
+            </div>
           ) : (
             <div className="purchase-lines-v3">
               {draft.rows.map((r, index) => (
-                <div className="purchase-line-v3" key={r.id}>
-                  <label className="entry-amount-label">
-                    {t("কত টাকা")}
-                    <div className="entry-amount-wrap">
-                      <span>৳</span>
-                      <MoneyInput
-                        autoFocus={!index}
-                        aria-label={t("কত টাকা")}
-                        value={r.amount}
-                        placeholder="0"
-                        onChange={(e) =>
-                          changeRow(r.id, { amount: e.target.value })
-                        }
-                      />
-                    </div>
-                  </label>
+                <div className="purchase-line-v3 transaction-card" key={r.id}>
+                  <TransactionAmount
+                    label={t("কত টাকা")}
+                    value={r.amount}
+                    onChange={(value) => changeRow(r.id, { amount: value })}
+                  />
                   <label>
                     {t(
                       labour
@@ -1133,108 +1122,86 @@ export function QuickEntrySheet({
                       {t(material ? "এই মাল বাদ দিন" : "এই খরচ বাদ দিন")}
                     </button>
                   ) : null}
-                  {!labour && r.unit && (material || transport) ? (
-                    <label>
-                      {t("পরিমাণ")} · {formatDigits(r.unit)}
-                      <NumericInput
-                        inputMode="decimal"
-                        aria-label={t("পরিমাণ")}
-                        value={r.quantity}
-                        onChange={(e) =>
-                          changeRow(r.id, {
-                            quantity: e.target.value,
-                          })
-                        }
-                      />
-                    </label>
-                  ) : null}
                   {material || transport ? (
-                    <details className="item-extra-v3">
-                      <summary>
-                        {t(
-                          transport
-                            ? "কিসের মাল এনেছেন"
-                            : "ব্র্যান্ড ও পরিমাণ লিখি",
-                        )}
-                        <CaretDownIcon size={15} />
-                      </summary>
-                      <section className="line-meta-v3">
-                        <div className="field-grid">
+                    <TransactionDetails
+                      summary={t(material ? "ব্র্যান্ড ও পরিমাণ" : "পরিমাণ")}
+                      defaultOpen={Boolean(r.brand || r.quantity || r.unit)}
+                    >
+                      <section className="line-meta-v3 transaction-fields">
+                        {material ? (
                           <label>
-                            {t("মালের ধরন")}
-                            <AppSelect
-                              value={r.groupId}
-                              onChange={(e) =>
-                                changeRow(r.id, { groupId: e.target.value })
-                              }
-                            >
-                              <option value="">{t("এখন দরকার নেই")}</option>
-                              {groups.map((g) => (
-                                <option key={g.id} value={g.id}>
-                                  {g.name}
-                                </option>
-                              ))}
-                              <option value="__new__">{t("+ নতুন ধরন")}</option>
-                            </AppSelect>
-                          </label>
-                          {r.groupId === "__new__" ? (
-                            <label>
-                              {t("নতুন মালের ধরন")}
-                              <input
-                                value={r.groupName}
-                                onChange={(e) =>
-                                  changeRow(r.id, { groupName: e.target.value })
-                                }
-                              />
-                            </label>
-                          ) : (
-                            <label>
-                              {t("ব্র্যান্ড")}
-                              <input
-                                value={r.brand}
-                                placeholder={t("যেমন: Crown")}
-                                onChange={(e) =>
-                                  changeRow(r.id, { brand: e.target.value })
-                                }
-                              />
-                            </label>
-                          )}
-                          <label>
-                            {t("কোথায় ব্যবহার হবে")}
+                            {t("ব্র্যান্ড")}
                             <input
-                              value={r.usage}
-                              placeholder={t("যেমন: প্লাস্টারের বালু")}
+                              value={r.brand}
+                              placeholder={t("ইচ্ছা হলে লিখুন")}
                               onChange={(e) =>
-                                changeRow(r.id, { usage: e.target.value })
+                                changeRow(r.id, { brand: e.target.value })
+                              }
+                            />
+                          </label>
+                        ) : null}
+                        <div className="transaction-grid">
+                          <label>
+                            {t("পরিমাণ")}
+                            <NumericInput
+                              value={r.quantity}
+                              inputMode="decimal"
+                              onChange={(e) =>
+                                changeRow(r.id, { quantity: e.target.value })
                               }
                             />
                           </label>
                           <label>
-                            {t("পরিমাণ ও একক")}
-                            <div className="inline-fields">
-                              <NumericInput
-                                aria-label={t("পরিমাণ")}
-                                value={r.quantity}
-                                inputMode="decimal"
-                                onChange={(e) =>
-                                  changeRow(r.id, {
-                                    quantity: e.target.value,
-                                  })
-                                }
-                              />
-                              <input
-                                aria-label={t("একক")}
-                                value={r.unit}
-                                placeholder={t("বস্তা / ফুট")}
-                                onChange={(e) =>
-                                  changeRow(r.id, { unit: e.target.value })
-                                }
-                              />
-                            </div>
+                            {t("একক")}
+                            <input
+                              value={r.unit}
+                              placeholder={t("বস্তা / ফুট")}
+                              onChange={(e) =>
+                                changeRow(r.id, { unit: e.target.value })
+                              }
+                            />
                           </label>
                         </div>
+                        <label>
+                          {t("মালের ধরন")}
+                          <AppSelect
+                            value={r.groupId}
+                            onChange={(e) =>
+                              changeRow(r.id, { groupId: e.target.value })
+                            }
+                          >
+                            <option value="">{t("এখন দরকার নেই")}</option>
+                            {groups.map((g) => (
+                              <option key={g.id} value={g.id}>
+                                {g.name}
+                              </option>
+                            ))}
+                            <option value="__new__">{t("+ নতুন ধরন")}</option>
+                          </AppSelect>
+                        </label>
+                        {r.groupId === "__new__" ? (
+                          <label>
+                            {t("নতুন মালের ধরন")}
+                            <input
+                              value={r.groupName}
+                              onChange={(e) =>
+                                changeRow(r.id, { groupName: e.target.value })
+                              }
+                            />
+                          </label>
+                        ) : null}
+                        <label>
+                          {t("কোথায় ব্যবহার হবে")}
+                          <input
+                            value={r.usage}
+                            placeholder={t("যেমন: প্লাস্টারের বালু")}
+                            onChange={(e) =>
+                              changeRow(r.id, { usage: e.target.value })
+                            }
+                          />
+                        </label>
                       </section>
-                    </details>
+                    </TransactionDetails>
                   ) : null}
                 </div>
               ))}
@@ -1474,9 +1441,55 @@ export function QuickEntrySheet({
               ))}
             </div>
           ) : null}
+          <div className="transaction-card legacy-transaction-attachments">
+            <label className="attachment-button transaction-secondary">
+              <CameraIcon size={20} />
+              {t("ভাউচারের ছবি / PDF")}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                multiple
+                onChange={(e) => {
+                  const incoming = Array.from(e.target.files ?? []);
+                  if (
+                    incoming.some((file) => file.size > 10 * 1024 * 1024) ||
+                    files.length + incoming.length > 20
+                  ) {
+                    setError(
+                      t("প্রতিটি ভাউচার ১০ MB-এর মধ্যে রাখুন। সর্বোচ্চ ২০টি।"),
+                    );
+                    return;
+                  }
+                  setFiles([
+                    ...files,
+                    ...incoming.map((file) => ({
+                      id: crypto.randomUUID(),
+                      entryId: draft.id,
+                      name: file.name,
+                      file,
+                    })),
+                  ]);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {files.map((f) => (
+              <div className="attachment-row" key={f.id}>
+                <span>{formatDigits(f.name ?? t("ভাউচার"))}</span>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={t("বাদ দিন")}
+                  onClick={() => setFiles(files.filter((v) => v.id !== f.id))}
+                >
+                  <TrashIcon size={17} />
+                </button>
+              </div>
+            ))}
+          </div>
           <button
             type="button"
-            className="entry-more-toggle"
+            className="entry-more-toggle transaction-secondary"
             onClick={() => setMore(!more)}
             aria-expanded={more}
           >
@@ -1484,7 +1497,7 @@ export function QuickEntrySheet({
             <CaretDownIcon size={17} />
           </button>
           {more ? (
-            <section className="entry-more-body">
+            <section className="entry-more-body transaction-card">
               <div className="field-grid">
                 <label>
                   {t("তারিখ")}
@@ -1534,52 +1547,6 @@ export function QuickEntrySheet({
                   />
                 </label>
               ) : null}
-              <label className="attachment-button">
-                <CameraIcon size={20} />
-                {t("ভাউচারের ছবি / PDF")}
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,application/pdf"
-                  multiple
-                  onChange={(e) => {
-                    const incoming = Array.from(e.target.files ?? []);
-                    if (
-                      incoming.some((file) => file.size > 10 * 1024 * 1024) ||
-                      files.length + incoming.length > 20
-                    ) {
-                      setError(
-                        t(
-                          "প্রতিটি ভাউচার ১০ MB-এর মধ্যে রাখুন। সর্বোচ্চ ২০টি।",
-                        ),
-                      );
-                      return;
-                    }
-                    setFiles([
-                      ...files,
-                      ...incoming.map((file) => ({
-                        id: crypto.randomUUID(),
-                        entryId: draft.id,
-                        name: file.name,
-                        file,
-                      })),
-                    ]);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-              {files.map((f) => (
-                <div className="attachment-row" key={f.id}>
-                  <span>{formatDigits(f.name ?? t("ভাউচার"))}</span>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label={t("বাদ দিন")}
-                    onClick={() => setFiles(files.filter((v) => v.id !== f.id))}
-                  >
-                    <TrashIcon size={17} />
-                  </button>
-                </div>
-              ))}
             </section>
           ) : null}
         </fieldset>

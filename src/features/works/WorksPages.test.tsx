@@ -153,12 +153,12 @@ it("keeps shared obligations separate and opens their exact source even after th
     </MemoryRouter>,
   );
   expect(container.querySelector(".work-shared-due")?.textContent).toContain(
-    "সব সেক্টর মিলিয়ে কাজের বাকি৳20000",
+    "সব খাতা মিলিয়ে কাজের বাকি৳20000",
   );
   expect(
     container.querySelector(".work-known-due:not(.work-shared-due)"),
   ).toBeNull();
-  await userEvent.click(screen.getByText("সব সেক্টর মিলিয়ে কাজের বাকি"));
+  await userEvent.click(screen.getByText("সব খাতা মিলিয়ে কাজের বাকি"));
   await userEvent.click(screen.getByRole("button", { name: /পুরো বাড়ির কাজ/ }));
   const target = new URL(context.go.mock.calls[0][0], "https://bari.invalid");
   expect(target.pathname).toBe("/works/shared");
@@ -284,9 +284,7 @@ it("keeps one labour paid total visible at zero and labels broader history as al
   expect(container.querySelectorAll(".history-row")).toHaveLength(0);
   const user = userEvent.setup();
   await user.click(screen.getByRole("button", { name: "আনা-নামানো" }));
-  await user.click(
-    screen.getByRole("button", { name: "এই সেক্টরের সব লেনদেন" }),
-  );
+  await user.click(screen.getByRole("button", { name: "এই খাতার সব লেনদেন" }));
   expect(context.go).toHaveBeenLastCalledWith("/ledger?work=empty");
 });
 
@@ -455,7 +453,7 @@ it("finds work names using either numeral script while preserving their stored n
       <WorksPage />
     </MemoryRouter>,
   );
-  const input = screen.getByRole("textbox", { name: "সেক্টর খুঁজুন" });
+  const input = screen.getByRole("textbox", { name: "খাতা খুঁজুন" });
   const user = userEvent.setup();
   await user.type(input, "16");
   expect(screen.getByRole("heading", { name: "খাতা ১৬" })).toBeTruthy();
@@ -856,7 +854,7 @@ it("keeps tab selection in the route, preserves other filters and supports nativ
     "/sectors/door?tab=material&account=materials&from=2026-01-01&q=cement",
   );
   const group = screen.getByRole("group", {
-    name: "সেক্টরের লেনদেন বেছে দেখুন",
+    name: "খাতার লেনদেন বেছে দেখুন",
   });
   expect(within(group).getAllByRole("button")).toHaveLength(6);
   for (const button of within(group).getAllByRole("button")) {
@@ -896,7 +894,7 @@ it("keeps tab selection in the route, preserves other filters and supports nativ
 it("reveals the last active tab within a narrow rail and brings the first tab back without changing filters", () => {
   renderWorkTabs("/sectors/door?tab=activity&q=cement");
   const rail = screen.getByRole("group", {
-    name: "সেক্টরের লেনদেন বেছে দেখুন",
+    name: "খাতার লেনদেন বেছে দেখুন",
   });
   Object.defineProperties(rail, {
     clientWidth: { configurable: true, value: 260 },
@@ -1030,7 +1028,7 @@ it("shows scoped compact job previews on the labour tab and routes details away 
   );
   expect(jobRoute.pathname).toBe("/works/door-job");
   expect(jobRoute.searchParams.get("back")).toBe("/sectors/door?tab=labour");
-  screen.getByRole("button", { name: "সেক্টরের আরও কাজ" }).focus();
+  screen.getByRole("button", { name: "খাতার আরও কাজ" }).focus();
   await userEvent.setup().keyboard("{Enter}");
   expect(await screen.findByRole("menu")).toBeTruthy();
   expect(screen.queryByRole("menuitem", { name: "মজুরির দর রাখি" })).toBeNull();
@@ -1072,11 +1070,11 @@ it("restores notebook search and status from the URL and preserves other filters
     within(filters).getByRole("button", { name: "শেষ", pressed: true }),
   ).toBeTruthy();
   expect(
-    (screen.getByRole("textbox", { name: "সেক্টর খুঁজুন" }) as HTMLInputElement)
+    (screen.getByRole("textbox", { name: "খাতা খুঁজুন" }) as HTMLInputElement)
       .value,
   ).toBe("8");
   expect(screen.getByRole("heading", { name: "ঘর 8" })).toBeTruthy();
-  fireEvent.change(screen.getByRole("textbox", { name: "সেক্টর খুঁজুন" }), {
+  fireEvent.change(screen.getByRole("textbox", { name: "খাতা খুঁজুন" }), {
     target: { value: "১৬" },
   });
   expect(screen.queryByRole("heading", { name: "ঘর 8" })).toBeNull();
@@ -1108,7 +1106,7 @@ it("restores notebook search and status from the URL and preserves other filters
   ).searchParams;
   expect(Object.fromEntries(params)).toEqual({ from: "2026-01-01" });
   expect(screen.getByRole("heading", { name: "All rods" })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "নতুন সেক্টর" }));
+  fireEvent.click(screen.getByRole("button", { name: "নতুন খাতা বানান" }));
   expect(context.entity).toHaveBeenCalledWith("work");
 });
 
@@ -1120,17 +1118,17 @@ it("treats an invalid status as all and retains the literal search word all", ()
   ).toBeTruthy();
   expect(screen.getByRole("heading", { name: "All rods" })).toBeTruthy();
   expect(
-    (screen.getByRole("textbox", { name: "সেক্টর খুঁজুন" }) as HTMLInputElement)
+    (screen.getByRole("textbox", { name: "খাতা খুঁজুন" }) as HTMLInputElement)
       .value,
   ).toBe("all");
   fireEvent.click(screen.getByRole("button", { name: "খোঁজা মুছুন" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "সেক্টর খুঁজুন" }), {
+  fireEvent.change(screen.getByRole("textbox", { name: "খাতা খুঁজুন" }), {
     target: { value: "all" },
   });
   expect(screen.getByRole("heading", { name: "All rods" })).toBeTruthy();
   fireEvent.click(within(filters).getByRole("button", { name: "চলছে" }));
   expect(
-    (screen.getByRole("textbox", { name: "সেক্টর খুঁজুন" }) as HTMLInputElement)
+    (screen.getByRole("textbox", { name: "খাতা খুঁজুন" }) as HTMLInputElement)
       .value,
   ).toBe("all");
 });
@@ -1141,7 +1139,7 @@ it("clears an empty filtered result without dropping unrelated URL state or chan
   );
   const before = JSON.stringify(context.ledger);
   expect(container.querySelectorAll(".work-notebook-card")).toHaveLength(0);
-  fireEvent.click(screen.getByRole("button", { name: "সব সেক্টর দেখুন" }));
+  fireEvent.click(screen.getByRole("button", { name: "সব খাতা দেখুন" }));
   expect(container.querySelectorAll(".work-notebook-card")).toHaveLength(3);
   const params = new URL(
     screen.getByTestId("work-route").textContent ?? "",

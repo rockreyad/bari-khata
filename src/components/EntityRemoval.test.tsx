@@ -100,7 +100,7 @@ it("requires DELETE for a notebook, keeps the subject visible, and restores with
   const user = userEvent.setup(),
     initial = fixture();
   mount(initial, "/sectors/door", <WorkPage />);
-  await user.click(screen.getByRole("button", { name: "সেক্টরের আরও কাজ" }));
+  await user.click(screen.getByRole("button", { name: "খাতার আরও কাজ" }));
   await user.click(screen.getByRole("menuitem", { name: "মুছুন" }));
   const input = screen.getByRole("textbox"),
     confirm = screen.getByRole("button", { name: "মুছুন" });
@@ -181,7 +181,7 @@ it("uses DELETE for a job without changing its bill or payment history", async (
 it("requires a fresh DELETE when a subject is renamed while its confirmation is open", async () => {
   const user = userEvent.setup();
   mount(fixture(), "/sectors/door", <WorkPage />);
-  await user.click(screen.getByRole("button", { name: "সেক্টরের আরও কাজ" }));
+  await user.click(screen.getByRole("button", { name: "খাতার আরও কাজ" }));
   await user.click(screen.getByRole("menuitem", { name: "মুছুন" }));
   await user.type(screen.getByLabelText("নিশ্চিত করতে DELETE লিখুন"), "DELETE");
   const save = state.context.save as (

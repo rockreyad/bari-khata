@@ -406,7 +406,7 @@ export function TotalAdjustmentForm({
             maxLength={2000}
             rows={3}
             onChange={(event) => field("reason", event.target.value)}
-            placeholder={t("যেমন: দুই পক্ষের হিসাব মিলিয়ে মোট ঠিক করেছি")}
+            placeholder={t("যেমন: হিসাব মিলিয়ে মোট ঠিক করেছি")}
           />
         </label>
       </fieldset>

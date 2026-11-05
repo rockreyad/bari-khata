@@ -10,25 +10,15 @@ import {
   ReceiptIcon,
   UserPlusIcon,
 } from "@phosphor-icons/react";
-import { WorkMark } from "../../components/ui/Icons";
 import "./entry-shortcuts.css";
 import { LegacyEntryDrafts } from "../write/LegacyEntryDrafts";
 import { Sheet } from "../../components/Sheet";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 export function QuickActionsSheet() {
-  const { add, entity, close, go, ledger } = useNotebook();
-  const { t, formatDigits } = useLanguageContext();
+  const { add, entity, close, go } = useNotebook();
+  const { t } = useLanguageContext();
   const [balanceChoices, setBalanceChoices] = useState(false);
-  const shortcuts = ledger.works.filter(
-    (work) => !work.archivedAt && work.quickActions?.length,
-  );
-  const actionNames = {
-    expense: "খরচ লিখি",
-    payment: "টাকা দিলাম",
-    labour: "মিস্ত্রির টাকা",
-    transport: "আনার খরচ",
-  };
   const actions = balanceChoices
     ? [
         {
@@ -118,70 +108,16 @@ export function QuickActionsSheet() {
           <div className="launch-secondary">
             <button type="button" onClick={() => entity("work")}>
               <FolderPlusIcon size={22} aria-hidden="true" />
-              {t("সেক্টর যোগ করি")}
+              {t("নতুন খাতা বানান")}
             </button>
             <button type="button" onClick={() => entity("person")}>
               <UserPlusIcon size={22} aria-hidden="true" />
-              {t("পক্ষ যোগ করি")}
+              {t("নতুন কর্মী")}
             </button>
           </div>
         )}
       </div>
       {!balanceChoices && <LegacyEntryDrafts />}
-      {!balanceChoices && shortcuts.length > 0 && (
-        <details className="quick-sector-shortcuts">
-          <summary>{t("পছন্দের সেক্টর")}</summary>
-          {shortcuts.length ? (
-            <section className="entry-work-shortcuts">
-              <h3>{t("পছন্দের সেক্টর")}</h3>
-              <div className="entry-shortcut-scroll">
-                {shortcuts.map((work) => (
-                  <article key={work.id}>
-                    <div className="entry-shortcut-title">
-                      <WorkMark icon={work.icon} color={work.color} size={20} />
-                      <strong>{formatDigits(work.name)}</strong>
-                    </div>
-                    <div className="entry-shortcut-actions">
-                      {work.quickActions!.map((action) => (
-                        <button
-                          key={action}
-                          onClick={() => {
-                            const labour =
-                              action === "labour" ||
-                              (action === "payment" &&
-                                work.quickActions!.includes("labour") &&
-                                !work.quickActions!.includes("expense") &&
-                                !work.quickActions!.includes("transport"));
-                            add({
-                              kind:
-                                labour || action === "payment"
-                                  ? "payment"
-                                  : "expense",
-                              workId: work.id,
-                              account: labour
-                                ? "labour"
-                                : action === "transport"
-                                  ? "other"
-                                  : "materials",
-                              costType: labour
-                                ? "labour"
-                                : action === "transport"
-                                  ? "transport"
-                                  : "material",
-                            });
-                          }}
-                        >
-                          {t(actionNames[action])}
-                        </button>
-                      ))}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null}
-        </details>
-      )}
     </Sheet>
   );
 }

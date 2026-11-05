@@ -28,6 +28,7 @@ const state = vi.hoisted(() => ({
   base: "",
   go: vi.fn(),
   detail: vi.fn(),
+  add: vi.fn(),
 }));
 vi.mock("../../app/NotebookProvider", async () => {
   const router =
@@ -38,7 +39,7 @@ vi.mock("../../app/NotebookProvider", async () => {
       const [, setParams] = router.useSearchParams();
       return {
         ledger: state.ledger as Ledger,
-        add: vi.fn(),
+        add: state.add,
         go: (path: string) => {
           state.go(path);
           navigate(`${state.base}${path}`);
@@ -70,6 +71,7 @@ afterEach(() => {
   localStorage.clear();
   state.go.mockClear();
   state.detail.mockClear();
+  state.add.mockClear();
   vi.unstubAllGlobals();
 });
 
@@ -234,7 +236,7 @@ it.each(["", "/sample"])(
     const before = JSON.stringify(ledger);
     const user = userEvent.setup();
     const { container } = mount(ledger, "bn", `${base}/dues`);
-    await user.click(screen.getByRole("button", { name: /নমুনা দোকান/ }));
+    await user.click(screen.getByRole("button", { name: /^নমুনা দোকান/ }));
     expect(screen.getByTestId("route").textContent).toBe(
       `${base}/ledger?person=shop&order=oldest`,
     );
@@ -291,4 +293,20 @@ it("reopens from its URL and handles a settled ledger without showing a false du
   expect(container.querySelector(".home-overview-due")).toBeNull();
   await user.click(screen.getByRole("button", { name: "এক নজরে" }));
   expect(screen.getByTestId("route").textContent).toBe("/");
+});
+
+it("opens payment directly from an active worker's due without changing records", async () => {
+  const ledger = fixture(),
+    before = JSON.stringify(ledger),
+    user = userEvent.setup();
+  mount(ledger, "bn", "/dues");
+  await user.click(
+    screen.getByRole("button", { name: "টাকা দিই: নমুনা দোকান" }),
+  );
+  expect(state.add).toHaveBeenCalledWith({
+    kind: "payment",
+    purpose: "settle",
+    personId: "shop",
+  });
+  expect(JSON.stringify(ledger)).toBe(before);
 });
