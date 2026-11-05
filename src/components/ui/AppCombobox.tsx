@@ -121,6 +121,8 @@ export function AppCombobox({
   onFocus,
   onBlur,
   onKeyDown,
+  onCompositionStart,
+  onCompositionEnd,
   className = "",
   style,
   disabled,
@@ -138,6 +140,7 @@ export function AppCombobox({
   const anchor = useRef<HTMLSpanElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const quietFocus = useRef(false);
+  const composing = useRef(false);
   const id = useId();
   const listId = `${id}-suggestions`;
   const choices = useMemo(
@@ -195,6 +198,8 @@ export function AppCombobox({
                 : undefined
             }
             onChange={(event) => {
+              if ((event.nativeEvent as InputEvent).isComposing)
+                composing.current = true;
               setInternal(event.target.value);
               setActive(-1);
               setOpen(true);
@@ -207,7 +212,18 @@ export function AppCombobox({
                 setOpen(true);
               }
             }}
-            onBlur={onBlur}
+            onBlur={(event) => {
+              composing.current = false;
+              onBlur?.(event);
+            }}
+            onCompositionStart={(event) => {
+              composing.current = true;
+              onCompositionStart?.(event);
+            }}
+            onCompositionEnd={(event) => {
+              composing.current = false;
+              onCompositionEnd?.(event);
+            }}
             onClick={() => {
               if (!disabled && !readOnly) setOpen(true);
             }}
@@ -215,7 +231,9 @@ export function AppCombobox({
               onKeyDown?.(event);
               if (
                 event.defaultPrevented ||
+                composing.current ||
                 event.nativeEvent.isComposing ||
+                event.nativeEvent.keyCode === 229 ||
                 disabled ||
                 readOnly
               )
