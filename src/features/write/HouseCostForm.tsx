@@ -37,6 +37,10 @@ import { HouseSavedNotice } from "./HouseSavedNotice";
 import { HouseAttachments } from "./HouseAttachments";
 import { workDescriptionSuggestions } from "./workDescriptionSuggestions";
 import {
+  purchaseSuggestions,
+  type PurchaseSuggestion,
+} from "./purchaseSuggestions";
+import {
   planHouseBillAdvance,
   applyHouseBillAdvance,
 } from "../../domain/housePayments";
@@ -145,6 +149,11 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
     initial,
   );
   const { draft, files } = value;
+  const purchases = useMemo(
+    () =>
+      action === "purchase" ? purchaseSuggestions(ledger, draft.workId) : [],
+    [action, ledger, draft.workId],
+  );
   const descriptions = useMemo(
     () =>
       action === "charge"
@@ -531,6 +540,31 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
       },
     }));
   };
+  const choosePurchase = (rowId: string, choice: PurchaseSuggestion) => {
+    setError("");
+    setInvalidField("");
+    update((current) => ({
+      ...current,
+      draft: {
+        ...current.draft,
+        rows: current.draft.rows.map((row) =>
+          row.id === rowId
+            ? {
+                ...row,
+                label: choice.value,
+                groupId: choice.groupId,
+                groupName: choice.groupName,
+                brand: choice.brand,
+                usage: choice.usage,
+                quantity: choice.quantity,
+                unit: choice.unit,
+                autoItemName: choice.value,
+              }
+            : row,
+        ),
+      },
+    }));
+  };
   const errorId = "house-cost-error";
   const personLabel = action === "purchase" ? "কর্মী বা দোকান" : "কর্মী";
   const personInvalid = invalidField === "person";
@@ -558,6 +592,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
     );
   return (
     <EntryFrame
+      focusAmountWhenReady={ready && !failed && !saving}
       title={t(action === "purchase" ? "মাল কিনেছি" : "কাজের বিল")}
       onClose={() => void closeSafely()}
       busy={saving}
@@ -658,7 +693,15 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                         }
                       />
                     ) : (
-                      <input
+                      <AppCombobox
+                        suggestions={purchases}
+                        fuzzy
+                        onSuggestionSelect={(suggestion) => {
+                          const choice = purchases.find(
+                            (candidate) => candidate.id === suggestion.id,
+                          );
+                          if (choice) choosePurchase(row.id, choice);
+                        }}
                         aria-label={t(
                           action === "purchase"
                             ? "মালের নাম {{number}}"
@@ -679,7 +722,8 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                         }
                       />
                     )}
-                    {action === "charge" && descriptions.length > 0 && (
+                    {((action === "charge" && descriptions.length > 0) ||
+                      (action === "purchase" && purchases.length > 0)) && (
                       <small
                         id={`work-description-hint-${row.id}`}
                         className="field-hint"

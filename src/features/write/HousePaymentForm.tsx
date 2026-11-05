@@ -536,6 +536,7 @@ export function HousePaymentForm() {
     );
   return (
     <EntryFrame
+      focusAmountWhenReady={ready && !failed && !saving}
       title={t(
         intent === "advance"
           ? "অগ্রিম দিলাম"

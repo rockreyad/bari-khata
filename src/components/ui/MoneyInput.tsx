@@ -3,7 +3,7 @@ import {
   useId,
   useRef,
   useState,
-  type InputHTMLAttributes,
+  type ComponentPropsWithRef,
   type KeyboardEvent,
 } from "react";
 import { AdaptivePopover } from "./AdaptivePopover";
@@ -23,7 +23,7 @@ import {
 import { valueChange } from "./controlEvents";
 import "./controls.css";
 
-export type MoneyInputProps = InputHTMLAttributes<HTMLInputElement>;
+export type MoneyInputProps = ComponentPropsWithRef<"input">;
 const errors = {
   empty: "প্রথমে একটি হিসাব লিখুন।",
   syntax: "হিসাবটি শেষ করুন। যেমন: ৫০০ + ২৫০।",

@@ -2021,6 +2021,9 @@ function SupportedEntrySheet({
   return (
     <Frame
       title={t(original ? "হিসাব বদলান" : "নতুন হিসাব")}
+      focusAmountWhenReady={
+        original ? undefined : ready && !saving && !processingFiles
+      }
       className="transaction-page entry-editor-page"
       onClose={close}
       footer={

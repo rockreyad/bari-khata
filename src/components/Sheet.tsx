@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Drawer } from "vaul";
 import { XIcon } from "@phosphor-icons/react";
 import { useLanguageContext } from "../context/LanguageProvider";
+import { useEntryAmountFocus } from "./useEntryAmountFocus";
 
 export function Sheet({
   title,
@@ -10,14 +11,18 @@ export function Sheet({
   onClose,
   children,
   footer,
+  focusAmountWhenReady,
 }: {
   title: string;
   subtitle?: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  focusAmountWhenReady?: boolean;
 }) {
   const { t } = useLanguageContext();
+  const container = useRef<HTMLDivElement>(null);
+  const amountFocus = useEntryAmountFocus(container, focusAmountWhenReady);
   const [mobile, setMobile] = useState(
     () => window.matchMedia("(max-width: 760px)").matches,
   );
@@ -46,10 +51,22 @@ export function Sheet({
         }}
         shouldScaleBackground={false}
         repositionInputs={false}
+        autoFocus={focusAmountWhenReady !== undefined}
       >
         <Drawer.Portal>
           <Drawer.Overlay className="sheet-overlay" />
           <Drawer.Content
+            ref={container}
+            onPointerDownCapture={amountFocus.markInteraction}
+            onKeyDownCapture={amountFocus.markInteraction}
+            onOpenAutoFocus={
+              focusAmountWhenReady !== undefined
+                ? (event) => {
+                    event.preventDefault();
+                    amountFocus.focusAmount();
+                  }
+                : undefined
+            }
             className="sheet-panel"
             aria-describedby={subtitle ? "drawer-description" : undefined}
           >
@@ -83,6 +100,17 @@ export function Sheet({
       <Dialog.Portal>
         <Dialog.Overlay className="sheet-overlay" />
         <Dialog.Content
+          ref={container}
+          onPointerDownCapture={amountFocus.markInteraction}
+          onKeyDownCapture={amountFocus.markInteraction}
+          onOpenAutoFocus={
+            focusAmountWhenReady !== undefined
+              ? (event) => {
+                  event.preventDefault();
+                  amountFocus.focusAmount();
+                }
+              : undefined
+          }
           className="sheet-panel"
           aria-describedby={subtitle ? "dialog-description" : undefined}
         >

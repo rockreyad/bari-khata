@@ -1,4 +1,5 @@
 export const houseCostEnglish: Record<string, string> = {
+  "টাকার ঘরে লিখুন": "Enter the amount here",
   "খাতা বেছে নিন।": "Choose a notebook.",
   "কী কাজ হয়েছে": "What work was done?",
   "কাজের বিবরণ {{number}}": "Work description {{number}}",
