@@ -339,6 +339,166 @@ it("searches legacy descriptions and numeric labels in either script without cha
 });
 
 describe("shared ledger and cost report projection", () => {
+  it("includes clear material processing once across ledger, reports and months without reclassifying the charge", () => {
+    const charge = (
+      id: string,
+      label: string,
+      amount: number,
+      date: string,
+      extra: Record<string, unknown> = {},
+    ) => ({
+      id,
+      kind: "expense",
+      account: "other",
+      personId: "shop",
+      date,
+      lines: [
+        { id: `${id}-line`, workId: "work", label, amount, costType: "other" },
+      ],
+      ...extra,
+    });
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "work", name: "নমুনা কাজ" }],
+      people: [{ id: "shop", name: "নমুনা দোকান" }],
+      materialGroups: [
+        { id: "panel", name: "প্যানেল", aliases: ["Panel", "প্যানেল কাটা"] },
+        { id: "pipe", name: "নল", aliases: ["Pipe"] },
+      ],
+      entries: [
+        charge("purchase", "প্যানেল", 1000, "2026-01-02", {
+          account: "materials",
+          lines: [
+            {
+              id: "purchase-line",
+              workId: "work",
+              label: "প্যানেল",
+              amount: 1000,
+              costType: "material",
+            },
+          ],
+        }),
+        charge("cut", "প্যানেল কাটা", 125, "2026-02-03"),
+        charge("cut-fee", "প্যানেলের কাটার বিল", 75, "2026-03-04"),
+        charge("returned-charge", "ফেরত", 20, "2026-04-05", {
+          kind: "expense_credit",
+          relatedEntryId: "cut",
+        }),
+        charge("deliberate", "কাটার বিল", 25, "2026-05-06", {
+          lines: [
+            {
+              id: "deliberate-line",
+              workId: "work",
+              label: "কাটার বিল",
+              amount: 25,
+              costType: "other",
+              materialGroupId: "panel",
+            },
+          ],
+        }),
+        charge("general", "প্যানেলের কাজ", 300, "2026-06-07"),
+        charge("machine", "", 400, "2026-06-07", {
+          lines: [
+            "প্যানেল কাটার মেশিন ভাড়া",
+            "প্যানেল কাটা মজুরী",
+            "প্যানেল ভাঙ্গার মেশিনটি",
+            "Panel cutting widget",
+          ].map((label, index) => ({
+            id: `machine-${index}`,
+            workId: "work",
+            label,
+            amount: 100,
+            costType: "other",
+          })),
+        }),
+        ...["labour", "rental"].map((costType, index) =>
+          charge(costType, "প্যানেল কাটা", 500 + index * 100, "2026-06-07", {
+            account: costType === "labour" ? "labour" : "other",
+            lines: [
+              {
+                id: `${costType}-line`,
+                workId: "work",
+                label: "প্যানেল কাটা",
+                amount: 500 + index * 100,
+                costType,
+              },
+            ],
+          }),
+        ),
+        charge("mixed", "প্যানেল ও নল কাটা", 700, "2026-06-07"),
+        charge("note", "নল কাটা", 800, "2026-06-07", { note: "প্যানেল" }),
+        {
+          id: "paid",
+          kind: "payment",
+          personId: "shop",
+          date: "2026-07-08",
+          note: "প্যানেল",
+          relatedEntryId: "purchase",
+          allocations: [{ workId: "work", amount: 900 }],
+          paymentParts: [{ amount: 900 }],
+        },
+      ],
+    });
+    const before = JSON.stringify(ledger);
+    const index = buildCostReportIndex(ledger);
+    for (const filters of [
+      { groupId: "panel" },
+      { query: "প্যানেল" },
+      { query: "Panel" },
+    ]) {
+      const report = selectCostReport(index, filters);
+      const shared = selectLedgerSearch(index.search, {
+        query: filters.query,
+        material: filters.groupId ? `group:${filters.groupId}` : undefined,
+      });
+      expect(report.search.totalCost).toBe(1205);
+      expect(summarizeRows(report.rows).total).toBe(1205);
+      expect(
+        breakdownRows(report.rows, "work").map((row) => row.amount),
+      ).toEqual([1205]);
+      expect(
+        matchingEntries(report.rows).reduce((sum, row) => sum + row.amount, 0),
+      ).toBe(1205);
+      expect(report.search.totalCost).toBe(shared.totalCost);
+      expect(report.search.monthlyRows).toEqual(shared.monthlyRows);
+      expect(
+        report.search.monthlyRows.map(({ month, total, other }) => [
+          month,
+          total,
+          other,
+        ]),
+      ).toEqual([
+        ["2026-01", 1000, 0],
+        ["2026-02", 125, 125],
+        ["2026-03", 75, 75],
+        ["2026-04", -20, -20],
+        ["2026-05", 25, 25],
+      ]);
+      expect(report.search.groupAmbiguousEntryIds).toContain("mixed");
+      expect(report.search.amounts.paid).toBeUndefined();
+    }
+    expect(
+      selectCostReport(index, { groupId: "panel" }, { section: "material" })
+        .search.totalCost,
+    ).toBe(1000);
+    expect(
+      selectCostReport(index, { groupId: "panel" }, { account: "other" }).search
+        .totalCost,
+    ).toBe(205);
+    const march = selectCostReport(
+      index,
+      { query: "প্যানেল" },
+      { month: "2026-03" },
+    );
+    expect(march.search.totalCost).toBe(75);
+    expect(march.rows.map((row) => row.key)).toEqual(["cut-fee:cut-fee-line"]);
+    const service = index.rows.find((row) => row.key === "cut:cut-line")!;
+    expect(service.line.costType).toBe("other");
+    expect(service.entry.account).toBe("other");
+    expect(selectCostReport(index).search.totalCost).toBe(4505);
+    expect(selectLedgerSearch(index.search).totalCost).toBe(4505);
+    expect(JSON.stringify(ledger)).toBe(before);
+  });
+
   function reportFixture(entries: unknown[]) {
     return LedgerSchema.parse({
       works: [

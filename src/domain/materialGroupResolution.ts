@@ -16,7 +16,128 @@ export type MaterialGroupResolver = {
   searchNames(groupId: string): string[];
 };
 
+const processingWords = new Set([
+  "ভাঙা",
+  "ভাঙ্গা",
+  "ভাঙার",
+  "ভাঙ্গার",
+  "ভাঙানো",
+  "ভাঙ্গানো",
+  "ভাঙানোর",
+  "ভাঙ্গানোর",
+  "কাটা",
+  "কাটার",
+  "কাটানো",
+  "কাটানোর",
+  "কাটাই",
+  "চেরাই",
+  "পেষাই",
+  "বাঁকানো",
+  "বাঁকানোর",
+  "breaking",
+  "crushing",
+  "cutting",
+  "sawing",
+  "bending",
+]);
+const nonProcessingWords = new Set([
+  "ভাড়া",
+  "ভাড়া",
+  "ভাড়ার",
+  "ভাড়ার",
+  "মেশিন",
+  "মেশিনের",
+  "মিক্সার",
+  "মিক্সারের",
+  "যন্ত্র",
+  "যন্ত্রের",
+  "ব্লেড",
+  "ব্লেডের",
+  "চাকা",
+  "চাকার",
+  "ডিস্ক",
+  "করাত",
+  "ক্রাশার",
+  "মজুরি",
+  "মজুরির",
+  "মজুরী",
+  "মজুরীর",
+  "শ্রমিক",
+  "শ্রমিকের",
+  "কুলি",
+  "কুলির",
+  "মিস্ত্রি",
+  "মিস্ত্রির",
+  "মেরামত",
+  "মেরামতের",
+  "মেরামতি",
+  "সারাই",
+  "rent",
+  "rental",
+  "hire",
+  "machine",
+  "machines",
+  "equipment",
+  "tool",
+  "tools",
+  "cutter",
+  "cutters",
+  "blade",
+  "blades",
+  "wheel",
+  "wheels",
+  "disc",
+  "discs",
+  "disk",
+  "disks",
+  "saw",
+  "saws",
+  "crusher",
+  "crushers",
+  "mixer",
+  "mixers",
+  "motor",
+  "motors",
+  "মোটর",
+  "মোটরের",
+  "wage",
+  "wages",
+  "labour",
+  "labor",
+  "worker",
+  "workers",
+  "repair",
+  "repairs",
+  "repairing",
+  "maintenance",
+]);
+const nonProcessingWord = (word: string) =>
+  nonProcessingWords.has(word) ||
+  nonProcessingWords.has(
+    word.replace(/(?:গুলোর|গুলির|গুলো|গুলি|দেরকে|দের|টির|টার|টি|টা)$/u, ""),
+  );
+const processingChargeWords = new Set([
+  "বিল",
+  "খরচ",
+  "চার্জ",
+  "fee",
+  "fees",
+  "charge",
+  "charges",
+  "cost",
+]);
+const processingSuffixWords = new Set([
+  ...processingChargeWords,
+  "বাবদ",
+  "টাকা",
+  "taka",
+  "tk",
+  "bdt",
+]);
 const genericNames = new Set([
+  ...processingWords,
+  ...nonProcessingWords,
+  ...processingChargeWords,
   "মাল",
   "মালামাল",
   "খরচ",
@@ -223,6 +344,25 @@ export function buildMaterialGroupResolver(
       ]),
     ].sort();
   };
+  const namesMaterialProcessing = (label: string) => {
+    const words = nameWords(label);
+    if (words.some(nonProcessingWord)) return false;
+    // “কাটা তার” names an item; unknown words after an action may name equipment.
+    const action = words.findIndex(
+      (word, index) =>
+        processingWords.has(word) &&
+        namedEvidence(words.slice(0, index).join(" "), true).direct.size > 0,
+    );
+    if (action < 0) return false;
+    const suffix = words.slice(action + 1);
+    return (
+      suffix.every(
+        (word) => processingSuffixWords.has(word) || /^\d+$/u.test(word),
+      ) &&
+      (words[action] !== "কাটার" ||
+        suffix.some((word) => processingChargeWords.has(word)))
+    );
+  };
   const resolve = (line: EntryLine): MaterialGroupResolution => {
     const lineGroup = groups.has(line.materialGroupId ?? "")
       ? line.materialGroupId
@@ -234,7 +374,8 @@ export function buildMaterialGroupResolver(
     );
     if (
       !metadata.size &&
-      !["material", "unload", "transport"].includes(line.costType)
+      !["material", "unload", "transport"].includes(line.costType) &&
+      !(line.costType === "other" && namesMaterialProcessing(line.label))
     )
       return { groupId: null, source: null, ambiguousGroupIds: [] };
     const { direct, catalog, clearCatalog } = namedEvidence(line.label, true);
