@@ -16,7 +16,14 @@ export function historyPage(
   pageSize = HISTORY_PAGE_SIZE,
 ) {
   const entries = sortHistory(filterHistory(ledger, filters), order);
-  const groups = historyGroups(entries);
+  return historyGroupPage(historyGroups(entries), requestedPage, pageSize);
+}
+
+export function historyGroupPage(
+  groups: ReturnType<typeof historyGroups>,
+  requestedPage: number,
+  pageSize = HISTORY_PAGE_SIZE,
+) {
   const size = Math.max(
     1,
     Math.min(100, Math.trunc(pageSize) || HISTORY_PAGE_SIZE),

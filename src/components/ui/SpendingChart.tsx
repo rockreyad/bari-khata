@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useId,
   useMemo,
   useRef,
@@ -6,7 +7,11 @@ import {
   type CSSProperties,
   type KeyboardEvent,
 } from "react";
-import { CalendarDotsIcon } from "@phosphor-icons/react";
+import {
+  CalendarDotsIcon,
+  CaretLeftIcon,
+  CaretRightIcon,
+} from "@phosphor-icons/react";
 import type { Ledger } from "../../domain/model";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import {
@@ -16,6 +21,7 @@ import {
   spendingCategories,
   type SpendingCategory,
   type SpendingScope,
+  type SpendingMonth,
 } from "./monthlySpending";
 import "./spending-chart.css";
 
@@ -30,6 +36,23 @@ const paidCategoryNames = {
   other: "অন্য টাকা",
 } as const;
 type Series = SpendingCategory | "total";
+const monthSerial = (month: string) => {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return null;
+  const [year, value] = month.split("-").map(Number);
+  return year * 12 + value - 1;
+};
+const monthId = (serial: number) =>
+  `${String(Math.floor(serial / 12)).padStart(4, "0")}-${String((serial % 12) + 1).padStart(2, "0")}`;
+
+export type SpendingSeriesChartProps = {
+  rows: SpendingMonth[];
+  selectedMonth?: string;
+  onMonthChange?: (month: string) => void;
+  title?: string;
+  basis?: "cost" | "paid";
+  presentation?: "card" | "embedded";
+  windowed?: boolean;
+};
 export function SpendingChart({
   ledger,
   workId,
@@ -44,7 +67,6 @@ export function SpendingChart({
   basis?: "cost" | "paid";
   presentation?: "card" | "embedded";
 }) {
-  const { t, money, date } = useLanguageContext();
   const rows = useMemo(
     () =>
       (basis === "paid" ? monthlyCashSpending : monthlySpending)(ledger, {
@@ -54,7 +76,84 @@ export function SpendingChart({
       }),
     [ledger, workId, personId, account, basis],
   );
-  const [selectedMonth, setSelectedMonth] = useState("");
+  return (
+    <SpendingSeriesChart
+      rows={rows}
+      title={title}
+      basis={basis}
+      presentation={presentation}
+    />
+  );
+}
+
+export function SpendingSeriesChart({
+  rows: sourceRows,
+  selectedMonth: controlledMonth,
+  onMonthChange,
+  title = "মাসে মাসে খরচ",
+  basis = "cost",
+  presentation = "card",
+  windowed = false,
+}: SpendingSeriesChartProps) {
+  const { t, money, date } = useLanguageContext();
+  const allRows = useMemo(
+    () =>
+      windowed
+        ? sourceRows
+            .filter((row) => monthSerial(row.month) !== null)
+            .slice()
+            .sort((a, b) => a.month.localeCompare(b.month))
+        : sourceRows,
+    [sourceRows, windowed],
+  );
+  const [internalMonth, setInternalMonth] = useState("");
+  const selectedMonth = controlledMonth ?? internalMonth;
+  const [windowEnd, setWindowEnd] = useState<number | null>(null);
+  const first = monthSerial(allRows[0]?.month ?? "") ?? 0;
+  const last = monthSerial(allRows.at(-1)?.month ?? "") ?? 0;
+  const earliestEnd = Math.min(last, first + 5);
+  const end = Math.min(last, Math.max(earliestEnd, windowEnd ?? last));
+  const start = Math.max(0, end - 5);
+  useEffect(() => {
+    const selected = monthSerial(selectedMonth);
+    if (!windowed || selected === null || selected < first || selected > last)
+      return;
+    setWindowEnd((current) => {
+      const currentEnd = Math.min(last, Math.max(earliestEnd, current ?? last));
+      if (selected < Math.max(0, currentEnd - 5))
+        return Math.min(last, Math.max(earliestEnd, selected + 5));
+      if (selected > currentEnd)
+        return Math.min(last, Math.max(earliestEnd, selected));
+      return current;
+    });
+  }, [selectedMonth, windowed, first, last, earliestEnd]);
+  const rows = useMemo(() => {
+    if (!windowed) return allRows;
+    if (!allRows.length) return [];
+    const byMonth = new Map(allRows.map((row) => [row.month, row]));
+    return Array.from({ length: end - start + 1 }, (_, index) => {
+      const month = monthId(start + index);
+      return (
+        byMonth.get(month) ?? {
+          month,
+          material: 0,
+          labour: 0,
+          other: 0,
+          total: 0,
+        }
+      );
+    });
+  }, [allRows, windowed, start, end]);
+  const chooseMonth = (month: string, toggle = false) => {
+    const next =
+      toggle && onMonthChange && month === selectedMonth ? "" : month;
+    if (onMonthChange) onMonthChange(next);
+    if (controlledMonth === undefined) setInternalMonth(next);
+  };
+  const moveWindow = (direction: -1 | 1) => {
+    setWindowEnd(Math.min(last, Math.max(earliestEnd, end + direction * 6)));
+    if (selectedMonth) chooseMonth("");
+  };
   const nodeButtons = useRef(new Map<string, HTMLButtonElement>());
   const id = useId().replaceAll(":", "");
   if (!rows.length) return null;
@@ -72,7 +171,8 @@ export function SpendingChart({
   const low = Math.min(0, ...values),
     high = Math.max(0, ...values);
   const range = high - low || 1;
-  const x = (index: number) => 27 + index * 54;
+  const x = (index: number) =>
+    rows.length === 1 ? 162 : 27 + (index * 270) / (rows.length - 1);
   const y = (value: number) => 114 - ((value - low) / range) * 98;
   const baseline = y(0);
   const monthName = (month: string, long = false) =>
@@ -101,7 +201,7 @@ export function SpendingChart({
               : null;
     if (next === null) return;
     event.preventDefault();
-    setSelectedMonth(rows[next].month);
+    chooseMonth(rows[next].month);
     nodeButtons.current.get(nodeKey(category, rows[next].month))?.focus();
   };
   const calloutEdge =
@@ -117,7 +217,7 @@ export function SpendingChart({
     (!embedded || (hasSelection && categories.length > 1));
   return (
     <section
-      className={`spending-chart-card${embedded ? " is-embedded" : ""}`}
+      className={`spending-chart-card${embedded ? " is-embedded" : ""}${windowed ? " is-windowed" : ""}`}
       data-basis={basis}
       aria-label={t(chartTitle)}
     >
@@ -135,6 +235,34 @@ export function SpendingChart({
           </span>
         ) : null}
       </header>
+      {windowed ? (
+        <nav
+          className="spending-chart-window"
+          aria-label={t("চার্টের সময়সীমা")}
+        >
+          <button
+            type="button"
+            aria-label={t("আগের মাসগুলো")}
+            disabled={start <= first}
+            onClick={() => moveWindow(-1)}
+          >
+            <CaretLeftIcon size={17} aria-hidden="true" />
+          </button>
+          <span aria-live="polite">
+            {monthName(rows[0].month, true)}
+            {" – "}
+            {monthName(rows[rows.length - 1].month, true)}
+          </span>
+          <button
+            type="button"
+            aria-label={t("পরের মাসগুলো")}
+            disabled={end >= last}
+            onClick={() => moveWindow(1)}
+          >
+            <CaretRightIcon size={17} aria-hidden="true" />
+          </button>
+        </nav>
+      ) : null}
       <div className="spending-chart-canvas">
         <svg
           className="spending-chart-plot"
@@ -142,6 +270,14 @@ export function SpendingChart({
           preserveAspectRatio="none"
           role="img"
           aria-label={t("মাসভিত্তিক খরচের রেখাচিত্র")}
+          aria-description={rows
+            .map((row) =>
+              t("{{month}} · {{amount}}", {
+                month: monthName(row.month, true),
+                amount: money(row.total),
+              }),
+            )
+            .join("; ")}
         >
           <defs>
             {series.map((category) => (
@@ -257,7 +393,7 @@ export function SpendingChart({
                   aria-pressed={hasSelection && row.month === selected.month}
                   data-selected={Boolean(chosen) && row.month === chosen?.month}
                   tabIndex={index === selectedIndex ? 0 : -1}
-                  onClick={() => setSelectedMonth(row.month)}
+                  onClick={() => chooseMonth(row.month, true)}
                   onKeyDown={(event) =>
                     selectByKeyboard(event, category, index)
                   }
@@ -297,7 +433,7 @@ export function SpendingChart({
             key={row.month}
             aria-pressed={hasSelection && row.month === selected.month}
             aria-label={monthName(row.month, true)}
-            onClick={() => setSelectedMonth(row.month)}
+            onClick={() => chooseMonth(row.month, true)}
           >
             {monthName(row.month)}
           </button>
