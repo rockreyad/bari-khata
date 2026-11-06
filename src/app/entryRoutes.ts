@@ -61,7 +61,6 @@ export function entryUrl(
     type: options.costType,
     purpose: options.purpose,
     contract: options.contractId,
-    milestone: options.milestoneId,
   }))
     if (value) params.set(key, value);
   return `${base}${options.editId ? `/entries/${encodeURIComponent(options.editId)}/edit` : "/entries/new"}?${params}`;

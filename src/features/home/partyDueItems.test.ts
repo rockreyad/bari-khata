@@ -4,7 +4,6 @@ import { partyDueItems, partyDuePaymentUrl } from "./partyDueItems";
 const base = (entries: unknown[] = []) =>
   LedgerSchema.parse({
     architectureVersion: 2,
-    milestones: [],
     paymentAllocations: [],
     works: [
       { id: "roof", name: "ছাদ" },

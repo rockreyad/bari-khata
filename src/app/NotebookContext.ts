@@ -12,7 +12,6 @@ export type AddOptions = {
   costType?: CostType;
   purpose?: "settle" | "advance" | "wage" | "charge";
   contractId?: string;
-  milestoneId?: string;
 };
 export type NotebookContextValue = {
   ledger: Ledger;

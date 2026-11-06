@@ -8,7 +8,6 @@ const fixture = () =>
   LedgerSchema.parse({
     architectureVersion: 2,
     paymentAllocations: [],
-    milestones: [],
     works: [{ id: "roof", name: "নমুনা ছাদ" }],
     people: [
       {

@@ -30,7 +30,6 @@ import { contactStatement } from "../features/people/statement";
 function base(): Ledger {
   return LedgerSchema.parse({
     architectureVersion: 2,
-    milestones: [],
     paymentAllocations: [],
     works: [
       { id: "structure", name: "নমুনা কাঠামোর কাজ" },
@@ -63,7 +62,6 @@ function bill(
     account?: Account;
     workId?: string;
     contractId?: string;
-    milestoneId?: string;
     personId?: string;
   } = {},
 ): Entry {
@@ -74,7 +72,6 @@ function bill(
     personId: options.personId ?? "party",
     account,
     contractId: options.contractId ?? null,
-    milestoneId: options.milestoneId,
     date: "2026-11-01",
     note: `নমুনা ${id}`,
     lines: [
@@ -217,7 +214,7 @@ describe("party identity and explicit bill settlement", () => {
       }).success,
     ).toBe(false);
   });
-  it("keeps an agreement's milestones optional and never books their amount as expense", () => {
+  it("keeps agreement bills and payments separate without extra work metadata", () => {
     const ledger = LedgerSchema.parse({
       ...base(),
       contracts: [
@@ -228,31 +225,10 @@ describe("party identity and explicit bill settlement", () => {
           total: 20000,
         },
       ],
-      milestones: [
-        {
-          id: "foundation",
-          contractId: "agreement",
-          title: "নমুনা ভিত্তি",
-          amount: 8000,
-          dueOn: "2026-11-10",
-          status: "done",
-        },
-        {
-          id: "walls",
-          contractId: "agreement",
-          title: "নমুনা দেয়াল",
-          amount: 12000,
-          status: "planned",
-        },
-      ],
     });
     expect(summarize(ledger).cost).toBe(0);
     const billed = appendEntries(ledger, [
-      bill("earned", 8000, {
-        account: "labour",
-        contractId: "agreement",
-        milestoneId: "foundation",
-      }),
+      bill("earned", 8000, { account: "labour", contractId: "agreement" }),
       cash("part", 3000, { account: "labour", contractId: "agreement" }),
     ]);
     const settled = allocatePayment(billed, "part", [
@@ -263,26 +239,6 @@ describe("party identity and explicit bill settlement", () => {
       allocated: 3000,
     });
     expect(summarize(settled).cost).toBe(8000);
-    expect(() =>
-      LedgerSchema.parse({
-        ...ledger,
-        milestones: [
-          ...ledger.milestones!,
-          {
-            id: "excess",
-            contractId: "agreement",
-            title: "নমুনা বাড়তি",
-            amount: 1,
-          },
-        ],
-      }),
-    ).toThrow();
-    expect(() =>
-      LedgerSchema.parse({
-        ...ledger,
-        milestones: [{ ...ledger.milestones![0], dueOn: "2026-02-31" }],
-      }),
-    ).toThrow();
   });
   it("accepts a driver's delivery charge without any agreement and separates sector from category", () => {
     const ledger = appendEntries(base(), [
@@ -593,18 +549,12 @@ describe("allocation financial validation", () => {
       LedgerSchema.parse({ ...ledger, architectureVersion: 3 }),
     ).toThrow();
     expect(() =>
-      LedgerSchema.parse({ ...ledger, milestones: undefined }),
+      LedgerSchema.parse({ ...ledger, paymentAllocations: undefined }),
     ).toThrow();
     expect(() =>
       LedgerSchema.parse({
         ...ledger,
         entries: [{ ...ledger.entries[0], paymentContext: "advance" }],
-      }),
-    ).toThrow();
-    expect(() =>
-      LedgerSchema.parse({
-        ...ledger,
-        entries: [{ ...ledger.entries[0], milestoneId: "missing" }],
       }),
     ).toThrow();
     expect(JSON.stringify(ledger)).toBe(original);

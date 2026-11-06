@@ -116,20 +116,5 @@ export const architectureEnglish: Record<string, string> = {
     "Enter amounts within the bill balance and available payment. Review again if the notebook has changed.",
   "অসমাপ্ত লেখা খোলা বা রাখা যাচ্ছে না। লেখা অক্ষত রেখে আবার খুলুন।":
     "The unfinished draft could not be opened or saved. Keep it intact and reopen this page.",
-  "কাজের ধাপ": "Work milestones",
-  "চাইলে কাজ ভাগ করে রাখুন। ধাপ রাখলে নতুন বিল বা খরচ হবে না।":
-    "Optionally split the work into milestones. Adding a milestone creates no bill or cost.",
-  "ধাপের নাম": "Milestone name",
-  "এই ধাপের টাকা": "Milestone amount",
-  "শেষ করার তারিখ": "Due date",
-  "ধাপ যোগ করি": "Add a milestone",
-  "ধাপ রাখুন": "Save milestone",
-  "ধাপের অবস্থা: {{name}}": "Milestone status: {{name}}",
-  "ধাপের নাম, সঠিক টাকা ও তারিখ লিখুন। সব ধাপের টাকা চুক্তির টাকার মধ্যে রাখুন।":
-    "Enter a milestone name, valid amount and date. Keep the combined amount within the agreement total.",
-  "ধাপের অবস্থা রাখা যায়নি। আবার চেষ্টা করুন।":
-    "The milestone status could not be saved. Try again.",
-  "ধাপ ছাড়াই বিল": "Bill without a milestone",
-  "এই ধাপের বিল লিখি": "Record a bill for this milestone",
   "বিলে টাকার ভাগ": "Bill payment allocations",
 };

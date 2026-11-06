@@ -18,7 +18,6 @@ const collections = [
   "paymentPurposes",
   "contracts",
   "entries",
-  "milestones",
   "paymentAllocations",
 ] as const;
 export type BackupCollection = (typeof collections)[number] | "project";

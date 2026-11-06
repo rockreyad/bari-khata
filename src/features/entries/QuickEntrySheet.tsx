@@ -129,7 +129,7 @@ export function QuickEntrySheet({
   const key =
     resumeDraftKey?.startsWith("quick-v2:") && resumeDraftKey.length <= 1500
       ? resumeDraftKey
-      : `${accountDraftKey}${options.contractId ? `:job=${options.contractId}` : ""}${options.milestoneId ? `:milestone=${options.milestoneId}` : ""}`;
+      : `${accountDraftKey}${options.contractId ? `:job=${options.contractId}` : ""}`;
   const [draft, setDraft] = useState(() => entryContext(ledger, options));
   const [ready, setReady] = useState(false);
   const [creatingWork, setCreatingWork] = useState(false);
@@ -185,9 +185,7 @@ export function QuickEntrySheet({
           (!options.account || parsed.draft.account === context.account) &&
           (!options.purpose || parsed.draft.purpose === options.purpose) &&
           (!options.contractId ||
-            parsed.draft.contractId === context.contractId) &&
-          (!options.milestoneId ||
-            parsed.draft.milestoneId === context.milestoneId)
+            parsed.draft.contractId === context.contractId)
         ) {
           hydratedKeys.current.add(candidate);
           hydratedSources.current.set(candidate, draftFingerprint(parsed));
@@ -276,7 +274,7 @@ export function QuickEntrySheet({
         : name === "workId"
           ? entryWorkChange(ledger, d, String(value), jobScopeChosen.current)
           : name === "personId" || (name === "account" && value !== "labour")
-            ? { contractId: "", milestoneId: "" }
+            ? { contractId: "" }
             : {}),
     }));
   };
@@ -825,7 +823,6 @@ export function QuickEntrySheet({
                         return {
                           ...current,
                           ...scope,
-                          milestoneId: "",
                           workId:
                             job?.scope === "work"
                               ? job.workId!
@@ -864,30 +861,6 @@ export function QuickEntrySheet({
                 </label>
               ) : null}
             </section>
-          ) : null}
-          {!cash &&
-          draft.kind !== "return" &&
-          draft.contractId &&
-          ledger.milestones?.some(
-            (row) => row.contractId === draft.contractId,
-          ) ? (
-            <label>
-              {t("কাজের ধাপ")}
-              <AppSelect
-                aria-label={t("কাজের ধাপ")}
-                value={draft.milestoneId}
-                onChange={(event) => field("milestoneId", event.target.value)}
-              >
-                <option value="">{t("ধাপ ছাড়াই বিল")}</option>
-                {ledger.milestones
-                  .filter((row) => row.contractId === draft.contractId)
-                  .map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {formatDigits(row.title)} · {money(row.amount)}
-                    </option>
-                  ))}
-              </AppSelect>
-            </label>
           ) : null}
           {draft.kind === "payment" ? (
             <div

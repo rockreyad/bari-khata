@@ -22,7 +22,6 @@ const collectionLabels: Record<BackupCollection, string> = {
   paymentPurposes: "টাকার কারণ",
   contracts: "মিস্ত্রির কাজ",
   entries: "লেনদেন",
-  milestones: "কাজের ধাপ",
   paymentAllocations: "বিলে টাকার ভাগ",
 };
 
@@ -103,11 +102,7 @@ export function BackupImportReview({
     if (!record) return "";
     return [
       "name" in record ? record.name : record.title,
-      "total" in record
-        ? money(record.total)
-        : "amount" in record
-          ? money(record.amount)
-          : "",
+      "total" in record ? money(record.total) : "",
       "phone" in record ? record.phone : "",
       "unit" in record ? record.unit : "",
       "note" in record ? record.note : "",

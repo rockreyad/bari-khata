@@ -13,7 +13,6 @@ import { legacyCommitmentTotals, reconciledTotals } from "./adjustmentMath";
 const fixture = (): Ledger =>
   LedgerSchema.parse({
     architectureVersion: 2,
-    milestones: [],
     paymentAllocations: [],
     works: [
       { id: "roof", name: "নমুনা ছাদ" },

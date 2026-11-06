@@ -14,8 +14,7 @@ export const contactPresetsEnglish: Record<string, string> = {
     "Masonry, carpentry, painting or utility work",
   শ্রমিক: "Labourer",
   "মাটি কাটা, বালু ভরাট বা মাল নামানো": "Digging, filling or unloading",
-  "একটি ধাপ বা পুরো কাজের দায়িত্ব":
-    "Responsible for a stage or the whole project",
+  "পুরো কাজের দায়িত্ব": "Responsible for the whole project",
   "ইঞ্জিনিয়ার / পরামর্শক": "Engineer / consultant",
   "নকশা, মাপজোক বা কাজের তদারকি": "Design, surveying or supervision",
   "গাড়ি / পরিবহন": "Transport provider",

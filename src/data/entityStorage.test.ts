@@ -228,7 +228,7 @@ it("upgrades known pre-checksum v3 data by validating and archiving raw records 
   databases.push(db);
   const repo = new LedgerRepository(db);
   expect((await repo.read())?.ledger).toEqual(ledger());
-  expect(db.verno).toBe(4);
+  expect(db.verno).toBe(5);
   expect((await db.ledgerHeaders.get("real"))?.checksum).toMatch(
     /^[0-9a-f]{64}$/,
   );

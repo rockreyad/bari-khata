@@ -53,7 +53,6 @@ const fixture = () =>
   LedgerSchema.parse({
     architectureVersion: 2,
     paymentAllocations: [],
-    milestones: [],
     works: [
       { id: "roof", name: "নমুনা ছাদ" },
       { id: "paint", name: "নমুনা রং" },
@@ -680,4 +679,78 @@ it("keeps every row of an old multi-work draft although adding another work row 
     ],
   });
   expect(saved.contracts).toEqual(initial.contracts);
+});
+
+it("reopens an old step-linked draft with its work and money intact and saves without step metadata", async () => {
+  const initial = await setup(
+    LedgerSchema.parse({
+      ...fixture(),
+      contracts: [
+        {
+          id: "job",
+          personId: "worker",
+          workId: "roof",
+          title: "নমুনা ঘরের কাজ",
+          total: 100000,
+        },
+      ],
+    }),
+  );
+  const key = "house-cost:charge:worker:roof:job:old-step";
+  const draft = QuickDraftSchema.parse({
+    id: "old-step-bill",
+    personId: "worker",
+    workId: "roof",
+    contractId: "job",
+    date: "2026-11-05",
+    kind: "expense",
+    account: "labour",
+    costType: "labour",
+    payment: "due",
+    note: "আগের অসমাপ্ত বিল",
+    rows: [{ id: "line", label: "নমুনা প্লাস্টার", amount: "250" }],
+  });
+  await createWorkspaceStorage().saveDraft(key, {
+    draft: { ...draft, milestoneId: "old-step" },
+    files: [],
+  });
+  const path = `/write/charge?person=worker&work=roof&contract=job&${new URLSearchParams({ draftKey: key })}`;
+  const first = mount(initial, path, "charge");
+  await ready();
+  expect(screen.getByRole("region", { name: "কাজ" })).toBeTruthy();
+  expect(screen.queryByText("কাজের ধাপ")).toBeNull();
+  expect(
+    screen.getByRole("combobox", { name: "কোন কাজের জন্য" }).textContent,
+  ).toContain("নমুনা ঘরের কাজ");
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "ফিরুন" }));
+  await waitFor(() => expect(close).toHaveBeenCalledOnce());
+  first.unmount();
+  repository.database.close();
+  await repository.database.open();
+  mount((await repository.read())!.ledger, path, "charge");
+  await ready();
+  expect(
+    latinDigits(
+      (screen.getByLabelText(/^বিলের টাকা/) as HTMLInputElement).value,
+    ),
+  ).toBe("250");
+  expect(
+    (
+      screen.getByRole("combobox", {
+        name: "কাজের বিবরণ ১",
+      }) as HTMLInputElement
+    ).value,
+  ).toBe("নমুনা প্লাস্টার");
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(close).toHaveBeenCalledTimes(2));
+  const saved = (await repository.read())!.ledger;
+  expect(saved.entries).toHaveLength(1);
+  expect(saved.entries[0]).toMatchObject({
+    id: "old-step-bill",
+    contractId: "job",
+    lines: [{ amount: 25000, workId: "roof" }],
+  });
+  expect(saved.entries[0]).not.toHaveProperty("milestoneId");
+  expect(await createWorkspaceStorage().readDraft(key)).toBeNull();
 });

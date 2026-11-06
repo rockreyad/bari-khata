@@ -96,7 +96,6 @@ function base(): Ledger {
   return LedgerSchema.parse({
     architectureVersion: 2,
     paymentAllocations: [],
-    milestones: [],
     works: [
       { id: "roof", name: "নমুনা ছাদ" },
       { id: "wall", name: "নমুনা দেয়াল" },

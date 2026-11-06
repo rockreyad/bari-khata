@@ -60,7 +60,6 @@ function savedDraft(change: Record<string, unknown> = {}) {
       personId: "party",
       workId: "roof",
       contractId: "contract",
-      milestoneId: "phase",
       amount: "125",
       note: "নমুনা অসমাপ্ত লেখা",
       date: "2026-11-05",
@@ -108,9 +107,10 @@ it.each(["", "/sample"])(
     );
     expect(
       Object.fromEntries(
-        ["kind", "purpose", "person", "work", "contract", "milestone"].map(
-          (key) => [key, url.searchParams.get(key)],
-        ),
+        ["kind", "purpose", "person", "work", "contract"].map((key) => [
+          key,
+          url.searchParams.get(key),
+        ]),
       ),
     ).toEqual({
       kind: "payment",
@@ -118,7 +118,6 @@ it.each(["", "/sample"])(
       person: "party",
       work: "roof",
       contract: "contract",
-      milestone: "phase",
     });
     expect(await storage.readDraft(key)).toEqual(source);
   },
@@ -250,4 +249,35 @@ it("masks the previous account's drafts immediately when the mounted drawer chan
     setActiveOwner(firstOwner);
     await getAccountDatabase(secondOwner).delete();
   }
+});
+
+it("resumes an old work-step cost draft by its exact key without changing other drafts", async () => {
+  const storage = await setup();
+  const key = "house-cost:charge:party:roof:contract:phase";
+  const source = savedDraft({
+    kind: "expense",
+    note: "নমুনা পুরোনো কাজের বিল",
+    rows: [{ id: "line", label: "নমুনা কাজ", amount: "125" }],
+  });
+  const legacy = {
+    ...source,
+    draft: { ...source.draft, milestoneId: "phase" },
+    useAdvance: true,
+    advanceSignature: "saved-choice",
+  };
+  await storage.saveDraft(key, legacy);
+  const otherKey = "house-cost:charge:party:roof:contract:another-phase";
+  const other = savedDraft({ note: "নমুনা অন্য অসমাপ্ত বিল" });
+  await storage.saveDraft(otherKey, other);
+  mount();
+  fireEvent.click(
+    await screen.findByRole("button", { name: "নমুনা পুরোনো কাজের বিল" }),
+  );
+  const url = new URL(state.go.mock.calls[0][0], "https://bari.invalid");
+  expect(url.pathname).toBe("/write/charge");
+  expect(url.searchParams.get("draftKey")).toBe(key);
+  expect(url.searchParams.get("contract")).toBe("contract");
+  expect(url.searchParams.has("milestone")).toBe(false);
+  expect(await storage.readDraft(key)).toEqual(legacy);
+  expect(await storage.readDraft(otherKey)).toEqual(other);
 });

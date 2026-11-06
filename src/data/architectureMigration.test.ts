@@ -454,7 +454,7 @@ describe("durable architecture conversion", () => {
     expect(result.status).toBe("conflict");
     expect((await repo.read())?.ledger).toEqual(ledger);
   });
-  it("round-trips roles, milestones and allocation cancellation and refuses history removal in reviewed merges", async () => {
+  it("round-trips roles and allocation cancellation and refuses history removal in reviewed merges", async () => {
     const ledger = migrateArchitecture(legacyArchitectureFixture()).ledger;
     ledger.people[0].roles = ["craftsperson", "supplier"];
     ledger.contracts = [
@@ -469,16 +469,6 @@ describe("durable architecture conversion", () => {
         rate: 10000,
         total: 10000,
       }),
-    ];
-    ledger.milestones = [
-      {
-        id: "m",
-        contractId: "c",
-        title: "নমুনা ধাপ",
-        amount: 10000,
-        dueOn: null,
-        status: "planned",
-      },
     ];
     ledger.paymentAllocations = [
       {
@@ -514,7 +504,7 @@ describe("durable architecture conversion", () => {
     await expect(target.save(ledger)).rejects.toThrow(
       "architecture_data_would_be_lost",
     );
-    const stripped = { ...cancelled, milestones: [], paymentAllocations: [] };
+    const stripped = { ...cancelled, paymentAllocations: [] };
     const text = JSON.stringify({
       format: "bari-khata-backup",
       version: 1,
