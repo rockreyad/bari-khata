@@ -12,8 +12,8 @@ import {
   CloudCheckIcon,
   CloudSlashIcon,
   GearSixIcon,
-  HouseLineIcon,
-  BookBookmarkIcon,
+  HouseIcon,
+  NotebookIcon,
   ChartDonutIcon,
   ClockCounterClockwiseIcon,
   PlusIcon,
@@ -164,7 +164,6 @@ function EntryRoute() {
     account: AccountSchema.safeParse(params.get("account")).data,
     costType: CostTypeSchema.safeParse(params.get("type")).data,
     contractId: params.get("contract") ?? undefined,
-    milestoneId: params.get("milestone") ?? undefined,
     purpose:
       purpose && ["settle", "advance", "wage", "charge"].includes(purpose)
         ? (purpose as AddOptions["purpose"])
@@ -303,11 +302,11 @@ export function AppShell() {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [location.pathname]);
   const nav = [
-    { to: "/", label: "এক নজরে", icon: HouseLineIcon },
-    { to: "/sectors", label: "খাতা", icon: BookBookmarkIcon },
+    { to: "/", label: "এক নজরে", icon: HouseIcon },
+    { to: "/sectors", label: "খাতা", icon: NotebookIcon },
     { to: "/ledger", label: "রেকর্ড", icon: ClockCounterClockwiseIcon },
     { to: "/parties", label: "কর্মী", icon: UsersIcon },
-    { to: "/works", label: "কাজ", icon: BookBookmarkIcon },
+    { to: "/works", label: "কাজ", icon: NotebookIcon },
     { to: "/reports", label: "রিপোর্ট", icon: ChartDonutIcon },
   ];
   const rawKind = params.get("_add");
@@ -588,15 +587,8 @@ export function AppShell() {
           onClick={quick}
           aria-label={t("হিসাব লিখি")}
         >
-          <span className="mobile-add-icon">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M12 5v14M5 12h14"
-                stroke="currentColor"
-                strokeWidth="3.5"
-                strokeLinecap="round"
-              />
-            </svg>
+          <span className="mobile-add-icon" aria-hidden="true">
+            <PlusIcon size={24} weight="regular" focusable="false" />
           </span>
         </button>
         {[nav[2], nav[3]].map((item) => (

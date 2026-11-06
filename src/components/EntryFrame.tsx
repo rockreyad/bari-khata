@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { ArrowLeftIcon, LockSimpleIcon } from "@phosphor-icons/react";
 import { useLanguageContext } from "../context/LanguageProvider";
 import "./entry-frame.css";
+import { useEntryAmountFocus } from "./useEntryAmountFocus";
 
 export type EntryFrameProps = {
   title: string;
@@ -11,6 +12,7 @@ export type EntryFrameProps = {
   footer?: ReactNode;
   className?: string;
   busy?: boolean;
+  focusAmountWhenReady?: boolean;
 };
 export function EntryFrame({
   title,
@@ -20,14 +22,24 @@ export function EntryFrame({
   footer,
   className = "",
   busy = false,
+  focusAmountWhenReady,
 }: EntryFrameProps) {
   const { t } = useLanguageContext();
   const heading = useRef<HTMLHeadingElement>(null);
+  const container = useRef<HTMLElement>(null);
+  const amountFocus = useEntryAmountFocus(container, focusAmountWhenReady);
   useEffect(() => {
+    if (focusAmountWhenReady !== undefined) return;
     heading.current?.focus({ preventScroll: true });
   }, []);
   return (
-    <section className={`entry-page ${className}`} aria-busy={busy}>
+    <section
+      ref={container}
+      onPointerDownCapture={amountFocus.markInteraction}
+      onKeyDownCapture={amountFocus.markInteraction}
+      className={`entry-page ${className}`}
+      aria-busy={busy}
+    >
       <header className="entry-page-header">
         <div className="entry-page-header-inner">
           <button

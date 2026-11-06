@@ -3,6 +3,7 @@ import { EntryFrame } from "./EntryFrame";
 import { numericDraftText, moneyInputValue } from "../lib/numericFields";
 import { NumericInput } from "./ui/NumericInput";
 import { latinDigits } from "../lib/numerals";
+import { NEW_RECEIPT_MAX_BYTES } from "../lib/attachmentLimits";
 import {
   useCallback,
   useEffect,
@@ -12,7 +13,6 @@ import {
   type FormEvent,
 } from "react";
 import {
-  Camera,
   Download,
   ChevronRight,
   Pencil,
@@ -49,6 +49,9 @@ import { AppSelect } from "./ui/AppSelect";
 import { AppDatePicker } from "./ui/AppDatePicker";
 import { MoneyInput } from "./ui/MoneyInput";
 import { TransactionAmount, TransactionDetails } from "./TransactionFields";
+import { TransactionExtras } from "./TransactionExtras";
+import { TransactionNoteField } from "./TransactionNoteField";
+import { ReceiptPicker } from "./ReceiptPicker";
 import { PaymentMethodField } from "./PaymentMethodField";
 import { PersonSchema } from "../domain/model";
 import { Sheet } from "./Sheet";
@@ -749,7 +752,6 @@ function SupportedEntrySheet({
         reviewReason: confirmsReview ? "" : (original?.reviewReason ?? ""),
         source: original?.source ?? null,
         provenance: original?.provenance,
-        milestoneId: original?.milestoneId,
         paymentContext: original?.paymentContext,
         id: draft.id,
         date: draft.unknownDate ? null : draft.date,
@@ -957,22 +959,24 @@ function SupportedEntrySheet({
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "";
       setError(
-        message === "paid_purchase_payment_stale"
-          ? t("সঙ্গে রাখা দেওয়া টাকার হিসাব বদলেছে। আবার খুলে মিলিয়ে নিন।")
-          : message === "paid_purchase_not_eligible"
-            ? t(
-                "বিল ও দেওয়া টাকা একসঙ্গে বদলানো যাচ্ছে না। যুক্ত হিসাবটি খুলে মিলিয়ে নিন।",
-              )
-            : message ===
-                "Linked payment: keep the same person, account and work"
+        message === "client_update_required"
+          ? t("নতুন হিসাব রাখার আগে অ্যাপ আপডেট করুন। আপনার লেখা অক্ষত আছে।")
+          : message === "paid_purchase_payment_stale"
+            ? t("সঙ্গে রাখা দেওয়া টাকার হিসাব বদলেছে। আবার খুলে মিলিয়ে নিন।")
+            : message === "paid_purchase_not_eligible"
               ? t(
-                  "এই বিলের সঙ্গে টাকা দেওয়ার হিসাব আছে। কাজ, ব্যক্তি বা চুক্তি বদলাতে আগে যুক্ত হিসাবটি দেখুন। দাম ও বিবরণ বদলানো যাবে।",
+                  "বিল ও দেওয়া টাকা একসঙ্গে বদলানো যাচ্ছে না। যুক্ত হিসাবটি খুলে মিলিয়ে নিন।",
                 )
-              : /[\u0980-\u09ff]/.test(message)
-                ? message
-                : t(
-                    "হিসাবটি রাখা যায়নি। তথ্য ও ফোনের খালি জায়গা দেখে আবার চেষ্টা করুন।",
-                  ),
+              : message ===
+                  "Linked payment: keep the same person, account and work"
+                ? t(
+                    "এই বিলের সঙ্গে টাকা দেওয়ার হিসাব আছে। কাজ, ব্যক্তি বা চুক্তি বদলাতে আগে যুক্ত হিসাবটি দেখুন। দাম ও বিবরণ বদলানো যাবে।",
+                  )
+                : /[\u0980-\u09ff]/.test(message)
+                  ? message
+                  : t(
+                      "হিসাবটি রাখা যায়নি। তথ্য ও ফোনের খালি জায়গা দেখে আবার চেষ্টা করুন।",
+                    ),
       );
       lock.current = false;
       setSaving(false);
@@ -996,8 +1000,7 @@ function SupportedEntrySheet({
     if (
       incoming.some(
         (file) =>
-          file.size >
-            (file.type === "application/pdf" ? 10 : 25) * 1024 * 1024 ||
+          file.size > NEW_RECEIPT_MAX_BYTES ||
           ![
             "image/jpeg",
             "image/png",
@@ -1007,17 +1010,14 @@ function SupportedEntrySheet({
       )
     ) {
       setError(
-        t(
-          "JPG, PNG, WebP ছবি বা PDF দিন। PDF {{pdfLimit}} MB ও ছবি {{imageLimit}} MB-এর মধ্যে হতে হবে।",
-          { pdfLimit: number(10), imageLimit: number(25) },
-        ),
+        t("JPG, PNG, WebP ছবি বা PDF দিন। প্রতিটি ২ MB-এর মধ্যে হতে হবে।"),
       );
       return;
     }
     setProcessingFiles(true);
     try {
       const compacted = await Promise.all(incoming.map(compactPhoto));
-      if (compacted.some((file) => file.size > 10 * 1024 * 1024))
+      if (compacted.some((file) => file.size > NEW_RECEIPT_MAX_BYTES))
         throw new Error(t("ছবিটি অনেক বড়। ছোট ছবি দিয়ে আবার চেষ্টা করুন।"));
       setFiles((current) => [
         ...current,
@@ -1151,6 +1151,7 @@ function SupportedEntrySheet({
       {work.name}
     </option>
   ));
+  const mixedWorkLines = new Set(draft.rows.map((row) => row.workId)).size > 1;
 
   const contextFields = (
     <>
@@ -1309,6 +1310,60 @@ function SupportedEntrySheet({
           </AppSelect>
         </label>
       ) : null}
+      {!isCash &&
+      (mixedWorkLines || (original && !isLabour)) &&
+      !(isLabour && selectedContractId) ? (
+        <div className="entry-line-contexts">
+          {draft.rows.map((row, index) => (
+            <div className="entry-line-context" key={row.id}>
+              {draft.rows.length > 1 ? (
+                <p>{row.name || t("খরচ {{index}}", { index: index + 1 })}</p>
+              ) : null}
+              {mixedWorkLines ? (
+                <label className="field">
+                  <span className="field-label">{t("খাতা")}</span>
+                  <AppSelect
+                    aria-label={t("খরচ {{index}}-এর খাতা", {
+                      index: index + 1,
+                    })}
+                    className="field-input"
+                    value={row.workId}
+                    onChange={(event) =>
+                      rowField(index, "workId", event.target.value)
+                    }
+                  >
+                    {workOptions}
+                  </AppSelect>
+                </label>
+              ) : null}
+              {original && !isLabour ? (
+                <label className="field">
+                  <span className="field-label">{t("খরচের ধরন")}</span>
+                  <AppSelect
+                    className="field-input"
+                    value={row.costType}
+                    onChange={(event) =>
+                      rowField(
+                        index,
+                        "costType",
+                        event.target.value as DraftRow["costType"],
+                      )
+                    }
+                  >
+                    {costTypes
+                      .filter((type) => type !== "labour")
+                      .map((type) => (
+                        <option key={type} value={type}>
+                          {t(costNames[type])}
+                        </option>
+                      ))}
+                  </AppSelect>
+                </label>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </>
   );
   const addCostRowButton = (
@@ -1372,54 +1427,10 @@ function SupportedEntrySheet({
                       />
                     </label>
                   </div>
-                  {draft.rows.length > 1 ? (
-                    <button
-                      type="button"
-                      className="text-button danger-text"
-                      onClick={() =>
-                        field(
-                          "rows",
-                          draft.rows.filter(
-                            (_, position) => index !== position,
-                          ),
-                        )
-                      }
-                    >
-                      <Trash2 size={14} />
-                      {t("এই ভাগ সরান")}
-                    </button>
-                  ) : null}
                 </div>
               ))}
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() =>
-                  field("rows", [...draft.rows, newRow(draft.workId)])
-                }
-              >
-                <Plus size={16} />
-                {t("আরেক খাতায় ভাগ করুন")}
-              </button>
             </div>
           )}
-          {!(draft.account === "labour" && selectedContractId) ? (
-            <label className="check-field">
-              <input
-                type="checkbox"
-                checked={draft.split}
-                onChange={(event) => {
-                  field("split", event.target.checked);
-                  if (event.target.checked)
-                    field("rows", [
-                      { ...newRow(draft.workId), amount: draft.amount },
-                    ]);
-                  else field("amount", moneyInputValue(lineTotal));
-                }}
-              />
-              {t("একাধিক খাতায় ভাগ করব")}
-            </label>
-          ) : null}
           {!original ? (
             <p className="form-hint muted">
               {t(
@@ -1519,20 +1530,12 @@ function SupportedEntrySheet({
                     required={!isLabour && row.costType === "material"}
                   />
                 </label>
-                <TransactionDetails
-                  summary={t(
-                    !isLabour && row.costType === "material"
-                      ? "ব্র্যান্ড ও পরিমাণ"
-                      : "আরও তথ্য",
-                  )}
-                  defaultOpen={
-                    !isLabour &&
-                    row.costType === "material" &&
-                    Boolean(row.brand || row.quantity || row.unit)
-                  }
-                  className="entry-line-details"
-                >
-                  {!isLabour && row.costType === "material" ? (
+                {!isLabour && row.costType === "material" ? (
+                  <TransactionDetails
+                    summary={t("ব্র্যান্ড ও পরিমাণ")}
+                    defaultOpen={Boolean(row.brand || row.quantity || row.unit)}
+                    className="entry-line-details"
+                  >
                     <label className="field">
                       <span className="field-label">{t("ব্র্যান্ড")}</span>
                       <input
@@ -1545,37 +1548,7 @@ function SupportedEntrySheet({
                         placeholder={t("ইচ্ছা হলে লিখুন")}
                       />
                     </label>
-                  ) : null}
-                  {original ? (
-                    <>
-                      {!isLabour ? (
-                        <label className="field">
-                          <span className="field-label">{t("খরচের ধরন")}</span>
-                          <AppSelect
-                            className="field-input"
-                            value={row.costType}
-                            onChange={(event) =>
-                              rowField(
-                                index,
-                                "costType",
-                                event.target.value as DraftRow["costType"],
-                              )
-                            }
-                          >
-                            {costTypes
-                              .filter((type) => type !== "labour")
-                              .map((type) => (
-                                <option key={type} value={type}>
-                                  {t(costNames[type])}
-                                </option>
-                              ))}
-                          </AppSelect>
-                        </label>
-                      ) : null}
-                    </>
-                  ) : null}
-                  {!isLabour && row.costType === "material" ? (
-                    <div className="form-grid transaction-grid">
+                    <div className="transaction-grid">
                       <label className="field">
                         <span className="field-label">{t("পরিমাণ")}</span>
                         <NumericInput
@@ -1602,31 +1575,17 @@ function SupportedEntrySheet({
                         />
                       </label>
                     </div>
-                  ) : null}
-                  {!(isLabour && selectedContractId) ? (
-                    <label className="field">
-                      <span className="field-label">
-                        {t("কোন খাতায় রাখবেন")}
-                      </span>
-                      <AppSelect
-                        className="field-input"
-                        value={row.workId}
-                        onChange={(event) =>
-                          rowField(index, "workId", event.target.value)
-                        }
-                      >
-                        {workOptions}
-                      </AppSelect>
-                    </label>
-                  ) : null}
-                  {original && draft.rows.length === 1
-                    ? addCostRowButton
-                    : null}
-                </TransactionDetails>
+                  </TransactionDetails>
+                ) : null}
+                {mixedWorkLines ? (
+                  <p className="entry-line-work-name">
+                    {ledger.works.find((work) => work.id === row.workId)?.name}
+                  </p>
+                ) : null}
               </div>
             ))}
           </div>
-          {!original || draft.rows.length > 1 ? addCostRowButton : null}
+          {addCostRowButton}
           <div
             className={`entry-total ${original && draft.rows.length === 1 ? "entry-edit-single-total" : ""}`}
           >
@@ -1797,42 +1756,10 @@ function SupportedEntrySheet({
                     }
                     required
                   />
-                  <button
-                    type="button"
-                    className="icon-button danger-text"
-                    aria-label={t("এই মাধ্যম সরান")}
-                    onClick={() =>
-                      field(
-                        "methods",
-                        draft.methods.filter(
-                          (_, position) => position !== index,
-                        ),
-                      )
-                    }
-                  >
-                    <Trash2 size={15} />
-                  </button>
                 </>
               ) : null}
             </div>
           ))}
-          <button
-            type="button"
-            className="text-button"
-            onClick={() =>
-              field("methods", [
-                ...draft.methods.map((part) =>
-                  draft.methods.length === 1
-                    ? { ...part, amount: moneyInputValue(cashTotal) }
-                    : part,
-                ),
-                { method: "bkash", amount: "" },
-              ])
-            }
-          >
-            <Plus size={14} />
-            {t("অন্য মাধ্যমেও দিয়েছি")}
-          </button>
           {draft.methods.length > 1 ? (
             <p className="form-hint muted">
               {t("সব মাধ্যম মিলিয়ে মোট {{amount}} হতে হবে।", {
@@ -1844,67 +1771,42 @@ function SupportedEntrySheet({
       ) : null}
     </>
   );
-  const extraFields = (
+  const dateFields = (
     <>
       <label className="field">
         <span className="field-label">{t("তারিখ")}</span>
         <AppDatePicker
           className="field-input"
           type="date"
-          value={draft.date}
-          disabled={draft.unknownDate}
-          onChange={(event) => field("date", event.target.value)}
+          value={draft.unknownDate ? "" : draft.date}
+          onChange={(event) => {
+            field("date", event.target.value);
+            field("unknownDate", !event.target.value);
+          }}
           required={!draft.unknownDate}
         />
       </label>
-      <label className="check-field">
-        <input
-          type="checkbox"
-          checked={draft.unknownDate}
-          onChange={(event) => field("unknownDate", event.target.checked)}
-        />
-        {t("তারিখ জানা নেই")}
-      </label>
-      <label className="field">
-        <span className="field-label">{t("মনে রাখার কথা")}</span>
-        <textarea
-          className="field-input"
-          rows={3}
-          value={draft.note}
-          maxLength={10000}
-          onChange={(event) => field("note", event.target.value)}
-          placeholder={t("কী বাবদ, কোথা থেকে বা অন্য কিছু…")}
-        />
-      </label>
-      <button
-        type="button"
-        className="text-button danger-text"
-        onClick={discard}
-      >
-        {t("অসমাপ্ত লেখা বাদ দিন")}
-      </button>
     </>
+  );
+  const noteField = (
+    <TransactionNoteField
+      value={draft.note}
+      onChange={(value) => field("note", value)}
+    />
+  );
+  const discardDraftButton = (
+    <button type="button" className="text-button danger-text" onClick={discard}>
+      {t("অসমাপ্ত লেখা বাদ দিন")}
+    </button>
   );
   const attachmentFields = (
     <div className="entry-edit-attachments">
-      <input
+      <ReceiptPicker
         ref={fileInput}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,application/pdf"
-        multiple
-        hidden
         onChange={(event) => {
           void addFiles(event.target.files);
         }}
       />
-      <button
-        type="button"
-        className="transaction-secondary"
-        onClick={() => fileInput.current?.click()}
-      >
-        <Camera size={17} />
-        {t("ভাউচার বা ছবি যোগ করুন")}
-      </button>
       {original?.receipts.length ? (
         <p className="form-hint muted">
           {t("আগের {{count}}টি ভাউচার রাখা আছে।", {
@@ -2021,6 +1923,9 @@ function SupportedEntrySheet({
   return (
     <Frame
       title={t(original ? "হিসাব বদলান" : "নতুন হিসাব")}
+      focusAmountWhenReady={
+        original ? undefined : ready && !saving && !processingFiles
+      }
       className="transaction-page entry-editor-page"
       onClose={close}
       footer={
@@ -2169,23 +2074,28 @@ function SupportedEntrySheet({
                 </summary>
                 <div className="entry-edit-context-fields">{contextFields}</div>
               </details>
-              <TransactionDetails
-                summary={t("ভাউচার, নোট ও তারিখ")}
-                className="entry-edit-extras"
+              <TransactionExtras
+                dateField={dateFields}
+                noteField={noteField}
+                hasReceipts={Boolean(original.receipts.length || files.length)}
               >
                 {attachmentFields}
-                {extraFields}
-              </TransactionDetails>
+              </TransactionExtras>
+              {discardDraftButton}
             </div>
           ) : (
             <>
               {contextFields}
               {amountFields}
               {paymentMethodFields}
-              <TransactionDetails summary={t("ভাউচার, নোট ও তারিখ")}>
+              <TransactionExtras
+                dateField={dateFields}
+                noteField={noteField}
+                hasReceipts={Boolean(files.length)}
+              >
                 {attachmentFields}
-                {extraFields}
-              </TransactionDetails>
+              </TransactionExtras>
+              {discardDraftButton}
             </>
           )}
         </fieldset>

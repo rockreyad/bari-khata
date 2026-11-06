@@ -1,4 +1,7 @@
-import { reconciledPayableGroups } from "../../domain/adjustmentMath";
+import {
+  reconciledPayableGroups,
+  type FinancialScope,
+} from "../../domain/adjustmentMath";
 import { effectiveAccounts } from "../../domain/effectiveAccounts";
 import { entryWorkIds } from "../../domain/ledger";
 import type { Account, Ledger } from "../../domain/model";
@@ -12,11 +15,15 @@ export type PayableRow = {
   wholeHouse: boolean;
 };
 
-export function payableBreakdown(ledger: Ledger): {
+export function payableBreakdown(
+  ledger: Ledger,
+  scope: FinancialScope = {},
+): {
   total: number;
   rows: PayableRow[];
+  workBalanceCorrection?: number;
 } {
-  const { total, groups } = reconciledPayableGroups(ledger);
+  const { total, groups } = reconciledPayableGroups(ledger, scope);
   const people = new Set(ledger.people.map((person) => person.id));
   const rows = new Map<
     string,
@@ -58,6 +65,8 @@ export function payableBreakdown(ledger: Ledger): {
     if (
       entry.voided ||
       entry.balanceImpact === "historical" ||
+      (scope.personId && entry.personId !== scope.personId) ||
+      (scope.contractId && entry.contractId !== scope.contractId) ||
       (entry.kind === "adjustment" && entry.adjustment?.target !== "person")
     )
       continue;
@@ -66,14 +75,38 @@ export function payableBreakdown(ledger: Ledger): {
     const current = rows.get(party);
     if (!current?.accounts.has(accounts.get(entry.id) ?? entry.account))
       continue;
-    for (const workId of entryWorkIds(entry)) current.workIds.add(workId);
+    for (const workId of entryWorkIds(entry))
+      if (!scope.workId || workId === scope.workId) current.workIds.add(workId);
   }
   for (const contract of ledger.contracts) {
+    if (scope.contractId && contract.id !== scope.contractId) continue;
+    if (
+      scope.workId &&
+      (contract.scope === "work"
+        ? contract.workId !== scope.workId
+        : !ledger.entries.some(
+            (entry) =>
+              entry.contractId === contract.id &&
+              !entry.voided &&
+              entry.balanceImpact !== "historical" &&
+              entryWorkIds(entry).includes(scope.workId!),
+          ))
+    )
+      continue;
     const current = rows.get(contract.personId);
     if (!current?.accounts.has("labour")) continue;
     if (contract.scope === "house") current.row.wholeHouse = true;
     else if (contract.workId) current.workIds.add(contract.workId);
   }
+  const maximum = BigInt(Number.MAX_SAFE_INTEGER);
+  let rowTotal = 0n;
+  for (const { amount } of rows.values()) {
+    rowTotal += amount;
+    if (rowTotal > maximum) throw new Error("balance_adjustment_out_of_range");
+  }
+  const correction = BigInt(total) - rowTotal;
+  if (correction < -maximum || correction > maximum)
+    throw new Error("balance_adjustment_out_of_range");
   return {
     total,
     rows: [...rows.values()]
@@ -83,5 +116,6 @@ export function payableBreakdown(ledger: Ledger): {
         workIds: [...workIds],
       }))
       .sort((a, b) => b.amount - a.amount),
+    ...(scope.workId ? { workBalanceCorrection: Number(correction) } : {}),
   };
 }

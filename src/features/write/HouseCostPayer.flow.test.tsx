@@ -53,7 +53,6 @@ const fixture = () =>
   LedgerSchema.parse({
     architectureVersion: 2,
     paymentAllocations: [],
-    milestones: [],
     works: [{ id: "roof", name: "নমুনা ছাদ" }],
     people: [
       {
@@ -287,6 +286,7 @@ it("hides charge quantity controls while retaining old draft line metadata, and 
   expect(screen.getByLabelText("তারিখ").closest("details")).toBe(
     receipt.closest("details"),
   );
+  expect(receipt.closest("details")?.open).toBe(false);
   await user.click(screen.getByRole("button", { name: "পুরোটা দিয়েছি" }));
   await user.click(screen.getByRole("button", { name: "ব্যাংক" }));
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));

@@ -20,7 +20,6 @@ import { savePreferences } from "../../lib/preferences";
 import { partyLedger } from "../../domain/partyLedger";
 import { recordHousePayment } from "../../domain/housePayments";
 import { QuickEntrySheet } from "../entries/QuickEntrySheet";
-import { AgreementMilestones } from "../jobs/AgreementMilestones";
 
 vi.mock("../../components/ui/AppSelect", () => ({
   AppSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => (
@@ -44,7 +43,6 @@ afterEach(async () => {
 function fixture() {
   return LedgerSchema.parse({
     architectureVersion: 2,
-    milestones: [],
     paymentAllocations: [],
     works: [
       { id: "roof", name: "নমুনা ছাদ" },
@@ -154,50 +152,6 @@ function Harness({
 function mount(initial: Ledger, element: React.ReactNode) {
   return render(<Harness initial={initial}>{element}</Harness>);
 }
-
-it("adds optional agreement milestones, saves status, and reopens without producing a financial entry", async () => {
-  const initial = fixture();
-  const repo = await setup(initial);
-  const user = userEvent.setup();
-  const first = mount(initial, <AgreementMilestones contractId="job" />);
-  await user.click(screen.getByText("ধাপ যোগ করি"));
-  await waitFor(() =>
-    expect(
-      (screen.getByLabelText("ধাপের নাম") as HTMLInputElement).disabled,
-    ).toBe(false),
-  );
-  await user.type(screen.getByLabelText("ধাপের নাম"), "নমুনা প্রথম ধাপ");
-  await user.type(screen.getByLabelText("এই ধাপের টাকা"), "400");
-  await user.click(screen.getByRole("button", { name: "ধাপ রাখুন" }));
-  await waitFor(async () =>
-    expect((await repo.read())!.ledger.milestones).toHaveLength(1),
-  );
-  const status = await screen.findByLabelText("ধাপের অবস্থা: নমুনা প্রথম ধাপ");
-  await waitFor(() =>
-    expect((status as HTMLSelectElement).disabled).toBe(false),
-  );
-  await user.selectOptions(status, "done");
-  await waitFor(async () =>
-    expect((await repo.read())!.ledger.milestones?.[0].status).toBe("done"),
-  );
-  first.unmount();
-  repo.database.close();
-  await repo.database.open();
-  const saved = (await repo.read())!.ledger;
-  mount(saved, <AgreementMilestones contractId="job" />);
-  expect(
-    (
-      screen.getByLabelText(
-        "ধাপের অবস্থা: নমুনা প্রথম ধাপ",
-      ) as HTMLSelectElement
-    ).value,
-  ).toBe("done");
-  expect(saved.entries).toEqual(initial.entries);
-  expect(saved.contracts).toEqual(initial.contracts);
-  expect(
-    screen.getByRole("button", { name: "এই ধাপের বিল লিখি" }),
-  ).toBeTruthy();
-});
 
 it("refunds an existing recoverable payment without offsetting the same party's unpaid bills", async () => {
   const initial = fixture();

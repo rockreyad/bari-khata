@@ -126,7 +126,7 @@ const ready = () =>
     ).toBe(false);
   });
 
-it("folds vouchers, note and date together while keeping payment method choices visible", async () => {
+it("keeps date, note and payment methods visible while folding optional receipts", async () => {
   state.notebook.ledger = LedgerSchema.parse({
     works: [{ id: "door", name: "নমুনা খাতা" }],
     people: [{ id: "worker", name: "নমুনা কর্মী", kind: "worker" }],
@@ -150,14 +150,19 @@ it("folds vouchers, note and date together while keeping payment method choices 
   expect(screen.getByLabelText("ভাউচারের ছবি / PDF").closest("details")).toBe(
     optional,
   );
-  expect(screen.getByLabelText("নোট").closest("details")).toBe(optional);
+  expect(screen.getByLabelText("মনে রাখার কথা").closest("details")).toBe(
+    optional,
+  );
+  expect(screen.getByPlaceholderText("কী বাবদ, কোথা থেকে বা অন্য কিছু…")).toBe(
+    screen.getByLabelText("মনে রাখার কথা"),
+  );
   expect(screen.getByLabelText("তারিখ").closest("details")).toBe(optional);
   const methods = screen.getByRole("group", { name: "কীভাবে দিয়েছেন" });
   expect(methods.closest("details")).toBeNull();
   await user.click(within(methods).getByRole("button", { name: "ব্যাংক" }));
   await user.type(screen.getByLabelText("কত টাকা"), "500");
   await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
-  await user.type(screen.getByLabelText("নোট"), "নমুনা অগ্রিম");
+  await user.type(screen.getByLabelText("মনে রাখার কথা"), "নমুনা অগ্রিম");
   await user.upload(
     screen.getByLabelText("ভাউচারের ছবি / PDF"),
     new File(["sample"], "sample-voucher.pdf", { type: "application/pdf" }),
@@ -394,7 +399,7 @@ describe("quick entry creation flow", () => {
         },
       ],
     };
-    const receipt = new File(["voucher"], "labour.pdf", {
+    const receipt = new File([new Uint8Array(3 * 1024 * 1024)], "labour.pdf", {
       type: "application/pdf",
     });
     const saved = {
@@ -435,7 +440,11 @@ describe("quick entry creation flow", () => {
     expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
       "3500",
     );
-    await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
+    await waitFor(() =>
+      expect(
+        screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open,
+      ).toBe(true),
+    );
     expect(screen.getByText("labour.pdf")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "ফিরুন" }));
     await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
@@ -551,7 +560,6 @@ describe("quick entry creation flow", () => {
     purchase.unmount();
     render(<QuickEntrySheet options={{ kind: "return" }} />);
     await ready();
-    await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
     expect(
       screen.getByRole("textbox", { name: "ক্যাশ ফেরত পেলে লিখুন" }),
     ).toBeTruthy();
@@ -853,7 +861,11 @@ it("keeps daily wage inputs and a receipt through back/reopen, then records one 
   expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
     "3001.25",
   );
-  await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
+  await waitFor(() =>
+    expect(
+      screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open,
+    ).toBe(true),
+  );
   expect(screen.getByText("wage.pdf")).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
@@ -1434,7 +1446,11 @@ it("keeps amounts and receipts isolated between two selected jobs for the same w
   expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
     "1700",
   );
-  await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
+  await waitFor(() =>
+    expect(
+      screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open,
+    ).toBe(true),
+  );
   expect(screen.getByText("job-a.pdf")).toBeTruthy();
   expect(screen.queryByText("job-b.pdf")).toBeNull();
   expect(
@@ -1502,7 +1518,11 @@ it.each(["job-a", "job-b"])(
     expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
       contractId === "job-a" ? "1700" : "",
     );
-    await userEvent.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
+    await waitFor(() =>
+      expect(
+        screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open,
+      ).toBe(contractId === "job-a"),
+    );
     if (contractId === "job-a")
       expect(screen.getByText("older-job-a.pdf")).toBeTruthy();
     else expect(screen.queryByText("older-job-a.pdf")).toBeNull();
@@ -1992,5 +2012,58 @@ describe("NARC-131 preferred payment job", () => {
       "125",
     );
     expect(state.notebook.save).not.toHaveBeenCalled();
+  });
+});
+
+it("rejects a new batch above 2 MiB without changing the amount and saves a receipt at the limit", async () => {
+  state.notebook.ledger = LedgerSchema.parse({
+    works: [{ id: "sample-work", name: "নমুনা খাতা" }],
+    people: [{ id: "worker", name: "নমুনা কর্মী", kind: "worker" }],
+  });
+  const user = userEvent.setup();
+  render(
+    <QuickEntrySheet
+      presentation="page"
+      options={{
+        kind: "payment",
+        personId: "worker",
+        workId: "sample-work",
+        account: "labour",
+        purpose: "advance",
+      }}
+    />,
+  );
+  await ready();
+  await user.type(screen.getByLabelText("কত টাকা"), "500");
+  await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
+  const input = screen.getByLabelText("ভাউচারের ছবি / PDF");
+  const accepted = new File(
+    [new Uint8Array(2 * 1024 * 1024)],
+    "sample-boundary.pdf",
+    { type: "application/pdf" },
+  );
+  const oversized = new File(
+    [new Uint8Array(2 * 1024 * 1024 + 1)],
+    "sample-over-limit.pdf",
+    { type: "application/pdf" },
+  );
+  await user.upload(input, [accepted, oversized]);
+  expect(screen.getByRole("alert").textContent).toContain("২ MB");
+  expect(screen.queryByText(accepted.name)).toBeNull();
+  expect(screen.queryByText(oversized.name)).toBeNull();
+  expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
+    "500",
+  );
+  expect(state.notebook.save).not.toHaveBeenCalled();
+  await user.upload(input, accepted);
+  expect(screen.getByText(accepted.name)).toBeTruthy();
+  await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
+  await user.click(screen.getByRole("button", { name: "রাখুন" }));
+  await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
+  expect((state.notebook.ledger as Ledger).entries[0]).toMatchObject({
+    kind: "payment",
+    allocations: [{ workId: "sample-work", amount: 50000 }],
+    paymentParts: [{ method: "cash", amount: 50000 }],
+    receipts: [{ name: accepted.name, size: accepted.size }],
   });
 });

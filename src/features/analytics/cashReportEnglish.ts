@@ -1,4 +1,6 @@
 export const cashReportEnglish: Record<string, string> = {
+  "দেওয়া টাকা আর বিলের দাম আলাদা হিসাব।":
+    "Payments and bill prices are separate totals.",
   "মাসে মাসে দিয়েছি": "Payments by month",
   "মালের টাকা": "Materials paid",
   "মিস্ত্রির টাকা": "Labour paid",

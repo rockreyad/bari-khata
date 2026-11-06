@@ -1,0 +1,88 @@
+.transaction-extras {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+.transaction-extras > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-height: 52px;
+  gap: 8px;
+  padding: 14px 18px;
+  list-style: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+}
+.transaction-extras > summary::-webkit-details-marker {
+  display: none;
+}
+.transaction-extras > summary svg {
+  flex: none;
+}
+.transaction-extras > summary small {
+  font-size: 11px;
+  font-weight: 400;
+}
+.transaction-extras > summary svg:last-child {
+  margin-left: auto;
+}
+.transaction-extras[open] > summary svg:last-child {
+  transform: rotate(180deg);
+}
+.transaction-extras > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+.transaction-extras-content {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+  padding: 0 18px 18px;
+}
+.transaction-extras-fields {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(0, 1.2fr);
+  align-items: start;
+  min-width: 0;
+  gap: 14px;
+}
+.transaction-extras-date,
+.transaction-extras-note {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+.transaction-extras-date:only-child {
+  grid-column: 1 / -1;
+}
+.transaction-form .transaction-extras-note textarea {
+  min-height: 72px;
+  height: 72px;
+  resize: vertical;
+}
+.transaction-extras-receipts {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.transaction-extras-receipts > * {
+  min-width: 0;
+}
+@media (max-width: 540px) {
+  .transaction-extras > summary {
+    padding-inline: 16px;
+  }
+  .transaction-extras-content {
+    padding-inline: 16px;
+    padding-bottom: 16px;
+  }
+  .transaction-extras-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

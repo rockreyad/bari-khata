@@ -39,7 +39,6 @@ const bill = (
 const fixture = (entries: Ledger["entries"] = []) =>
   LedgerSchema.parse({
     architectureVersion: 2,
-    milestones: [],
     paymentAllocations: [],
     people: [
       {

@@ -61,7 +61,6 @@ const owner = randomUUID(),
   markerOwner = randomUUID();
 const base = LedgerSchema.parse({
   architectureVersion: 2,
-  milestones: [],
   paymentAllocations: [],
   project: { name: "নমুনা অর্জিত কাজ" },
   works: [{ id: "roof", name: "নমুনা ছাদ" }],
@@ -235,10 +234,22 @@ const completedMigration = strip(
     "utf8",
   ),
 );
+const retirementMigration = readFileSync(
+  new URL(
+    "../supabase/migrations/202611060001_remove_work_milestones.sql",
+    import.meta.url,
+  ),
+  "utf8",
+)
+  .trim()
+  .replace(/^begin;\s*/i, "")
+  .replace(/\s*commit;$/i, "");
 const sql = [
   "begin; set local lock_timeout='2s'; set local statement_timeout='20s';",
   helper,
   migration,
+  "drop trigger if exists ledger_00_normalize_retired_work_metadata on public.ledger_documents; drop function if exists public.normalize_retired_work_metadata(); drop function if exists private.strip_retired_work_metadata(jsonb);",
+  retirementMigration,
   completedMigration,
   `insert into auth.users(id,email) values (${quote(owner)}::uuid,${quote(`earned-${owner}@example.invalid`)}),(${quote(ambiguousOwner)}::uuid,${quote(`unclear-${ambiguousOwner}@example.invalid`)}),(${quote(markerOwner)}::uuid,${quote(`marker-${markerOwner}@example.invalid`)});`,
   `insert into public.ledger_documents(owner_id,revision,document) values (${quote(owner)}::uuid,1,${json(base)}),(${quote(ambiguousOwner)}::uuid,1,${json(ambiguous)});`,

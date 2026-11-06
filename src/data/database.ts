@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { readLegacyEntityLedger } from "./legacyEntityStorage";
+import { hasRetiredWorkMetadata } from "../domain/legacyWorkMetadata";
 import type { MigrationReview } from "../domain/migrationReview";
 import {
   writeEntityLedger,
@@ -110,22 +112,22 @@ const MigrationReceiptSchema = z.object({
   entryId: z.string().min(1).max(200),
   name: z.string().max(300),
   mime: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]),
-  // IndexedDB may return a native Blob from a different window realm.
+  // File uploads and cross-window Blobs share the native Blob storage.
   blob: z.custom<Blob>((value) => {
-    if (
-      !value ||
-      typeof value !== "object" ||
-      Object.prototype.toString.call(value) !== "[object Blob]"
-    )
+    if (!value || typeof value !== "object") return false;
+    try {
+      Blob.prototype.slice.call(value, 0, 0);
+      const blob = value as Blob;
+      return (
+        Number.isSafeInteger(blob.size) &&
+        blob.size >= 0 &&
+        typeof blob.type === "string" &&
+        typeof blob.arrayBuffer === "function" &&
+        typeof blob.slice === "function"
+      );
+    } catch {
       return false;
-    const blob = value as Blob;
-    return (
-      Number.isSafeInteger(blob.size) &&
-      blob.size >= 0 &&
-      typeof blob.type === "string" &&
-      typeof blob.arrayBuffer === "function" &&
-      typeof blob.slice === "function"
-    );
+    }
   }),
   createdAt: z.string(),
   uploadedFor: z.string().nullable(),
@@ -330,10 +332,14 @@ export class LedgerDatabase extends Dexie {
             throw new Error("workspace_storage_invalid");
           const header = await this.ledgerHeaders.get(metadata.id);
           if (header && Object.hasOwn(header, "checksum")) {
-            await readEntityLedger(this, metadata.id);
+            if (hasRetiredWorkMetadata(header.collections))
+              await readLegacyEntityLedger(this, metadata.id);
+            else await readEntityLedger(this, metadata.id);
             continue;
           }
-          const ledger = await readPreChecksumEntityLedger(this, metadata.id);
+          const ledger = hasRetiredWorkMetadata(header?.collections)
+            ? await readLegacyEntityLedger(this, metadata.id, true)
+            : await readPreChecksumEntityLedger(this, metadata.id);
           migrateArchitecture(ledger);
           if (this.ownerId && metadata.ownerId !== this.ownerId)
             throw new Error("owner_mismatch");
@@ -354,6 +360,43 @@ export class LedgerDatabase extends Dexie {
             receipts,
             createdAt: new Date().toISOString(),
           });
+          await writeEntityLedger(this, metadata.id, ledger);
+        }
+      });
+    this.version(5)
+      .stores({})
+      .upgrade(async () => {
+        for (const metadata of await this.workspaces.toArray()) {
+          WorkspaceMigrationMetadataSchema.parse(metadata);
+          if (
+            metadata.storageVersion !== 3 ||
+            Object.hasOwn(metadata, "ledger")
+          )
+            throw new Error("workspace_storage_invalid");
+          const header = await this.ledgerHeaders.get(metadata.id);
+          if (!hasRetiredWorkMetadata(header?.collections)) continue;
+          if (this.ownerId && metadata.ownerId !== this.ownerId)
+            throw new Error("owner_mismatch");
+          const ledger = await readLegacyEntityLedger(this, metadata.id);
+          migrateArchitecture(ledger);
+          const receipts = await this.receipts
+            .where("workspace")
+            .equals(metadata.id)
+            .toArray();
+          validateMigrationReceipts(receipts, metadata.id, ledger);
+          await this.storageRecoveries.add({
+            id: `work-metadata:${metadata.id}:5`,
+            workspace: metadata.id,
+            metadata,
+            header,
+            entities: await this.ledgerEntities
+              .where("workspace")
+              .equals(metadata.id)
+              .toArray(),
+            receipts,
+            createdAt: new Date().toISOString(),
+          });
+          // Metadata removal must not become a new edit that conflicts with another upgraded device.
           await writeEntityLedger(this, metadata.id, ledger);
         }
       });

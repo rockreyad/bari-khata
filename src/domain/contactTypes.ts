@@ -94,7 +94,7 @@ export const contactPresets: ContactPreset[] = [
   {
     id: "contractor",
     label: "ঠিকাদার",
-    description: "একটি ধাপ বা পুরো কাজের দায়িত্ব",
+    description: "পুরো কাজের দায়িত্ব",
     kind: "worker",
     role: "ঠিকাদার",
     roles: [

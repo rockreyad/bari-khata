@@ -25,6 +25,9 @@ import { EntitySheet } from "../../components/EntitySheet";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { MoneyInput } from "../../components/ui/MoneyInput";
+import { TransactionExtras } from "../../components/TransactionExtras";
+import { TransactionNoteField } from "../../components/TransactionNoteField";
+import { NEW_RECEIPT_MAX_BYTES } from "../../lib/attachmentLimits";
 import {
   TransactionAmount,
   TransactionDetails,
@@ -126,7 +129,7 @@ export function QuickEntrySheet({
   const key =
     resumeDraftKey?.startsWith("quick-v2:") && resumeDraftKey.length <= 1500
       ? resumeDraftKey
-      : `${accountDraftKey}${options.contractId ? `:job=${options.contractId}` : ""}${options.milestoneId ? `:milestone=${options.milestoneId}` : ""}`;
+      : `${accountDraftKey}${options.contractId ? `:job=${options.contractId}` : ""}`;
   const [draft, setDraft] = useState(() => entryContext(ledger, options));
   const [ready, setReady] = useState(false);
   const [creatingWork, setCreatingWork] = useState(false);
@@ -182,9 +185,7 @@ export function QuickEntrySheet({
           (!options.account || parsed.draft.account === context.account) &&
           (!options.purpose || parsed.draft.purpose === options.purpose) &&
           (!options.contractId ||
-            parsed.draft.contractId === context.contractId) &&
-          (!options.milestoneId ||
-            parsed.draft.milestoneId === context.milestoneId)
+            parsed.draft.contractId === context.contractId)
         ) {
           hydratedKeys.current.add(candidate);
           hydratedSources.current.set(candidate, draftFingerprint(parsed));
@@ -273,7 +274,7 @@ export function QuickEntrySheet({
         : name === "workId"
           ? entryWorkChange(ledger, d, String(value), jobScopeChosen.current)
           : name === "personId" || (name === "account" && value !== "labour")
-            ? { contractId: "", milestoneId: "" }
+            ? { contractId: "" }
             : {}),
     }));
   };
@@ -410,31 +411,33 @@ export function QuickEntrySheet({
       if (mounted.current)
         setError(
           t(
-            code === "person"
-              ? "বাকি, অগ্রিম বা টাকা দেওয়ার হিসাব রাখতে ব্যক্তি বা দোকানের নাম দিন।"
-              : code === "label"
-                ? "কী বাবদ খরচ, ছোট করে লিখুন।"
-                : code === "date"
-                  ? "সঠিক তারিখ বেছে নিন।"
-                  : code === "work"
-                    ? "কোন খাতার টাকা, তা বেছে নিন।"
-                    : code === "group"
-                      ? "নতুন মালের ধরনটির নাম লিখুন।"
-                      : code === "account_changed" ||
-                          code === "account_inactive"
-                        ? "খাতা বদলে গেছে। অসমাপ্ত লেখা আগের খাতায় রাখা আছে।"
-                        : code === "refund"
-                          ? "এই ফেরতের মূল্যের বেশি টাকা লিখেছেন। পুরোনো পাওনা পেলে আলাদা “টাকা ফেরত” লিখুন।"
-                          : code === "duplicate"
-                            ? "এই হিসাব আগেই রাখা হয়েছে। বন্ধ করে দেখুন।"
-                            : code === "contract"
-                              ? "মজুরির কাজ ও ব্যক্তির সঙ্গে নির্ধারিত দর মিলছে না।"
-                              : code === "removed_entity"
-                                ? "মুছে রাখা নাম, খাতা বা কাজ আগে ফিরিয়ে আনুন।"
-                                : code === "person_kind" ||
-                                    code === "contact_rules"
-                                  ? "এই নামের নিয়মে এই হিসাব রাখা যাবে না। ধরন বা নাম বদলান।"
-                                  : "সঠিক টাকা ও প্রয়োজনীয় তথ্য দিন। হিসাব রাখা যায়নি।",
+            code === "client_update_required"
+              ? "নতুন হিসাব রাখার আগে অ্যাপ আপডেট করুন। আপনার লেখা অক্ষত আছে।"
+              : code === "person"
+                ? "বাকি, অগ্রিম বা টাকা দেওয়ার হিসাব রাখতে ব্যক্তি বা দোকানের নাম দিন।"
+                : code === "label"
+                  ? "কী বাবদ খরচ, ছোট করে লিখুন।"
+                  : code === "date"
+                    ? "সঠিক তারিখ বেছে নিন।"
+                    : code === "work"
+                      ? "কোন খাতার টাকা, তা বেছে নিন।"
+                      : code === "group"
+                        ? "নতুন মালের ধরনটির নাম লিখুন।"
+                        : code === "account_changed" ||
+                            code === "account_inactive"
+                          ? "খাতা বদলে গেছে। অসমাপ্ত লেখা আগের খাতায় রাখা আছে।"
+                          : code === "refund"
+                            ? "এই ফেরতের মূল্যের বেশি টাকা লিখেছেন। পুরোনো পাওনা পেলে আলাদা “টাকা ফেরত” লিখুন।"
+                            : code === "duplicate"
+                              ? "এই হিসাব আগেই রাখা হয়েছে। বন্ধ করে দেখুন।"
+                              : code === "contract"
+                                ? "মজুরির কাজ ও ব্যক্তির সঙ্গে নির্ধারিত দর মিলছে না।"
+                                : code === "removed_entity"
+                                  ? "মুছে রাখা নাম, খাতা বা কাজ আগে ফিরিয়ে আনুন।"
+                                  : code === "person_kind" ||
+                                      code === "contact_rules"
+                                    ? "এই নামের নিয়মে এই হিসাব রাখা যাবে না। ধরন বা নাম বদলান।"
+                                    : "সঠিক টাকা ও প্রয়োজনীয় তথ্য দিন। হিসাব রাখা যায়নি।",
           ),
         );
     } finally {
@@ -615,6 +618,7 @@ export function QuickEntrySheet({
               : "খরচ লিখি";
   return (
     <Frame
+      focusAmountWhenReady={ready && !saving && !needsIntent}
       title={t(title)}
       className="transaction-page legacy-transaction-page"
       onClose={() => void requestClose()}
@@ -821,7 +825,6 @@ export function QuickEntrySheet({
                         return {
                           ...current,
                           ...scope,
-                          milestoneId: "",
                           workId:
                             job?.scope === "work"
                               ? job.workId!
@@ -860,30 +863,6 @@ export function QuickEntrySheet({
                 </label>
               ) : null}
             </section>
-          ) : null}
-          {!cash &&
-          draft.kind !== "return" &&
-          draft.contractId &&
-          ledger.milestones?.some(
-            (row) => row.contractId === draft.contractId,
-          ) ? (
-            <label>
-              {t("কাজের ধাপ")}
-              <AppSelect
-                aria-label={t("কাজের ধাপ")}
-                value={draft.milestoneId}
-                onChange={(event) => field("milestoneId", event.target.value)}
-              >
-                <option value="">{t("ধাপ ছাড়াই বিল")}</option>
-                {ledger.milestones
-                  .filter((row) => row.contractId === draft.contractId)
-                  .map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {formatDigits(row.title)} · {money(row.amount)}
-                    </option>
-                  ))}
-              </AppSelect>
-            </label>
           ) : null}
           {draft.kind === "payment" ? (
             <div
@@ -1448,7 +1427,25 @@ export function QuickEntrySheet({
               onChange={(method) => field("method", method)}
             />
           ) : null}
-          <TransactionDetails summary={t("ভাউচার, নোট ও তারিখ")}>
+          <TransactionExtras
+            hasReceipts={files.length > 0}
+            dateField={
+              <label>
+                {t("তারিখ")}
+                <AppDatePicker
+                  required
+                  value={draft.date}
+                  onChange={(event) => field("date", event.target.value)}
+                />
+              </label>
+            }
+            noteField={
+              <TransactionNoteField
+                value={draft.note}
+                onChange={(value) => field("note", value)}
+              />
+            }
+          >
             <div className="legacy-transaction-attachments">
               <label className="attachment-button transaction-secondary">
                 <CameraIcon size={20} />
@@ -1460,13 +1457,13 @@ export function QuickEntrySheet({
                   onChange={(e) => {
                     const incoming = Array.from(e.target.files ?? []);
                     if (
-                      incoming.some((file) => file.size > 10 * 1024 * 1024) ||
+                      incoming.some(
+                        (file) => file.size > NEW_RECEIPT_MAX_BYTES,
+                      ) ||
                       files.length + incoming.length > 20
                     ) {
                       setError(
-                        t(
-                          "প্রতিটি ভাউচার ১০ MB-এর মধ্যে রাখুন। সর্বোচ্চ ২০টি।",
-                        ),
+                        t("প্রতিটি ভাউচার ২ MB-এর মধ্যে রাখুন। সর্বোচ্চ ২০টি।"),
                       );
                       return;
                     }
@@ -1483,6 +1480,9 @@ export function QuickEntrySheet({
                   }}
                 />
               </label>
+              <p className="form-hint muted">
+                {t("প্রতিটি ছবি বা PDF সর্বোচ্চ ২ MB।")}
+              </p>
               {files.map((f) => (
                 <div className="attachment-row" key={f.id}>
                   <span>{formatDigits(f.name ?? t("ভাউচার"))}</span>
@@ -1497,58 +1497,38 @@ export function QuickEntrySheet({
                 </div>
               ))}
             </div>
-            <div className="entry-more-body">
-              <div className="field-grid">
-                <label>
-                  {t("তারিখ")}
-                  <AppDatePicker
-                    required
-                    value={draft.date}
-                    onChange={(e) => field("date", e.target.value)}
-                  />
-                </label>
-                {!cash &&
-                !labour &&
-                !returning &&
-                (!selectedKind || selectedKind === "other") ? (
-                  <label>
-                    {t("খরচের ধরন")}
-                    <AppSelect
-                      value={draft.costType}
-                      onChange={(e) =>
-                        chooseType(e.target.value as QuickDraft["costType"])
-                      }
-                    >
-                      {Object.entries(costNames).map(([id, label]) => (
-                        <option key={id} value={id}>
-                          {t(label)}
-                        </option>
-                      ))}
-                    </AppSelect>
-                  </label>
-                ) : null}
-              </div>
-              <label>
-                {t("নোট")}
-                <textarea
-                  rows={2}
-                  value={draft.note}
-                  onChange={(e) => field("note", e.target.value)}
-                />
-              </label>
-              {returning ? (
-                <label>
-                  {t("ক্যাশ ফেরত পেলে লিখুন")}
-                  <MoneyInput
-                    aria-label={t("ক্যাশ ফেরত পেলে লিখুন")}
-                    value={draft.refund}
-                    placeholder="0"
-                    onChange={(e) => field("refund", e.target.value)}
-                  />
-                </label>
-              ) : null}
-            </div>
-          </TransactionDetails>
+          </TransactionExtras>
+          {!cash &&
+          !labour &&
+          !returning &&
+          (!selectedKind || selectedKind === "other") ? (
+            <label>
+              {t("খরচের ধরন")}
+              <AppSelect
+                value={draft.costType}
+                onChange={(event) =>
+                  chooseType(event.target.value as QuickDraft["costType"])
+                }
+              >
+                {Object.entries(costNames).map(([id, label]) => (
+                  <option key={id} value={id}>
+                    {t(label)}
+                  </option>
+                ))}
+              </AppSelect>
+            </label>
+          ) : null}
+          {returning ? (
+            <label>
+              {t("ক্যাশ ফেরত পেলে লিখুন")}
+              <MoneyInput
+                aria-label={t("ক্যাশ ফেরত পেলে লিখুন")}
+                value={draft.refund}
+                placeholder="0"
+                onChange={(event) => field("refund", event.target.value)}
+              />
+            </label>
+          ) : null}
         </fieldset>
       </form>
     </Frame>

@@ -5,6 +5,10 @@ export const worksRefreshEnglish: Record<string, string> = {
   "এই খাতার সব লেনদেন": "All transactions in this notebook",
   "হিসাব লেখার বোতাম": "Entry shortcuts",
   "মোট বাকি": "Total remaining",
+  "কার কাছে কত বাকি": "Who is owed how much",
+  "কারও নামে না থাকা সমন্বয়": "Adjustment without a name",
+  "এই সমন্বয় কারও নামে লেখা নেই। মোট বাকিতে ধরা হয়েছে, তবে কারও বাকিতে ভাগ করে দেওয়া হয়নি।":
+    "This adjustment is included in the total remaining, but has no name and has not been assigned to anyone's balance.",
   "এই খাতায় বাকি": "Remaining in this notebook",
   "বিলের বাকি": "Bills remaining",
   "চুক্তির বাকি": "Agreements remaining",

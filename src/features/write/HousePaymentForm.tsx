@@ -33,6 +33,8 @@ import { useInlineDraft } from "../entries/useInlineDraft";
 import { QuickSavedDraftSchema } from "../entries/quickEntry";
 import { HouseSavedNotice } from "./HouseSavedNotice";
 import { HouseAttachments } from "./HouseAttachments";
+import { TransactionExtras } from "../../components/TransactionExtras";
+import { TransactionNoteField } from "../../components/TransactionNoteField";
 import { paymentPresentation } from "./paymentPresentation";
 import { partyDueItems } from "../home/partyDueItems";
 
@@ -479,11 +481,13 @@ export function HousePaymentForm() {
       setInvalidField(issue);
       setError(
         t(
-          issue in issueText
-            ? issueText[issue as PaymentFormIssue]
-            : code === "house_payment_confirm_advance"
-              ? "বাড়তি টাকা অগ্রিম থাকবে কি না, নিশ্চিত করুন।"
-              : "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
+          code === "client_update_required"
+            ? "নতুন হিসাব রাখার আগে অ্যাপ আপডেট করুন। আপনার লেখা অক্ষত আছে।"
+            : issue in issueText
+              ? issueText[issue as PaymentFormIssue]
+              : code === "house_payment_confirm_advance"
+                ? "বাড়তি টাকা অগ্রিম থাকবে কি না, নিশ্চিত করুন।"
+                : "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
         ),
       );
     } finally {
@@ -536,6 +540,7 @@ export function HousePaymentForm() {
     );
   return (
     <EntryFrame
+      focusAmountWhenReady={ready && !failed && !saving}
       title={t(
         intent === "advance"
           ? "অগ্রিম দিলাম"
@@ -1030,43 +1035,41 @@ export function HousePaymentForm() {
                 )}
               </TransactionDetails>
             )}
-          <TransactionDetails
-            summary={t(
-              intent === "advance" ? "ভাউচার ও তারিখ" : "ভাউচার, নোট ও তারিখ",
-            )}
+          <TransactionExtras
             defaultOpen={invalidField === "invalid_date"}
-          >
-            <label>
-              {t("তারিখ")}
-              <AppDatePicker
-                aria-label={t("তারিখ")}
-                aria-invalid={invalidField === "invalid_date"}
-                aria-describedby={
-                  invalidField === "invalid_date"
-                    ? "house-payment-error"
-                    : undefined
-                }
-                value={draft.date}
-                onChange={(event) => change("date", event.target.value)}
-              />
-            </label>
-            {intent !== "advance" && (
+            hasReceipts={draft.files.length > 0}
+            dateField={
               <label>
-                {t("বাড়তি কথা")}
-                <textarea
-                  value={draft.note}
-                  maxLength={10000}
-                  onChange={(event) => change("note", event.target.value)}
+                {t("তারিখ")}
+                <AppDatePicker
+                  aria-label={t("তারিখ")}
+                  aria-invalid={invalidField === "invalid_date"}
+                  aria-describedby={
+                    invalidField === "invalid_date"
+                      ? "house-payment-error"
+                      : undefined
+                  }
+                  value={draft.date}
+                  onChange={(event) => change("date", event.target.value)}
                 />
               </label>
-            )}
+            }
+            noteField={
+              intent !== "advance" && (
+                <TransactionNoteField
+                  value={draft.note}
+                  onChange={(value) => change("note", value)}
+                />
+              )
+            }
+          >
             <HouseAttachments
               files={draft.files}
               entryId={draft.id}
               onChange={(files) => change("files", files)}
               onError={setError}
             />
-          </TransactionDetails>
+          </TransactionExtras>
         </fieldset>
       </form>
     </EntryFrame>

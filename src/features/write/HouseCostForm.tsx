@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
 import { z } from "zod";
-import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
+import { HardHatIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { EntryFrame } from "../../components/EntryFrame";
@@ -35,7 +35,13 @@ import { useInlineDraft } from "../entries/useInlineDraft";
 import { recordHouseCost } from "./houseCost";
 import { HouseSavedNotice } from "./HouseSavedNotice";
 import { HouseAttachments } from "./HouseAttachments";
+import { TransactionExtras } from "../../components/TransactionExtras";
+import { TransactionNoteField } from "../../components/TransactionNoteField";
 import { workDescriptionSuggestions } from "./workDescriptionSuggestions";
+import {
+  purchaseSuggestions,
+  type PurchaseSuggestion,
+} from "./purchaseSuggestions";
 import {
   planHouseBillAdvance,
   applyHouseBillAdvance,
@@ -107,7 +113,6 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
       personId: params.get("person") ?? undefined,
       workId: workId || undefined,
       contractId: params.get("contract") ?? undefined,
-      milestoneId: params.get("milestone") ?? undefined,
     });
     return {
       draft: {
@@ -138,13 +143,24 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
       payerContact: { id: "", name: "", newId: crypto.randomUUID() },
     };
   }, []);
-  const key = `house-cost:${action}:${params.get("person") ?? "all"}:${params.get("work") ?? "all"}:${params.get("contract") ?? "none"}:${params.get("milestone") ?? "none"}${paidEntry ? ":paid" : ""}`;
+  const defaultKey = `house-cost:${action}:${params.get("person") ?? "all"}:${params.get("work") ?? "all"}:${params.get("contract") ?? "none"}:none${paidEntry ? ":paid" : ""}`;
+  const resumeKey = params.get("draftKey");
+  // Keep the old empty slot so saved forms reopen after the update.
+  const key =
+    resumeKey?.startsWith(`house-cost:${action}:`) && resumeKey.length <= 1500
+      ? resumeKey
+      : defaultKey;
   const { value, update, ready, failed, clear, flush } = useInlineDraft(
     key,
     savedSchema,
     initial,
   );
   const { draft, files } = value;
+  const purchases = useMemo(
+    () =>
+      action === "purchase" ? purchaseSuggestions(ledger, draft.workId) : [],
+    [action, ledger, draft.workId],
+  );
   const descriptions = useMemo(
     () =>
       action === "charge"
@@ -223,7 +239,6 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
           personName: target.name,
           personNewId: target.newId || crypto.randomUUID(),
           contractId: "",
-          milestoneId: "",
         },
       };
     });
@@ -264,7 +279,6 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               ? "labour"
               : "other",
         contractId: "",
-        milestoneId: "",
       },
     }));
   };
@@ -286,7 +300,6 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
           ...current.draft,
           workId,
           contractId: contract?.id ?? "",
-          milestoneId: contract ? current.draft.milestoneId : "",
         },
       };
     });
@@ -343,9 +356,6 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
       row.personId === draft.personId &&
       (row.scope === "house" || !draft.workId || row.workId === draft.workId),
   );
-  const milestones =
-    ledger.milestones?.filter((row) => row.contractId === draft.contractId) ??
-    [];
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (lock.current || !ready || failed || finished.current) return;
@@ -437,25 +447,27 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
         setInvalidField("paid");
       setError(
         t(
-          code === "contact_rules"
-            ? "এই নামের নিয়মে এই হিসাব রাখা যাবে না। ধরন বা নাম বদলান।"
-            : code === "house_advance_changed"
-              ? "আগের অগ্রিম বদলেছে। নতুন প্রস্তাব দেখে আবার বেছে নিন।"
-              : code === "duplicate"
-                ? "এই হিসাব আগেই রাখা হয়েছে। আগের হিসাব খুলে দেখুন।"
-                : code === "date"
-                  ? "সঠিক তারিখ বেছে নিন।"
-                  : code === "work"
-                    ? "খাতা বেছে নিন।"
-                    : code === "person"
-                      ? draft.payment === "worker"
-                        ? "কে দিয়েছেন, তাঁর নাম বেছে নিন।"
-                        : "বাকি কার কাছে থাকবে, তাঁর নাম দিন।"
-                      : code === "label"
-                        ? "কী মাল বা কাজের বিল, লিখুন।"
-                        : code === "amount"
-                          ? "সঠিক টাকার অঙ্ক দিন। দেওয়া টাকা ও অগ্রিম যেন বিলের বেশি না হয়।"
-                          : "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
+          code === "client_update_required"
+            ? "নতুন হিসাব রাখার আগে অ্যাপ আপডেট করুন। আপনার লেখা অক্ষত আছে।"
+            : code === "contact_rules"
+              ? "এই নামের নিয়মে এই হিসাব রাখা যাবে না। ধরন বা নাম বদলান।"
+              : code === "house_advance_changed"
+                ? "আগের অগ্রিম বদলেছে। নতুন প্রস্তাব দেখে আবার বেছে নিন।"
+                : code === "duplicate"
+                  ? "এই হিসাব আগেই রাখা হয়েছে। আগের হিসাব খুলে দেখুন।"
+                  : code === "date"
+                    ? "সঠিক তারিখ বেছে নিন।"
+                    : code === "work"
+                      ? "খাতা বেছে নিন।"
+                      : code === "person"
+                        ? draft.payment === "worker"
+                          ? "কে দিয়েছেন, তাঁর নাম বেছে নিন।"
+                          : "বাকি কার কাছে থাকবে, তাঁর নাম দিন।"
+                        : code === "label"
+                          ? "কী মাল বা কাজের বিল, লিখুন।"
+                          : code === "amount"
+                            ? "সঠিক টাকার অঙ্ক দিন। দেওয়া টাকা ও অগ্রিম যেন বিলের বেশি না হয়।"
+                            : "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
         ),
       );
     } finally {
@@ -472,7 +484,6 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
         costType,
         account: costType === "labour" ? "labour" : "other",
         contractId: "",
-        milestoneId: "",
       },
     }));
   const savedEntryIds = [draft.id, draft.paymentId, draft.refundId].filter(
@@ -531,6 +542,31 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
       },
     }));
   };
+  const choosePurchase = (rowId: string, choice: PurchaseSuggestion) => {
+    setError("");
+    setInvalidField("");
+    update((current) => ({
+      ...current,
+      draft: {
+        ...current.draft,
+        rows: current.draft.rows.map((row) =>
+          row.id === rowId
+            ? {
+                ...row,
+                label: choice.value,
+                groupId: choice.groupId,
+                groupName: choice.groupName,
+                brand: choice.brand,
+                usage: choice.usage,
+                quantity: choice.quantity,
+                unit: choice.unit,
+                autoItemName: choice.value,
+              }
+            : row,
+        ),
+      },
+    }));
+  };
   const errorId = "house-cost-error";
   const personLabel = action === "purchase" ? "কর্মী বা দোকান" : "কর্মী";
   const personInvalid = invalidField === "person";
@@ -558,6 +594,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
     );
   return (
     <EntryFrame
+      focusAmountWhenReady={ready && !failed && !saving}
       title={t(action === "purchase" ? "মাল কিনেছি" : "কাজের বিল")}
       onClose={() => void closeSafely()}
       busy={saving}
@@ -658,7 +695,15 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                         }
                       />
                     ) : (
-                      <input
+                      <AppCombobox
+                        suggestions={purchases}
+                        fuzzy
+                        onSuggestionSelect={(suggestion) => {
+                          const choice = purchases.find(
+                            (candidate) => candidate.id === suggestion.id,
+                          );
+                          if (choice) choosePurchase(row.id, choice);
+                        }}
                         aria-label={t(
                           action === "purchase"
                             ? "মালের নাম {{number}}"
@@ -679,7 +724,8 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                         }
                       />
                     )}
-                    {action === "charge" && descriptions.length > 0 && (
+                    {((action === "charge" && descriptions.length > 0) ||
+                      (action === "purchase" && purchases.length > 0)) && (
                       <small
                         id={`work-description-hint-${row.id}`}
                         className="field-hint"
@@ -917,10 +963,11 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
             </label>
           ) : null}
           {draft.account === "labour" && contracts.length > 0 ? (
-            <TransactionDetails
-              summary={t("কাজ ও ধাপ")}
-              defaultOpen={Boolean(draft.contractId)}
-            >
+            <section className="house-work-picker" aria-label={t("কাজ")}>
+              <div className="house-work-picker-heading">
+                <HardHatIcon size={20} aria-hidden="true" />
+                <h3>{t("কাজ")}</h3>
+              </div>
               <label>
                 {t("কোন কাজের জন্য")}
                 <AppSelect
@@ -936,7 +983,6 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                       draft: {
                         ...current.draft,
                         contractId: event.target.value,
-                        milestoneId: "",
                         workId:
                           contract?.scope === "work"
                             ? contract.workId!
@@ -953,26 +999,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                   ))}
                 </AppSelect>
               </label>
-              {milestones.length > 0 ? (
-                <label>
-                  {t("কাজের ধাপ")}
-                  <AppSelect
-                    aria-label={t("কাজের ধাপ")}
-                    value={draft.milestoneId}
-                    onChange={(event) =>
-                      field("milestoneId", event.target.value)
-                    }
-                  >
-                    <option value="">{t("ধাপ ছাড়াই বিল")}</option>
-                    {milestones.map((step) => (
-                      <option key={step.id} value={step.id}>
-                        {formatDigits(step.title)}
-                      </option>
-                    ))}
-                  </AppSelect>
-                </label>
-              ) : null}
-            </TransactionDetails>
+            </section>
           ) : null}
           <div className="transaction-fields">
             <span className="transaction-label">{t("টাকা মিটিয়েছেন?")}</span>
@@ -1142,9 +1169,29 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               </dl>
             </section>
           )}
-          <TransactionDetails
-            summary={t("ভাউচার, নোট ও তারিখ")}
+          <TransactionExtras
             defaultOpen={invalidField === "date"}
+            hasReceipts={files.length > 0}
+            noteField={
+              <TransactionNoteField
+                value={draft.note}
+                onChange={(value) => field("note", value)}
+              />
+            }
+            dateField={
+              <label>
+                {t("তারিখ")}
+                <AppDatePicker
+                  aria-label={t("তারিখ")}
+                  value={draft.date}
+                  aria-invalid={invalidField === "date"}
+                  aria-describedby={
+                    invalidField === "date" ? errorId : undefined
+                  }
+                  onChange={(event) => field("date", event.target.value)}
+                />
+              </label>
+            }
           >
             <HouseAttachments
               files={files}
@@ -1152,25 +1199,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               onChange={(next) => update({ ...value, files: next })}
               onError={setError}
             />
-            <label>
-              {t("বাড়তি কথা")}
-              <textarea
-                maxLength={10000}
-                value={draft.note}
-                onChange={(event) => field("note", event.target.value)}
-              />
-            </label>
-            <label>
-              {t("তারিখ")}
-              <AppDatePicker
-                aria-label={t("তারিখ")}
-                value={draft.date}
-                aria-invalid={invalidField === "date"}
-                aria-describedby={invalidField === "date" ? errorId : undefined}
-                onChange={(event) => field("date", event.target.value)}
-              />
-            </label>
-          </TransactionDetails>
+          </TransactionExtras>
         </fieldset>
       </form>
     </EntryFrame>

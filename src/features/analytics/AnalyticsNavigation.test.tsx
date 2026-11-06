@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
 import { LedgerSchema } from "../../domain/model";
 import { AnalyticsPage } from "./AnalyticsPage";
+import { buildCostReportIndex } from "./analytics";
 
 vi.mock("../../components/ui/AppSelect", () => ({
   AppSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => (
@@ -110,7 +111,121 @@ it.each([
     expect(container.querySelector(".report-total > strong")?.textContent).toBe(
       amount,
     );
-    expect(container.querySelectorAll(".history-payment")).toHaveLength(1);
+    expect(container.querySelector(".report-history")).toBeNull();
+  },
+);
+
+function brandLedger() {
+  return LedgerSchema.parse({
+    works: [{ id: "work", name: "নমুনা খাতা" }],
+    materialGroups: [{ id: "panel", name: "প্যানেল" }],
+    items: [
+      { id: "first", name: "প্যানেল", brand: "Nova", materialGroupId: "panel" },
+      {
+        id: "second",
+        name: "প্যানেল",
+        brand: "nova",
+        materialGroupId: "panel",
+      },
+    ],
+    entries: [
+      ...["first", "second", null].map((itemId, index) => ({
+        id: `brand-bill-${index}`,
+        kind: "expense",
+        date: `2026-0${index + 1}-02`,
+        lines: [
+          {
+            id: `brand-line-${index}`,
+            workId: "work",
+            itemId,
+            materialGroupId: "panel",
+            label: "প্যানেল",
+            amount: itemId ? (index + 1) * 10000 : 7000,
+          },
+        ],
+      })),
+    ],
+  });
+}
+
+it("keeps a raw brand URL selected while cards and dropdown use one canonical brand", () => {
+  const ledger = brandLedger();
+  const identity = buildCostReportIndex(ledger).brands.resolve("Nova")!;
+  const { container } = render(
+    <MemoryRouter
+      initialEntries={["/reports?mode=cost&section=all&by=brand&brand=nOvA"]}
+    >
+      <AnalyticsPage ledger={ledger} />
+      <CurrentRoute />
+    </MemoryRouter>,
+  );
+  expect(container.querySelector(".report-total > strong")?.textContent).toBe(
+    "৳300",
+  );
+  expect(
+    new URLSearchParams(screen.getByTestId("route").textContent ?? "").get(
+      "brand",
+    ),
+  ).toBe("nOvA");
+  expect(
+    container.querySelector(".report-filter-chips")?.textContent,
+  ).toContain(identity.label);
+  fireEvent.click(screen.getByRole("button", { name: "হিসাব বেছে দেখুন" }));
+  const select = screen.getByLabelText("ব্র্যান্ড") as HTMLSelectElement;
+  expect(select.value).toBe(identity.id);
+  expect(screen.getAllByRole("option", { name: identity.label })).toHaveLength(
+    1,
+  );
+  fireEvent.change(select, { target: { value: "__unknown__" } });
+  expect(select.value).toBe("__unknown__");
+  expect(container.querySelector(".report-total > strong")?.textContent).toBe(
+    "৳70",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "হিসাব দেখুন" }));
+  fireEvent.click(screen.getByRole("button", { name: "সব বাছাই মুছুন" }));
+  expect(container.querySelector(".report-total > strong")?.textContent).toBe(
+    "৳370",
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: `${identity.label}৳300` }),
+  );
+  expect(
+    new URLSearchParams(screen.getByTestId("route").textContent ?? "").get(
+      "brand",
+    ),
+  ).toBe(identity.id);
+  expect(container.querySelector(".report-total > strong")?.textContent).toBe(
+    "৳300",
+  );
+});
+
+it.each([
+  ["plain text", "A".repeat(200)],
+  ["expanded compatibility characters", "ﬃ".repeat(200)],
+])(
+  "retains a maximum-length brand with %s in a canonical breakdown link",
+  (_label, brand) => {
+    const ledger = brandLedger();
+    ledger.items[0].brand = brand;
+    const identity = buildCostReportIndex(ledger).brands.resolve(
+      ledger.items[0].brand,
+    )!;
+    const { container } = render(
+      <MemoryRouter
+        initialEntries={[
+          `/reports?mode=cost&section=all&brand=${encodeURIComponent(identity.id)}`,
+        ]}
+      >
+        <AnalyticsPage ledger={ledger} />
+      </MemoryRouter>,
+    );
+    expect(container.querySelector(".report-total > strong")?.textContent).toBe(
+      "৳100",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "হিসাব বেছে দেখুন" }));
+    expect(
+      (screen.getByLabelText("ব্র্যান্ড") as HTMLSelectElement).value,
+    ).toBe(identity.id);
   },
 );
 
@@ -254,19 +369,13 @@ it("keeps scoped labour bills separate from split cash and refunds", () => {
   expect(container.querySelector(".report-total > strong")?.textContent).toBe(
     "৳2800",
   );
-  expect(container.querySelectorAll(".history-row")).toHaveLength(2);
+  expect(container.querySelector(".report-history")).toBeNull();
   expect(container.querySelectorAll(".history-expense")).toHaveLength(0);
   expect(
-    container.querySelector(".history-payment .history-row-amount")
+    container.querySelector(".report-breakdown-list button > strong")
       ?.textContent,
-  ).toBe("৳3000");
-  expect(
-    container.querySelector(".history-refund .history-row-amount")?.textContent,
-  ).toBe("৳-200");
-  fireEvent.click(
-    container.querySelector<HTMLButtonElement>(".history-payment")!,
-  );
-  expect(onEntry).toHaveBeenCalledWith("split-payment");
+  ).toBe("৳2800");
+  expect(onEntry).not.toHaveBeenCalled();
   expect(mixed).toEqual(before);
 });
 
@@ -295,7 +404,7 @@ it.each([
     expect(container.querySelector(".report-total > strong")?.textContent).toBe(
       amount,
     );
-    expect(container.querySelectorAll(".history-payment")).toHaveLength(1);
+    expect(container.querySelector(".report-history")).toBeNull();
   },
 );
 
@@ -328,7 +437,7 @@ it("clears legacy category hints when choosing all payment accounts", () => {
   expect(container.querySelector(".report-total > strong")?.textContent).toBe(
     "৳2800",
   );
-  expect(container.querySelectorAll(".history-payment")).toHaveLength(3);
+  expect(container.querySelector(".report-history")).toBeNull();
 });
 
 it.each(["transport", "other"])(
@@ -346,7 +455,7 @@ it.each(["transport", "other"])(
     expect(container.querySelector(".report-total > strong")?.textContent).toBe(
       "৳2800",
     );
-    expect(container.querySelectorAll(".history-payment")).toHaveLength(3);
+    expect(container.querySelector(".report-history")).toBeNull();
   },
 );
 
@@ -363,7 +472,7 @@ it("preserves an explicit account while opening broader cash details", () => {
   expect(container.querySelector(".report-total > strong")?.textContent).toBe(
     "৳100",
   );
-  expect(container.querySelectorAll(".history-payment")).toHaveLength(1);
+  expect(container.querySelector(".report-history")).toBeNull();
 });
 
 it("preserves an explicit account rather than replacing it with the cost section", () => {

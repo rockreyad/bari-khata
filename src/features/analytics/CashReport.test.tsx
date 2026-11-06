@@ -141,17 +141,16 @@ describe.each(["bn", "en"] as const)("cash report in %s", (language) => {
       copy[language].total,
     );
     expect(
-      [...container.querySelectorAll(".history-row-amount")].map(
-        (amount) => amount.textContent,
-      ),
-    ).toEqual([copy[language].one, copy[language].payment]);
-    expect(container.querySelectorAll(".history-row")).toHaveLength(2);
+      container.querySelector(".report-breakdown-list button > strong")
+        ?.textContent,
+    ).toBe(copy[language].total);
+    expect(container.querySelector(".report-history")).toBeNull();
     expect(container.querySelector(".history-expense")).toBeNull();
     expect(container.querySelector(".history-load-more")).toBeNull();
     expect(JSON.stringify(ledger)).toBe(before);
   });
 
-  it("displays only the selected work allocation, then opens the actual cash entry", () => {
+  it("displays only the selected work allocation in its breakdown", () => {
     const { container, onEntry } = mount(
       mixedLedger("Bengali"),
       language,
@@ -160,16 +159,18 @@ describe.each(["bn", "en"] as const)("cash report in %s", (language) => {
     expect(container.querySelector(".report-total strong")?.textContent).toBe(
       copy[language].split,
     );
-    expect(container.querySelector(".history-row-amount")?.textContent).toBe(
-      copy[language].split,
-    );
-    const rows = container.querySelectorAll<HTMLButtonElement>(".history-row");
-    expect(rows).toHaveLength(1);
-    fireEvent.click(rows[0]);
-    expect(onEntry).toHaveBeenCalledExactlyOnceWith("split-payment");
+    expect(
+      container.querySelector(".report-breakdown-list button > strong")
+        ?.textContent,
+    ).toBe(copy[language].split);
+    expect(
+      container.querySelectorAll(".report-breakdown-list button"),
+    ).toHaveLength(1);
+    expect(container.querySelector(".report-history")).toBeNull();
+    expect(onEntry).not.toHaveBeenCalled();
   });
 
-  it("subtracts a received refund once and shows the signed amount in history", () => {
+  it("subtracts a received refund once in its signed work breakdown", () => {
     const { container } = mount(
       mixedLedger("English"),
       language,
@@ -179,10 +180,10 @@ describe.each(["bn", "en"] as const)("cash report in %s", (language) => {
       copy[language].refund,
     );
     expect(
-      container.querySelector(".history-refund .history-row-amount")
+      container.querySelector(".report-breakdown-list button > strong")
         ?.textContent,
     ).toBe(copy[language].refund);
-    expect(container.querySelectorAll(".history-row")).toHaveLength(1);
+    expect(container.querySelector(".report-history")).toBeNull();
     expect(container.querySelector(".report-total p")?.textContent).toContain(
       language === "bn" ? "৳\u202f১,০০০" : "৳\u202f1,000",
     );
@@ -195,7 +196,9 @@ it("drills into an unnamed contact without dropping its payment", () => {
   expect(container.querySelector(".report-total strong")?.textContent).toBe(
     "৳\u202f১",
   );
-  expect(container.querySelectorAll(".history-row")).toHaveLength(1);
+  expect(
+    container.querySelectorAll(".report-breakdown-list button"),
+  ).toHaveLength(1);
   expect(
     new URLSearchParams(screen.getByTestId("route").textContent ?? "").get(
       "person",
@@ -203,7 +206,7 @@ it("drills into an unnamed contact without dropping its payment", () => {
   ).toBe("__anonymous__");
 });
 
-it("loads extra groups and transactions independently and hides each button after the last result", () => {
+it("loads extra breakdown groups without repeating the ledger's transaction list", () => {
   const ledger = LedgerSchema.parse({
     works: Array.from({ length: 31 }, (_, i) => ({
       id: `work-${i}`,
@@ -223,15 +226,14 @@ it("loads extra groups and transactions independently and hides each button afte
   expect(
     container.querySelectorAll(".report-breakdown-list button"),
   ).toHaveLength(30);
-  expect(container.querySelectorAll(".history-row")).toHaveLength(30);
+  expect(container.querySelector(".report-history")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "আরও দেখুন" }));
   expect(
     container.querySelectorAll(".report-breakdown-list button"),
   ).toHaveLength(31);
-  expect(container.querySelectorAll(".history-row")).toHaveLength(30);
+  expect(container.querySelector(".report-history")).toBeNull();
   expect(screen.queryByRole("button", { name: "আরও দেখুন" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "আরও হিসাব দেখুন" }));
-  expect(container.querySelectorAll(".history-row")).toHaveLength(31);
+  expect(screen.queryByRole("button", { name: "আরও হিসাব দেখুন" })).toBeNull();
   expect(container.querySelector(".history-load-more")).toBeNull();
 });
 
@@ -277,9 +279,10 @@ it("preserves scoped amounts for old entry IDs that overlap object property name
   expect(container.querySelector(".report-total strong")?.textContent).toBe(
     "৳\u202f১৬২",
   );
-  expect(container.querySelector(".history-row-amount")?.textContent).toBe(
-    "৳\u202f১৬২",
-  );
+  expect(
+    container.querySelector(".report-breakdown-list button > strong")
+      ?.textContent,
+  ).toBe("৳\u202f১৬২");
 });
 
 it("preserves the whole other account when opening price details so driver transport bills are included", () => {

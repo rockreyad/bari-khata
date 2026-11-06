@@ -5,6 +5,12 @@ import {
 } from "@supabase/supabase-js";
 import { z } from "zod";
 import { AUTH_STORAGE_KEY, lockAccount } from "./authSession";
+import { APP_VERSION } from "../lib/appVersion";
+import { reportClientUpdateRequired } from "../lib/releasePolicy";
+import {
+  assertFinancialWritesAllowed,
+  trackLocalWrite,
+} from "../lib/localWriteBarrier";
 import type { Ledger } from "../domain/model";
 import { preservesArchitecture } from "../domain/architectureMigration";
 import { preservesRemovalHistory } from "../domain/entityDeletion";
@@ -37,6 +43,7 @@ let client: SupabaseClient | null = null;
 export function getCloudClient(): SupabaseClient | null {
   if (!isCloudConfigured) return null;
   client ??= createClient(url!, key!, {
+    global: { headers: { "x-bari-client-version": APP_VERSION } },
     auth: {
       persistSession: true,
       storageKey: AUTH_STORAGE_KEY,
@@ -116,7 +123,11 @@ export function createTransport(
     ownerId,
     async load() {
       const result = await cloud.rpc("load_ledger_snapshot");
-      if (result.error) throw new Error("sync_failed");
+      if (result.error) {
+        if (reportClientUpdateRequired(result.error))
+          throw new Error("client_update_required");
+        throw new Error("sync_failed");
+      }
       const parsed = SnapshotSchema.parse(result.data);
       return {
         ...parsed,
@@ -125,12 +136,17 @@ export function createTransport(
       };
     },
     async save(operation) {
+      assertFinancialWritesAllowed();
       const result = await cloud.rpc("save_ledger_snapshot", {
         p_request_id: operation.id,
         p_expected_revision: operation.baseRevision,
         p_document: operation.ledger,
       });
-      if (result.error) throw new Error("sync_failed");
+      if (result.error) {
+        if (reportClientUpdateRequired(result.error))
+          throw new Error("client_update_required");
+        throw new Error("sync_failed");
+      }
       const saved = z
         .object({
           status: z.enum(["saved", "conflict"]),
@@ -154,6 +170,7 @@ export function createTransport(
       };
     },
     async uploadReceipt(receipt) {
+      assertFinancialWritesAllowed();
       const path = `${ownerId}/${receipt.id}`;
       const result = await cloud.storage
         .from("bari-receipts")
@@ -162,6 +179,8 @@ export function createTransport(
           upsert: false,
         });
       if (!result.error) return;
+      if (reportClientUpdateRequired(result.error))
+        throw new Error("client_update_required");
       const existing = await cloud.storage.from("bari-receipts").download(path);
       if (
         existing.error ||
@@ -195,7 +214,6 @@ function isEmptyArchitecture(ledger: Ledger) {
     ledger.paymentPurposes,
     ledger.contracts,
     ledger.entries,
-    ledger.milestones ?? [],
     ledger.paymentAllocations ?? [],
   ].some((records) => records.length);
 }
@@ -473,7 +491,12 @@ export async function syncLedger(
   const previous = running.get(runningKey);
   if (previous) return previous;
   const scoped = createClient(url!, key!, {
-    global: { headers: { Authorization: `Bearer ${session.access_token}` } },
+    global: {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "x-bari-client-version": APP_VERSION,
+      },
+    },
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -495,65 +518,75 @@ export async function syncLedger(
 export async function resolveCloudConflict(
   choice: "keep-local" | "use-cloud",
 ): Promise<SyncResult> {
+  assertFinancialWritesAllowed();
+  return resolveConflict(choice);
+}
+
+async function resolveConflict(
+  choice: "keep-local" | "use-cloud",
+): Promise<SyncResult> {
   const repository = getScopedRepository("real");
   const session = await getCloudSession();
   if (!session) throw new Error("sign_in_required");
   const db = repository.database;
   if (db.ownerId !== session.user.id) throw new Error("owner_mismatch");
-  await db.transaction(
-    "rw",
-    [
-      ...db.workspaceTables(),
-      db.conflicts,
-      db.outbox,
-      db.recoveries,
-      db.receipts,
-      db.migrations,
-    ],
-    async () => {
-      const conflict = await db.conflicts.get("real");
-      const current = await repository.read("real");
-      if (!conflict || !current) throw new Error("conflict_missing");
-      if (
-        conflict.ownerId !== session.user.id ||
-        (current.ownerId && current.ownerId !== session.user.id)
-      )
-        throw new Error("owner_mismatch");
-      if (choice === "use-cloud")
-        await db.recoveries.add({
-          id: crypto.randomUUID(),
-          workspace: "real",
-          ledger: current.ledger,
-          receipts: await db.receipts
-            .where("workspace")
-            .equals("real")
-            .toArray(),
-          reason: "cloud-conflict",
-          createdAt: new Date().toISOString(),
+  assertFinancialWritesAllowed();
+  await trackLocalWrite(
+    db.transaction(
+      "rw",
+      [
+        ...db.workspaceTables(),
+        db.conflicts,
+        db.outbox,
+        db.recoveries,
+        db.receipts,
+        db.migrations,
+      ],
+      async () => {
+        const conflict = await db.conflicts.get("real");
+        const current = await repository.read("real");
+        if (!conflict || !current) throw new Error("conflict_missing");
+        if (
+          conflict.ownerId !== session.user.id ||
+          (current.ownerId && current.ownerId !== session.user.id)
+        )
+          throw new Error("owner_mismatch");
+        if (choice === "use-cloud")
+          await db.recoveries.add({
+            id: crypto.randomUUID(),
+            workspace: "real",
+            ledger: current.ledger,
+            receipts: await db.receipts
+              .where("workspace")
+              .equals("real")
+              .toArray(),
+            reason: "cloud-conflict",
+            createdAt: new Date().toISOString(),
+          });
+        const incoming =
+          choice === "use-cloud"
+            ? await repository.recordIncomingMigration(
+                validateLedger(conflict.ledger),
+                current,
+                "cloud",
+                String(conflict.revision),
+              )
+            : null;
+        if (incoming && !preservesArchitecture(current.ledger, incoming.ledger))
+          throw new Error("architecture_data_would_be_lost");
+        await repository.writeWorkspace({
+          ...current,
+          ledger: incoming?.ledger ?? current.ledger,
+          cloudRevision: conflict.revision,
+          ownerId: session.user.id,
+          pending: choice === "keep-local" || Boolean(incoming?.changed),
+          generation: current.generation + 1,
+          updatedAt: new Date().toISOString(),
         });
-      const incoming =
-        choice === "use-cloud"
-          ? await repository.recordIncomingMigration(
-              validateLedger(conflict.ledger),
-              current,
-              "cloud",
-              String(conflict.revision),
-            )
-          : null;
-      if (incoming && !preservesArchitecture(current.ledger, incoming.ledger))
-        throw new Error("architecture_data_would_be_lost");
-      await repository.writeWorkspace({
-        ...current,
-        ledger: incoming?.ledger ?? current.ledger,
-        cloudRevision: conflict.revision,
-        ownerId: session.user.id,
-        pending: choice === "keep-local" || Boolean(incoming?.changed),
-        generation: current.generation + 1,
-        updatedAt: new Date().toISOString(),
-      });
-      await db.outbox.where("workspace").equals("real").delete();
-      await db.conflicts.delete("real");
-    },
+        await db.outbox.where("workspace").equals("real").delete();
+        await db.conflicts.delete("real");
+      },
+    ),
   );
   return syncLedger(repository);
 }

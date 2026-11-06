@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
+import userEvent from "@testing-library/user-event";
 import { LanguageProvider } from "../../context/LanguageProvider";
 import { LedgerSchema, type Ledger } from "../../domain/model";
 import { saveContractChange } from "../../domain/contracts";
@@ -194,7 +195,7 @@ it("keeps separate job balances on their cards without a repeated aggregate summ
 });
 
 describe.each(["bn", "en"] as const)("profile progress in %s", (language) => {
-  it("keeps a compact house-job preview on the profile and opens full totals and history in the dedicated job page", () => {
+  it("keeps a compact house-job preview on the profile and opens full totals and history in the dedicated job page", async () => {
     const ledger = fixture();
     const before = JSON.stringify(ledger);
     const profile = mount(ledger, "/parties/worker?work=door", language);
@@ -229,10 +230,15 @@ describe.each(["bn", "en"] as const)("profile progress in %s", (language) => {
     expect(
       detail.container.querySelector(".contract-history")?.textContent,
     ).toContain("বারান্দার কাজ যোগ হয়েছে");
-    fireEvent.click(
-      detail.container.querySelector<HTMLButtonElement>(
-        ".job-page-heading .icon-button",
-      )!,
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: language === "bn" ? "কাজের আরও কাজ" : "More work actions",
+      }),
+    );
+    await userEvent.click(
+      screen.getByRole("menuitem", {
+        name: language === "bn" ? "কাজ বদলাই" : "Edit job",
+      }),
     );
     expect(state.entity).toHaveBeenLastCalledWith("contract", "house");
     fireEvent.click(

@@ -32,19 +32,19 @@ Party তৈরির সময় রাখা ধরন/একাধিক দা
 
 ## ২. বর্তমান তথ্যের একক উৎস
 
-| ধারণা                 | বাস্তব domain data                                       | নিয়ম                                                                          |
-| --------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Project               | `project`                                                | এক খাতায় এক বাড়ি; `BDT`, পূর্ণসংখ্যার পয়সা                                    |
-| Party ও role          | `people`, `people.roles`                                 | পরিচয় স্থায়ী; একাধিক দায়িত্বে ইতিহাস বদলায় না                                 |
-| Sector                | `works`                                                  | কাজের বিভাগ; expense category থেকে আলাদা                                      |
-| Category ও মাল        | `EntryLine.costType`, `materialGroups`, `items`          | মাল, মজুরি, পরিবহনসহ খরচের প্রকৃতি; পরিচয় দেখে বদলায় না                       |
-| Agreement ও milestone | `contracts`, `milestones`                                | ভবিষ্যৎ commitment ও ঐচ্ছিক ধাপ; নিজে থেকে খরচ নয়                             |
-| Cost document/line    | `entries.kind: "expense"`, `lines`                       | সত্যি পাওয়া মাল/হয়ে যাওয়া কাজের bill                                          |
-| Cash movement         | `payment`, `refund`, `paymentParts`, কাজের `allocations` | সত্যি টাকা দেওয়া/ফেরত; নতুন bill নয়                                           |
-| Bill settlement       | `paymentAllocations`                                     | নির্দিষ্ট payment-এর কোন পয়সা কোন bill-এ লাগল                                 |
-| Advance/receivable    | `paymentContext`                                         | usable advance ও ফেরতযোগ্য জমার স্পষ্ট পরিচয়; পুরোনো অজানা context অপরিবর্তিত |
-| Credit/adjustment     | `expense_credit`, audit-সহ `adjustment`                  | bill কমানো ও noncash সংশোধন cash refund-এর সমার্থক নয়                         |
-| Attachment/history    | `receipts`, `revisions`, source/activity/removal data    | বর্তমান ও আগের প্রমাণ অক্ষত                                                   |
+| ধারণা              | বাস্তব domain data                                       | নিয়ম                                                                          |
+| ------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Project            | `project`                                                | এক খাতায় এক বাড়ি; `BDT`, পূর্ণসংখ্যার পয়সা                                    |
+| Party ও role       | `people`, `people.roles`                                 | পরিচয় স্থায়ী; একাধিক দায়িত্বে ইতিহাস বদলায় না                                 |
+| Sector             | `works`                                                  | কাজের বিভাগ; expense category থেকে আলাদা                                      |
+| Category ও মাল     | `EntryLine.costType`, `materialGroups`, `items`          | মাল, মজুরি, পরিবহনসহ খরচের প্রকৃতি; পরিচয় দেখে বদলায় না                       |
+| কাজের চুক্তি       | `contracts`                                              | কাজের ঠিক করা টাকা; নিজে থেকে খরচ নয়                                          |
+| Cost document/line | `entries.kind: "expense"`, `lines`                       | সত্যি পাওয়া মাল/হয়ে যাওয়া কাজের bill                                          |
+| Cash movement      | `payment`, `refund`, `paymentParts`, কাজের `allocations` | সত্যি টাকা দেওয়া/ফেরত; নতুন bill নয়                                           |
+| Bill settlement    | `paymentAllocations`                                     | নির্দিষ্ট payment-এর কোন পয়সা কোন bill-এ লাগল                                 |
+| Advance/receivable | `paymentContext`                                         | usable advance ও ফেরতযোগ্য জমার স্পষ্ট পরিচয়; পুরোনো অজানা context অপরিবর্তিত |
+| Credit/adjustment  | `expense_credit`, audit-সহ `adjustment`                  | bill কমানো ও noncash সংশোধন cash refund-এর সমার্থক নয়                         |
+| Attachment/history | `receipts`, `revisions`, source/activity/removal data    | বর্তমান ও আগের প্রমাণ অক্ষত                                                   |
 
 `Obligation` বা payable হলো উপরোক্ত উৎস থেকে পাওয়া read model; আলাদা সম্পাদনাযোগ্য মোট নয়। `partyLedger()`, `reconciledTotals()` ও `contractSummary()` সেই ব্যাখ্যা দেয়। `Purchase`, `Transaction` ও `Payment` নামে একই টাকা তিন জায়গায় রাখা হয়নি। `paymentAllocations` যোগ হলেও cost বা cash আবার যোগ হয় না। পূর্ণ double-entry bookkeeping এই বাড়ির খাতার শর্ত নয়।
 
@@ -157,7 +157,7 @@ Migration developer-এর দায়িত্ব; ব্যবহারকার
 | refundable deposit এবং আলাদা bill                 | ফেরতযোগ্য টাকা ও earned due আলাদা            | বর্তমান                      |
 | একই party-এর একাধিক role; role বদল                | স্থায়ী ID/history                            | বর্তমান                      |
 | agreement ১,০০০; earned ৩০০; paid ১০০             | earned due ২০০, unearned ৭০০                 | বর্তমান                      |
-| milestone; agreement ছাড়া driver service          | commitment নিজে cost নয়; optional agreement  | বর্তমান                      |
+| চুক্তি ছাড়া গাড়িচালকের সেবা                       | commitment নিজে cost নয়; optional agreement  | বর্তমান                      |
 | worker নিজের ৮০০-তে মাল কিনেছেন                   | material reimbursement ৮০০, homeowner cash ০ | বর্তমান সরাসরি reimbursement |
 | পুরোনো অস্পষ্ট payment/adjustment                 | source অক্ষত; review; guessed settlement নয়  | বর্তমান                      |
 | save/reopen/backup/restore                        | facts, receipt ও semantic report থাকে        | বর্তমান                      |

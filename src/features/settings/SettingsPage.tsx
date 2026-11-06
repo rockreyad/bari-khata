@@ -152,6 +152,8 @@ export function SettingsPage() {
       await callback();
     } catch (error) {
       const backupErrors: Record<string, string> = {
+        client_update_required:
+          "নতুন হিসাব রাখার আগে অ্যাপ আপডেট করুন। আপনার লেখা অক্ষত আছে।",
         backup_preview_changed:
           "ফাইল দেখার পর খাতায় পরিবর্তন হয়েছে। ফাইলটি আবার খুলে মিলিয়ে নিন।",
         backup_sync_conflict:

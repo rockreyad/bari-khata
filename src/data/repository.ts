@@ -1,5 +1,15 @@
 import { z } from "zod";
 import {
+  assertFinancialWritesAllowed,
+  draftWriteKey,
+  trackLocalWrite,
+} from "../lib/localWriteBarrier";
+import {
+  hasRetiredWorkMetadata,
+  ledgerBeforeWorkMetadataRemoval,
+  removeRetiredWorkMetadata,
+} from "../domain/legacyWorkMetadata";
+import {
   assertSupportedArchitecture,
   migrateArchitecture,
   preservesArchitecture,
@@ -65,7 +75,9 @@ const LedgerDocumentShape = z
   })
   .passthrough();
 const PersistedLedgerSchema = LedgerDocumentShape.transform((value) =>
-  LedgerSchema.parse(value),
+  hasRetiredWorkMetadata(value)
+    ? removeRetiredWorkMetadata(value)
+    : LedgerSchema.parse(value),
 );
 const WorkspaceSchema = z.object({
   id: ModeSchema,
@@ -145,12 +157,17 @@ async function backupFingerprint(text: string) {
   );
 }
 
+const originalBackupLedgers = new WeakMap<
+  LedgerBackup,
+  { before: string; after: string }
+>();
+
 export async function verifyBackupIntegrity(backup: LedgerBackup) {
   if (!backup.integrity) return;
-  if (
-    (await backupFingerprint(JSON.stringify(backup.ledger))) !==
-    backup.integrity.ledger
-  )
+  const parsed = JSON.stringify(backup.ledger);
+  const original = originalBackupLedgers.get(backup);
+  const checked = original?.after === parsed ? original.before : parsed;
+  if ((await backupFingerprint(checked)) !== backup.integrity.ledger)
     throw new Error("backup_checksum_mismatch");
   const records = new Map(
     backup.integrity.receipts.map((receipt) => [receipt.id, receipt.checksum]),
@@ -168,7 +185,9 @@ export async function verifyBackupIntegrity(backup: LedgerBackup) {
 export function validateLedger(value: unknown): Ledger {
   assertSupportedArchitecture(value);
   LedgerDocumentShape.parse(value);
-  const ledger = validateDomainLedger(value);
+  const ledger = hasRetiredWorkMetadata(value)
+    ? removeRetiredWorkMetadata(value)
+    : validateDomainLedger(value);
   if (!balanceAdjustmentHistoryIsValid(ledger))
     throw new Error("balance_adjustment_history_invalid");
   receiptReferences(ledger);
@@ -272,6 +291,15 @@ export class LedgerRepository {
     change: LedgerChange,
     mode: WorkspaceMode = "real",
     files: ReceiptInput[] = [],
+  ): Promise<void> {
+    assertFinancialWritesAllowed();
+    return trackLocalWrite(this.persistChange(change, mode, files));
+  }
+
+  private async persistChange(
+    change: LedgerChange,
+    mode: WorkspaceMode,
+    files: ReceiptInput[],
   ): Promise<void> {
     const prepared = files.map((input): ReceiptRow => {
       if (
@@ -448,6 +476,14 @@ export class LedgerRepository {
   }
 
   async rollbackArchitectureMigration(
+    id: string,
+    expected: { ledger: Ledger; generation: number },
+  ) {
+    assertFinancialWritesAllowed();
+    return trackLocalWrite(this.rollbackMigration(id, expected));
+  }
+
+  private async rollbackMigration(
     id: string,
     expected: { ledger: Ledger; generation: number },
   ) {
@@ -642,6 +678,14 @@ export class LedgerRepository {
     text: string,
     options: { mode?: WorkspaceMode; replace: true },
   ): Promise<void> {
+    assertFinancialWritesAllowed();
+    return trackLocalWrite(this.restoreBackup(text, options));
+  }
+
+  private async restoreBackup(
+    text: string,
+    options: { mode?: WorkspaceMode; replace: true },
+  ): Promise<void> {
     if (options.replace !== true)
       throw new Error("restore_confirmation_required");
     const backup = parseBackup(text);
@@ -659,6 +703,7 @@ export class LedgerRepository {
       blob: base64ToBlob(receipt.base64, receipt.mime),
       uploadedFor: null,
     }));
+    assertFinancialWritesAllowed();
     await this.database.transaction(
       "rw",
       [
@@ -755,6 +800,14 @@ export class LedgerRepository {
     text: string,
     options: BackupMergeOptions,
   ): Promise<{ changed: boolean }> {
+    assertFinancialWritesAllowed();
+    return trackLocalWrite(this.mergeBackupContents(text, options));
+  }
+
+  private async mergeBackupContents(
+    text: string,
+    options: BackupMergeOptions,
+  ): Promise<{ changed: boolean }> {
     if (options.confirmed !== true)
       throw new Error("restore_confirmation_required");
     const backup = parseBackup(text);
@@ -776,6 +829,7 @@ export class LedgerRepository {
         throw new Error("account_changed");
     };
     checkOwner();
+    assertFinancialWritesAllowed();
     return this.database.transaction(
       "rw",
       [
@@ -900,7 +954,14 @@ export class LedgerRepository {
 
 export function parseBackup(text: string): LedgerBackup {
   if (text.length > 100 * 1024 * 1024) throw new Error("backup_too_large");
-  const backup = BackupSchema.parse(JSON.parse(text));
+  const raw = JSON.parse(text);
+  const backup = BackupSchema.parse(raw);
+  if (hasRetiredWorkMetadata(raw.ledger)) {
+    originalBackupLedgers.set(backup, {
+      before: JSON.stringify(ledgerBeforeWorkMetadataRemoval(raw.ledger)),
+      after: JSON.stringify(backup.ledger),
+    });
+  }
   backup.ledger = validateLedger(backup.ledger);
   const ids = new Set<string>();
   for (const receipt of backup.receipts) {
@@ -1036,12 +1097,15 @@ function storeDraft(
   value: unknown,
 ) {
   const parsed = JsonValueSchema.parse(value);
-  return database.drafts.put({
-    id: `${mode}:${key}`,
-    workspace: mode,
-    value: packDraft(parsed),
-    updatedAt: now(),
-  });
+  return trackLocalWrite(
+    database.drafts.put({
+      id: `${mode}:${key}`,
+      workspace: mode,
+      value: packDraft(parsed),
+      updatedAt: now(),
+    }),
+    draftWriteKey(database.name, mode, key),
+  );
 }
 async function loadDraft<T>(
   database: LedgerDatabase,
@@ -1083,7 +1147,11 @@ export function createWorkspaceStorage(mode: WorkspaceMode = "real") {
     readDraft: <T = unknown>(key: string) => loadDraft<T>(database, mode, key),
     saveDraft: (key: string, value: unknown) =>
       storeDraft(database, mode, key, value),
-    removeDraft: (key: string) => database.drafts.delete(`${mode}:${key}`),
+    removeDraft: (key: string) =>
+      trackLocalWrite(
+        database.drafts.delete(`${mode}:${key}`),
+        draftWriteKey(database.name, mode, key),
+      ),
     getReceipt: async (id: string) => {
       checkAccount();
       const receipt = await repository.getReceipt(id, mode);
@@ -1127,5 +1195,8 @@ export async function readDraft<T = unknown>(
 }
 export async function removeDraft(key: string, mode: WorkspaceMode = "real") {
   const database = getWorkspaceDatabase(mode);
-  await database.drafts.delete(`${mode}:${key}`);
+  await trackLocalWrite(
+    database.drafts.delete(`${mode}:${key}`),
+    draftWriteKey(database.name, mode, key),
+  );
 }

@@ -53,7 +53,6 @@ const fixture = () =>
   LedgerSchema.parse({
     architectureVersion: 2,
     paymentAllocations: [],
-    milestones: [],
     works: [
       { id: "roof", name: "নমুনা ছাদ" },
       { id: "paint", name: "নমুনা রং" },
@@ -202,6 +201,173 @@ it("selects a notebook through the real picker, retains it after other choices a
     saved.entries.find((entry) => entry.kind === "payment")!.allocations,
   ).toEqual([{ workId: "paint", amount: 4000 }]);
   expect(saved.works).toEqual(initial.works);
+}, 10000);
+
+it("selects one historical purchase variant without copying its price or context, restores the draft and saves the same metadata offline", async () => {
+  const initial = await setup(
+    LedgerSchema.parse({
+      ...fixture(),
+      materialGroups: [{ id: "cement", name: "সিমেন্ট" }],
+      items: [
+        {
+          id: "crown",
+          name: "সিমেন্ট",
+          brand: "Crown",
+          materialGroupId: "cement",
+          unit: "বস্তা",
+        },
+        {
+          id: "shah",
+          name: "সিমেন্ট",
+          brand: "Shah",
+          materialGroupId: "cement",
+          unit: "কেজি",
+        },
+      ],
+      entries: [
+        {
+          id: "old-crown",
+          kind: "expense",
+          date: "2026-10-01",
+          personId: "shop",
+          lines: [
+            {
+              id: "crown-line",
+              workId: "roof",
+              itemId: "crown",
+              label: "সিমেন্ট",
+              quantity: "10",
+              unit: "বস্তা",
+              amount: 500000,
+            },
+          ],
+        },
+        {
+          id: "old-shah",
+          kind: "expense",
+          date: "2026-11-01",
+          personId: "shop",
+          lines: [
+            {
+              id: "shah-line",
+              workId: "paint",
+              itemId: "shah",
+              label: "সিমেন্ট",
+              quantity: "5",
+              unit: "কেজি",
+              amount: 900000,
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  const user = userEvent.setup();
+  const path = "/write/purchase?work=paint&person=shop";
+  const view = mount(initial, path);
+  await ready();
+  const amount = screen.getByLabelText(/^মালের দাম/) as HTMLInputElement;
+  expect(document.activeElement).toBe(amount);
+  await user.type(amount, "777");
+  await user.click(screen.getByRole("button", { name: "কিছু দিয়েছি" }));
+  await user.type(screen.getByLabelText("এখন কত দিয়েছি"), "50");
+  await user.click(
+    screen.getByText("ব্র্যান্ড ও পরিমাণ", { selector: "summary span" }),
+  );
+  await user.type(screen.getByLabelText(/^ব্র্যান্ড/), "নিজের লেখা");
+  await user.type(screen.getByLabelText(/^পরিমাণ/), "3");
+  await user.type(screen.getByLabelText(/^একক/), "টি");
+  await user.type(screen.getByLabelText(/^মালের নাম/), "সিমেন্ট");
+  expect((screen.getByLabelText(/^ব্র্যান্ড/) as HTMLInputElement).value).toBe(
+    "নিজের লেখা",
+  );
+  expect(
+    latinDigits((screen.getByLabelText(/^পরিমাণ/) as HTMLInputElement).value),
+  ).toBe("3");
+  expect((screen.getByLabelText(/^একক/) as HTMLInputElement).value).toBe("টি");
+  expect((await repository.read())!.ledger).toEqual(initial);
+  await user.click(
+    screen.getByRole("option", { name: /সিমেন্ট.*Crown.*১০ বস্তা/ }),
+  );
+  expect((screen.getByLabelText(/^ব্র্যান্ড/) as HTMLInputElement).value).toBe(
+    "Crown",
+  );
+  expect(
+    latinDigits((screen.getByLabelText(/^পরিমাণ/) as HTMLInputElement).value),
+  ).toBe("10");
+  expect((screen.getByLabelText(/^একক/) as HTMLInputElement).value).toBe(
+    "বস্তা",
+  );
+  expect(latinDigits(amount.value)).toBe("777");
+  const key = "house-cost:purchase:shop:paint:none:none";
+  await waitFor(async () =>
+    expect(await createWorkspaceStorage().readDraft(key)).toMatchObject({
+      draft: {
+        workId: "paint",
+        personId: "shop",
+        payment: "partial",
+        paid: "50",
+        rows: [
+          {
+            label: "সিমেন্ট",
+            amount: "777",
+            brand: "Crown",
+            quantity: "10",
+            unit: "বস্তা",
+            groupId: "cement",
+          },
+        ],
+      },
+    }),
+  );
+  const draftBefore = (await createWorkspaceStorage().readDraft(key)) as {
+    draft: { date: string };
+  };
+  expect(draftBefore.draft.date).not.toBe("2026-10-01");
+  view.unmount();
+  repository.database.close();
+  await repository.database.open();
+  mount((await repository.read())!.ledger, path);
+  await ready();
+  expect(document.activeElement).toBe(screen.getByLabelText(/^মালের দাম/));
+  expect((screen.getByLabelText(/^ব্র্যান্ড/) as HTMLInputElement).value).toBe(
+    "Crown",
+  );
+  expect(
+    latinDigits((screen.getByLabelText(/^পরিমাণ/) as HTMLInputElement).value),
+  ).toBe("10");
+  expect(
+    latinDigits(
+      (screen.getByLabelText(/^মালের দাম/) as HTMLInputElement).value,
+    ),
+  ).toBe("777");
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(close).toHaveBeenCalledOnce());
+  repository.database.close();
+  await repository.database.open();
+  const saved = (await repository.read())!.ledger;
+  const bill = saved.entries.find(
+    (entry) => entry.kind === "expense" && !entry.id.startsWith("old-"),
+  )!;
+  expect(bill).toMatchObject({
+    date: draftBefore.draft.date,
+    personId: "shop",
+    lines: [
+      {
+        workId: "paint",
+        label: "সিমেন্ট",
+        amount: 77700,
+        itemId: "crown",
+        materialGroupId: "cement",
+        quantity: "10",
+        unit: "বস্তা",
+      },
+    ],
+  });
+  expect(saved.entries.find((entry) => entry.kind === "payment")).toMatchObject(
+    { allocations: [{ workId: "paint", amount: 5000 }] },
+  );
+  expect(await createWorkspaceStorage().readDraft(key)).toBeNull();
 }, 10000);
 
 it("creates and selects a notebook inline without losing the unfinished purchase or creating a financial record early", async () => {
@@ -513,4 +679,78 @@ it("keeps every row of an old multi-work draft although adding another work row 
     ],
   });
   expect(saved.contracts).toEqual(initial.contracts);
+});
+
+it("reopens an old step-linked draft with its work and money intact and saves without step metadata", async () => {
+  const initial = await setup(
+    LedgerSchema.parse({
+      ...fixture(),
+      contracts: [
+        {
+          id: "job",
+          personId: "worker",
+          workId: "roof",
+          title: "নমুনা ঘরের কাজ",
+          total: 100000,
+        },
+      ],
+    }),
+  );
+  const key = "house-cost:charge:worker:roof:job:old-step";
+  const draft = QuickDraftSchema.parse({
+    id: "old-step-bill",
+    personId: "worker",
+    workId: "roof",
+    contractId: "job",
+    date: "2026-11-05",
+    kind: "expense",
+    account: "labour",
+    costType: "labour",
+    payment: "due",
+    note: "আগের অসমাপ্ত বিল",
+    rows: [{ id: "line", label: "নমুনা প্লাস্টার", amount: "250" }],
+  });
+  await createWorkspaceStorage().saveDraft(key, {
+    draft: { ...draft, milestoneId: "old-step" },
+    files: [],
+  });
+  const path = `/write/charge?person=worker&work=roof&contract=job&${new URLSearchParams({ draftKey: key })}`;
+  const first = mount(initial, path, "charge");
+  await ready();
+  expect(screen.getByRole("region", { name: "কাজ" })).toBeTruthy();
+  expect(screen.queryByText("কাজের ধাপ")).toBeNull();
+  expect(
+    screen.getByRole("combobox", { name: "কোন কাজের জন্য" }).textContent,
+  ).toContain("নমুনা ঘরের কাজ");
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "ফিরুন" }));
+  await waitFor(() => expect(close).toHaveBeenCalledOnce());
+  first.unmount();
+  repository.database.close();
+  await repository.database.open();
+  mount((await repository.read())!.ledger, path, "charge");
+  await ready();
+  expect(
+    latinDigits(
+      (screen.getByLabelText(/^বিলের টাকা/) as HTMLInputElement).value,
+    ),
+  ).toBe("250");
+  expect(
+    (
+      screen.getByRole("combobox", {
+        name: "কাজের বিবরণ ১",
+      }) as HTMLInputElement
+    ).value,
+  ).toBe("নমুনা প্লাস্টার");
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await waitFor(() => expect(close).toHaveBeenCalledTimes(2));
+  const saved = (await repository.read())!.ledger;
+  expect(saved.entries).toHaveLength(1);
+  expect(saved.entries[0]).toMatchObject({
+    id: "old-step-bill",
+    contractId: "job",
+    lines: [{ amount: 25000, workId: "roof" }],
+  });
+  expect(saved.entries[0]).not.toHaveProperty("milestoneId");
+  expect(await createWorkspaceStorage().readDraft(key)).toBeNull();
 });

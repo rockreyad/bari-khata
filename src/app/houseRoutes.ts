@@ -27,7 +27,6 @@ export function houseWriteUrl(
     type: options.costType,
     purpose: options.purpose,
     contract: options.contractId,
-    milestone: options.milestoneId,
   }))
     if (value) params.set(key, value);
   return `${base}/write/${action}?${params}`;

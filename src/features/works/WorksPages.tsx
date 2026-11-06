@@ -1,4 +1,5 @@
 import { latinDigits } from "../../lib/numerals";
+import { useComposedSearch } from "../../lib/useComposedSearch";
 import {
   useCallback,
   useEffect,
@@ -53,6 +54,7 @@ import { AppMenu } from "../../components/ui/AppMenu";
 import { orderedWorks } from "./workOverview";
 import { workBalances, type WorkBalances } from "./workBalances";
 import { workLabourSummary } from "./workLabourSummary";
+import { WorkPayables } from "./WorkPayables";
 const statusNames = {
   planned: "শুরু হয়নি",
   ongoing: "কাজ চলছে",
@@ -159,10 +161,15 @@ export function WorksPage() {
     (work) => status === "all" || work.status === status,
   );
   const filterRail = useWorkTabRail(status, `works:${language}`);
-  const changeFilter = (key: "q" | "status", value: string) =>
+  const changeFilter = (key: "q" | "status", value: string): void =>
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
+        if (key !== "q") {
+          const latestQuery = searchInput.getCommittedQuery();
+          if (latestQuery) next.set("q", latestQuery);
+          else next.delete("q");
+        }
         if (value && !(key === "status" && value === "all"))
           next.set(key, value);
         else next.delete(key);
@@ -170,6 +177,9 @@ export function WorksPage() {
       },
       { replace: key === "q" },
     );
+  const searchInput = useComposedSearch(search, (value) =>
+    changeFilter("q", value),
+  );
   return (
     <div className="page-flow works-directory">
       <header className="page-heading works-directory-heading">
@@ -179,27 +189,19 @@ export function WorksPage() {
           {t("নতুন খাতা বানান")}
         </button>
       </header>
-      <button
-        type="button"
-        className="text-button"
-        onClick={() => go("/works")}
-      >
-        {t("সব কাজ")}
-      </button>
       <section className="works-directory-tools">
         <label className="works-search">
           <MagnifyingGlassIcon size={20} aria-hidden="true" />
           <input
             aria-label={t("খাতা খুঁজুন")}
             placeholder={t("খাতার নাম লিখুন")}
-            value={search}
-            onChange={(event) => changeFilter("q", event.target.value)}
+            {...searchInput.inputProps}
           />
-          {search ? (
+          {searchInput.value ? (
             <button
               type="button"
               aria-label={t("খোঁজা মুছুন")}
-              onClick={() => changeFilter("q", "")}
+              onClick={searchInput.clear}
             >
               <XIcon size={17} />
             </button>
@@ -282,14 +284,15 @@ export function WorksPage() {
           {search || status !== "all" ? (
             <button
               className="text-button"
-              onClick={() =>
+              onClick={() => {
+                searchInput.clear();
                 setParams((previous) => {
                   const next = new URLSearchParams(previous);
                   next.delete("q");
                   next.delete("status");
                   return next;
-                })
-              }
+                });
+              }}
             >
               {t("সব খাতা দেখুন")}
             </button>
@@ -563,6 +566,9 @@ export function WorkPage() {
             <strong>{money(row.amount)}</strong>
           </div>
         ))}
+        {balance.valid && balance.reconciledPayable !== null ? (
+          <WorkPayables workId={work.id} />
+        ) : null}
         {balance.valid && balance.costCorrection !== 0 ? (
           <div className="work-known-due">
             <span>

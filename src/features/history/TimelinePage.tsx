@@ -18,6 +18,7 @@ import {
 } from "./timeline";
 import "./timeline.css";
 import { adjustmentBasisLabels } from "./adjustmentDisplay";
+import { useComposedSearch } from "../../lib/useComposedSearch";
 
 const filters = [
   ["all", "সব ঘটনা"],
@@ -33,6 +34,7 @@ export function TimelinePage() {
   const raw = params.get("type") ?? "all";
   const type = filters.find(([value]) => value === raw)?.[0] ?? "all";
   const query = params.get("q") ?? "";
+  const searchInput = useComposedSearch(query, (value) => filter("q", value));
   const rawPage = params.get("page");
   const deferredQuery = useDeferredValue(query);
   const searching =
@@ -55,14 +57,22 @@ export function TimelinePage() {
     setParams(
       (previous) => {
         if (previous.get("page") !== rawPage) return previous;
+        if ((previous.get("q") ?? "") !== searchInput.getCommittedQuery())
+          return previous;
+        if (
+          (previous.get("q") ?? "") !== query ||
+          (previous.get("type") ?? "all") !== raw
+        )
+          return previous;
         const next = new URLSearchParams(previous);
+        applyCommittedQuery(next);
         if (canonicalPage) next.set("page", canonicalPage);
         else next.delete("page");
         return next;
       },
       { replace: true },
     );
-  }, [canonicalPage, rawPage, searching, setParams]);
+  }, [canonicalPage, rawPage, searching, query, raw, setParams]);
   useEffect(() => {
     if (!focusPage.current) return;
     focusPage.current = false;
@@ -73,6 +83,7 @@ export function TimelinePage() {
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
+        applyCommittedQuery(next);
         if (value && (key !== "type" || value !== "all")) next.set(key, value);
         else next.delete(key);
         next.delete("page");
@@ -81,12 +92,18 @@ export function TimelinePage() {
       { replace: true },
     );
   }
+  function applyCommittedQuery(next: URLSearchParams) {
+    const value = searchInput.getCommittedQuery();
+    if (value) next.set("q", value);
+    else next.delete("q");
+  }
   function changePage(page: number) {
     if (searching || page < 1 || page > current.count || page === current.page)
       return;
     focusPage.current = true;
     setParams((previous) => {
       const next = new URLSearchParams(previous);
+      applyCommittedQuery(next);
       if (page === 1) next.delete("page");
       else next.set("page", String(page));
       return next;
@@ -122,8 +139,7 @@ export function TimelinePage() {
         <input
           aria-label={t("টাইমলাইনে খুঁজুন")}
           placeholder={t("নাম বা কারণ লিখুন")}
-          value={query}
-          onChange={(event) => filter("q", event.target.value)}
+          {...searchInput.inputProps}
         />
       </label>
       <div

@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
-import { effectiveAccounts } from "../../domain/effectiveAccounts";
+import { useId, useMemo, useState } from "react";
 import { cashSummary } from "../../domain/cashSummary";
 import { CashReport } from "./CashReport";
 import { reportMode } from "./reportMode";
 import { useSearchParams } from "react-router";
 import {
   ArrowRightIcon,
+  CalendarDotsIcon,
   DownloadSimpleIcon,
   FunnelSimpleIcon,
   MagnifyingGlassIcon,
@@ -16,6 +16,8 @@ import { useLanguageContext } from "../../context/LanguageProvider";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { EntryList } from "../../components/ui/EntryList";
+import { SpendingSeriesChart } from "../../components/ui/SpendingChart";
+import { useComposedSearch } from "../../lib/useComposedSearch";
 import { Sheet } from "../../components/Sheet";
 import {
   accountNames,
@@ -28,11 +30,12 @@ import { reportAdjustments } from "./reportAdjustments";
 import {
   analyticsCsv,
   breakdownRows,
-  costRows,
+  buildCostReportIndex,
   emptyFilters,
   filterCostRows,
   matchingEntries,
   summarizeRows,
+  selectCostReport,
   reportSection,
   sectionRows,
   type AnalyticsDimension,
@@ -76,7 +79,7 @@ export function filtersFromSearch(
     if (params.has(key))
       (next as Record<string, string>)[field] = (params.get(key) ?? "").slice(
         0,
-        field === "query" ? 300 : 200,
+        field === "query" ? 300 : field === "brand" ? 4096 : 200,
       );
   if (!params.has("group")) next.groupId = initialGroupId;
   if (!["all", "needs_review", "confirmed"].includes(next.review))
@@ -115,6 +118,12 @@ function CostAnalyticsPage({
   const section = reportSection(params.get("section"), filters.costType);
   const [filterOpen, setFilterOpen] = useState(false);
   const [limit, setLimit] = useState(20);
+  const month = params.get("month") ?? "";
+  const [chartOpen, setChartOpen] = useState(Boolean(month));
+  const chartId = useId();
+  const searchInput = useComposedSearch(filters.query, (value) =>
+    update({ query: value }),
+  );
   const rawAccount = params.get("account");
   const account = ["materials", "labour", "other"].includes(rawAccount ?? "")
     ? (rawAccount as Account)
@@ -126,17 +135,32 @@ function CostAnalyticsPage({
         ? "labour"
         : null;
   const cashAccount = account ?? sectionAccount;
+  const reportIndex = useMemo(() => {
+    try {
+      return buildCostReportIndex(ledger);
+    } catch {
+      return null;
+    }
+  }, [ledger]);
   const allRows = useMemo(() => {
-    const rows = costRows(ledger);
-    if (!account) return rows;
-    const accounts = effectiveAccounts(ledger);
-    return rows.filter((row) => accounts.get(row.entry.id) === account);
-  }, [ledger, account]);
+    if (!reportIndex) return [];
+    if (!account) return reportIndex.rows;
+    const entryIds = new Set(
+      reportIndex.search.documents
+        .filter((document) => document.account === account)
+        .map((document) => document.entry.id),
+    );
+    return reportIndex.rows.filter((row) => entryIds.has(row.entry.id));
+  }, [reportIndex, account]);
   const hasMaterialGroups = allRows.some(
     (row) => row.line.costType === "material" && row.groupId,
   );
   const visibleDimensions = dimensions.filter(
-    (d) => section === "material" || d.id === "work" || d.id === "person",
+    (d) =>
+      section === "all" ||
+      section === "material" ||
+      d.id === "work" ||
+      d.id === "person",
   );
   const dimension: AnalyticsDimension = visibleDimensions.some(
     (d) => d.id === params.get("by"),
@@ -151,11 +175,38 @@ function CostAnalyticsPage({
     () => sectionRows(allRows, section),
     [allRows, section],
   );
-  const rows = useMemo(
-    () => filterCostRows(selectedSection, filters),
-    [selectedSection, filters],
-  );
-  const totals = useMemo(() => summarizeRows(rows), [rows]);
+  const derived = useMemo(() => {
+    if (!reportIndex) return null;
+    try {
+      const report = selectCostReport(reportIndex, filters, {
+        section,
+        account: account ?? undefined,
+        month,
+      });
+      const groupScope = filterCostRows(selectedSection, {
+        groupId: filters.groupId,
+      });
+      return {
+        report,
+        rows: report.rows,
+        totals: summarizeRows(report.rows),
+        breakdown: breakdownRows(report.rows, dimension),
+        matches: matchingEntries(report.rows),
+        groupScope,
+        availableItems: breakdownRows(groupScope, "item"),
+      };
+    } catch {
+      return null;
+    }
+  }, [
+    reportIndex,
+    filters,
+    section,
+    account,
+    month,
+    dimension,
+    selectedSection,
+  ]);
   // Corrections have account/work scope, not individual line classifications.
   const completeCorrectionScope =
     (section === "all" || sectionAccount !== null) &&
@@ -166,6 +217,7 @@ function CostAnalyticsPage({
     !filters.usage &&
     !filters.costType &&
     !filters.query &&
+    !month &&
     filters.review === "all" &&
     filters.dates === "all";
   const financialScope = {
@@ -189,21 +241,55 @@ function CostAnalyticsPage({
               : filters.personId,
         })
       : null;
-  const breakdown = useMemo(
-    () => breakdownRows(rows, dimension),
-    [rows, dimension],
+  const entries = useMemo(
+    () =>
+      [...(derived?.report.search.entries ?? [])].sort(
+        (a, b) =>
+          (b.date ?? "").localeCompare(a.date ?? "") ||
+          b.createdAt.localeCompare(a.createdAt),
+      ),
+    [derived],
   );
-  const matches = useMemo(() => matchingEntries(rows), [rows]);
-  const groupScope = filterCostRows(selectedSection, {
-    groupId: filters.groupId,
-  });
-  const brands = [
-    ...new Set(groupScope.map((row) => row.brand).filter(Boolean)),
-  ].sort();
+  if (!derived)
+    return (
+      <div className="report-page">
+        <header className="page-heading">
+          <h1>{t("মাল ও কাজের দাম")}</h1>
+        </header>
+        <p role="status">{t("টাকার অঙ্ক বেশি হয়েছে।")}</p>
+      </div>
+    );
+  const {
+    report,
+    rows,
+    totals,
+    breakdown,
+    matches,
+    groupScope,
+    availableItems,
+  } = derived;
+  const availableBrands = new Map(
+    groupScope.flatMap((row) =>
+      row.brandIdentity
+        ? [[row.brandIdentity.id, row.brandIdentity] as const]
+        : [],
+    ),
+  );
+  const selectedBrand =
+    filters.brand && filters.brand !== "__unknown__"
+      ? (reportIndex?.brands.resolve(filters.brand) ?? null)
+      : null;
+  if (selectedBrand) availableBrands.set(selectedBrand.id, selectedBrand);
+  const brands = [...availableBrands.values()].sort((a, b) =>
+    a.label.localeCompare(b.label),
+  );
+  const selectedBrandValue =
+    filters.brand === "__unknown__"
+      ? "__unknown__"
+      : (selectedBrand?.id ?? filters.brand);
   const usages = [
     ...new Set(groupScope.map((row) => row.usage).filter(Boolean)),
   ].sort();
-  const availableItems = breakdownRows(groupScope, "item");
   const group = ledger.materialGroups.find((g) => g.id === filters.groupId);
   const person = ledger.people.find((p) => p.id === filters.personId);
   const relevantPeople = ledger.people.filter(
@@ -212,25 +298,59 @@ function CostAnalyticsPage({
       selectedSection.some((row) => row.entry.personId === person.id),
   );
   const work = ledger.works.find((w) => w.id === filters.workId);
+  const cashPeriod = (() => {
+    if (month === "undated" || report.search.monthInvalid) return null;
+    let from = filters.from,
+      to = filters.to;
+    if (month) {
+      const start = `${month}-01`;
+      const endDate = new Date(`${start}T00:00:00.000Z`);
+      endDate.setUTCMonth(endDate.getUTCMonth() + 1, 0);
+      const end = endDate.toISOString().slice(0, 10);
+      from = from && from > start ? from : start;
+      to = to && to < end ? to : end;
+    }
+    return from && to && from > to ? null : { from, to };
+  })();
   function showPayments() {
+    if (!cashPeriod) return;
     const next = new URLSearchParams({ mode: "cash" });
-    for (const key of ["work", "person", "from", "to", "q"])
+    for (const key of ["work", "person", "q"])
       if (params.get(key)) next.set(key, params.get(key)!);
+    if (cashPeriod.from) next.set("from", cashPeriod.from);
+    if (cashPeriod.to) next.set("to", cashPeriod.to);
+    const latestQuery = searchInput.getCommittedQuery();
+    if (latestQuery) next.set("q", latestQuery);
+    else next.delete("q");
     if (next.get("person") === "__unknown__")
       next.set("person", "__anonymous__");
     if (cashAccount) next.set("account", cashAccount);
     setParams(next);
   }
-  function update(change: Partial<AnalyticsFilters>, reset = false) {
+  function scopedParams() {
+    const next = new URLSearchParams(params);
+    const query = searchInput.getCommittedQuery();
+    if (query) next.set("q", query);
+    else next.delete("q");
+    return next;
+  }
+  function update(
+    change: Partial<AnalyticsFilters>,
+    reset = false,
+    by?: AnalyticsDimension,
+  ) {
+    if (reset) searchInput.clear();
     const next = reset
       ? { ...emptyFilters, ...change }
-      : { ...filters, ...change };
+      : { ...filters, query: searchInput.getCommittedQuery(), ...change };
     if (change.groupId !== undefined && change.groupId !== filters.groupId) {
       next.itemId = "";
       next.brand = "";
       next.usage = "";
     }
-    const search = new URLSearchParams(params);
+    const search = scopedParams();
+    search.delete("month");
+    if (by) search.set("by", by);
     if (reset) search.set("section", section);
     for (const [field, key] of Object.entries(queryKeys)) {
       const value = (next as Record<string, string>)[field];
@@ -243,7 +363,8 @@ function CostAnalyticsPage({
     setLimit(20);
   }
   function chooseSection(id: ReportSection) {
-    const next = new URLSearchParams(params);
+    const next = scopedParams();
+    next.delete("month");
     next.set("section", id);
     if (id !== "all") next.delete("account");
     ["type", "item", "brand", "usage", "by"].forEach((key) => next.delete(key));
@@ -260,19 +381,18 @@ function CostAnalyticsPage({
       costType: "costType",
       person: "personId",
     };
-    update({ [fields[dimension]]: id });
-    if (dimension === "group") {
-      setParams(
-        (previous) => {
-          const next = new URLSearchParams(previous);
-          next.set("group", id);
-          next.set("by", "work");
-          ["item", "brand", "usage"].forEach((key) => next.delete(key));
-          return next;
-        },
-        { replace: true },
-      );
-    }
+    update(
+      { [fields[dimension]]: id },
+      false,
+      dimension === "group" ? "work" : undefined,
+    );
+  }
+  function chooseMonth(value: string) {
+    const next = scopedParams();
+    if (value) next.set("month", value);
+    else next.delete("month");
+    setParams(next, { replace: true, preventScrollReset: true });
+    setLimit(20);
   }
   const filterChips: { label: string; field: keyof AnalyticsFilters }[] = [];
   if (filters.groupId)
@@ -292,7 +412,7 @@ function CostAnalyticsPage({
       label:
         filters.brand === "__unknown__"
           ? t("ব্র্যান্ড দেওয়া নেই")
-          : filters.brand,
+          : (selectedBrand?.label ?? filters.brand),
       field: "brand",
     });
   if (filters.usage)
@@ -324,17 +444,19 @@ function CostAnalyticsPage({
       field: "to",
     });
   const heading =
-    section === "all"
-      ? t("মাল ও কাজের দাম")
-      : section === "material"
-        ? group
-          ? t("{{name}} — কোথায় কত", { name: group.name })
-          : t("মালের খরচ")
-        : section === "labour"
-          ? t("মজুরির বিল")
-          : section === "transport"
-            ? t("আনা ও নামানোর খরচ")
-            : t("অন্য খরচ");
+    group && (section === "all" || section === "material")
+      ? t("{{name}} — কোথায় কত", { name: group.name })
+      : section === "all"
+        ? t("মাল ও কাজের দাম")
+        : section === "material"
+          ? group
+            ? t("{{name}} — কোথায় কত", { name: group.name })
+            : t("মালের খরচ")
+          : section === "labour"
+            ? t("মজুরির বিল")
+            : section === "transport"
+              ? t("আনা ও নামানোর খরচ")
+              : t("অন্য খরচ");
   const scopeLabel = [
     work?.name ?? t("সব কাজ মিলিয়ে"),
     account ? t(accountNames[account as keyof typeof accountNames]) : "",
@@ -354,11 +476,27 @@ function CostAnalyticsPage({
         .join(" + "),
     ]),
   );
+  const selectedByEntry = new Map(
+    matches.map((match) => [match.entry.id, match]),
+  );
+  const partial = new Set(report.search.matchedPartEntryIds);
   const subtitles = Object.fromEntries(
-    matches.map((match) => [
-      match.entry.id,
-      [...new Set(match.lines.map((row) => row.workName))].join(" · "),
-    ]),
+    entries.map((entry) => {
+      const match = selectedByEntry.get(entry.id);
+      return [
+        entry.id,
+        [
+          !match
+            ? t("খোঁজে মিলেছে · মোটে ধরা হয়নি")
+            : partial.has(entry.id)
+              ? t("মেলা অংশ")
+              : "",
+          ...new Set(match?.lines.map((row) => row.workName) ?? []),
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      ];
+    }),
   );
   const selectCostTypes =
     section === "all"
@@ -375,7 +513,9 @@ function CostAnalyticsPage({
       <header className="page-heading">
         <div>
           <h1>{t("মাল ও কাজের দাম")}</h1>
-          <p>{t("যে খরচ জানতে চান, সেটি খুলে দেখুন।")}</p>
+          <p>
+            {t("বিলের দাম থেকে মাল ফেরত বাদ আছে। টাকা দেওয়া আবার যোগ হয় না।")}
+          </p>
         </div>
         <button
           className="report-download icon-button"
@@ -392,7 +532,7 @@ function CostAnalyticsPage({
           <DownloadSimpleIcon size={21} />
         </button>
       </header>
-      {!labourPayments ? (
+      {!labourPayments && cashPeriod ? (
         <button className="text-button" onClick={showPayments}>
           {t(
             cashAccount === "other"
@@ -409,10 +549,7 @@ function CostAnalyticsPage({
         role="tablist"
         aria-label={t("খরচের খাত")}
       >
-        {(section === "all"
-          ? [{ id: "all" as const, label: "সব দাম" }, ...sections]
-          : sections
-        ).map((item) => (
+        {[{ id: "all" as const, label: "সব দাম" }, ...sections].map((item) => (
           <button
             key={item.id}
             role="tab"
@@ -434,14 +571,15 @@ function CostAnalyticsPage({
                 ? "মিস্ত্রি বা কাজ খুঁজুন"
                 : "মাল, দোকান বা খাতা খুঁজুন",
             )}
-            value={filters.query}
-            onChange={(e) => update({ query: e.target.value })}
+            maxLength={300}
+            {...searchInput.inputProps}
           />
-          {filters.query ? (
+          {searchInput.value ? (
             <button
               className="history-clear"
               aria-label={t("খোঁজ মুছুন")}
-              onClick={() => update({ query: "" })}
+              type="button"
+              onClick={searchInput.clear}
             >
               <XIcon size={17} />
             </button>
@@ -484,7 +622,95 @@ function CostAnalyticsPage({
           {formatDigits(scopeLabel)}
           {section === "material" ? ` · ${t("মালের দাম")}` : ""}
         </small>
-        {totals.returns ? <p>{t("ফেরত ও সমন্বয় বাদ দেওয়া হয়েছে।")}</p> : null}
+        {totals.returns ? (
+          <p>
+            {t("মাল ফেরতের {{amount}} বাদ দেওয়া হয়েছে।", {
+              amount: money(totals.returns),
+            })}
+          </p>
+        ) : null}
+        <div className="report-month-controls">
+          {report.search.monthlyRows.length ? (
+            <button
+              type="button"
+              className="text-button"
+              aria-expanded={chartOpen}
+              aria-controls={chartId}
+              onClick={() => setChartOpen((value) => !value)}
+            >
+              <CalendarDotsIcon size={17} aria-hidden="true" />
+              {t("মাসে মাসে")}
+            </button>
+          ) : null}
+          {month ? (
+            <>
+              <span>
+                {month === "undated"
+                  ? t("তারিখ লেখা নেই")
+                  : report.search.monthInvalid
+                    ? t("বাছাইটি পাওয়া যায়নি। আবার বেছে নিন।")
+                    : date(`${month}-01`, {
+                        day: undefined,
+                        month: "long",
+                        year: "numeric",
+                      })}
+              </span>
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => chooseMonth("")}
+              >
+                {t("সব মাস দেখুন")}
+              </button>
+            </>
+          ) : null}
+        </div>
+        {chartOpen && report.search.monthlyRows.length ? (
+          <div id={chartId} className="report-cost-chart">
+            <SpendingSeriesChart
+              key={JSON.stringify([filters, section, account])}
+              rows={report.search.monthlyRows}
+              selectedMonth={month}
+              onMonthChange={chooseMonth}
+              presentation="embedded"
+              windowed
+            />
+          </div>
+        ) : null}
+        {report.search.baseUndatedEntryCount > 0 ? (
+          <button
+            type="button"
+            className="report-undated"
+            aria-pressed={month === "undated"}
+            onClick={() => chooseMonth(month === "undated" ? "" : "undated")}
+          >
+            <span>{t("তারিখ লেখা নেই")}</span>
+            <strong>{money(report.search.baseUndatedCost)}</strong>
+          </button>
+        ) : null}
+        {report.search.groupAmbiguousEntryIds.length ? (
+          <p role="status">
+            {t(
+              "কিছু লেখায় একাধিক মালের নাম বা ধরন মিলেছে। অস্পষ্ট অংশ এই মালের মোটে ধরা হয়নি।",
+            )}
+          </p>
+        ) : null}
+        {report.search.partiallyAmbiguousEntryIds.length ? (
+          <p role="status">
+            {t(
+              "কিছু ফেরতের মালের পরিচয় মেলেনি। শুধু নিশ্চিত অংশ মোটে ধরা হয়েছে।",
+            )}
+          </p>
+        ) : null}
+        {report.search.ambiguousEntryIds.some(
+          (id) => !report.search.groupAmbiguousEntryIds.includes(id),
+        ) ? (
+          <p role="status">
+            {t(
+              "কিছু হিসাব শুধু অন্য তথ্যে মিলেছে। সেগুলো খরচের মোটে ধরা হয়নি।",
+            )}
+          </p>
+        ) : null}
         {labourPayments ? (
           <div className="report-paid-summary">
             <button
@@ -518,16 +744,11 @@ function CostAnalyticsPage({
           <AppSelect
             aria-label={t("হিসাব কীভাবে দেখাব")}
             value={dimension}
-            onChange={(e) =>
-              setParams(
-                (previous) => {
-                  const next = new URLSearchParams(previous);
-                  next.set("by", e.target.value);
-                  return next;
-                },
-                { replace: true },
-              )
-            }
+            onChange={(e) => {
+              const next = scopedParams();
+              next.set("by", e.target.value);
+              setParams(next, { replace: true });
+            }}
           >
             {visibleDimensions.map((d) => (
               <option key={d.id} value={d.id}>
@@ -572,14 +793,14 @@ function CostAnalyticsPage({
         </div>
         <EntryList
           ledger={ledger}
-          entries={matches.slice(0, limit).map((match) => match.entry)}
+          entries={entries.slice(0, limit)}
           onEntry={(id) => onEntry?.(id)}
           amounts={amounts}
           titles={titles}
           subtitles={subtitles}
           grouped
         />
-        {matches.length > limit ? (
+        {entries.length > limit ? (
           <button
             className="history-load-more"
             onClick={() => setLimit(limit + 30)}
@@ -658,7 +879,7 @@ function CostAnalyticsPage({
                 <option value="__unknown__">{t("মালের নাম দেওয়া নেই")}</option>
               </AppSelect>
             </label>
-            {section === "material" ? (
+            {section === "all" || section === "material" ? (
               <>
                 <label>
                   {t("মালের নাম")}
@@ -678,15 +899,26 @@ function CostAnalyticsPage({
                   <label>
                     {t("ব্র্যান্ড")}
                     <AppSelect
-                      value={filters.brand}
+                      value={selectedBrandValue}
                       onChange={(e) => update({ brand: e.target.value })}
                     >
                       <option value="">{t("সব ব্র্যান্ড")}</option>
+                      {groupScope.some((row) => !row.brandIdentity) ||
+                      filters.brand === "__unknown__" ? (
+                        <option value="__unknown__">
+                          {t("ব্র্যান্ড দেওয়া নেই")}
+                        </option>
+                      ) : null}
                       {brands.map((brand) => (
-                        <option key={brand} value={brand}>
-                          {brand}
+                        <option key={brand.id} value={brand.id}>
+                          {brand.label}
                         </option>
                       ))}
+                      {filters.brand &&
+                      filters.brand !== "__unknown__" &&
+                      !selectedBrand ? (
+                        <option value={filters.brand}>{filters.brand}</option>
+                      ) : null}
                     </AppSelect>
                   </label>
                   <label>

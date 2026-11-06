@@ -38,6 +38,34 @@
   padding-bottom: 4px;
   text-align: right;
 }
+.spending-chart-window {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.spending-chart-window > span {
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.spending-chart-window button {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  flex: none;
+  border-radius: 10px;
+  color: var(--accent);
+}
+.spending-chart-window button:disabled {
+  opacity: 0.35;
+}
+.is-windowed.is-embedded .spending-chart-canvas {
+  margin-top: 30px;
+}
 .spending-chart-canvas {
   position: relative;
   margin-top: 15px;

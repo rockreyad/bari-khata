@@ -16,6 +16,7 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
+import { useComposedInput } from "../../lib/useComposedInput";
 import { readShare, type SharedStatement } from "./shareClient";
 import { useSharedStatement } from "./useSharedStatement";
 import { SharedEntryDetail } from "./SharedEntryDetail";
@@ -253,6 +254,10 @@ export function SharedStatementPage() {
   const { t, money, date, formatDigits } = useLanguageContext();
   const pager = useSharedStatement();
   const { token, statement, query, busy, missing, error, stale } = pager;
+  const search = useComposedInput(query, pager.setQuery, {
+    scope: token,
+    restore: true,
+  });
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const [contractPage, setContractPage] = useState(0);
@@ -686,17 +691,16 @@ export function SharedStatementPage() {
               <MagnifyingGlassIcon size={19} aria-hidden="true" />
               <input
                 type="search"
-                value={query}
                 maxLength={200}
                 aria-label={t("লেনদেন খুঁজুন")}
                 placeholder={t("বিবরণ, তারিখ বা টাকা দিয়ে খুঁজুন")}
-                onChange={(event) => pager.setQuery(event.target.value)}
+                {...search.inputProps}
               />
-              {query ? (
+              {search.value ? (
                 <button
                   type="button"
                   aria-label={t("খোঁজা মুছুন")}
-                  onClick={() => pager.setQuery("")}
+                  onClick={search.clear}
                 >
                   <XIcon size={17} />
                 </button>

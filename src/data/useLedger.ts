@@ -12,6 +12,7 @@ import {
   type ReceiptInput,
 } from "./repository";
 import { syncLedger, type SyncResult } from "./sync";
+import { assertFinancialWritesAllowed } from "../lib/localWriteBarrier";
 
 export function useLedger(mode: WorkspaceMode) {
   const ownerId = getActiveOwner();
@@ -81,6 +82,7 @@ export function useLedger(mode: WorkspaceMode) {
 
   const save = useCallback(
     async (change: LedgerChange, files: ReceiptInput[] = []) => {
+      assertFinancialWritesAllowed();
       await repository.save(change, mode, files);
       if (mode === "real") void sync().catch(() => {});
     },

@@ -15,6 +15,7 @@ import { normalizeLabel as normalized } from "../../lib/normalizeLabel";
 import "./controls.css";
 
 export type AppSuggestion = {
+  id?: string;
   value: string;
   label?: string;
   description?: string;
@@ -24,25 +25,30 @@ export type AppComboboxProps = Omit<
   "list"
 > & {
   suggestions: readonly AppSuggestion[];
+  fuzzy?: boolean;
+  onSuggestionSelect?: (suggestion: AppSuggestion) => void;
 };
 export function comboboxSuggestions(
   suggestions: readonly AppSuggestion[],
 ): AppSuggestion[] {
   const unique = new Map<
     string,
-    { value: string; label?: string; descriptions: Set<string> }
+    { id?: string; value: string; label?: string; descriptions: Set<string> }
   >();
   for (const suggestion of suggestions) {
     if (typeof suggestion.value !== "string" || !suggestion.value.trim())
       continue;
     const value = suggestion.value.trim();
-    const key = normalized(value);
+    const key = JSON.stringify(
+      suggestion.id ? ["id", suggestion.id] : ["value", normalized(value)],
+    );
     const existing = unique.get(key);
     if (existing) {
       if (suggestion.description?.trim())
         existing.descriptions.add(suggestion.description.trim());
     } else
       unique.set(key, {
+        ...(suggestion.id ? { id: suggestion.id } : {}),
         value,
         label: suggestion.label,
         descriptions: new Set(
@@ -50,7 +56,8 @@ export function comboboxSuggestions(
         ),
       });
   }
-  return [...unique.values()].map(({ value, label, descriptions }) => ({
+  return [...unique.values()].map(({ id, value, label, descriptions }) => ({
+    ...(id ? { id } : {}),
     value,
     label,
     description: [...descriptions].join(" · "),
@@ -60,6 +67,7 @@ export function matchingSuggestions(
   suggestions: readonly AppSuggestion[],
   query: string,
   limit = 8,
+  fuzzy = false,
 ) {
   const terms = normalized(query).split(" ").filter(Boolean);
   return suggestions
@@ -67,7 +75,13 @@ export function matchingSuggestions(
       const haystack = normalized(
         `${suggestion.value} ${suggestion.label ?? ""} ${suggestion.description ?? ""}`,
       );
-      return terms.every((term) => haystack.includes(term));
+      return terms.every(
+        (term) =>
+          haystack.includes(term) ||
+          (fuzzy &&
+            term.length >= 3 &&
+            haystack.split(" ").some((word) => nearSuggestion(term, word))),
+      );
     })
     .sort(
       (a, b) =>
@@ -77,14 +91,38 @@ export function matchingSuggestions(
     .slice(0, limit);
 }
 
+function nearSuggestion(a: string, b: string) {
+  const limit = a.length >= 7 ? 2 : 1;
+  if (Math.abs(a.length - b.length) > limit) return false;
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 0; i < a.length; i++) {
+    const next = [i + 1];
+    for (let j = 0; j < b.length; j++)
+      next.push(
+        Math.min(
+          next[j] + 1,
+          previous[j + 1] + 1,
+          previous[j] + Number(a[i] !== b[j]),
+        ),
+      );
+    if (Math.min(...next) > limit) return false;
+    previous = next;
+  }
+  return previous[b.length] <= limit;
+}
+
 export function AppCombobox({
   suggestions,
+  fuzzy = false,
+  onSuggestionSelect,
   value,
   defaultValue,
   onChange,
   onFocus,
   onBlur,
   onKeyDown,
+  onCompositionStart,
+  onCompositionEnd,
   className = "",
   style,
   disabled,
@@ -102,6 +140,7 @@ export function AppCombobox({
   const anchor = useRef<HTMLSpanElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const quietFocus = useRef(false);
+  const composing = useRef(false);
   const id = useId();
   const listId = `${id}-suggestions`;
   const choices = useMemo(
@@ -109,13 +148,14 @@ export function AppCombobox({
     [suggestions],
   );
   const shown = useMemo(
-    () => matchingSuggestions(choices, current),
-    [choices, current],
+    () => matchingSuggestions(choices, current, 8, fuzzy),
+    [choices, current, fuzzy],
   );
   const visible = open && !disabled && !readOnly && choices.length > 0;
   const choose = (suggestion: AppSuggestion) => {
     setInternal(suggestion.value);
     onChange?.(valueChange<HTMLInputElement>(suggestion.value, name));
+    onSuggestionSelect?.(suggestion);
     setOpen(false);
     setActive(-1);
     quietFocus.current = true;
@@ -158,6 +198,8 @@ export function AppCombobox({
                 : undefined
             }
             onChange={(event) => {
+              if ((event.nativeEvent as InputEvent).isComposing)
+                composing.current = true;
               setInternal(event.target.value);
               setActive(-1);
               setOpen(true);
@@ -170,7 +212,18 @@ export function AppCombobox({
                 setOpen(true);
               }
             }}
-            onBlur={onBlur}
+            onBlur={(event) => {
+              composing.current = false;
+              onBlur?.(event);
+            }}
+            onCompositionStart={(event) => {
+              composing.current = true;
+              onCompositionStart?.(event);
+            }}
+            onCompositionEnd={(event) => {
+              composing.current = false;
+              onCompositionEnd?.(event);
+            }}
             onClick={() => {
               if (!disabled && !readOnly) setOpen(true);
             }}
@@ -178,7 +231,9 @@ export function AppCombobox({
               onKeyDown?.(event);
               if (
                 event.defaultPrevented ||
+                composing.current ||
                 event.nativeEvent.isComposing ||
+                event.nativeEvent.keyCode === 229 ||
                 disabled ||
                 readOnly
               )
@@ -254,7 +309,7 @@ export function AppCombobox({
             {shown.length ? (
               shown.map((suggestion, index) => (
                 <div
-                  key={suggestion.value}
+                  key={suggestion.id ?? suggestion.value}
                   id={`${id}-option-${index}`}
                   role="option"
                   aria-selected={active === index}
@@ -279,7 +334,8 @@ export function AppCombobox({
                       </small>
                     ) : null}
                   </span>
-                  {normalized(suggestion.value) === normalized(current) ? (
+                  {!suggestion.id &&
+                  normalized(suggestion.value) === normalized(current) ? (
                     <CheckIcon size={16} weight="bold" />
                   ) : null}
                 </div>

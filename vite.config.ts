@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { accountPlugin } from "./server/accountPlugin.ts";
@@ -7,6 +8,9 @@ import { sharedReceiptPlugin } from "./server/sharedReceiptPlugin.ts";
 import { mcpPlugin } from "./server/mcpPlugin.js";
 import { phoneOtpPlugin } from "./server/phoneOtpPlugin.ts";
 import { phoneAuthMode } from "./server/phoneOtp.ts";
+import { serviceWorkerSource } from "./scripts/serviceWorker.ts";
+import { checkPwaBuild } from "./scripts/checkPwaBuild.ts";
+import releasePolicy from "./release-policy.json" with { type: "json" };
 
 const { version: appVersion } = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8"),
@@ -48,58 +52,82 @@ function offlineShell(): Plugin {
   return {
     name: "bari-khata-offline-shell",
     apply: "build",
-    generateBundle(_, bundle) {
-      const assets = [
-        "/",
-        "/index.html",
-        "/manifest.webmanifest",
-        "/icon.svg",
-        "/icon-192.png",
-        "/icon-512.png",
-        "/apple-touch-icon.png",
-        "/brands/bkash.svg",
-        ...Object.keys(bundle)
-          .filter((name) => name !== "index.html")
-          .map((name) => `/${name}`),
-      ];
-      const hash = createHash("sha256").update(JSON.stringify(assets));
-      hash.update(readFileSync("index.html"));
-      for (const file of [
-        "manifest.webmanifest",
-        "icon.svg",
-        "icon-192.png",
-        "icon-512.png",
-        "apple-touch-icon.png",
-        "brands/bkash.svg",
-      ])
-        hash.update(readFileSync(`public/${file}`));
-      const version = hash.digest("hex").slice(0, 16);
-      const source = `
-const CACHE = 'bari-khata-${version}';
-const ASSETS = ${JSON.stringify(assets)};
-self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));
-});
-self.addEventListener('activate', event => {
-  event.waitUntil((async () => {
-    for (const name of await caches.keys()) if (name.startsWith('bari-khata-') && name !== CACHE) await caches.delete(name);
-    await self.clients.claim();
-  })());
-});
-self.addEventListener('message', event => {
-  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
-});
-self.addEventListener('fetch', event => {
-  const request = event.request;
-  const url = new URL(request.url);
-  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
-  if (request.mode === 'navigate') {
-    event.respondWith(caches.open(CACHE).then(cache => cache.match('/index.html')).then(cached => cached || fetch(request)));
-  } else if (ASSETS.includes(url.pathname)) {
-    event.respondWith(caches.open(CACHE).then(cache => cache.match(url.pathname)).then(cached => cached || fetch(request)));
-  }
-});`;
-      this.emitFile({ type: "asset", fileName: "sw.js", source });
+    enforce: "post",
+    generateBundle: {
+      order: "post",
+      handler(_, bundle) {
+        const assets = [
+          "/",
+          "/index.html",
+          "/manifest.webmanifest",
+          "/icon.svg",
+          "/icon-192.png",
+          "/icon-512.png",
+          "/apple-touch-icon.png",
+          "/brands/bkash.svg",
+          ...Object.keys(bundle)
+            .filter((name) => name !== "index.html")
+            .filter((name) => name !== "release.json")
+            .map((name) => `/${name}`),
+        ];
+        const html = bundle["index.html"];
+        if (html?.type !== "asset")
+          this.error("The offline shell requires Vite's emitted index.html.");
+        const hash = createHash("sha256").update(JSON.stringify(assets));
+        hash.update(String(html.source));
+        hash.update(serviceWorkerSource.toString());
+        for (const file of [
+          "manifest.webmanifest",
+          "icon.svg",
+          "icon-192.png",
+          "icon-512.png",
+          "apple-touch-icon.png",
+          "brands/bkash.svg",
+        ])
+          hash.update(readFileSync(`public/${file}`));
+        const version = hash.digest("hex").slice(0, 16);
+        html.source = String(html.source).replace(
+          "</head>",
+          `<meta name="bari-build" content="${version}" /></head>`,
+        );
+        const source = serviceWorkerSource(version, assets);
+        this.emitFile({ type: "asset", fileName: "sw.js", source });
+      },
+    },
+    writeBundle(options) {
+      const read = (file: string) =>
+        readFileSync(resolve(options.dir ?? "dist", file), "utf8");
+      checkPwaBuild(
+        read("index.html"),
+        read("sw.js"),
+        JSON.parse(read("release.json")),
+        { latestVersion: appVersion, ...releasePolicy },
+      );
+    },
+  };
+}
+
+function releaseManifest(): Plugin {
+  const source = JSON.stringify({
+    latestVersion: appVersion,
+    ...releasePolicy,
+  });
+  return {
+    name: "bari-khata-release-manifest",
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        if (
+          new URL(request.url ?? "/", "http://localhost").pathname !==
+          "/release.json"
+        )
+          return next();
+        response.setHeader("Content-Type", "application/json");
+        response.setHeader("Cache-Control", "no-store");
+        response.end(source);
+      });
+    },
+    generateBundle() {
+      this.emitFile({ type: "asset", fileName: "release.json", source });
     },
   };
 }
@@ -122,6 +150,7 @@ export default defineConfig(({ mode }) => {
       sharedReceiptPlugin(env),
       mcpPlugin(env),
       react(),
+      releaseManifest(),
       offlineShell(),
     ],
     server: {

@@ -1,0 +1,38 @@
+.receipt-picker,
+.transaction-extras .receipt-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 14px 18px;
+  border: 1px dashed var(--control-border, var(--line));
+  border-radius: 18px;
+  color: var(--accent-strong);
+  background: var(--surface);
+  cursor: pointer;
+  overflow: hidden;
+}
+.receipt-picker > span {
+  font-size: 13px;
+  font-weight: 550;
+}
+.receipt-picker small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  margin-top: 3px;
+}
+.receipt-picker input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.receipt-picker:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}

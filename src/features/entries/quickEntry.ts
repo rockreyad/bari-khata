@@ -59,7 +59,6 @@ export const QuickDraftSchema = z.object({
   paymentPurposeName: text(),
   paymentPurposeNewId: id(),
   contractId: id(),
-  milestoneId: id(),
   costType: z
     .enum(["material", "labour", "transport", "unload", "rental", "other"])
     .default("material"),
@@ -492,7 +491,6 @@ export function buildQuickEntry(
           : "confirmed",
       reviewReason: !draft.workId ? "খাতা পরে বেছে নিন।" : "",
       id: draft.id,
-      ...(draft.milestoneId ? { milestoneId: draft.milestoneId } : {}),
       kind: draft.kind === "return" ? "expense_credit" : "expense",
       lines,
       receipts,

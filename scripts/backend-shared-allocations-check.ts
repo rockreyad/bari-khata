@@ -123,7 +123,6 @@ const allocation = (
 ) => ({ id, paymentId, billId, amount, workId, createdAt: at });
 const ledger = LedgerSchema.parse({
   architectureVersion: 2,
-  milestones: [],
   project: { id: "synthetic", name: "নমুনা ভাগ করা হিসাব" },
   works: [
     { id: "roof", name: "নমুনা ছাদ" },
@@ -170,9 +169,21 @@ const migration = readFileSync(
   .replace(/^begin;\s*/i, "")
   .replace(/\s*commit;$/i, "");
 assert.doesNotMatch(migration, /^\s*(?:begin|commit|rollback)\s*;/im);
+const retirementMigration = readFileSync(
+  new URL(
+    "../supabase/migrations/202611060001_remove_work_milestones.sql",
+    import.meta.url,
+  ),
+  "utf8",
+)
+  .trim()
+  .replace(/^begin;\s*/i, "")
+  .replace(/\s*commit;$/i, "");
 const sql = [
   "begin; set local lock_timeout='2s'; set local statement_timeout='30s';",
   migration,
+  "drop trigger if exists ledger_00_normalize_retired_work_metadata on public.ledger_documents; drop function if exists public.normalize_retired_work_metadata(); drop function if exists private.strip_retired_work_metadata(jsonb);",
+  retirementMigration,
   `insert into auth.users(id,email) values (${quote(owner)}::uuid,${quote(`allocation-share-${owner}@example.invalid`)});`,
   `insert into public.ledger_documents(owner_id,revision,document) values (${quote(owner)}::uuid,1,${json(ledger)});`,
   `insert into public.contact_share_links(owner_id,person_id,account,work_id,token_hash,revoked_at) values (${quote(owner)}::uuid,'shop','materials','roof',encode(extensions.digest(repeat('d',64),'sha256'),'hex'),null);`,

@@ -592,7 +592,7 @@ const copy = {
   },
 };
 describe.each(["bn", "en"] as const)("job details in %s", (language) => {
-  it("uses net paid after refunds, excludes historical/cancelled cash from totals and opens exact job entry/edit context", () => {
+  it("uses net paid after refunds, excludes historical/cancelled cash from totals and opens exact job entry/edit context", async () => {
     const ledger = withPayments();
     const before = JSON.stringify(ledger);
     const { container } = mount(ledger, "/works/job-0", language);
@@ -622,7 +622,20 @@ describe.each(["bn", "en"] as const)("job details in %s", (language) => {
       container.querySelector(".job-detail-panel")?.textContent,
     ).not.toContain("অন্য মিস্ত্রি");
     expect(container.textContent).not.toContain("পুরো বাড়ি");
-    fireEvent.click(screen.getByRole("button", { name: copy[language].edit }));
+    expect(
+      screen.queryByRole("button", { name: copy[language].edit }),
+    ).toBeNull();
+    expect(
+      container.querySelectorAll(".job-page-heading > .icon-button"),
+    ).toHaveLength(1);
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: language === "bn" ? "কাজের আরও কাজ" : "More work actions",
+      }),
+    );
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: copy[language].edit }),
+    );
     expect(state.entity).toHaveBeenCalledWith("contract", "job-0");
     fireEvent.click(screen.getByRole("button", { name: copy[language].pay }));
     expect(state.add).toHaveBeenCalledWith({
@@ -858,14 +871,7 @@ it.each([
     expect(
       screen.getByRole("button", { name: "কাজের অবস্থা বদলাই" }).textContent,
     ).toContain(status === "done" ? "শেষ" : "চলছে");
-    const stages =
-      page.container.querySelector<HTMLDetailsElement>(".job-milestones")!;
-    expect(stages.open).toBe(false);
-    if (paid === 3600000) {
-      await userEvent.click(stages.querySelector("summary")!);
-      expect(screen.getByRole("heading", { name: "কাজের ধাপ" })).toBeTruthy();
-      expect(screen.getByText("ধাপ যোগ করি")).toBeTruthy();
-    }
+    expect(screen.queryByText("কাজের ধাপ")).toBeNull();
     page.unmount();
     page = mount(
       ledger,

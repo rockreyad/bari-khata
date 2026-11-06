@@ -29,6 +29,7 @@ import {
   saveContractChange,
 } from "../../domain/contracts";
 import { latinDigits } from "../../lib/numerals";
+import { useComposedSearch } from "../../lib/useComposedSearch";
 import { sortHistory } from "../history/history";
 import { ContractCard, ContractHistory } from "../works/ContractCard";
 import { JobTile } from "./JobPreview";
@@ -42,7 +43,6 @@ import {
   type JobStatus,
 } from "./jobView";
 import "./jobs.css";
-import { AgreementMilestones } from "./AgreementMilestones";
 
 export function JobsPage() {
   const { ledger, go, entity, base } = useNotebook();
@@ -58,6 +58,9 @@ export function JobsPage() {
     ? params.get("work")!
     : "";
   const query = (params.get("q") ?? "").slice(0, 200);
+  const searchInput = useComposedSearch(query, (value) =>
+    update("q", value.slice(0, 200)),
+  );
   const normalized = latinDigits(query).trim().toLocaleLowerCase();
   const status = ["planned", "ongoing", "done", "unknown"].includes(
     params.get("status") ?? "",
@@ -145,17 +148,24 @@ export function JobsPage() {
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
-        if (value && value !== "all") next.set(key, value);
+        applyCommittedQuery(next);
+        if (value && (key === "q" || value !== "all")) next.set(key, value);
         else next.delete(key);
         return next;
       },
       { replace: true },
     );
   }
+  function applyCommittedQuery(next: URLSearchParams) {
+    const value = searchInput.getCommittedQuery().slice(0, 200);
+    if (value) next.set("q", value);
+    else next.delete("q");
+  }
   function insight(value: "all" | "ongoing" | "due") {
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
+        applyCommittedQuery(next);
         next.delete("status");
         next.delete("balance");
         if (value === "ongoing") next.set("status", "ongoing");
@@ -166,6 +176,7 @@ export function JobsPage() {
     );
   }
   function reset() {
+    searchInput.clear();
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
@@ -176,7 +187,11 @@ export function JobsPage() {
       { replace: true },
     );
   }
-  const origin = location.pathname + location.search;
+  function origin() {
+    const next = new URLSearchParams(params);
+    applyCommittedQuery(next);
+    return location.pathname + (next.size ? `?${next}` : "");
+  }
   return (
     <div className="jobs-page page-flow">
       <header className="page-heading jobs-heading">
@@ -234,9 +249,8 @@ export function JobsPage() {
           <MagnifyingGlassIcon size={20} />
           <input
             aria-label={t("কাজ খুঁজুন")}
-            value={query}
             placeholder={t("কাজের নাম খুঁজুন")}
-            onChange={(event) => update("q", event.target.value)}
+            {...searchInput.inputProps}
           />
         </label>
         <div
@@ -365,7 +379,7 @@ export function JobsPage() {
               job={job}
               balance={balances.get(job.id)}
               showWorker={!personId}
-              onOpen={() => go(jobDetailUrl(job.id, origin, base))}
+              onOpen={() => go(jobDetailUrl(job.id, origin(), base))}
             />
           ))}
         </div>
@@ -489,9 +503,14 @@ export function JobPage() {
                 errorOccurrence: (value.errorOccurrence ?? 0) + 1,
                 error:
                   cause instanceof Error &&
-                  /[\u0980-\u09ff]/.test(cause.message)
-                    ? t(cause.message)
-                    : t("অবস্থা রাখা যায়নি। আবার চেষ্টা করুন।"),
+                  cause.message === "client_update_required"
+                    ? t(
+                        "নতুন হিসাব রাখার আগে অ্যাপ আপডেট করুন। আপনার লেখা অক্ষত আছে।",
+                      )
+                    : cause instanceof Error &&
+                        /[\u0980-\u09ff]/.test(cause.message)
+                      ? t(cause.message)
+                      : t("অবস্থা রাখা যায়নি। আবার চেষ্টা করুন।"),
               }
             : value,
         );
@@ -520,28 +539,7 @@ export function JobPage() {
         {t("ফিরুন")}
       </button>
       <header className="job-page-heading">
-        <div>
-          <h1>{formatDigits(jobName(job, t))}</h1>
-          {worker ? (
-            <button
-              type="button"
-              className="text-button job-worker-link"
-              onClick={() => go(`/parties/${encodeURIComponent(worker.id)}`)}
-            >
-              {formatDigits(worker.name)}
-              <ArrowRightIcon size={14} />
-            </button>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label={t("কাজ বদলাই")}
-          disabled={removal.archived}
-          onClick={() => entity("contract", job.id)}
-        >
-          <PencilSimpleIcon size={20} />
-        </button>
+        <h1>{formatDigits(jobName(job, t))}</h1>
         <AppMenu
           trigger={
             <button
@@ -553,30 +551,55 @@ export function JobPage() {
               <DotsThreeIcon size={23} />
             </button>
           }
-          items={[removal.menuItem]}
+          items={[
+            {
+              label: t("কাজ বদলাই"),
+              icon: <PencilSimpleIcon size={18} />,
+              disabled: removal.archived,
+              onSelect: () => entity("contract", job.id),
+            },
+            { ...removal.menuItem, separatorBefore: true },
+          ]}
         />
+        <div className="job-heading-meta">
+          {worker ? (
+            <button
+              type="button"
+              className="text-button job-worker-link"
+              onClick={() => go(`/parties/${encodeURIComponent(worker.id)}`)}
+            >
+              <span>{formatDigits(worker.name)}</span>
+              <ArrowRightIcon size={14} />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={`job-status-control job-status job-status-${currentStatus}`}
+            aria-label={t("কাজের অবস্থা বদলাই")}
+            aria-expanded={Boolean(editor)}
+            aria-controls="job-status-editor"
+            disabled={savingStatus || removal.archived}
+            onClick={() =>
+              setStatusEditor(
+                editor
+                  ? null
+                  : {
+                      jobId: job.id,
+                      status: job.status,
+                      reason: "",
+                      error: "",
+                    },
+              )
+            }
+          >
+            <i />
+            {t(jobStatusNames[currentStatus])}
+            <CaretDownIcon size={15} />
+          </button>
+        </div>
       </header>
       {removal.notice}
       {removal.dialog}
-      <button
-        type="button"
-        className={`job-status-control job-status job-status-${currentStatus}`}
-        aria-label={t("কাজের অবস্থা বদলাই")}
-        aria-expanded={Boolean(editor)}
-        aria-controls="job-status-editor"
-        disabled={savingStatus || removal.archived}
-        onClick={() =>
-          setStatusEditor(
-            editor
-              ? null
-              : { jobId: job.id, status: job.status, reason: "", error: "" },
-          )
-        }
-      >
-        <i />
-        {t(jobStatusNames[currentStatus])}
-        <CaretDownIcon size={15} />
-      </button>
       {editor ? (
         <form
           id="job-status-editor"
@@ -673,17 +696,6 @@ export function JobPage() {
         <WalletIcon size={21} weight="duotone" />
         {t("টাকা দিই")}
       </button>
-      <details className="job-milestones">
-        <summary>
-          {t("কাজের ধাপ")}
-          <CaretDownIcon size={17} aria-hidden="true" />
-        </summary>
-        <AgreementMilestones
-          key={job.id}
-          contractId={job.id}
-          archived={removal.archived || Boolean(worker?.archivedAt)}
-        />
-      </details>
       <div
         className="job-detail-tabs"
         role="tablist"

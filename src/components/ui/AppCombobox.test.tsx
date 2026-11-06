@@ -41,6 +41,33 @@ const choices = [
 ];
 
 describe("custom free-text suggestions", () => {
+  it("keeps keyed variants separate and reports the exact explicit fuzzy choice", async () => {
+    const user = userEvent.setup();
+    const chosen = vi.fn();
+    const variants = [
+      { id: "first", value: "সিমেন্ট", description: "Crown · 10 বস্তা" },
+      { id: "second", value: "সিমেন্ট", description: "Shah · 5 কেজি" },
+    ];
+    render(
+      <AppCombobox
+        aria-label="মাল"
+        suggestions={variants}
+        fuzzy
+        onSuggestionSelect={chosen}
+      />,
+    );
+    await user.type(screen.getByRole("combobox", { name: "মাল" }), "সিমেনট");
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+    expect(chosen).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("option", { name: /সিমেন্ট.*Shah/ }));
+    expect(chosen).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        id: "second",
+        value: "সিমেন্ট",
+        description: "Shah · 5 কেজি",
+      }),
+    );
+  });
   it("deduplicates names without hiding their brands and matches Bengali digits", () => {
     const items = comboboxSuggestions(choices);
     expect(items).toHaveLength(3);
@@ -208,5 +235,51 @@ describe("custom free-text suggestions", () => {
     expect(screen.getByRole("listbox")).not.toBeNull();
     await user.keyboard("{Enter}");
     expect(changed).toHaveBeenCalledExactlyOnceWith("সিমেন্ট");
+  });
+  it("keeps Enter with a false native flag inside an active composition and preserves composition callbacks", async () => {
+    const chosen = vi.fn();
+    const started = vi.fn();
+    const ended = vi.fn();
+    render(
+      <AppCombobox
+        aria-label="মাল"
+        suggestions={choices}
+        onSuggestionSelect={chosen}
+        onCompositionStart={started}
+        onCompositionEnd={ended}
+      />,
+    );
+    const input = screen.getByRole("combobox", { name: "মাল" });
+    await userEvent.click(input);
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.compositionStart(input);
+    fireEvent.keyDown(input, { key: "Enter", isComposing: false });
+    expect(chosen).not.toHaveBeenCalled();
+    expect(screen.queryByRole("listbox")).not.toBeNull();
+    expect(started).toHaveBeenCalledTimes(1);
+    fireEvent.compositionEnd(input);
+    expect(ended).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(chosen).toHaveBeenCalledTimes(1);
+  });
+  it("leaves legacy keyCode 229 to the keyboard instead of accepting the active old suggestion", async () => {
+    const chosen = vi.fn();
+    render(
+      <AppCombobox
+        aria-label="মাল"
+        suggestions={choices}
+        onSuggestionSelect={chosen}
+      />,
+    );
+    const input = screen.getByRole("combobox", { name: "মাল" });
+    await userEvent.click(input);
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, {
+      key: "Enter",
+      keyCode: 229,
+      isComposing: false,
+    });
+    expect(chosen).not.toHaveBeenCalled();
+    expect(screen.queryByRole("listbox")).not.toBeNull();
   });
 });

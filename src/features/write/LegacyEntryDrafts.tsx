@@ -5,7 +5,7 @@ import { useLanguageContext } from "../../context/LanguageProvider";
 import { createWorkspaceStorage } from "../../data/repository";
 import { getActiveOwner } from "../../data/database";
 import { QuickSavedDraftSchema, type QuickDraft } from "../entries/quickEntry";
-import { entryUrl } from "../../app/entryRoutes";
+import { entryReturn, entryUrl } from "../../app/entryRoutes";
 
 export function LegacyEntryDrafts() {
   const { go, mode, ledger, base } = useNotebook();
@@ -36,7 +36,12 @@ export function LegacyEntryDrafts() {
       .then(async (keys) => {
         const results = await Promise.all(
           keys
-            .filter((key) => key.startsWith("quick-v2:"))
+            .filter(
+              (key) =>
+                key.startsWith("quick-v2:") ||
+                key.startsWith("house-cost:purchase:") ||
+                key.startsWith("house-cost:charge:"),
+            )
             .map(async (key) => {
               const value = QuickSavedDraftSchema.parse(
                 await storage.readDraft(key),
@@ -91,20 +96,31 @@ export function LegacyEntryDrafts() {
               className="text-button"
               key={key}
               onClick={() => {
-                const path = entryUrl(
-                  base,
-                  {
-                    kind: draft.kind,
-                    workId: draft.workId || undefined,
-                    personId: draft.personId || undefined,
-                    account: draft.account,
-                    costType: draft.costType,
-                    purpose: draft.purpose,
-                    contractId: draft.contractId || undefined,
-                    milestoneId: draft.milestoneId || undefined,
-                  },
-                  params.get("back") ?? `${base}/`,
-                );
+                const options = {
+                  kind: draft.kind,
+                  workId: draft.workId || undefined,
+                  personId: draft.personId || undefined,
+                  account: draft.account,
+                  costType: draft.costType,
+                  purpose: draft.purpose,
+                  contractId: draft.contractId || undefined,
+                };
+                const back = params.get("back") ?? `${base}/`;
+                const houseAction = key.startsWith("house-cost:purchase:")
+                  ? "purchase"
+                  : key.startsWith("house-cost:charge:")
+                    ? "charge"
+                    : null;
+                const path = houseAction
+                  ? `${base}/write/${houseAction}?${new URLSearchParams({
+                      back: entryReturn(back, base),
+                      person: draft.personId,
+                      work: draft.workId,
+                      contract: draft.contractId,
+                      type: draft.costType,
+                      ...(key.endsWith(":paid") ? { paid: "yes" } : {}),
+                    })}`
+                  : entryUrl(base, options, back);
                 go(
                   `${path.slice(base.length)}&${new URLSearchParams({ draftKey: key })}`,
                 );

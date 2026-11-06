@@ -1,12 +1,24 @@
 import { latinDigits } from "../../lib/numerals";
+import { normalizeLabel } from "../../lib/normalizeLabel";
 import { poishaDecimal } from "../../domain/money";
+import {
+  buildBrandResolver,
+  type BrandIdentity,
+  type BrandResolver,
+} from "../../domain/brandResolution";
 import type {
+  Account,
   CostType,
   Entry,
   EntryLine,
   Item,
   Ledger,
 } from "../../domain/model";
+import {
+  buildLedgerSearchIndex,
+  selectLedgerSearch,
+  type LedgerSearchIndex,
+} from "../ledger/searchAnalytics";
 
 export type AnalyticsFilters = {
   groupId: string;
@@ -48,10 +60,14 @@ export type CostRow = {
   groupName: string;
   itemName: string;
   brand: string;
+  brandIdentity: BrandIdentity | null;
+  brandResolver: BrandResolver;
   usage: string;
   workName: string;
   personName: string;
   searchable: string;
+  ambiguousGroupIds: string[];
+  materialTokens: string[];
 };
 
 export type Breakdown = {
@@ -70,23 +86,43 @@ export const normalizeSearch = (value: string) =>
     .toLocaleLowerCase()
     .replace(/\s+/g, " ");
 
-export function costRows(ledger: Ledger): CostRow[] {
+const maximum = BigInt(Number.MAX_SAFE_INTEGER);
+function exactAmount(amount: bigint) {
+  if (amount < -maximum || amount > maximum)
+    throw new Error("report_amount_out_of_range");
+  return Number(amount);
+}
+function moneyAmount(amount: number) {
+  if (!Number.isSafeInteger(amount))
+    throw new Error("report_amount_out_of_range");
+  return BigInt(amount);
+}
+
+export function costRows(
+  ledger: Ledger,
+  index = buildLedgerSearchIndex(ledger),
+  brands = buildBrandResolver(ledger.items.map((item) => item.brand)),
+): CostRow[] {
   const items = new Map(ledger.items.map((item) => [item.id, item]));
   const groups = new Map(
     ledger.materialGroups.map((group) => [group.id, group]),
   );
   const works = new Map(ledger.works.map((work) => [work.id, work]));
   const people = new Map(ledger.people.map((person) => [person.id, person]));
-  return ledger.entries.flatMap((entry) => {
+  return index.documents.flatMap(({ entry, costs }) => {
     if (
       entry.voided ||
       (entry.kind !== "expense" && entry.kind !== "expense_credit")
     )
       return [];
     const sign = entry.kind === "expense_credit" ? -1 : 1;
-    return entry.lines.map((line) => {
-      const item = line.itemId ? (items.get(line.itemId) ?? null) : null;
-      const groupId = line.materialGroupId || item?.materialGroupId || "";
+    return costs.map(({ line, resolvedGroupId, ambiguousGroupIds, tokens }) => {
+      const inheritedItem = [...tokens].find((token) =>
+        token.startsWith("item:"),
+      );
+      const itemId = line.itemId || inheritedItem?.slice(5);
+      const item = itemId ? (items.get(itemId) ?? null) : null;
+      const groupId = resolvedGroupId ?? "";
       const group = groups.get(groupId);
       const workName = works.get(line.workId)?.name ?? "";
       const personName = entry.personId
@@ -105,9 +141,13 @@ export function costRows(ledger: Ledger): CostRow[] {
         groupName: group?.name ?? "",
         itemName,
         brand,
+        brandIdentity: brands.resolve(brand),
+        brandResolver: brands,
         usage,
         workName,
         personName,
+        ambiguousGroupIds: [...ambiguousGroupIds],
+        materialTokens: [...tokens],
         searchable: normalizeSearch(
           [
             group?.name,
@@ -130,12 +170,116 @@ export function costRows(ledger: Ledger): CostRow[] {
   });
 }
 
+export type CostReportIndex = {
+  search: LedgerSearchIndex;
+  brands: BrandResolver;
+  rows: CostRow[];
+  ambiguousOrigins: Map<string, CostRow[]>;
+};
+
+export function buildCostReportIndex(ledger: Ledger): CostReportIndex {
+  const search = buildLedgerSearchIndex(ledger);
+  const brands = buildBrandResolver(ledger.items.map((item) => item.brand));
+  const rows = costRows(ledger, search, brands);
+  const byLine = new Map(rows.map((row) => [row.line, row]));
+  const ambiguousOrigins = new Map<string, CostRow[]>();
+  for (const document of search.documents)
+    for (const cost of document.costs)
+      if (cost.ambiguousOrigins)
+        ambiguousOrigins.set(
+          `${document.entry.id}:${cost.line.id}`,
+          cost.ambiguousOrigins.flatMap((origin) => {
+            const row = byLine.get(origin.line);
+            return row ? [row] : [];
+          }),
+        );
+  return { search, brands, rows, ambiguousOrigins };
+}
+
+export function selectCostReport(
+  index: CostReportIndex,
+  filters: Partial<AnalyticsFilters> = {},
+  options: {
+    section?: ReportSection;
+    account?: Account | null;
+    month?: string;
+  } = {},
+) {
+  const f = { ...emptyFilters, ...filters };
+  const selectedBrand = index.brands.resolve(f.brand);
+  const scope = filterCostRows(
+    sectionRows(index.rows, options.section ?? "all"),
+    { ...f, groupId: "", itemId: "", brand: "", usage: "", query: "" },
+  );
+  const matchesIdentity = (row: CostRow) =>
+    (!f.groupId ||
+      (f.groupId === "__unknown__"
+        ? !row.groupId
+        : row.groupId === f.groupId ||
+          row.ambiguousGroupIds.includes(f.groupId))) &&
+    (!f.itemId ||
+      row.materialTokens.includes(
+        f.itemId.startsWith("label:")
+          ? `label:${normalizeLabel(f.itemId.slice(6))}`
+          : `item:${f.itemId}`,
+      )) &&
+    (!f.brand ||
+      (f.brand === "__unknown__"
+        ? !row.brandIdentity
+        : Boolean(
+            selectedBrand && row.brandIdentity?.id === selectedBrand.id,
+          ))) &&
+    (!f.usage ||
+      (f.usage === "__unknown__" ? !row.usage : row.usage === f.usage));
+  const candidates = scope.filter(
+    (row) =>
+      matchesIdentity(row) &&
+      (!(f.itemId || (f.brand && f.brand !== "__unknown__")) ||
+        !row.ambiguousGroupIds.length),
+  );
+  const candidateKeys = new Set(candidates.map((row) => row.key));
+  const discoveries = scope.filter(
+    (row) =>
+      !candidateKeys.has(row.key) &&
+      ((matchesIdentity(row) && row.ambiguousGroupIds.length > 0) ||
+        index.ambiguousOrigins.get(row.key)?.some(matchesIdentity)),
+  );
+  const materialToken = f.itemId
+    ? f.itemId.startsWith("label:")
+      ? `label:${normalizeLabel(f.itemId.slice(6))}`
+      : `item:${f.itemId}`
+    : f.groupId && f.groupId !== "__unknown__"
+      ? `group:${f.groupId}`
+      : undefined;
+  const material =
+    materialToken &&
+    (index.search.materials.has(materialToken) ||
+      !scope.some((row) => row.materialTokens.includes(materialToken)))
+      ? materialToken
+      : undefined;
+  const search = selectLedgerSearch(index.search, {
+    query: f.query,
+    workId: f.workId,
+    personId: f.personId === "__unknown__" ? undefined : f.personId,
+    account: options.account ?? undefined,
+    from: f.from,
+    to: f.to,
+    material,
+    month: options.month,
+    costLineKeys: candidateKeys,
+    costDiscoveryLineKeys: new Set(discoveries.map((row) => row.key)),
+  });
+  const keys = new Set(search.matchedLineKeys);
+  return { rows: candidates.filter((row) => keys.has(row.key)), search };
+}
+
 export function filterCostRows(
   rows: CostRow[],
   filters: Partial<AnalyticsFilters> = {},
 ): CostRow[] {
   const f = { ...emptyFilters, ...filters };
   const query = normalizeSearch(f.query);
+  const selectedBrand = rows[0]?.brandResolver.resolve(f.brand);
   return rows.filter(
     (row) =>
       (!f.groupId ||
@@ -146,9 +290,13 @@ export function filterCostRows(
         (f.itemId.startsWith("label:")
           ? !row.line.itemId &&
             normalizeSearch(row.itemName) === normalizeSearch(f.itemId.slice(6))
-          : row.line.itemId === f.itemId)) &&
+          : (row.item?.id ?? row.line.itemId) === f.itemId)) &&
       (!f.brand ||
-        (f.brand === "__unknown__" ? !row.brand : row.brand === f.brand)) &&
+        (f.brand === "__unknown__"
+          ? !row.brandIdentity
+          : Boolean(
+              selectedBrand && row.brandIdentity?.id === selectedBrand.id,
+            ))) &&
       (!f.usage ||
         (f.usage === "__unknown__" ? !row.usage : row.usage === f.usage)) &&
       (!f.workId || row.line.workId === f.workId) &&
@@ -168,56 +316,68 @@ export function filterCostRows(
 }
 
 export function summarizeRows(rows: CostRow[]) {
-  const byType: Record<CostType, number> = {
-    material: 0,
-    labour: 0,
-    transport: 0,
-    unload: 0,
-    rental: 0,
-    other: 0,
+  const typeAmounts: Record<CostType, bigint> = {
+    material: 0n,
+    labour: 0n,
+    transport: 0n,
+    unload: 0n,
+    rental: 0n,
+    other: 0n,
   };
-  let purchases = 0,
-    returns = 0,
-    historical = 0,
-    reviewAmount = 0,
-    undated = 0;
+  let purchases = 0n,
+    returns = 0n,
+    historical = 0n,
+    reviewAmount = 0n,
+    undated = 0n;
   const entries = new Set<string>(),
     reviewEntries = new Set<string>(),
     historicalEntries = new Set<string>(),
     undatedEntries = new Set<string>();
   for (const row of rows) {
-    byType[row.line.costType] += row.amount;
+    const amount = moneyAmount(row.amount);
+    typeAmounts[row.line.costType] += amount;
     entries.add(row.entry.id);
-    if (row.amount >= 0) purchases += row.amount;
-    else returns -= row.amount;
+    if (amount >= 0n) purchases += amount;
+    else returns -= amount;
     if (row.entry.balanceImpact === "historical") {
-      historical += row.amount;
+      historical += amount;
       historicalEntries.add(row.entry.id);
     }
     if (row.entry.reviewStatus === "needs_review") {
-      reviewAmount += row.amount;
+      reviewAmount += amount;
       reviewEntries.add(row.entry.id);
     }
     if (!row.entry.date) {
-      undated += row.amount;
+      undated += amount;
       undatedEntries.add(row.entry.id);
     }
   }
+  const byType = Object.fromEntries(
+    Object.entries(typeAmounts).map(([type, amount]) => [
+      type,
+      exactAmount(amount),
+    ]),
+  ) as Record<CostType, number>;
   return {
-    total: purchases - returns,
-    purchases,
-    returns,
+    total: exactAmount(purchases - returns),
+    purchases: exactAmount(purchases),
+    returns: exactAmount(returns),
     byType,
     material: byType.material,
     labour: byType.labour,
-    supporting: byType.transport + byType.unload + byType.rental + byType.other,
+    supporting: exactAmount(
+      typeAmounts.transport +
+        typeAmounts.unload +
+        typeAmounts.rental +
+        typeAmounts.other,
+    ),
     entryCount: entries.size,
     lineCount: rows.length,
-    historical,
+    historical: exactAmount(historical),
     historicalCount: historicalEntries.size,
-    reviewAmount,
+    reviewAmount: exactAmount(reviewAmount),
     reviewCount: reviewEntries.size,
-    undated,
+    undated: exactAmount(undated),
     undatedCount: undatedEntries.size,
   };
 }
@@ -228,7 +388,7 @@ export function breakdownRows(
 ): Breakdown[] {
   const map = new Map<
     string,
-    { label: string; amount: number; lines: number; entries: Set<string> }
+    { label: string; amount: bigint; lines: number; entries: Set<string> }
   >();
   for (const row of rows) {
     const values: Record<AnalyticsDimension, [string, string]> = {
@@ -237,11 +397,16 @@ export function breakdownRows(
         row.groupName || "মালের ধরন দেওয়া নেই",
       ],
       item: [
-        row.line.itemId || `label:${normalizeSearch(row.itemName)}`,
+        row.item?.id ||
+          row.line.itemId ||
+          `label:${normalizeSearch(row.itemName)}`,
         row.itemName || "মালের নাম দেওয়া নেই",
       ],
       work: [row.line.workId, row.workName],
-      brand: [row.brand || "__unknown__", row.brand || "ব্র্যান্ড দেওয়া নেই"],
+      brand: [
+        row.brandIdentity?.id ?? "__unknown__",
+        row.brandIdentity?.label ?? "ব্র্যান্ড দেওয়া নেই",
+      ],
       usage: [row.usage || "__unknown__", row.usage || "ব্যবহার লেখা নেই"],
       costType: [row.line.costType, row.line.costType],
       person: [
@@ -252,11 +417,11 @@ export function breakdownRows(
     const [id, label] = values[dimension];
     const previous = map.get(id) ?? {
       label,
-      amount: 0,
+      amount: 0n,
       lines: 0,
       entries: new Set<string>(),
     };
-    previous.amount += row.amount;
+    previous.amount += moneyAmount(row.amount);
     previous.lines++;
     previous.entries.add(row.entry.id);
     map.set(id, previous);
@@ -265,7 +430,7 @@ export function breakdownRows(
     .map(([id, value]) => ({
       id,
       label: value.label,
-      amount: value.amount,
+      amount: exactAmount(value.amount),
       lines: value.lines,
       entries: value.entries.size,
     }))
@@ -275,23 +440,25 @@ export function breakdownRows(
 export function matchingEntries(rows: CostRow[]) {
   const map = new Map<
     string,
-    { entry: Entry; amount: number; lines: CostRow[] }
+    { entry: Entry; amount: bigint; lines: CostRow[] }
   >();
   for (const row of rows) {
     const previous = map.get(row.entry.id) ?? {
       entry: row.entry,
-      amount: 0,
+      amount: 0n,
       lines: [],
     };
-    previous.amount += row.amount;
+    previous.amount += moneyAmount(row.amount);
     previous.lines.push(row);
     map.set(row.entry.id, previous);
   }
-  return [...map.values()].sort(
-    (a, b) =>
-      (b.entry.date ?? "").localeCompare(a.entry.date ?? "") ||
-      b.entry.createdAt.localeCompare(a.entry.createdAt),
-  );
+  return [...map.values()]
+    .map((row) => ({ ...row, amount: exactAmount(row.amount) }))
+    .sort(
+      (a, b) =>
+        (b.entry.date ?? "").localeCompare(a.entry.date ?? "") ||
+        b.entry.createdAt.localeCompare(a.entry.createdAt),
+    );
 }
 
 type Translate = (text: string) => string;
@@ -460,7 +627,7 @@ export function reportSection(
   if (costType === "labour") return "labour";
   if (costType === "transport" || costType === "unload") return "transport";
   if (costType === "rental" || costType === "other") return "other";
-  return "material";
+  return "all";
 }
 export function sectionRows(rows: CostRow[], section: ReportSection) {
   if (section === "all") return rows;

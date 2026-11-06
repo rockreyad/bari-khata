@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
   ArrowDownIcon,
@@ -10,23 +10,47 @@ import {
 } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
+import { useComposedSearch } from "../../lib/useComposedSearch";
 import { EntryList } from "../../components/ui/EntryList";
 import { LoadMore } from "../../components/ui/LoadMore";
 import { AppSelect } from "../../components/ui/AppSelect";
 import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { Sheet } from "../../components/Sheet";
-import { validHistoryDate, type HistoryOrder } from "../history/history";
+import {
+  historyGroups,
+  historySubtitle,
+  sortHistory,
+  validHistoryDate,
+  type HistoryOrder,
+} from "../history/history";
 import "../history/history.css";
 import "../history/history-v4.css";
-import { historyPage } from "../history/page";
+import { historyGroupPage } from "../history/page";
 import { pendingReviewEntries } from "../import/bulkReview";
+import {
+  buildLedgerSearchIndex,
+  materialSuggestions,
+  selectLedgerSearch,
+  type MaterialChoice,
+} from "./searchAnalytics";
+import { LedgerSearchSummary } from "./LedgerSearchSummary";
+function materialChoiceKind(choice: MaterialChoice) {
+  return choice.token.startsWith("group:")
+    ? "মালের ধরন"
+    : choice.token.startsWith("item:")
+      ? "নির্দিষ্ট মাল"
+      : "আগের নাম";
+}
 export function LedgerPage() {
   const { ledger, add, detail, go } = useNotebook();
   const { t, number, formatDigits } = useLanguageContext();
   const [params, setParams] = useSearchParams();
   const [filterOpen, setFilterOpen] = useState(false);
   const page = Number(params.get("page") ?? "1");
-  const reviewCount = pendingReviewEntries(ledger).length;
+  const reviewCount = useMemo(
+    () => pendingReviewEntries(ledger).length,
+    [ledger],
+  );
   const q = params.get("q") ?? "",
     person = params.get("person") ?? "",
     work = params.get("work") ?? "",
@@ -35,55 +59,70 @@ export function LedgerPage() {
     costType = params.get("type") ?? "",
     from = validHistoryDate(params.get("from") ?? ""),
     to = validHistoryDate(params.get("to") ?? "");
-  const [searchText, setSearchText] = useState(q);
-  const searchInput = useRef<HTMLInputElement>(null);
-  const composing = useRef(false);
-  const committedSearch = useRef(q);
-  useEffect(() => {
-    committedSearch.current = q;
-    if (!composing.current) setSearchText(q);
-  }, [q]);
+  const material = params.get("material") ?? "";
+  const month = params.get("month") ?? "";
   const order: HistoryOrder =
     params.get("order") === "oldest" ? "oldest" : "newest";
   const includeVoided = params.get("voided") === "yes";
-  const result = useMemo(
-    () =>
-      historyPage(
-        ledger,
-        {
-          query: q,
-          personId: person,
-          workId: work,
-          kind,
-          account,
-          costType,
-          from,
-          to,
-          includeVoided,
-        },
-        order,
-        page,
-      ),
-    [
-      ledger,
-      q,
-      person,
-      work,
-      kind,
-      account,
-      costType,
-      from,
-      to,
-      includeVoided,
-      order,
-      page,
-    ],
+  const index = useMemo(() => {
+    try {
+      return buildLedgerSearchIndex(ledger);
+    } catch {
+      return null;
+    }
+  }, [ledger]);
+  const selection = useMemo(() => {
+    if (!index) return null;
+    try {
+      return selectLedgerSearch(index, {
+        query: q,
+        personId: person,
+        workId: work,
+        kind,
+        account,
+        costType,
+        from,
+        to,
+        includeVoided,
+        material,
+        month,
+      });
+    } catch {
+      return null;
+    }
+  }, [
+    index,
+    q,
+    person,
+    work,
+    kind,
+    account,
+    costType,
+    from,
+    to,
+    includeVoided,
+    material,
+    month,
+  ]);
+  const groups = useMemo(
+    () => historyGroups(sortHistory(selection?.entries ?? [], order)),
+    [selection, order],
   );
-  const update = (key: string, value: string) => {
+  const result = useMemo(() => historyGroupPage(groups, page), [groups, page]);
+  const suggestions = useMemo(
+    () => (index && !material ? materialSuggestions(index, q, 4) : []),
+    [index, material, q],
+  );
+  const update = (key: string, value: string): void => {
     setParams(
       (prev) => {
-        const next = new URLSearchParams(prev);
+        const next =
+          key === "q" ? new URLSearchParams(prev) : currentParams(prev);
         next.delete("page");
+        if (key === "q") {
+          next.delete("material");
+          next.delete("month");
+        }
         if (value) next.set(key, value);
         else next.delete(key);
         return next;
@@ -91,11 +130,23 @@ export function LedgerPage() {
       { replace: true, preventScrollReset: key === "q" },
     );
   };
-  const search = (value: string) => {
-    setSearchText(value);
-    if (value === committedSearch.current) return;
-    committedSearch.current = value;
-    update("q", value);
+  const search = useComposedSearch(q, (value) => update("q", value));
+  const searchInput = search.inputProps.ref;
+  const focusSearch = params.get("focus") === "search";
+  useEffect(() => {
+    if (focusSearch) searchInput.current?.focus({ preventScroll: true });
+  }, [focusSearch, searchInput]);
+  const currentParams = (previous: URLSearchParams): URLSearchParams => {
+    const next = new URLSearchParams(previous);
+    const latestQuery = search.getCommittedQuery();
+    if (latestQuery !== (previous.get("q") ?? "")) {
+      next.delete("page");
+      next.delete("material");
+      next.delete("month");
+    }
+    if (latestQuery) next.set("q", latestQuery);
+    else next.delete("q");
+    return next;
   };
   const contact = ledger.people.find((p) => p.id === person),
     selectedWork = ledger.works.find((w) => w.id === work);
@@ -107,12 +158,63 @@ export function LedgerPage() {
     costType ||
     from ||
     to ||
-    includeVoided,
+    includeVoided ||
+    material ||
+    month,
   );
+  const showAnalytics = Boolean(q.trim() || filtered || !index);
+  const subtitles = useMemo(() => {
+    if (!selection || !showAnalytics) return undefined;
+    const partial = new Set(selection.matchedPartEntryIds);
+    const ambiguous = new Set(selection.ambiguousEntryIds);
+    const overrides: Record<string, string> = Object.create(null);
+    for (const entry of result.rows) {
+      if (!partial.has(entry.id) && !ambiguous.has(entry.id)) continue;
+      const context = historySubtitle(ledger, entry, {
+        hidePerson: Boolean(person),
+        hideWork: Boolean(work),
+        translate: t,
+      });
+      overrides[entry.id] = [
+        t(
+          ambiguous.has(entry.id) ? "খোঁজে মিলেছে · মোটে ধরা হয়নি" : "মেলা অংশ",
+        ),
+        context,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
+    return overrides;
+  }, [selection, result.rows, showAnalytics, ledger, person, work, t]);
+  const chooseMaterial = (choice: MaterialChoice) => {
+    search.clear();
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.set("material", choice.token);
+        next.delete("q");
+        next.delete("month");
+        next.delete("page");
+        return next;
+      },
+      { preventScrollReset: true },
+    );
+  };
+  const chooseMonth = (value: string) =>
+    setParams(
+      (previous) => {
+        const next = currentParams(previous);
+        if (value) next.set("month", value);
+        else next.delete("month");
+        next.delete("page");
+        return next;
+      },
+      { preventScrollReset: true },
+    );
   const clear = () => {
     setParams(
       (prev) => {
-        const next = new URLSearchParams(prev);
+        const next = currentParams(prev);
         [
           "page",
           "person",
@@ -123,6 +225,8 @@ export function LedgerPage() {
           "from",
           "to",
           "voided",
+          "material",
+          "month",
         ].forEach((key) => next.delete(key));
         return next;
       },
@@ -132,8 +236,10 @@ export function LedgerPage() {
   const loadMore = () => {
     setParams(
       (previous) => {
-        const next = new URLSearchParams(previous);
-        next.set("page", String(result.page + 1));
+        const next = currentParams(previous);
+        if (search.getCommittedQuery() === q)
+          next.set("page", String(result.page + 1));
+        else next.delete("page");
         return next;
       },
       { replace: true, preventScrollReset: true },
@@ -173,49 +279,17 @@ export function LedgerPage() {
         <label className="history-search">
           <MagnifyingGlassIcon size={21} />
           <input
-            ref={searchInput}
             type="search"
-            inputMode="search"
-            enterKeyHint="search"
-            autoComplete="off"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
             aria-label={t("হিসাব খুঁজুন")}
-            placeholder={t("কী খুঁজছেন?")}
-            value={searchText}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              setSearchText(value);
-              if (
-                !composing.current &&
-                !(event.nativeEvent as InputEvent).isComposing
-              )
-                search(value);
-            }}
-            onCompositionStart={() => {
-              composing.current = true;
-            }}
-            onCompositionEnd={(event) => {
-              composing.current = false;
-              search(event.currentTarget.value);
-            }}
-            onBlur={(event) => {
-              if (!composing.current) return;
-              composing.current = false;
-              search(event.currentTarget.value);
-            }}
+            placeholder={t(material ? "আরও খুঁজতে লিখুন" : "কী খুঁজছেন?")}
+            {...search.inputProps}
           />
-          {searchText ? (
+          {search.value ? (
             <button
               className="history-clear"
               type="button"
               aria-label={t("খোঁজ মুছুন")}
-              onClick={() => {
-                composing.current = false;
-                search("");
-                searchInput.current?.focus();
-              }}
+              onClick={search.clear}
             >
               <XIcon size={17} />
             </button>
@@ -230,8 +304,59 @@ export function LedgerPage() {
           <span>{t("বেছে দেখুন")}</span>
         </button>
       </section>
+      {suggestions.length ? (
+        <div
+          className="ledger-material-suggestions"
+          role="group"
+          aria-label={t("মালের হিসাব বেছে দেখুন")}
+        >
+          <span>{t("মালের হিসাব বেছে দেখুন")}</span>
+          {suggestions.map((choice) => (
+            <button
+              key={choice.token}
+              type="button"
+              aria-label={t("মালের হিসাব: {{name}}", {
+                name: [
+                  choice.label,
+                  t(materialChoiceKind(choice)),
+                  choice.description,
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
+              })}
+              onClick={() => chooseMaterial(choice)}
+            >
+              {formatDigits(choice.label)}
+              <small>
+                {[
+                  t(materialChoiceKind(choice)),
+                  choice.description ? formatDigits(choice.description) : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </small>
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="history-scope">
         <div>
+          {material ? (
+            <button
+              type="button"
+              className="history-filter-chip"
+              aria-label={t("মালের বাছাই মুছুন")}
+              onClick={() => update("material", "")}
+            >
+              {selection?.material
+                ? [
+                    formatDigits(selection.material.label),
+                    t(materialChoiceKind(selection.material)),
+                  ].join(" · ")
+                : t("মালের বাছাই")}
+              <XIcon size={14} aria-hidden="true" />
+            </button>
+          ) : null}
           {contact ? (
             <button
               onClick={() => update("person", "")}
@@ -271,7 +396,7 @@ export function LedgerPage() {
               onClick={() =>
                 setParams(
                   (previous) => {
-                    const next = new URLSearchParams(previous);
+                    const next = currentParams(previous);
                     next.delete("page");
                     next.delete("from");
                     next.delete("to");
@@ -300,6 +425,25 @@ export function LedgerPage() {
           {t(order === "oldest" ? "শুরু থেকে" : "সাম্প্রতিক আগে")}
         </button>
       </div>
+      {showAnalytics ? (
+        <LedgerSearchSummary
+          key={JSON.stringify([
+            q,
+            person,
+            work,
+            kind,
+            account,
+            costType,
+            from,
+            to,
+            includeVoided,
+            material,
+          ])}
+          result={selection}
+          month={month}
+          onMonthChange={chooseMonth}
+        />
+      ) : null}
       <section className="history-surface">
         <EntryList
           showKind
@@ -311,6 +455,9 @@ export function LedgerPage() {
           grouped
           hidePerson={Boolean(person)}
           hideWork={Boolean(work)}
+          amounts={showAnalytics ? selection?.amounts : undefined}
+          titles={showAnalytics ? selection?.titles : undefined}
+          subtitles={subtitles}
         />
         <LoadMore hasMore={result.hasMore} onLoadMore={loadMore} />
       </section>

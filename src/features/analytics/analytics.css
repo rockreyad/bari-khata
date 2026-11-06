@@ -6,6 +6,13 @@
 .report-page > * {
   min-width: 0;
 }
+.report-mode-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+}
 .report-page .page-heading h1 {
   font-size: 29px;
 }
@@ -102,6 +109,42 @@
   font-size: 11px;
   color: var(--muted);
   margin-top: 3px;
+}
+.report-month-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 16px;
+  width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+}
+.report-month-controls .text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+}
+.report-cost-chart {
+  width: 100%;
+  min-width: 0;
+}
+.report-undated {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  text-align: start;
+  font-size: 12px;
+}
+.report-undated[aria-pressed="true"] {
+  color: var(--accent-strong);
 }
 .report-paid-summary {
   width: 100%;

@@ -11,6 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
+import { useComposedSearch } from "../../lib/useComposedSearch";
 import { AppMenu } from "../../components/ui/AppMenu";
 import { contactSummary, personKind } from "../../domain/contacts";
 import { contactCommitmentSummary } from "../../domain/contactCommitments";
@@ -88,20 +89,29 @@ export function PeoplePage() {
         b.summary.reconciledNetPaid - a.summary.reconciledNetPaid ||
         a.person.name.localeCompare(b.person.name),
     );
-  const filter = (key: string, value: string) =>
+  const filter = (key: string, value: string): void =>
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
-        if (value && value !== "all") next.set(key, value);
+        if (key !== "q") {
+          const latestQuery = search.getCommittedQuery();
+          if (latestQuery) next.set("q", latestQuery);
+          else next.delete("q");
+        }
+        if (value && (key === "q" || value !== "all")) next.set(key, value);
         else next.delete(key);
         return next;
       },
       { replace: true },
     );
+  const search = useComposedSearch(query, (value) => filter("q", value));
   const selectType = (type: string) =>
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
+        const latestQuery = search.getCommittedQuery();
+        if (latestQuery) next.set("q", latestQuery);
+        else next.delete("q");
         next.delete("type");
         next.delete("role");
         if (type) next.set("contactType", type);
@@ -163,14 +173,14 @@ export function PeoplePage() {
         <input
           aria-label={t("নাম বা নম্বর খুঁজুন")}
           placeholder={t("নাম বা নম্বর খুঁজুন")}
-          value={query}
-          onChange={(event) => filter("q", event.target.value)}
+          {...search.inputProps}
         />
-        {query ? (
+        {search.value ? (
           <button
             className="icon-button"
             aria-label={t("খোঁজ মুছুন")}
-            onClick={() => filter("q", "")}
+            type="button"
+            onClick={search.clear}
           >
             <XIcon size={17} />
           </button>

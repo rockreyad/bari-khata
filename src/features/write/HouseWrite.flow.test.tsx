@@ -38,6 +38,7 @@ import { planHousePayment } from "../../domain/housePayments";
 import { partyDueItems, partyDuePaymentUrl } from "../home/partyDueItems";
 import { savePreferences } from "../../lib/preferences";
 import { latinDigits } from "../../lib/numerals";
+import { setFinancialWritesAllowed } from "../../lib/localWriteBarrier";
 import { HouseCostForm } from "./HouseCostForm";
 import { HousePaymentForm } from "./HousePaymentForm";
 
@@ -81,6 +82,7 @@ const api = {
 };
 let owner: string | undefined;
 afterEach(async () => {
+  setFinancialWritesAllowed(true);
   cleanup();
   await Promise.resolve();
   if (owner) await getAccountDatabase(owner).delete();
@@ -96,7 +98,6 @@ function base(): Ledger {
   return LedgerSchema.parse({
     architectureVersion: 2,
     paymentAllocations: [],
-    milestones: [],
     works: [
       { id: "roof", name: "নমুনা ছাদ" },
       { id: "wall", name: "নমুনা দেয়াল" },
@@ -230,6 +231,34 @@ async function cost(
 }
 const payPath = "/write/payment?person=party&work=roof&account=materials";
 
+it("explains a required update on a valid purchase and keeps the entered draft and ledger intact", async () => {
+  const initial = base();
+  const repo = await setup(initial);
+  const user = userEvent.setup();
+  mount(initial, <HouseCostForm action="purchase" />);
+  await ready();
+  const input = screen.getByLabelText(/^মালের নাম/);
+  fireEvent.change(input, { target: { value: "নমুনা বালু" } });
+  fireEvent.change(screen.getByLabelText(/^মালের দাম [০-৯0-9]+$/), {
+    target: { value: "100" },
+  });
+  setFinancialWritesAllowed(false);
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await screen.findByText(
+    "নতুন হিসাব রাখার আগে অ্যাপ আপডেট করুন। আপনার লেখা অক্ষত আছে।",
+  );
+  expect(screen.getByLabelText(/^মালের নাম/)).toBe(input);
+  expect((input as HTMLInputElement).value).toBe("নমুনা বালু");
+  expect(api.save).toHaveBeenCalledOnce();
+  expect((await repo.read())!.ledger.entries).toEqual([]);
+  expect(api.close).not.toHaveBeenCalled();
+  expect(
+    screen.queryByText(
+      "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
+    ),
+  ).toBeNull();
+});
+
 it("pays a finished job with no separate bill and retains its remaining due after IndexedDB reopens", async () => {
   const initial = LedgerSchema.parse({
     ...base(),
@@ -334,8 +363,11 @@ it("reopens an old settlement cash draft on the ordinary route and saves its rec
     ),
   );
   await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
+  expect(screen.getByPlaceholderText("কী বাবদ, কোথা থেকে বা অন্য কিছু…")).toBe(
+    screen.getByLabelText("মনে রাখার কথা"),
+  );
   await user.type(
-    screen.getByLabelText("বাড়তি কথা"),
+    screen.getByLabelText("মনে রাখার কথা"),
     "নমুনা বিল ছাড়া দেওয়া টাকা",
   );
   await user.upload(
@@ -385,8 +417,10 @@ it("reopens an old settlement cash draft on the ordinary route and saves its rec
   expect(
     screen.getByRole("button", { name: "ব্যাংক", pressed: true }),
   ).toBeTruthy();
-  expect(screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open).toBe(
-    false,
+  await waitFor(() =>
+    expect(
+      screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open,
+    ).toBe(true),
   );
   expect(screen.queryByText(/^মোট বাকি /)).toBeNull();
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
@@ -1806,7 +1840,6 @@ it("keeps invalid payment drafts and focuses Bengali field errors on every attem
   await user.click(saveButton);
   expect(document.activeElement).toBe(screen.getByRole("alert"));
   await user.type(amountField, "50");
-  await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
   await user.clear(screen.getByLabelText("তারিখ"));
   await user.click(saveButton);
   alert = screen.getByRole("alert");
@@ -1859,7 +1892,7 @@ it("keeps a malformed inline worker draft recoverable instead of crashing the pa
   });
 });
 
-it("keeps the icon payment method and folded voucher, note and date across reopening", async () => {
+it("folds date, note and receipts together and restores them alongside the selected payment method", async () => {
   const initial = withBills(),
     repo = await setup(initial),
     user = userEvent.setup();
@@ -1880,9 +1913,11 @@ it("keeps the icon payment method and folded voucher, note and date across reope
   const fold = screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!;
   expect(fold.open).toBe(false);
   expect(screen.getByLabelText("ভাউচার বা ছবি").closest("details")).toBe(fold);
+  expect(screen.getByLabelText("তারিখ").closest("details")).toBe(fold);
+  expect(screen.getByLabelText("মনে রাখার কথা").closest("details")).toBe(fold);
   await user.type(screen.getByLabelText("কত দিয়েছেন"), "50");
   await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
-  await user.type(screen.getByLabelText("বাড়তি কথা"), "নমুনা ব্যাংক হিসাব");
+  await user.type(screen.getByLabelText("মনে রাখার কথা"), "নমুনা ব্যাংক হিসাব");
   await user.upload(
     screen.getByLabelText("ভাউচার বা ছবি"),
     new File(["sample receipt"], "sample-bank.pdf", {
@@ -1905,8 +1940,10 @@ it("keeps the icon payment method and folded voucher, note and date across reope
   expect(
     screen.getByRole("button", { name: "ব্যাংক" }).getAttribute("aria-pressed"),
   ).toBe("true");
-  expect(screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open).toBe(
-    false,
+  await waitFor(() =>
+    expect(
+      screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open,
+    ).toBe(true),
   );
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
-import { Blob as NodeBlob } from "node:buffer";
+import { Blob as NodeBlob, File as NodeFile } from "node:buffer";
 import type { InputHTMLAttributes, SelectHTMLAttributes } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
@@ -32,7 +32,13 @@ import {
 } from "../features/entries/quickEntry";
 import { latinDigits } from "../lib/numerals";
 import { savePreferences } from "../lib/preferences";
-import { EntrySheet } from "./EntrySheet";
+import { EntrySheet, type EntryAttachments } from "./EntrySheet";
+
+await vi.hoisted(async () => {
+  const { Blob, File } = await import("node:buffer");
+  vi.stubGlobal("Blob", Blob);
+  vi.stubGlobal("File", File);
+});
 
 vi.mock("./ui/AppSelect", () => ({
   AppSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => (
@@ -52,6 +58,7 @@ const receipt = () =>
   new Blob(["sample disclosure voucher"], { type: "application/pdf" });
 beforeEach(() => {
   vi.stubGlobal("Blob", NodeBlob);
+  vi.stubGlobal("File", NodeFile);
   savePreferences({ language: "bn" });
 });
 afterEach(async () => {
@@ -286,8 +293,10 @@ it("keeps a fully paid simple purchase focused on one amount while preserving it
     screen.queryByRole("checkbox", { name: "পুরো টাকা দেওয়া ছিল" }),
   ).toBeNull();
   const note = screen.getByLabelText("মনে রাখার কথা");
-  expect(note.closest("details")).not.toBeNull();
   expect(note.closest("details")!.open).toBe(false);
+  expect(screen.getByLabelText("তারিখ").closest("details")).toBe(
+    note.closest("details"),
+  );
   fireEvent.change(amount, { target: { value: "100" } });
   await userEvent.click(save());
   await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
@@ -300,6 +309,33 @@ it("keeps a fully paid simple purchase focused on one amount while preserving it
   });
   expect(onSave).toHaveBeenCalledOnce();
   page.unmount();
+});
+
+it("translates the compact date, notes and optional receipt area with the real language provider", async () => {
+  const original = purchase("full");
+  await repository(original);
+  savePreferences({ language: "en" });
+  mount(original, billId, vi.fn(), vi.fn());
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("button", { name: "Save" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false),
+  );
+  const extras = screen.getByRole("group", {
+    name: "Voucher, note and date",
+  }) as HTMLDetailsElement;
+  expect(within(extras).getByLabelText("Date").closest("details")).toBe(extras);
+  const note = within(extras).getByLabelText("Notes") as HTMLTextAreaElement;
+  expect(note.closest("details")).toBe(extras);
+  expect(note.placeholder).toBe(
+    "What it was for, where it came from, or anything else…",
+  );
+  expect(note.maxLength).toBe(10000);
+  expect(within(extras).getByLabelText("Receipt or photo")).toBeTruthy();
+  expect(within(extras).getByText("Add voucher")).toBeTruthy();
+  expect(extras.open).toBe(false);
+  expect(screen.queryByRole("checkbox", { name: "Date unknown" })).toBeNull();
 });
 
 it("does not change an independent partial payment when the common bill amount is edited", async () => {
@@ -373,6 +409,18 @@ it("keeps multirow, unknown-date, note and receipt values through a closed draft
       (details) => (details as HTMLDetailsElement).open,
     ),
   ).toBe(true);
+  const context = screen.getByLabelText("নাম ও খাতা").closest("details")!;
+  for (const [index, workId] of ["sample-one", "sample-two"].entries()) {
+    const work = screen.getByLabelText(`খরচ ${["১", "২"][index]}-এর খাতা`);
+    expect(work.closest("details")).toBe(context);
+    expect(value(work)).toBe(workId);
+  }
+  for (const details of page.container.querySelectorAll(
+    ".entry-line-details",
+  )) {
+    expect(details.querySelector("select")).toBeNull();
+  }
+  expect(screen.queryByText("কোন খাতায় রাখবেন")).toBeNull();
   const amounts = screen.getAllByLabelText(/^মোট দাম/);
   expect(amounts.map(value)).toEqual(["600", "400"]);
   await reveal(amounts[0], user);
@@ -403,9 +451,11 @@ it("keeps multirow, unknown-date, note and receipt values through a closed draft
     "650",
     "400",
   ]);
-  const unknown = screen.getByLabelText("তারিখ জানা নেই") as HTMLInputElement;
-  await reveal(unknown, user);
-  expect(unknown.checked).toBe(true);
+  const dateField = screen.getByLabelText("তারিখ") as HTMLInputElement;
+  await reveal(dateField, user);
+  expect(dateField.value).toBe("");
+  expect(dateField.disabled).toBe(false);
+  expect(screen.queryByRole("checkbox", { name: "তারিখ জানা নেই" })).toBeNull();
   for (const quantity of screen.getAllByLabelText("পরিমাণ"))
     await reveal(quantity, user);
   expect(screen.getAllByLabelText("পরিমাণ").map(value)).toEqual(["2.5", "3"]);
@@ -451,10 +501,25 @@ it("preserves split work and multiple payment methods when every optional disclo
   const page = mount(original, cashId, onSave, onClose);
   await ready();
   expect(
-    [...page.container.querySelectorAll("details")].every(
-      (details) => !details.open,
-    ),
+    screen.queryByRole("checkbox", { name: "একাধিক খাতায় ভাগ করব" }),
+  ).toBeNull();
+  for (const name of [
+    "অন্য মাধ্যমেও দিয়েছি",
+    "এই মাধ্যম সরান",
+    "এই ভাগ সরান",
+    "আরেক খাতায় ভাগ করুন",
+  ])
+    expect(screen.queryByRole("button", { name })).toBeNull();
+  expect(
+    [
+      ...page.container.querySelectorAll<HTMLDetailsElement>(
+        "details:not(.transaction-extras)",
+      ),
+    ].every((details) => !details.open),
   ).toBe(true);
+  expect(screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open).toBe(
+    true,
+  );
   const parts = screen.getAllByLabelText("এই মাধ্যমে কত টাকা");
   for (const part of parts) await reveal(part, user);
   expect(parts.map(value)).toEqual(["700", "300"]);
@@ -469,9 +534,7 @@ it("preserves split work and multiple payment methods when every optional disclo
   const splits = screen.getAllByLabelText("টাকা", { exact: true });
   for (const part of splits) await reveal(part, user);
   expect(splits.map(value)).toEqual(["600", "400"]);
-  expect(
-    (screen.getByLabelText("তারিখ জানা নেই") as HTMLInputElement).checked,
-  ).toBe(true);
+  expect((screen.getByLabelText("তারিখ") as HTMLInputElement).value).toBe("");
   expect(
     (screen.getByLabelText("মনে রাখার কথা") as HTMLTextAreaElement).value,
   ).toBe(original.entries[0].note);
@@ -525,12 +588,10 @@ it("reopens brand and quantity drafts, keeps vouchers reachable, and preserves t
     screen.getAllByLabelText("ব্র্যান্ড")[0].closest("details")?.open,
   ).toBe(true);
   const extras = screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!;
-  expect(extras.open).toBe(false);
-  expect(
-    screen
-      .getByRole("button", { name: "ভাউচার বা ছবি যোগ করুন", hidden: true })
-      .closest("details"),
-  ).toBe(extras);
+  expect(extras.open).toBe(true);
+  expect(screen.getByLabelText("ভাউচার বা ছবি").closest("details")).toBe(
+    extras,
+  );
   expect(screen.getByLabelText("মনে রাখার কথা").closest("details")).toBe(
     extras,
   );
@@ -725,4 +786,311 @@ it("edits an existing refundable payment with icon methods without changing its 
     allocations: [{ workId: "sample-one", amount: 90000 }],
     paymentParts: [{ method: "bkash", amount: 90000 }],
   });
+});
+
+it("lets a legacy unknown date be selected without a checkbox and persists the first selection", async () => {
+  const original = complex("expense");
+  const repo = await repository(original);
+  const onClose = vi.fn();
+  const page = mount(
+    original,
+    billId,
+    async (next) => repo.save(next),
+    onClose,
+  );
+  await ready();
+  const date = screen.getByLabelText("তারিখ") as HTMLInputElement;
+  expect(date.value).toBe("");
+  expect(date.disabled).toBe(false);
+  expect(screen.queryByRole("checkbox", { name: "তারিখ জানা নেই" })).toBeNull();
+  fireEvent.change(date, { target: { value: "2026-10-25" } });
+  await userEvent.click(save());
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  page.unmount();
+  repo.database.close();
+  await repo.database.open();
+  const saved = (await repo.read())!.ledger;
+  expect(saved.entries[0].date).toBe("2026-10-25");
+  expect(saved.entries[0].lines).toEqual(original.entries[0].lines);
+  expect(saved.entries[0].receipts).toEqual(original.entries[0].receipts);
+});
+
+it("records a new cash payment in one work and one method without split controls", async () => {
+  const original = base();
+  const repo = await repository(original);
+  const onClose = vi.fn();
+  const user = userEvent.setup();
+  const page = render(
+    <LanguageProvider>
+      <EntrySheet
+        presentation="page"
+        ledger={original}
+        initialKind="payment"
+        defaultWorkId="sample-one"
+        defaultPersonId="sample-shop"
+        onSave={async (next) => repo.save(next)}
+        onClose={onClose}
+      />
+    </LanguageProvider>,
+  );
+  await ready();
+  expect(
+    screen.queryByRole("checkbox", { name: "একাধিক খাতায় ভাগ করব" }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "অন্য মাধ্যমেও দিয়েছি" }),
+  ).toBeNull();
+  expect(screen.queryByRole("checkbox", { name: "তারিখ জানা নেই" })).toBeNull();
+  fireEvent.change(screen.getByLabelText("টাকার পরিমাণ"), {
+    target: { value: "123" },
+  });
+  await user.click(screen.getByRole("button", { name: "ব্যাংক" }));
+  await user.click(save());
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  page.unmount();
+  repo.database.close();
+  await repo.database.open();
+  expect((await repo.read())!.ledger.entries[0]).toMatchObject({
+    kind: "payment",
+    allocations: [{ workId: "sample-one", amount: 12300 }],
+    paymentParts: [{ method: "bank", amount: 12300 }],
+  });
+});
+
+it("rejects a new oversized batch atomically and saves an exact 2 MiB receipt after a draft reopens", async () => {
+  const original = complex("expense");
+  const repo = await repository(original);
+  const onClose = vi.fn();
+  const onSave = vi.fn(async (next: Ledger, attachments?: EntryAttachments) => {
+    await repo.save(
+      next,
+      "real",
+      attachments?.files.map(({ id, file }) => ({
+        id,
+        file,
+        entryId: attachments.entryId,
+      })),
+    );
+  });
+  const user = userEvent.setup();
+  let page = mount(original, billId, onSave, onClose);
+  await ready();
+  const input =
+    page.container.querySelector<HTMLInputElement>('input[type="file"]')!;
+  const accepted = new File(
+    [new Uint8Array(2 * 1024 * 1024)],
+    "sample-at-limit.pdf",
+    { type: "application/pdf" },
+  );
+  const oversized = new File(
+    [new Uint8Array(2 * 1024 * 1024 + 1)],
+    "sample-too-large.pdf",
+    { type: "application/pdf" },
+  );
+  await user.upload(input, [accepted, oversized]);
+  expect(screen.getByRole("alert").textContent).toContain("২ MB");
+  expect(screen.queryByText(accepted.name)).toBeNull();
+  expect(screen.queryByText(oversized.name)).toBeNull();
+  expect((await repo.read())!.ledger).toEqual(original);
+  await user.upload(input, accepted);
+  await waitFor(() => expect(screen.getByText(accepted.name)).toBeTruthy());
+  await user.click(screen.getByRole("button", { name: "ফিরুন" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  page.unmount();
+  expect(
+    await createWorkspaceStorage().readDraft(`entry:${billId}`),
+  ).toMatchObject({
+    files: [{ file: expect.objectContaining({ size: accepted.size }) }],
+  });
+  page = mount(original, billId, onSave, onClose);
+  await ready();
+  expect(screen.getByText(accepted.name)).toBeTruthy();
+  await collapse(page.container, user);
+  await user.click(save());
+  await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
+  page.unmount();
+  repo.database.close();
+  await repo.database.open();
+  const saved = (await repo.read())!.ledger.entries[0];
+  expect(saved.lines).toEqual(original.entries[0].lines);
+  const receipt = saved.receipts.find(
+    (receipt) => receipt.name === accepted.name,
+  )!;
+  expect(receipt.size).toBe(accepted.size);
+  expect((await repo.getReceipt(receipt.id))!.blob.size).toBe(accepted.size);
+  expect(
+    saved.receipts.some((receipt) => receipt.name === oversized.name),
+  ).toBe(false);
+});
+
+it("keeps a legacy 3 MiB draft receipt through editing, another reopen and backup restore", async () => {
+  const original = complex("expense");
+  const repo = await repository(original);
+  const onClose = vi.fn();
+  const onSave = async (next: Ledger, attachments?: EntryAttachments) => {
+    await repo.save(
+      next,
+      "real",
+      attachments?.files.map(({ id, file }) => ({
+        id,
+        file,
+        entryId: attachments.entryId,
+      })),
+    );
+  };
+  const user = userEvent.setup();
+  let page = mount(original, billId, onSave, onClose);
+  await ready();
+  await user.click(screen.getByRole("button", { name: "ফিরুন" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  page.unmount();
+  const storage = createWorkspaceStorage();
+  const pending = await storage.readDraft<{ draft: unknown; files: unknown[] }>(
+    `entry:${billId}`,
+  );
+  const legacy = new File(
+    [new Uint8Array(3 * 1024 * 1024).fill(51)],
+    "sample-legacy-large.pdf",
+    { type: "application/pdf" },
+  );
+  await storage.saveDraft(`entry:${billId}`, {
+    ...pending!,
+    files: [{ id: "sample-legacy-3mb", file: legacy }],
+  });
+  page = mount(original, billId, onSave, onClose);
+  await ready();
+  await waitFor(() => expect(screen.getByText(legacy.name)).toBeTruthy());
+  fireEvent.change(screen.getByLabelText("মনে রাখার কথা"), {
+    target: { value: "নমুনা পুরোনো রসিদ রাখা হলো" },
+  });
+  await collapse(page.container, user);
+  await user.click(save());
+  await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
+  page.unmount();
+  repo.database.close();
+  await repo.database.open();
+  const firstSave = (await repo.read())!.ledger;
+  expect(firstSave.entries[0].date).toBeNull();
+  expect(firstSave.entries[0].lines).toEqual(original.entries[0].lines);
+  expect((await repo.getReceipt("sample-legacy-3mb"))!.blob.size).toBe(
+    legacy.size,
+  );
+  page = mount(firstSave, billId, onSave, onClose);
+  await ready();
+  expect(screen.getByRole("button", { name: legacy.name })).toBeTruthy();
+  await collapse(page.container, user);
+  await user.click(save());
+  await waitFor(() => expect(onClose).toHaveBeenCalledTimes(3));
+  page.unmount();
+  const backup = await repo.exportBackup();
+  const target = await repository(LedgerSchema.parse({}));
+  await target.importBackup(backup, { replace: true });
+  target.database.close();
+  await target.database.open();
+  const restored = (await target.read())!.ledger;
+  expect(restored.entries[0].date).toBeNull();
+  expect(restored.entries[0].lines).toEqual(original.entries[0].lines);
+  expect(restored.entries[0].receipts).toEqual(firstSave.entries[0].receipts);
+  expect(
+    await (await target.getReceipt("sample-legacy-3mb"))!.blob.text(),
+  ).toBe(await legacy.text());
+});
+
+it("keeps new multi-item purchases in the selected single work without per-line split choices", async () => {
+  const original = base();
+  const repo = await repository(original);
+  const onClose = vi.fn();
+  const user = userEvent.setup();
+  const page = render(
+    <LanguageProvider>
+      <EntrySheet
+        presentation="page"
+        ledger={original}
+        initialKind="purchase"
+        defaultWorkId="sample-one"
+        defaultPersonId="sample-shop"
+        onSave={async (next) => repo.save(next)}
+        onClose={onClose}
+      />
+    </LanguageProvider>,
+  );
+  await ready();
+  await user.click(screen.getByRole("button", { name: "আরেকটি মাল বা খরচ" }));
+  expect(screen.queryByLabelText(/^খরচ.*-এর খাতা$/)).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "অন্য মাধ্যমেও দিয়েছি" }),
+  ).toBeNull();
+  await user.selectOptions(
+    screen.getByLabelText("কোন খাতার হিসাব"),
+    "sample-two",
+  );
+  const amounts = screen.getAllByLabelText("মোট দাম");
+  const names = screen.getAllByRole("combobox", {
+    name: "মালামাল বা খরচের নাম",
+  });
+  for (let index = 0; index < 2; index++) {
+    fireEvent.change(amounts[index], {
+      target: { value: index === 0 ? "100" : "200" },
+    });
+    fireEvent.change(names[index], {
+      target: { value: index === 0 ? "নমুনা মাল এক" : "নমুনা মাল দুই" },
+    });
+  }
+  await user.click(save());
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  page.unmount();
+  repo.database.close();
+  await repo.database.open();
+  const saved = (await repo.read())!.ledger;
+  const bill = saved.entries.find((entry) => entry.kind === "expense")!;
+  expect(
+    bill.lines.map((line) => ({ workId: line.workId, amount: line.amount })),
+  ).toEqual([
+    { workId: "sample-two", amount: 10000 },
+    { workId: "sample-two", amount: 20000 },
+  ]);
+  const payment = saved.entries.find((entry) => entry.kind === "payment")!;
+  expect(payment.allocations).toEqual([
+    { workId: "sample-two", amount: 30000 },
+  ]);
+  expect(payment.paymentParts).toEqual([{ method: "cash", amount: 30000 }]);
+});
+
+it("reveals an invalid restored date for correction without discarding the pending draft", async () => {
+  const original = purchase("full");
+  const repo = await repository(original);
+  const onClose = vi.fn();
+  const onSave = vi.fn(async (next: Ledger) => repo.save(next));
+  const user = userEvent.setup();
+  let page = mount(original, billId, onSave, onClose);
+  await ready();
+  await user.click(screen.getByRole("button", { name: "ফিরুন" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  page.unmount();
+  const storage = createWorkspaceStorage();
+  const pending = await storage.readDraft<{
+    draft: Record<string, unknown>;
+    files: unknown[];
+  }>(`entry:${billId}`);
+  await storage.saveDraft(`entry:${billId}`, {
+    ...pending!,
+    draft: { ...pending!.draft, date: "invalid", unknownDate: false },
+  });
+  page = mount(original, billId, onSave, onClose);
+  await ready();
+  const date = screen.getByLabelText("তারিখ");
+  const extras = date.closest("details")!;
+  expect(extras.open).toBe(false);
+  await user.click(save());
+  expect(extras.open).toBe(true);
+  expect(onSave).not.toHaveBeenCalled();
+  expect(await storage.readDraft(`entry:${billId}`)).toMatchObject({
+    draft: { date: "invalid", unknownDate: false },
+  });
+  fireEvent.change(date, { target: { value: "2026-11-04" } });
+  await user.click(save());
+  await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
+  page.unmount();
+  expect((await repo.read())!.ledger.entries[0].date).toBe("2026-11-04");
+  expect(await storage.readDraft(`entry:${billId}`)).toBeNull();
 });

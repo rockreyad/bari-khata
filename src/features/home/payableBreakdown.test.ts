@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   reconciledPayableGroups,
   reconciledTotals,
+  type FinancialScope,
 } from "../../domain/adjustmentMath";
 import { appendBalanceAdjustment } from "../../domain/balanceAdjustments";
 import { setEntityRemoved } from "../../domain/entityDeletion";
@@ -19,6 +20,338 @@ const bill = (
   kind: "expense",
   personId,
   lines: [{ id: `${id}-line`, workId, label: "মাল", amount }],
+});
+
+describe("scoped payable breakdown", () => {
+  function readScoped(
+    ledger: Ledger,
+    scope: FinancialScope = { workId: "one" },
+  ) {
+    const before = structuredClone(ledger);
+    const result = payableBreakdown(ledger, scope);
+    expect(result.total).toBe(
+      reconciledTotals(ledger, scope).reconciledPayable,
+    );
+    const rowTotal = result.rows.reduce(
+      (sum, row) => sum + BigInt(row.amount),
+      0n,
+    );
+    expect(rowTotal + BigInt(result.workBalanceCorrection ?? 0)).toBe(
+      BigInt(result.total),
+    );
+    expect(
+      result.rows.every(
+        (row) => Number.isSafeInteger(row.amount) && row.amount > 0,
+      ),
+    ).toBe(true);
+    expect(ledger).toEqual(before);
+    return result;
+  }
+
+  it("identifies the creditor for 4400 taka without offsetting another notebook's advance", () => {
+    const ledger = LedgerSchema.parse({
+      ...base,
+      entries: [
+        bill("bill", "shop", 600000),
+        payment("paid", "shop", 160000),
+        payment("other-notebook-advance", "shop", 700000, "two"),
+      ],
+    });
+    expect(payableBreakdown(ledger).total).toBe(0);
+    expect(readScoped(ledger)).toEqual({
+      total: 440000,
+      rows: [
+        {
+          id: "shop",
+          personId: "shop",
+          entryId: null,
+          amount: 440000,
+          workIds: ["one"],
+          wholeHouse: false,
+        },
+      ],
+      workBalanceCorrection: 0,
+    });
+  });
+
+  it("keeps anonymous settlements, goods returns and cash refunds attached to their original bill", () => {
+    const ledger = LedgerSchema.parse({
+      ...base,
+      entries: [
+        bill("unnamed", null, 600000),
+        { ...payment("paid", null, 120000), relatedEntryId: "unnamed" },
+        {
+          ...bill("goods-return", null, 50000),
+          kind: "expense_credit",
+          relatedEntryId: "unnamed",
+        },
+        {
+          ...payment("cash-refund", null, 10000),
+          kind: "refund",
+          relatedEntryId: "unnamed",
+        },
+        bill("other-notebook", null, 1000000, "two"),
+        payment("unrelated-advance", null, 1000000),
+      ],
+    });
+    expect(readScoped(ledger).rows).toEqual([
+      {
+        id: "anonymous:unnamed",
+        personId: null,
+        entryId: "unnamed",
+        amount: 440000,
+        workIds: ["one"],
+        wholeHouse: false,
+      },
+    ]);
+  });
+
+  it("includes completed earned work without a bill and excludes ongoing promises", () => {
+    const ledger = LedgerSchema.parse({
+      ...base,
+      contracts: [
+        {
+          id: "finished",
+          personId: "worker",
+          workId: "one",
+          total: 600000,
+          status: "done",
+        },
+        {
+          id: "ongoing",
+          personId: "house-worker",
+          workId: "one",
+          total: 1000000,
+        },
+      ],
+      entries: [
+        {
+          ...payment("paid", "worker", 160000),
+          account: "labour",
+          contractId: "finished",
+        },
+      ],
+    });
+    expect(readScoped(ledger).rows).toEqual([
+      {
+        id: "worker",
+        personId: "worker",
+        entryId: null,
+        amount: 440000,
+        workIds: ["one"],
+        wholeHouse: false,
+      },
+    ]);
+    expect(readScoped(ledger, { workId: "two" }).total).toBe(0);
+  });
+
+  it("preserves separate contracts' advances and supports a signed person/account scope", () => {
+    const ledger = advanceFixture();
+    const secondBill = ledger.entries.find(
+      (entry) => entry.id === "earned-second",
+    )!;
+    secondBill.lines[0].workId = "one";
+    ledger.contracts.find((contract) => contract.id === "second")!.workId =
+      "one";
+    expect(readScoped(ledger).rows[0].amount).toBe(1000);
+    expect(
+      readScoped(ledger, {
+        workId: "one",
+        personId: "worker",
+        account: "labour",
+      }),
+    ).toMatchObject({
+      total: 500,
+      rows: [{ personId: "worker", amount: 500 }],
+      workBalanceCorrection: 0,
+    });
+    expect(
+      reconciledPayableGroups(ledger, { workId: "one", contractId: "second" }),
+    ).toEqual({
+      total: 1000,
+      groups: [{ party: "worker", account: "labour", amount: 1000 }],
+    });
+  });
+
+  it("includes only the allocated bill portion of a house-wide job", () => {
+    const ledger = LedgerSchema.parse({
+      ...base,
+      contracts: [
+        {
+          id: "house",
+          personId: "worker",
+          scope: "house",
+          workId: null,
+          total: 10000000,
+        },
+      ],
+      entries: [
+        {
+          ...bill("house-bill", "worker", 600000),
+          account: "labour",
+          contractId: "house",
+          lines: [
+            {
+              id: "one-line",
+              workId: "one",
+              amount: 600000,
+              costType: "labour",
+            },
+            {
+              id: "two-line",
+              workId: "two",
+              amount: 1000000,
+              costType: "labour",
+            },
+          ],
+        },
+        {
+          ...payment("paid", "worker", 160000),
+          account: "labour",
+          contractId: "house",
+        },
+      ],
+    });
+    expect(readScoped(ledger)).toMatchObject({
+      total: 440000,
+      rows: [
+        {
+          personId: "worker",
+          amount: 440000,
+          workIds: ["one"],
+          wholeHouse: true,
+        },
+      ],
+    });
+  });
+
+  it.each([
+    [760000, 160000],
+    [440000, -160000],
+    [-100000, -600000],
+  ])(
+    "keeps an unassigned notebook balance of %s separate from every creditor",
+    (after, applied) => {
+      const original = LedgerSchema.parse({
+        ...base,
+        entries: [bill("bill", "shop", 600000)],
+      });
+      const ledger = appendBalanceAdjustment(original, {
+        target: "work",
+        basis: "balance",
+        workId: "one",
+        account: null,
+        expectedBefore: 600000,
+        after,
+        reason: "খাতার মোট মিলিয়েছি",
+      });
+      expect(readScoped(ledger)).toMatchObject({
+        total: Math.max(after, 0),
+        rows: [{ personId: "shop", amount: 600000 }],
+        workBalanceCorrection: applied,
+      });
+      expect(payableBreakdown(ledger)).toEqual(payableBreakdown(original));
+    },
+  );
+
+  it("does not turn work-only paid/cost corrections into a person's debt", () => {
+    let ledger = LedgerSchema.parse({
+      ...base,
+      entries: [bill("bill", "shop", 600000), payment("paid", "shop", 160000)],
+    });
+    ledger = appendBalanceAdjustment(ledger, {
+      target: "work",
+      basis: "cost",
+      workId: "one",
+      account: null,
+      expectedBefore: 600000,
+      after: 700000,
+      reason: "খরচের মোট মিলিয়েছি",
+    });
+    ledger = appendBalanceAdjustment(ledger, {
+      target: "work",
+      basis: "paid",
+      workId: "one",
+      account: null,
+      expectedBefore: 160000,
+      after: 200000,
+      reason: "দেওয়া টাকার মোট মিলিয়েছি",
+    });
+    expect(readScoped(ledger)).toMatchObject({
+      total: 440000,
+      rows: [{ personId: "shop", amount: 440000 }],
+      workBalanceCorrection: 0,
+    });
+  });
+
+  it("attributes a correction-only opening due to its named person and account", () => {
+    const ledger = appendBalanceAdjustment(LedgerSchema.parse(base), {
+      target: "person",
+      basis: "balance",
+      personId: "shop",
+      account: "materials",
+      workId: "one",
+      expectedBefore: 0,
+      after: 440000,
+      reason: "নামের সঙ্গে আগের বাকি লিখেছি",
+    });
+    const scope = {
+      personId: "shop",
+      account: "materials" as const,
+      workId: "one",
+    };
+    expect(reconciledPayableGroups(ledger, scope)).toEqual({
+      total: 440000,
+      groups: [{ party: "shop", account: "materials", amount: 440000 }],
+    });
+    expect(readScoped(ledger, scope)).toMatchObject({
+      total: 440000,
+      rows: [{ personId: "shop", amount: 440000 }],
+      workBalanceCorrection: 0,
+    });
+  });
+
+  it("retains archived creditors and omits voided/historical entries from both totals and context", () => {
+    let ledger = LedgerSchema.parse({
+      ...base,
+      entries: [
+        bill("current", "shop", 440000),
+        { ...bill("cancelled", "shop", 500000, "two"), voided: true },
+        { ...bill("old", "shop", 600000, "two"), balanceImpact: "historical" },
+      ],
+    });
+    ledger = setEntityRemoved(ledger, "person", "shop", true);
+    expect(readScoped(ledger).rows).toEqual([
+      {
+        id: "shop",
+        personId: "shop",
+        entryId: null,
+        amount: 440000,
+        workIds: ["one"],
+        wholeHouse: false,
+      },
+    ]);
+  });
+
+  it("keeps an exact maximum-safe scoped sum and rejects overflowing aggregates", () => {
+    const maximum = Number.MAX_SAFE_INTEGER;
+    const ledger = LedgerSchema.parse({
+      ...base,
+      entries: [bill("large", "shop", maximum - 1), bill("small", null, 1)],
+    });
+    expect(readScoped(ledger).total).toBe(maximum);
+    const overflowing = {
+      ...ledger,
+      entries: [
+        ...ledger.entries,
+        { ...ledger.entries[1], id: "extra", personId: "worker" },
+      ],
+    };
+    expect(LedgerSchema.safeParse(overflowing).success).toBe(false);
+    expect(() => payableBreakdown(overflowing, { workId: "one" })).toThrow(
+      "balance_adjustment_out_of_range",
+    );
+  });
 });
 const payment = (
   id: string,
