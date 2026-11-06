@@ -1,10 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { checkRelease } from "./check-release.mjs";
+import { checkRelease, checkBackendMinimum } from "./check-release.mjs";
 
 const manifest = { version: "1.2.3" };
 const lock = { version: "1.2.3", packages: { "": { version: "1.2.3" } } };
 
 describe("release version consistency", () => {
+  it("keeps the minimum within the built version and equal to the latest SQL gate", () => {
+    expect(
+      checkRelease(manifest, lock, undefined, {
+        minimumSupportedVersion: "1.2.2",
+      }),
+    ).toBe("1.2.3");
+    expect(() =>
+      checkRelease(manifest, lock, undefined, {
+        minimumSupportedVersion: "1.2.4",
+      }),
+    ).toThrow("cannot exceed");
+    expect(() =>
+      checkRelease(manifest, lock, undefined, {
+        minimumSupportedVersion: "1.2.3-beta",
+      }),
+    ).toThrow("A.B.C");
+    const sql =
+      "create function private.minimum_supported_client_version() returns text as $$ select '1.2.2'::text; $$;";
+    expect(() =>
+      checkBackendMinimum({ minimumSupportedVersion: "1.2.2" }, sql),
+    ).not.toThrow();
+    expect(() =>
+      checkBackendMinimum({ minimumSupportedVersion: "1.2.3" }, sql),
+    ).toThrow("must match");
+  });
   it("accepts matching app, lockfile and semantic release tag", () => {
     expect(checkRelease(manifest, lock, "v1.2.3")).toBe("1.2.3");
     expect(checkRelease(manifest, lock)).toBe("1.2.3");

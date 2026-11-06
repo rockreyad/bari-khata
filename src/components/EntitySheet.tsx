@@ -549,13 +549,15 @@ export function EntitySheet({
     } catch (cause) {
       if (mounted.current)
         setError(
-          cause instanceof Error && /[\u0980-\u09ff]/.test(cause.message)
-            ? t(
-                cause.message === "চুক্তি কেন বদলালেন, তা লিখুন।"
-                  ? "কেন বদলালেন, তা লিখুন।"
-                  : cause.message,
-              )
-            : t("তথ্য ঠিক হয়নি। নাম, তারিখ ও টাকা মিলিয়ে দেখুন।"),
+          cause instanceof Error && cause.message === "client_update_required"
+            ? t("নতুন হিসাব রাখার আগে অ্যাপ আপডেট করুন। আপনার লেখা অক্ষত আছে।")
+            : cause instanceof Error && /[\u0980-\u09ff]/.test(cause.message)
+              ? t(
+                  cause.message === "চুক্তি কেন বদলালেন, তা লিখুন।"
+                    ? "কেন বদলালেন, তা লিখুন।"
+                    : cause.message,
+                )
+              : t("তথ্য ঠিক হয়নি। নাম, তারিখ ও টাকা মিলিয়ে দেখুন।"),
         );
       lock.current = false;
       setSaving(false);

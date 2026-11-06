@@ -38,6 +38,7 @@ import { planHousePayment } from "../../domain/housePayments";
 import { partyDueItems, partyDuePaymentUrl } from "../home/partyDueItems";
 import { savePreferences } from "../../lib/preferences";
 import { latinDigits } from "../../lib/numerals";
+import { setFinancialWritesAllowed } from "../../lib/localWriteBarrier";
 import { HouseCostForm } from "./HouseCostForm";
 import { HousePaymentForm } from "./HousePaymentForm";
 
@@ -81,6 +82,7 @@ const api = {
 };
 let owner: string | undefined;
 afterEach(async () => {
+  setFinancialWritesAllowed(true);
   cleanup();
   await Promise.resolve();
   if (owner) await getAccountDatabase(owner).delete();
@@ -228,6 +230,34 @@ async function cost(
   await user.type(screen.getByLabelText(/^মালের দাম [০-৯0-9]+$/), amount);
 }
 const payPath = "/write/payment?person=party&work=roof&account=materials";
+
+it("explains a required update on a valid purchase and keeps the entered draft and ledger intact", async () => {
+  const initial = base();
+  const repo = await setup(initial);
+  const user = userEvent.setup();
+  mount(initial, <HouseCostForm action="purchase" />);
+  await ready();
+  const input = screen.getByLabelText(/^মালের নাম/);
+  fireEvent.change(input, { target: { value: "নমুনা বালু" } });
+  fireEvent.change(screen.getByLabelText(/^মালের দাম [০-৯0-9]+$/), {
+    target: { value: "100" },
+  });
+  setFinancialWritesAllowed(false);
+  await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+  await screen.findByText(
+    "নতুন হিসাব রাখার আগে অ্যাপ আপডেট করুন। আপনার লেখা অক্ষত আছে।",
+  );
+  expect(screen.getByLabelText(/^মালের নাম/)).toBe(input);
+  expect((input as HTMLInputElement).value).toBe("নমুনা বালু");
+  expect(api.save).toHaveBeenCalledOnce();
+  expect((await repo.read())!.ledger.entries).toEqual([]);
+  expect(api.close).not.toHaveBeenCalled();
+  expect(
+    screen.queryByText(
+      "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
+    ),
+  ).toBeNull();
+});
 
 it("pays a finished job with no separate bill and retains its remaining due after IndexedDB reopens", async () => {
   const initial = LedgerSchema.parse({

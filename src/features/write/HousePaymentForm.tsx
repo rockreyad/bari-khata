@@ -481,11 +481,13 @@ export function HousePaymentForm() {
       setInvalidField(issue);
       setError(
         t(
-          issue in issueText
-            ? issueText[issue as PaymentFormIssue]
-            : code === "house_payment_confirm_advance"
-              ? "বাড়তি টাকা অগ্রিম থাকবে কি না, নিশ্চিত করুন।"
-              : "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
+          code === "client_update_required"
+            ? "নতুন হিসাব রাখার আগে অ্যাপ আপডেট করুন। আপনার লেখা অক্ষত আছে।"
+            : issue in issueText
+              ? issueText[issue as PaymentFormIssue]
+              : code === "house_payment_confirm_advance"
+                ? "বাড়তি টাকা অগ্রিম থাকবে কি না, নিশ্চিত করুন।"
+                : "খাতা বদলে থাকতে পারে। লেখা অক্ষত আছে; হিসাব দেখে আবার রাখুন।",
         ),
       );
     } finally {
