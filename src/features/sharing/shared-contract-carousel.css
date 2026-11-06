@@ -1,0 +1,176 @@
+.shared-contract-carousel {
+  min-width: 0;
+  margin-top: 20px;
+}
+.shared-contract-carousel-heading {
+  margin-bottom: 12px;
+}
+.shared-contract-carousel-heading h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+.shared-work-track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc(100% - 28px);
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  border-radius: 20px;
+}
+.shared-work-track::-webkit-scrollbar {
+  display: none;
+}
+.shared-work-track-single {
+  grid-auto-columns: 100%;
+}
+.shared-work-track:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+.shared-work-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 180px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text);
+  scroll-snap-align: start;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 180px;
+}
+.shared-work-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.shared-work-card h3 {
+  min-width: 0;
+  flex: 1;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.shared-work-status {
+  --work-status-color: var(--state-unknown);
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 5px;
+  max-width: 45%;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.shared-work-status > i {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--work-status-color);
+}
+.shared-work-status-planned {
+  --work-status-color: var(--state-planned);
+}
+.shared-work-status-ongoing {
+  --work-status-color: var(--state-ongoing);
+}
+.shared-work-status-done {
+  --work-status-color: var(--state-done);
+}
+.shared-work-card .shared-contract-balances {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: auto 0 0;
+  padding-top: 14px;
+}
+.shared-work-card .shared-contract-balances > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.shared-work-card .shared-contract-balances > div:nth-child(2) {
+  text-align: end;
+}
+.shared-work-card .shared-contract-balances dt {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.shared-work-card .shared-contract-balances dd {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  text-align: inherit;
+}
+.shared-work-card .shared-contract-balances > .shared-work-due {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  grid-column: 1 / -1;
+  gap: 4px 10px;
+  min-height: 42px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: var(--surface-muted);
+}
+.shared-work-card .shared-work-due dt {
+  font-size: 12px;
+}
+.shared-work-card .shared-work-due dd {
+  margin-inline-start: auto;
+  font-size: 16px;
+  font-weight: 650;
+  text-align: end;
+}
+.shared-work-card .shared-work-due .shared-work-pending {
+  font-size: 13px;
+}
+@media (min-width: 640px) {
+  .shared-work-track {
+    grid-auto-columns: calc((100% - 12px) / 2);
+  }
+  .shared-work-track-single {
+    grid-auto-columns: 100%;
+  }
+}
+@media print {
+  .shared-work-track {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-columns: auto;
+    overflow: visible;
+  }
+  .shared-work-card {
+    content-visibility: visible;
+    break-inside: avoid;
+  }
+}

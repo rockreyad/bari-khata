@@ -1,4 +1,20 @@
+import { carouselEnglish } from "./carouselEnglish";
+import { monthlyChartEnglish } from "./monthlyChartEnglish";
+
 export const sharedEnglish: Record<string, string> = {
+  ...carouselEnglish,
+  ...monthlyChartEnglish,
+  "হিসাবটা বিস্তারিত দেখি": "Account details",
+  "চুক্তির বিস্তারিত": "Contract details",
+  "আসলে পাওয়া টাকা": "Money actually received",
+  "বাকি টাকার সমন্বয়": "Balance adjustment",
+  "হিসাব মিলিয়ে পাওয়া টাকার অঙ্ক বদলানো হয়েছে।":
+    "The received amount was adjusted when reconciling the account.",
+  "এই টাকা এখনকার পাওনার মধ্যে ধরা হয়নি।":
+    "This is not included in the amount currently due.",
+  "বাকি টাকার হিসাব এখনও মেলানো হয়নি। যিনি লিংক পাঠিয়েছেন, তাঁর সঙ্গে মিলিয়ে নিন।":
+    "The balance still needs review. Check it with the person who sent this link.",
+
   "বাকি মেলানো বাকি": "Balance needs review",
   "পুরোনো চুক্তির ছাড় আর কাজের বিল আলাদা করে মেলানো বাকি। এখন বাকি বা জমার চূড়ান্ত অঙ্ক দেখানো হচ্ছে না।":
     "An earlier agreement correction needs to be separated from earned bills. A final due or credit is not shown yet.",

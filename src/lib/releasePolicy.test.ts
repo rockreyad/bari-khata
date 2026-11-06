@@ -1,5 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { APP_VERSION } from "./appVersion";
+
+const [major, minor, patch] = APP_VERSION.split(".").map(Number);
+const nextVersion = `${major}.${minor}.${patch + 1}`;
+const laterVersion = `${major}.${minor}.${patch + 2}`;
 
 beforeEach(() => {
   vi.resetModules();
@@ -37,13 +42,22 @@ it("allows optional releases, enforces newer minimums and never lowers a known f
   const fetcher = vi
     .fn()
     .mockResolvedValueOnce(
-      response({ latestVersion: "0.2.0", minimumSupportedVersion: "0.1.4" }),
+      response({
+        latestVersion: laterVersion,
+        minimumSupportedVersion: APP_VERSION,
+      }),
     )
     .mockResolvedValueOnce(
-      response({ latestVersion: "0.2.0", minimumSupportedVersion: "0.1.5" }),
+      response({
+        latestVersion: laterVersion,
+        minimumSupportedVersion: nextVersion,
+      }),
     )
     .mockResolvedValueOnce(
-      response({ latestVersion: "0.1.3", minimumSupportedVersion: "0.1.3" }),
+      response({
+        latestVersion: APP_VERSION,
+        minimumSupportedVersion: APP_VERSION,
+      }),
     )
     .mockResolvedValueOnce(response({ latestVersion: "broken" }));
   vi.stubGlobal("fetch", fetcher);
@@ -57,7 +71,7 @@ it("allows optional releases, enforces newer minimums and never lowers a known f
   );
   await api.checkReleasePolicy(true);
   await api.checkReleasePolicy(true);
-  expect(api.getReleaseState().minimumSupportedVersion).toBe("0.1.5");
+  expect(api.getReleaseState().minimumSupportedVersion).toBe(nextVersion);
   expect(api.getReleaseState().required).toBe(true);
   expect(fetcher.mock.calls[0][1]).toMatchObject({
     cache: "no-store",
@@ -79,7 +93,10 @@ it("deduplicates concurrent checks and skips offline checks without discarding p
   expect(api.checkReleasePolicy(true)).toBe(first);
   await Promise.resolve();
   resolve(
-    response({ latestVersion: "0.1.4", minimumSupportedVersion: "0.1.4" }),
+    response({
+      latestVersion: APP_VERSION,
+      minimumSupportedVersion: APP_VERSION,
+    }),
   );
   await first;
   vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
@@ -96,7 +113,7 @@ it("treats server PT426 as mandatory, including same-version and malformed detai
     api.reportClientUpdateRequired({
       code: "PT426",
       message: "client_update_required",
-      details: JSON.stringify({ minimumSupportedVersion: "0.1.4" }),
+      details: JSON.stringify({ minimumSupportedVersion: APP_VERSION }),
     }),
   ).toBe(true);
   expect(api.getReleaseState().required).toBe(true);
@@ -106,7 +123,7 @@ it("treats server PT426 as mandatory, including same-version and malformed detai
     details: "invalid",
   });
   expect(api.getReleaseState().required).toBe(true);
-  expect(api.getReleaseState().minimumSupportedVersion).toBe("0.1.4");
+  expect(api.getReleaseState().minimumSupportedVersion).toBe(APP_VERSION);
 });
 
 it("aborts a hung check and allows a later check to succeed", async () => {
@@ -123,7 +140,10 @@ it("aborts a hung check and allows a later check to succeed", async () => {
         }),
     )
     .mockResolvedValueOnce(
-      response({ latestVersion: "0.1.5", minimumSupportedVersion: "0.1.5" }),
+      response({
+        latestVersion: nextVersion,
+        minimumSupportedVersion: nextVersion,
+      }),
     );
   vi.stubGlobal("fetch", fetcher);
   const first = api.checkReleasePolicy(true);
