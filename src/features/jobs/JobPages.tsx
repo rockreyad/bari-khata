@@ -503,9 +503,14 @@ export function JobPage() {
                 errorOccurrence: (value.errorOccurrence ?? 0) + 1,
                 error:
                   cause instanceof Error &&
-                  /[\u0980-\u09ff]/.test(cause.message)
-                    ? t(cause.message)
-                    : t("অবস্থা রাখা যায়নি। আবার চেষ্টা করুন।"),
+                  cause.message === "client_update_required"
+                    ? t(
+                        "নতুন হিসাব রাখার আগে অ্যাপ আপডেট করুন। আপনার লেখা অক্ষত আছে।",
+                      )
+                    : cause instanceof Error &&
+                        /[\u0980-\u09ff]/.test(cause.message)
+                      ? t(cause.message)
+                      : t("অবস্থা রাখা যায়নি। আবার চেষ্টা করুন।"),
               }
             : value,
         );

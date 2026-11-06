@@ -959,22 +959,24 @@ function SupportedEntrySheet({
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "";
       setError(
-        message === "paid_purchase_payment_stale"
-          ? t("সঙ্গে রাখা দেওয়া টাকার হিসাব বদলেছে। আবার খুলে মিলিয়ে নিন।")
-          : message === "paid_purchase_not_eligible"
-            ? t(
-                "বিল ও দেওয়া টাকা একসঙ্গে বদলানো যাচ্ছে না। যুক্ত হিসাবটি খুলে মিলিয়ে নিন।",
-              )
-            : message ===
-                "Linked payment: keep the same person, account and work"
+        message === "client_update_required"
+          ? t("নতুন হিসাব রাখার আগে অ্যাপ আপডেট করুন। আপনার লেখা অক্ষত আছে।")
+          : message === "paid_purchase_payment_stale"
+            ? t("সঙ্গে রাখা দেওয়া টাকার হিসাব বদলেছে। আবার খুলে মিলিয়ে নিন।")
+            : message === "paid_purchase_not_eligible"
               ? t(
-                  "এই বিলের সঙ্গে টাকা দেওয়ার হিসাব আছে। কাজ, ব্যক্তি বা চুক্তি বদলাতে আগে যুক্ত হিসাবটি দেখুন। দাম ও বিবরণ বদলানো যাবে।",
+                  "বিল ও দেওয়া টাকা একসঙ্গে বদলানো যাচ্ছে না। যুক্ত হিসাবটি খুলে মিলিয়ে নিন।",
                 )
-              : /[\u0980-\u09ff]/.test(message)
-                ? message
-                : t(
-                    "হিসাবটি রাখা যায়নি। তথ্য ও ফোনের খালি জায়গা দেখে আবার চেষ্টা করুন।",
-                  ),
+              : message ===
+                  "Linked payment: keep the same person, account and work"
+                ? t(
+                    "এই বিলের সঙ্গে টাকা দেওয়ার হিসাব আছে। কাজ, ব্যক্তি বা চুক্তি বদলাতে আগে যুক্ত হিসাবটি দেখুন। দাম ও বিবরণ বদলানো যাবে।",
+                  )
+                : /[\u0980-\u09ff]/.test(message)
+                  ? message
+                  : t(
+                      "হিসাবটি রাখা যায়নি। তথ্য ও ফোনের খালি জায়গা দেখে আবার চেষ্টা করুন।",
+                    ),
       );
       lock.current = false;
       setSaving(false);

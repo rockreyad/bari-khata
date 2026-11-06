@@ -19,11 +19,15 @@
       "destination": "/api/mcp-auth?action=:action"
     },
     {
-      "source": "/((?!api/|assets/|sw.js|workbox-|manifest.webmanifest|icon-|apple-touch-icon).*)",
+      "source": "/((?!api/|assets/|sw.js|release.json|workbox-|manifest.webmanifest|icon-|apple-touch-icon).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
+    {
+      "source": "/release.json",
+      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+    },
     {
       "source": "/(.*)",
       "headers": [

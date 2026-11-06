@@ -1,5 +1,10 @@
 import { z } from "zod";
 import {
+  assertFinancialWritesAllowed,
+  draftWriteKey,
+  trackLocalWrite,
+} from "../lib/localWriteBarrier";
+import {
   hasRetiredWorkMetadata,
   ledgerBeforeWorkMetadataRemoval,
   removeRetiredWorkMetadata,
@@ -287,6 +292,15 @@ export class LedgerRepository {
     mode: WorkspaceMode = "real",
     files: ReceiptInput[] = [],
   ): Promise<void> {
+    assertFinancialWritesAllowed();
+    return trackLocalWrite(this.persistChange(change, mode, files));
+  }
+
+  private async persistChange(
+    change: LedgerChange,
+    mode: WorkspaceMode,
+    files: ReceiptInput[],
+  ): Promise<void> {
     const prepared = files.map((input): ReceiptRow => {
       if (
         !allowedTypes.has(input.file.type) ||
@@ -462,6 +476,14 @@ export class LedgerRepository {
   }
 
   async rollbackArchitectureMigration(
+    id: string,
+    expected: { ledger: Ledger; generation: number },
+  ) {
+    assertFinancialWritesAllowed();
+    return trackLocalWrite(this.rollbackMigration(id, expected));
+  }
+
+  private async rollbackMigration(
     id: string,
     expected: { ledger: Ledger; generation: number },
   ) {
@@ -656,6 +678,14 @@ export class LedgerRepository {
     text: string,
     options: { mode?: WorkspaceMode; replace: true },
   ): Promise<void> {
+    assertFinancialWritesAllowed();
+    return trackLocalWrite(this.restoreBackup(text, options));
+  }
+
+  private async restoreBackup(
+    text: string,
+    options: { mode?: WorkspaceMode; replace: true },
+  ): Promise<void> {
     if (options.replace !== true)
       throw new Error("restore_confirmation_required");
     const backup = parseBackup(text);
@@ -673,6 +703,7 @@ export class LedgerRepository {
       blob: base64ToBlob(receipt.base64, receipt.mime),
       uploadedFor: null,
     }));
+    assertFinancialWritesAllowed();
     await this.database.transaction(
       "rw",
       [
@@ -769,6 +800,14 @@ export class LedgerRepository {
     text: string,
     options: BackupMergeOptions,
   ): Promise<{ changed: boolean }> {
+    assertFinancialWritesAllowed();
+    return trackLocalWrite(this.mergeBackupContents(text, options));
+  }
+
+  private async mergeBackupContents(
+    text: string,
+    options: BackupMergeOptions,
+  ): Promise<{ changed: boolean }> {
     if (options.confirmed !== true)
       throw new Error("restore_confirmation_required");
     const backup = parseBackup(text);
@@ -790,6 +829,7 @@ export class LedgerRepository {
         throw new Error("account_changed");
     };
     checkOwner();
+    assertFinancialWritesAllowed();
     return this.database.transaction(
       "rw",
       [
@@ -1057,12 +1097,15 @@ function storeDraft(
   value: unknown,
 ) {
   const parsed = JsonValueSchema.parse(value);
-  return database.drafts.put({
-    id: `${mode}:${key}`,
-    workspace: mode,
-    value: packDraft(parsed),
-    updatedAt: now(),
-  });
+  return trackLocalWrite(
+    database.drafts.put({
+      id: `${mode}:${key}`,
+      workspace: mode,
+      value: packDraft(parsed),
+      updatedAt: now(),
+    }),
+    draftWriteKey(database.name, mode, key),
+  );
 }
 async function loadDraft<T>(
   database: LedgerDatabase,
@@ -1104,7 +1147,11 @@ export function createWorkspaceStorage(mode: WorkspaceMode = "real") {
     readDraft: <T = unknown>(key: string) => loadDraft<T>(database, mode, key),
     saveDraft: (key: string, value: unknown) =>
       storeDraft(database, mode, key, value),
-    removeDraft: (key: string) => database.drafts.delete(`${mode}:${key}`),
+    removeDraft: (key: string) =>
+      trackLocalWrite(
+        database.drafts.delete(`${mode}:${key}`),
+        draftWriteKey(database.name, mode, key),
+      ),
     getReceipt: async (id: string) => {
       checkAccount();
       const receipt = await repository.getReceipt(id, mode);
@@ -1148,5 +1195,8 @@ export async function readDraft<T = unknown>(
 }
 export async function removeDraft(key: string, mode: WorkspaceMode = "real") {
   const database = getWorkspaceDatabase(mode);
-  await database.drafts.delete(`${mode}:${key}`);
+  await trackLocalWrite(
+    database.drafts.delete(`${mode}:${key}`),
+    draftWriteKey(database.name, mode, key),
+  );
 }

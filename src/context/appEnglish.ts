@@ -1,6 +1,19 @@
 export const appEnglish: Record<string, string> = {
+  "নতুন হিসাব রাখার আগে অ্যাপ আপডেট করুন। আপনার লেখা অক্ষত আছে।":
+    "Update the app before saving new records. Your writing is still here.",
   "নতুন আপডেট এসেছে": "A new update is available",
   "আপডেট করুন": "Update now",
+  "চালিয়ে যেতে আপডেট করুন": "Update to continue",
+  "খোলা লেখা রেখে ফর্মটি বন্ধ করুন। তারপর আপডেট করুন।":
+    "Keep your draft and close the form, then update.",
+  "সংযোগ এলে আপডেট করুন। ফোনের লেখা মুছবেন না।":
+    "Update when connected. Keep the data on this device.",
+  "আগের হিসাব দেখা ও কপি নামানো যাবে; নতুন হিসাবের আগে আপডেট দরকার।":
+    "You can view and back up existing entries. Update before adding new entries.",
+  "আপডেটটি এখনও নামেনি। সংযোগ দেখে আবার চেষ্টা করুন।":
+    "The update has not downloaded yet. Check your connection and try again.",
+  "লেখা রাখা শেষ হয়নি। আগে সংরক্ষণ করে আবার চেষ্টা করুন।":
+    "Your draft has not finished saving. Save it before trying again.",
   "মালের হিসাব": "Material history",
   "সব কাজ মিলিয়ে": "Across all works",
   "কেনা ও ফেরত মিলিয়ে": "Purchases less returns",
