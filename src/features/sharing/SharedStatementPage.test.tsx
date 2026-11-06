@@ -21,6 +21,7 @@ vi.mock("./shareExport", async (original) => ({
   ...(await original<typeof import("./shareExport")>()),
   downloadSharedCsv: mocked.download,
 }));
+vi.mock("./SharedMonthlySection", () => ({ SharedMonthlySection: () => null }));
 vi.mock("./shareClient", () => ({ readShare: mocked.read }));
 vi.mock("./SharedEntryDetail", () => ({
   SharedEntryDetail: ({
@@ -124,7 +125,7 @@ describe("public live statements", () => {
       );
       render(<SharedStatementPage />);
       await screen.findByText(
-        "পুরোনো চুক্তির ছাড় আর কাজের বিল আলাদা করে মেলানো বাকি। এখন বাকি বা জমার চূড়ান্ত অঙ্ক দেখানো হচ্ছে না।",
+        "বাকি টাকার হিসাব এখনও মেলানো হয়নি। যিনি লিংক পাঠিয়েছেন, তাঁর সঙ্গে মিলিয়ে নিন।",
       );
       expect(screen.queryByText("৳200")).toBeNull();
       expect(screen.queryByText("৳150")).toBeNull();
@@ -505,7 +506,7 @@ describe("public live statements", () => {
   });
 });
 
-it("keeps the shop's full bill, payment and due summary while searching all scoped history and exporting the full copy", async () => {
+it("keeps the shop's received and due summary plus folded bill details while searching and exporting the full copy", async () => {
   const original = page();
   const shop = SharedStatementSchema.parse({
     ...original,
@@ -539,13 +540,18 @@ it("keeps the shop's full bill, payment and due summary while searching all scop
     .mockResolvedValueOnce(shop);
   const user = userEvent.setup();
   const { container } = render(<SharedStatementPage />);
-  await screen.findByText("মোট বিল");
+  await screen.findByText("মোট পেয়েছেন");
   const summary = screen.getByRole("region", { name: "হিসাবের সারাংশ" });
-  expect(
-    container.querySelector(".shared-shop-bill > strong")?.textContent,
-  ).toBe("৳300");
-  expect(summary.textContent).toContain("পরিশোধ৳100");
-  expect(summary.textContent).toContain("বাকি৳200");
+  const details = summary.querySelector<HTMLDetailsElement>(
+    ".shared-summary-details",
+  )!;
+  expect(details.open).toBe(false);
+  await user.click(details.querySelector("summary")!);
+  expect(details.querySelector(".shared-detail-amounts dd")?.textContent).toBe(
+    "৳300",
+  );
+  expect(summary.textContent).toContain("মোট পেয়েছেন৳100");
+  expect(summary.textContent).toContain("আর পাবেন৳200");
   const beforeSummary = summary.textContent;
   await user.type(
     screen.getByRole("searchbox", { name: "লেনদেন খুঁজুন" }),
@@ -634,34 +640,40 @@ it.each([
     const before = JSON.stringify(statement);
     mocked.read.mockResolvedValue(statement);
     const { container } = render(<SharedStatementPage />);
-    await screen.findByText("মোট বিল");
+    await screen.findByText("মোট পেয়েছেন");
+    const payment = container.querySelector(".shared-total-main")!;
+    expect(payment.querySelector("strong")?.textContent).toBe(received);
     expect(
-      container.querySelector(".shared-shop-bill > strong")?.textContent,
-    ).toBe(bill);
+      container.querySelector(".shared-balance-grid dd")?.textContent,
+    ).toBe(balance);
     if (corrections) {
-      const payment = screen.getByText("পরিশোধ", {
+      const details = container.querySelector<HTMLDetailsElement>(
+        ".shared-summary-details",
+      )!;
+      expect(details.open).toBe(false);
+      await userEvent.click(details.querySelector("summary")!);
+      const billMetric = screen.getByText("মোট বিল", {
         selector: "dt",
       }).parentElement!;
-      expect(payment.querySelector("dd")?.textContent).toBe(received);
-      const remaining = screen.getByText("ক্রেতা পাবেন", {
+      expect(within(billMetric).getByText(bill)).toBeTruthy();
+      const remaining = screen.getByText("আপনার কাছে জমা", {
         selector: "dt",
       }).parentElement!;
       expect(remaining.querySelector("dd")?.textContent).toBe(balance);
-      expect(
-        container.querySelector(".shared-shop-bill small")?.textContent,
-      ).toBe("সমন্বয়সহ · ৳-100");
+      expect(billMetric.querySelector("small")?.textContent).toBe(
+        "সমন্বয়সহ · −৳100",
+      );
       expect(payment.querySelector("small")?.textContent).toBe(
         "সমন্বয়সহ · +৳150",
       );
       expect(screen.queryByText("পুরো বিল মেটানো")).toBeNull();
     } else {
-      expect(screen.queryByText("পরিশোধ", { selector: "dt" })).toBeNull();
-      expect(screen.queryByText("বাকি", { selector: "dt" })).toBeNull();
+      expect(screen.queryByText("মোট বিল", { selector: "dt" })).toBeNull();
+      expect(screen.getByText("আর পাবেন", { selector: "dt" })).toBeTruthy();
       expect(
         screen.getByText(cost === 0 ? "বাকি নেই" : "পুরো বিল মেটানো"),
       ).toBeTruthy();
-      const summary = screen.getByRole("region", { name: "হিসাবের সারাংশ" });
-      expect(within(summary).getAllByText(bill)).toHaveLength(1);
+      expect(container.querySelector(".shared-summary-details")).toBeNull();
     }
     expect(JSON.stringify(statement)).toBe(before);
   },
@@ -709,14 +721,12 @@ it("shows a noncash balance waiver as no amount owed without claiming the bill w
   await screen.findByText("বাকি নেই");
   expect(screen.queryByText("পুরো বিল মেটানো")).toBeNull();
   expect(
-    container.querySelector(".shared-shop-bill > strong")?.textContent,
+    container.querySelector(".shared-detail-amounts dd")?.textContent,
   ).toBe("৳300");
   expect(
-    screen
-      .getByText("পরিশোধ", { selector: "dt" })
-      .parentElement?.querySelector("dd")?.textContent,
+    container.querySelector(".shared-total-main > strong")?.textContent,
   ).toBe("৳0");
-  expect(container.querySelector(".shared-shop-due dd")?.textContent).toBe(
+  expect(container.querySelector(".shared-balance-grid dd")?.textContent).toBe(
     "৳0",
   );
   expect(
@@ -758,7 +768,7 @@ it("shows contracts only when scoped worker contracts exist", async () => {
   await waitFor(() => expect(screen.queryByText("কাজ ও চুক্তি")).toBeNull());
 });
 
-it("replaces a bounded set of contracts and keeps its financial summary unchanged", async () => {
+it("keeps every contract available to swipe without changing the financial summary", async () => {
   mocked.read.mockResolvedValue(
     SharedStatementSchema.parse({
       ...page(),
@@ -775,45 +785,25 @@ it("replaces a bounded set of contracts and keeps its financial summary unchange
   );
   const { container } = render(<SharedStatementPage />);
   await screen.findByText("কাজ ও চুক্তি");
-  const contracts =
-    container.querySelector<HTMLDetailsElement>(".shared-contracts")!;
-  const user = userEvent.setup();
-  await user.click(contracts.querySelector("summary")!);
-  expect(contracts.querySelectorAll("article")).toHaveLength(5);
+  const contracts = container.querySelector<HTMLElement>(
+    ".shared-contract-carousel",
+  )!;
+  expect(contracts.querySelectorAll("article")).toHaveLength(6);
   expect(
-    (
-      within(contracts).getByRole("button", {
-        name: "আগের চুক্তি",
-      }) as HTMLButtonElement
-    ).disabled,
-  ).toBe(true);
-  await user.click(
-    within(contracts).getByRole("button", { name: "পরের চুক্তি" }),
-  );
+    within(contracts).queryByRole("button", { name: "আগের কাজ" }),
+  ).toBeNull();
+  expect(
+    within(contracts).queryByRole("button", { name: "পরের কাজ" }),
+  ).toBeNull();
+  expect(
+    within(contracts).getByRole("heading", { name: "নমুনা চুক্তি 1" }),
+  ).toBeTruthy();
   expect(
     within(contracts).getByRole("heading", { name: "নমুনা চুক্তি 6" }),
   ).toBeTruthy();
   expect(
-    within(contracts).queryByRole("heading", { name: "নমুনা চুক্তি 1" }),
-  ).toBeNull();
-  expect(contracts.querySelectorAll("article")).toHaveLength(1);
-  expect(
-    (
-      within(contracts).getByRole("button", {
-        name: "পরের চুক্তি",
-      }) as HTMLButtonElement
-    ).disabled,
-  ).toBe(true);
-  expect(
     container.querySelector(".shared-total-main > strong")?.textContent,
   ).toBe("৳100");
-  await user.click(
-    within(contracts).getByRole("button", { name: "আগের চুক্তি" }),
-  );
-  expect(contracts.querySelectorAll("article")).toHaveLength(5);
-  expect(
-    within(contracts).getByRole("heading", { name: "নমুনা চুক্তি 1" }),
-  ).toBeTruthy();
 });
 
 it.each([
@@ -855,31 +845,19 @@ it.each([
     mocked.read.mockResolvedValue(statement);
     const { container } = render(<SharedStatementPage />);
     await screen.findByText("Golam");
-    if (account === "materials") {
-      expect(
-        container.querySelector(".shared-shop-bill > strong")?.textContent,
-      ).toBe("৳0");
-      const balances = container.querySelector<HTMLElement>(
-        ".shared-shop-balances",
-      )!;
-      expect(
-        within(balances).getByText("পরিশোধ").parentElement?.textContent,
-      ).toBe("পরিশোধ৳162");
-      expect(
-        within(balances).getByText("ক্রেতা পাবেন").parentElement?.textContent,
-      ).toBe("ক্রেতা পাবেন৳162");
-    } else {
-      expect(
-        container.querySelector(".shared-total-main > strong")?.textContent,
-      ).toBe("৳162");
-      expect(container.querySelector(".shared-balance-grid")).toBeNull();
-      expect(container.querySelector(".shared-has-due")).toBeNull();
-      const more = container.querySelector("details.shared-reconciliation")!;
-      expect(more.hasAttribute("open")).toBe(false);
-      await userEvent.click(screen.getByText("আপনার কাছে জমা"));
-      expect(more.hasAttribute("open")).toBe(true);
-      expect(more.querySelector("dd")?.textContent).toBe("৳162");
-    }
+    expect(
+      container.querySelector(".shared-total-main > strong")?.textContent,
+    ).toBe("৳162");
+    const balances = container.querySelector<HTMLElement>(
+      ".shared-balance-grid",
+    )!;
+    expect(
+      within(balances).getByText("আপনার কাছে জমা").parentElement?.textContent,
+    ).toBe("আপনার কাছে জমা৳162");
+    expect(container.querySelector(".shared-has-due")).toBeNull();
+    expect(container.querySelector(".shared-summary-details")).toBeNull();
+    expect(screen.queryByText("মোট বিল", { selector: "dt" })).toBeNull();
+    expect(screen.queryByText("কাজের বিল", { selector: "dt" })).toBeNull();
     expect(screen.getByRole("button", { name: "কপি নামান" })).toBeTruthy();
     expect(JSON.stringify(statement)).toBe(before);
   },
@@ -916,18 +894,17 @@ it("uses the server's net paid amount once even when only a refund row is loaded
     }),
   );
   const { container } = render(<SharedStatementPage />);
-  await screen.findByText("মোট বিল");
+  await screen.findByText("মোট পেয়েছেন");
   expect(
-    screen
-      .getByText("পরিশোধ", { selector: "dt" })
-      .parentElement?.querySelector("dd")?.textContent,
+    container.querySelector(".shared-total-main > strong")?.textContent,
   ).toBe("৳150");
   expect(
-    container.querySelector(".shared-shop-bill > strong")?.textContent,
+    container.querySelector(".shared-detail-amounts dd")?.textContent,
   ).toBe("৳100");
-  expect(
-    container.querySelector(".shared-customer-credit dd")?.textContent,
-  ).toBe("৳50");
+  expect(container.querySelector(".shared-balance-grid dd")?.textContent).toBe(
+    "৳50",
+  );
+  expect(screen.getByText("আপনার কাছে জমা", { selector: "dt" })).toBeTruthy();
   expect(
     (screen.getByRole("button", { name: "পরের পাতা" }) as HTMLButtonElement)
       .disabled,
@@ -1045,13 +1022,11 @@ it("identifies received cash, cash returned, bills and noncash corrections from 
   expect(within(historical).queryByText("টাকা পেয়েছেন")).toBeNull();
   expect(screen.getByRole("heading", { name: "তারিখ জানা নেই" })).toBeTruthy();
   expect(
-    screen
-      .getByText("পরিশোধ", { selector: "dt" })
-      .parentElement?.querySelector("dd")?.textContent,
+    container.querySelector(".shared-total-main > strong")?.textContent,
   ).toBe("৳90");
-  expect(screen.getByText("টাকা ফেরত বাদে")).toBeTruthy();
-  expect(container.querySelector(".shared-shop-due")?.textContent).toBe(
-    "বাকি৳140",
+  expect(screen.getByText("ফেরত দেওয়া টাকা বাদে")).toBeTruthy();
+  expect(container.querySelector(".shared-has-due")?.textContent).toBe(
+    "আর পাবেন৳140",
   );
   expect(JSON.stringify(statement)).toBe(before);
 });
@@ -1156,7 +1131,7 @@ it.each([5000, -5000])(
     expect(
       within(due).getByText(`৳${(20000 + correction * 2) / 100}`),
     ).toBeTruthy();
-    const context = `সমন্বয়সহ · সমন্বয়: ${correction > 0 ? "+" : ""}৳${correction / 100}`;
+    const context = `সমন্বয়সহ · ${correction > 0 ? "+" : "−"}৳${Math.abs(correction) / 100}`;
     expect(within(bill).getByText(context)).toBeTruthy();
     expect(within(due).getByText(context)).toBeTruthy();
     expect(
@@ -1187,9 +1162,9 @@ it("keeps correction context visible when the corrected bill and due are both ze
   const bill = screen.getByText("কাজের বিল", { selector: "dt" }).parentElement!;
   const due = screen.getByText("আর পাবেন", { selector: "dt" }).parentElement!;
   expect(within(bill).getByText("৳0")).toBeTruthy();
-  expect(within(bill).getByText("সমন্বয়সহ · সমন্বয়: ৳-300")).toBeTruthy();
+  expect(within(bill).getByText("সমন্বয়সহ · −৳300")).toBeTruthy();
   expect(within(due).getByText("৳0")).toBeTruthy();
-  expect(within(due).getByText("সমন্বয়সহ · সমন্বয়: +৳100")).toBeTruthy();
+  expect(within(due).getByText("সমন্বয়সহ · +৳100")).toBeTruthy();
 });
 
 it("cannot download an old copy after a same-tick URL hash swap before its navigation event", async () => {

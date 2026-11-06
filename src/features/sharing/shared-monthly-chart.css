@@ -1,0 +1,193 @@
+.shared-monthly-chart {
+  min-width: 0;
+  margin-top: 16px;
+  padding: 16px 20px 12px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--surface);
+}
+.shared-chart-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 24px;
+}
+.shared-chart-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 550;
+}
+.shared-chart-heading h2 svg {
+  flex: none;
+}
+.shared-chart-year {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.shared-chart-year {
+  width: auto;
+  min-height: 44px;
+  margin-block: -8px;
+  padding: 0 4px;
+  border: 0;
+  background: var(--surface);
+  cursor: pointer;
+}
+.shared-chart-year:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.shared-chart-plot-container {
+  position: relative;
+}
+.shared-chart-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.shared-chart-scroll::-webkit-scrollbar {
+  display: none;
+}
+.shared-chart-series {
+  min-width: max(100%, calc(var(--month-count) * 52px));
+}
+.shared-chart-series .spending-chart-card.is-embedded {
+  padding: 0;
+  border: 0;
+}
+.shared-chart-series .spending-chart-header,
+.shared-chart-series .spending-chart-callout {
+  display: none;
+}
+.shared-chart-series .spending-chart-canvas {
+  margin-top: 16px;
+}
+.shared-chart-series .spending-chart-plot {
+  height: 130px;
+}
+.shared-chart-series .spending-chart-months {
+  display: flex;
+  justify-content: space-between;
+  gap: 0;
+  margin: 0 calc(8.333333% - 22px);
+}
+.shared-chart-series .spending-chart-months button {
+  width: 44px;
+  flex: none;
+}
+.shared-chart-series .spending-chart-months button:only-child {
+  margin-inline: auto;
+}
+.shared-chart-selection-info {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  max-width: calc(100% - 16px);
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 5px 18px color-mix(in srgb, var(--text) 8%, transparent);
+  pointer-events: none;
+}
+.shared-chart-selection-info output {
+  display: grid;
+  gap: 2px;
+}
+.shared-chart-selection-info output > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.shared-chart-selection-info output > strong {
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.shared-chart-selection-info .shared-chart-refunds {
+  display: grid;
+}
+.shared-chart-refunds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 16px;
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.shared-chart-refunds > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.shared-chart-refunds dd {
+  margin: 0;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.shared-chart-undated {
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.shared-chart-undated summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.shared-chart-undated summary::-webkit-details-marker {
+  display: none;
+}
+.shared-chart-undated strong {
+  margin-left: auto;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.shared-chart-undated summary > svg {
+  flex: none;
+}
+.shared-chart-undated > p {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.shared-chart-message {
+  display: grid;
+  justify-items: start;
+  align-content: center;
+  gap: 8px;
+  min-height: 140px;
+  padding-block: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.shared-chart-message p {
+  margin: 0;
+}
+.shared-chart-message button {
+  min-height: 44px;
+}
+@media (max-width: 360px) {
+  .shared-monthly-chart {
+    padding-inline: 16px;
+  }
+}

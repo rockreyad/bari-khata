@@ -20,6 +20,8 @@ import { useComposedInput } from "../../lib/useComposedInput";
 import { readShare, type SharedStatement } from "./shareClient";
 import { useSharedStatement } from "./useSharedStatement";
 import { SharedEntryDetail } from "./SharedEntryDetail";
+import { SharedContractCarousel } from "./SharedContractCarousel";
+import { SharedMonthlySection } from "./SharedMonthlySection";
 import {
   completeSharedStatement,
   downloadSharedCsv,
@@ -172,7 +174,7 @@ function SharedTransactionRow({
   );
 }
 
-function SharedShopSummary({ statement }: { statement: SharedStatement }) {
+function SharedRecipientSummary({ statement }: { statement: SharedStatement }) {
   const { t, money } = useLanguageContext();
   const totals = statement.totals;
   const cost = totals.reconciledCost ?? totals.cost;
@@ -190,61 +192,108 @@ function SharedShopSummary({ statement }: { statement: SharedStatement }) {
     !totals.paidCorrection &&
     !totals.balanceCorrection &&
     !totals.historicalCost;
+  const showBill = cost !== 0 && !fullyPaid;
+  const hasDetails =
+    showBill ||
+    totals.costCorrection ||
+    totals.paidCorrection ||
+    (!ambiguous && totals.balanceCorrection);
   const correction = (value: number | undefined) =>
     value ? (
       <small className="shared-metric-note">
-        {t("সমন্বয়সহ")} · {value > 0 ? "+" : ""}
-        {money(value)}
+        {t("সমন্বয়সহ")} · {value > 0 ? "+" : "−"}
+        {money(Math.abs(value))}
       </small>
     ) : null;
   return (
-    <section className="shared-shop-summary" aria-label={t("হিসাবের সারাংশ")}>
-      <div className="shared-shop-bill">
-        <span>{t("মোট বিল")}</span>
-        <strong>{money(cost)}</strong>
-        {correction(totals.costCorrection)}
-        {statement.counts.expense_credit ? (
-          <small>{t("মাল ফেরত বাদে")}</small>
-        ) : null}
-      </div>
-      {!fullyPaid &&
-      (ambiguous ||
-        cost !== 0 ||
-        paid !== 0 ||
-        due !== 0 ||
-        credit !== 0 ||
-        totals.costCorrection ||
-        totals.paidCorrection ||
-        totals.balanceCorrection) ? (
-        <dl className="shared-shop-balances">
-          <div>
-            <dt>{t("পরিশোধ")}</dt>
-            <dd>{money(paid)}</dd>
-            {correction(totals.paidCorrection)}
-            {statement.counts.refund ? (
-              <small>{t("টাকা ফেরত বাদে")}</small>
-            ) : null}
-          </div>
-          <div
-            className={
-              credit > 0 ? "shared-customer-credit" : "shared-shop-due"
-            }
-          >
-            <dt>{t(credit > 0 ? "ক্রেতা পাবেন" : "বাকি")}</dt>
-            <dd>
+    <section className="shared-overview" aria-label={t("হিসাবের সারাংশ")}>
+      <div className="shared-summary-balances">
+        <div className="shared-total-main">
+          <span>{t("মোট পেয়েছেন")}</span>
+          <strong>{money(paid)}</strong>
+          {correction(totals.paidCorrection)}
+          {statement.counts.refund ? (
+            <small>{t("ফেরত দেওয়া টাকা বাদে")}</small>
+          ) : null}
+        </div>
+        <dl className="shared-balance-grid">
+          <div className={!ambiguous && due > 0 ? "shared-has-due" : undefined}>
+            <dt>
+              {t(
+                !ambiguous && credit > 0 && due === 0
+                  ? "আপনার কাছে জমা"
+                  : "আর পাবেন",
+              )}
+            </dt>
+            <dd className={ambiguous ? "shared-balance-pending" : undefined}>
               {ambiguous
                 ? t("বাকি মেলানো বাকি")
-                : money(credit > 0 ? credit : due)}
+                : money(credit > 0 && due === 0 ? credit : due)}
             </dd>
-            {correction(totals.balanceCorrection)}
+            {!ambiguous ? correction(totals.balanceCorrection) : null}
+            {!ambiguous && due === 0 && credit === 0 ? (
+              <small className="shared-paid-status">
+                <CheckCircleIcon size={15} aria-hidden="true" />
+                {t(fullyPaid ? "পুরো বিল মেটানো" : "বাকি নেই")}
+              </small>
+            ) : null}
           </div>
         </dl>
+      </div>
+      {!ambiguous && due > 0 && credit > 0 ? (
+        <dl className="shared-credit-note">
+          <dt>{t("আপনার কাছে জমা")}</dt>
+          <dd>{money(credit)}</dd>
+        </dl>
       ) : null}
-      {!ambiguous && due === 0 && credit === 0 ? (
-        <p className="shared-paid-status">
-          <CheckCircleIcon size={16} />
-          {t(fullyPaid ? "পুরো বিল মেটানো" : "বাকি নেই")}
+      {ambiguous ? (
+        <p role="status" className="shared-balance-notice">
+          {t(
+            "বাকি টাকার হিসাব এখনও মেলানো হয়নি। যিনি লিংক পাঠিয়েছেন, তাঁর সঙ্গে মিলিয়ে নিন।",
+          )}
         </p>
+      ) : null}
+      {hasDetails ? (
+        <details className="shared-summary-details">
+          <summary>
+            <span>{t("আরও হিসাব")}</span>
+            <CaretDownIcon size={16} aria-hidden="true" />
+          </summary>
+          <dl className="shared-detail-amounts">
+            {showBill || totals.costCorrection ? (
+              <div>
+                <dt>
+                  {t(statement.account === "labour" ? "কাজের বিল" : "মোট বিল")}
+                </dt>
+                <dd>
+                  {money(cost)}
+                  {correction(totals.costCorrection)}
+                </dd>
+                {statement.counts.expense_credit ? (
+                  <small>{t("মাল ফেরত বাদে")}</small>
+                ) : null}
+              </div>
+            ) : null}
+            {totals.paidCorrection ? (
+              <div>
+                <dt>{t("আসলে পাওয়া টাকা")}</dt>
+                <dd>{money(totals.actualNetPaid ?? totals.paid)}</dd>
+                <small>
+                  {t("হিসাব মিলিয়ে পাওয়া টাকার অঙ্ক বদলানো হয়েছে।")}
+                </small>
+              </div>
+            ) : null}
+            {!ambiguous && totals.balanceCorrection ? (
+              <div>
+                <dt>{t("বাকি টাকার সমন্বয়")}</dt>
+                <dd>
+                  {totals.balanceCorrection > 0 ? "+" : "−"}
+                  {money(Math.abs(totals.balanceCorrection))}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+        </details>
       ) : null}
     </section>
   );
@@ -260,7 +309,6 @@ export function SharedStatementPage() {
   });
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
-  const [contractPage, setContractPage] = useState(0);
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const exportRequest = useRef(0);
   const exportAbort = useRef<AbortController | null>(null);
@@ -275,7 +323,6 @@ export function SharedStatementPage() {
     exportLock.current = false;
     setExporting(false);
     setExportError("");
-    setContractPage(0);
     return () => {
       exportRequest.current++;
       exportAbort.current?.abort();
@@ -291,7 +338,6 @@ export function SharedStatementPage() {
     setExportError("");
   }, [missing, stale]);
   useEffect(() => {
-    setContractPage(0);
     setSelectedEntryId(null);
   }, [token, statement?.revision]);
   useEffect(() => {
@@ -364,35 +410,7 @@ export function SharedStatementPage() {
   const isWorker = statement?.account === "labour";
   const isShop = statement?.account === "materials";
   const Icon = isWorker ? HardHatIcon : isShop ? StorefrontIcon : ReceiptIcon;
-  const totals = statement?.totals;
-  const paid = totals?.reconciledNetPaid ?? totals?.paid ?? 0;
-  const cost = totals?.reconciledCost ?? totals?.cost ?? 0;
-  const due = totals?.reconciledPayable ?? totals?.payable ?? 0;
-  const credit = totals?.reconciledAdvance ?? totals?.advance ?? 0;
-  const ambiguous = Boolean(totals?.balanceAmbiguous);
-  const metrics = [
-    ...((cost !== 0 && (cost !== paid || due > 0 || credit > 0)) ||
-    totals?.costCorrection
-      ? [
-          {
-            label: isShop ? "মালের বিল" : isWorker ? "কাজের বিল" : "খরচের বিল",
-            amount: cost,
-            due: false,
-            correction: totals?.costCorrection ?? 0,
-          },
-        ]
-      : []),
-    ...(!ambiguous && (due > 0 || totals?.balanceCorrection)
-      ? [
-          {
-            label: "আর পাবেন",
-            amount: due,
-            due: true,
-            correction: totals?.balanceCorrection ?? 0,
-          },
-        ]
-      : []),
-  ];
+  const ambiguous = Boolean(statement?.totals.balanceAmbiguous);
   const months = new Map<string, SharedRow[]>();
   for (const row of statement?.rows ?? []) {
     const key = row.date?.slice(0, 7) ?? "unknown";
@@ -400,20 +418,12 @@ export function SharedStatementPage() {
     entries.push(row);
     months.set(key, entries);
   }
-  const contractStart = Math.min(
-    contractPage * 5,
-    Math.max(0, (statement?.contracts.length ?? 0) - 1),
-  );
   return (
     <main className="shared-statement-page">
       <header className="shared-brand">
         <span>
           <HouseLineIcon size={22} />
           {t("বাড়ির খাতা")}
-        </span>
-        <span className="shared-copy-label">
-          <ShieldCheckIcon size={15} />
-          {t("শুধু দেখার কপি")}
         </span>
       </header>
       {!statement ? (
@@ -424,7 +434,6 @@ export function SharedStatementPage() {
                 <ReceiptIcon size={28} />
               </span>
               <h1>{t("হিসাব আসছে…")}</h1>
-              <p role="status">{t("অল্প অল্প করে লেনদেন দেখানো হবে।")}</p>
               <div className="shared-loading-lines" aria-hidden="true">
                 <i />
                 <i />
@@ -484,173 +493,20 @@ export function SharedStatementPage() {
               <span>{formatDigits(statement.workName)}</span>
             </div>
           ) : null}
-          {ambiguous ? (
-            <p role="status" className="shared-metric-note">
-              {t(
-                "পুরোনো চুক্তির ছাড় আর কাজের বিল আলাদা করে মেলানো বাকি। এখন বাকি বা জমার চূড়ান্ত অঙ্ক দেখানো হচ্ছে না।",
-              )}
-            </p>
-          ) : null}
-          {isShop ? (
-            <SharedShopSummary statement={statement} />
-          ) : (
-            <section
-              className={`shared-overview ${metrics.length === 1 ? "shared-overview-pair" : ""}`}
-              aria-label={t("হিসাবের সারাংশ")}
-            >
-              <div className="shared-total-main">
-                <span>{t("মোট পেয়েছেন")}</span>
-                <strong>{money(paid)}</strong>
-                {totals?.paidCorrection ? (
-                  <small>
-                    {t("সমন্বয়সহ")} · {t("সমন্বয়")}:{" "}
-                    {money(totals.paidCorrection)}
-                    {totals.actualNetPaid !== undefined ? (
-                      <span>
-                        {t("আসলে পেয়েছেন {{amount}}", {
-                          amount: money(totals.actualNetPaid),
-                        })}
-                      </span>
-                    ) : null}
-                  </small>
-                ) : statement.counts.refund > 0 ? (
-                  <small>{t("ফেরত দেওয়া টাকা বাদে")}</small>
-                ) : null}
-              </div>
-              {metrics.length ? (
-                <dl className="shared-balance-grid">
-                  {metrics.map((metric) => (
-                    <div
-                      key={metric.label}
-                      className={metric.due ? "shared-has-due" : ""}
-                    >
-                      <dt>{t(metric.label)}</dt>
-                      <dd>
-                        {money(metric.amount)}
-                        {metric.correction !== 0 ? (
-                          <small className="shared-metric-note">
-                            {t("সমন্বয়সহ")} · {t("সমন্বয়")}:{" "}
-                            {metric.correction > 0 ? "+" : ""}
-                            {money(metric.correction)}
-                          </small>
-                        ) : null}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : !ambiguous && credit === 0 ? (
-                <p className="shared-settled">
-                  {t(
-                    cost > 0 &&
-                      cost === paid &&
-                      !totals?.paidCorrection &&
-                      !totals?.costCorrection &&
-                      !totals?.balanceCorrection &&
-                      !totals?.historicalCost
-                      ? "পুরো বিল মেটানো"
-                      : "বাকি নেই",
-                  )}
-                </p>
-              ) : null}
-              {!ambiguous && credit > 0 ? (
-                <details className="shared-reconciliation">
-                  <summary>
-                    <span>{t("আপনার কাছে জমা")}</span>
-                    <strong>{money(credit)}</strong>
-                    <CaretDownIcon size={16} />
-                  </summary>
-                  <dl>
-                    <dt>{t("হিসাবের জমা")}</dt>
-                    <dd>{money(credit)}</dd>
-                  </dl>
-                </details>
-              ) : null}
-            </section>
-          )}
+          <SharedRecipientSummary statement={statement} />
+          <SharedMonthlySection
+            key={`monthly:${token}:${statement.revision}`}
+            token={token}
+            statement={statement}
+            onUnavailable={pager.markUnavailable}
+            onStale={pager.markStale}
+          />
           {isWorker && statement.contracts.length > 0 ? (
-            <details className="shared-contracts">
-              <summary>
-                <span>
-                  <HardHatIcon size={19} />
-                  <span>
-                    {t("কাজ ও চুক্তি")}
-                    <small>
-                      {t("{{count}}টি চুক্তি", {
-                        count: formatDigits(statement.contracts.length),
-                      })}
-                    </small>
-                  </span>
-                </span>
-                <CaretDownIcon size={18} />
-              </summary>
-              <div className="shared-contract-list">
-                {statement.contracts
-                  .slice(contractStart, contractStart + 5)
-                  .map((contract, index) => (
-                    <article key={contractStart + index}>
-                      <h3>
-                        {formatDigits(contract.title || t("কাজের চুক্তি"))}
-                      </h3>
-                      {contract.workName ? (
-                        <p>{formatDigits(contract.workName)}</p>
-                      ) : null}
-                      <dl>
-                        <div>
-                          <dt>{t("চুক্তির মোট")}</dt>
-                          <dd>{money(contract.total)}</dd>
-                        </div>
-                        <div>
-                          <dt>{t("পেয়েছেন")}</dt>
-                          <dd>{money(contract.netPaid)}</dd>
-                        </div>
-                        <div>
-                          <dt>{t("কাজের বিলের বাকি")}</dt>
-                          <dd>
-                            {ambiguous
-                              ? t("বাকি মেলানো বাকি")
-                              : money(contract.remaining)}
-                          </dd>
-                        </div>
-                        {contract.unearnedCommitment !== undefined ? (
-                          <div>
-                            <dt>{t("এখনও বিল হয়নি")}</dt>
-                            <dd>{money(contract.unearnedCommitment)}</dd>
-                          </div>
-                        ) : null}
-                      </dl>
-                    </article>
-                  ))}
-                {statement.contracts.length > 5 ? (
-                  <nav
-                    className="shared-contract-pages"
-                    aria-label={t("চুক্তির পাতা")}
-                  >
-                    <button
-                      type="button"
-                      className="text-button"
-                      disabled={contractPage === 0}
-                      onClick={() => setContractPage((value) => value - 1)}
-                    >
-                      {t("আগের চুক্তি")}
-                    </button>
-                    <span>
-                      {formatDigits(
-                        `${contractStart + 1}–${Math.min(contractStart + 5, statement.contracts.length)}`,
-                      )}{" "}
-                      / {formatDigits(statement.contracts.length)}
-                    </span>
-                    <button
-                      type="button"
-                      className="text-button"
-                      disabled={contractStart + 5 >= statement.contracts.length}
-                      onClick={() => setContractPage((value) => value + 1)}
-                    >
-                      {t("পরের চুক্তি")}
-                    </button>
-                  </nav>
-                ) : null}
-              </div>
-            </details>
+            <SharedContractCarousel
+              key={`contracts:${token}:${statement.revision}`}
+              contracts={statement.contracts}
+              ambiguous={ambiguous}
+            />
           ) : null}
           <section className="shared-transactions">
             <div className="shared-history-heading">

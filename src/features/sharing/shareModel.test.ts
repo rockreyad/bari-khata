@@ -336,3 +336,29 @@ describe("shared entry item and payment history validation", () => {
       ).toBe(false);
   });
 });
+
+describe("shared contract work status", () => {
+  const schema = SharedStatementSchema.shape.contracts.unwrap().element;
+  const contract = {
+    title: "নমুনা কাজ",
+    workName: "নমুনা ছাদ",
+    total: 10000,
+    netPaid: 10000,
+    remaining: 0,
+  };
+  it.each(["planned", "ongoing", "done", null] as const)(
+    "preserves stored status %s independently of payments",
+    (status) => {
+      expect(schema.parse({ ...contract, status }).status).toBe(status);
+    },
+  );
+  it("keeps older responses without status unknown", () => {
+    expect(schema.parse(contract).status).toBeUndefined();
+  });
+  it.each(["complete", "unknown", "", 1, {}, []])(
+    "rejects an invalid status %j",
+    (status) => {
+      expect(schema.safeParse({ ...contract, status }).success).toBe(false);
+    },
+  );
+});

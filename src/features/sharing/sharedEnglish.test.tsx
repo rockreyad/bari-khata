@@ -17,6 +17,8 @@ it("translates all static shared-page and detail copy through the real English l
   const copy = new Set<string>();
   for (const file of [
     "SharedStatementPage.tsx",
+    "SharedContractCarousel.tsx",
+    "SharedMonthlyChart.tsx",
     "SharedEntryDetail.tsx",
     "ShareLinkControls.tsx",
     "../people/StatementSheet.tsx",

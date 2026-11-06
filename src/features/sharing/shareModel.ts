@@ -75,6 +75,7 @@ export const SharedStatementSchema = z.object({
     .array(
       z.object({
         title: z.string().max(300),
+        status: z.enum(["planned", "ongoing", "done"]).nullable().optional(),
         workName: z.string().max(200),
         total: SafeAmount.refine((value) => value >= 0),
         netPaid: SafeAmount,
