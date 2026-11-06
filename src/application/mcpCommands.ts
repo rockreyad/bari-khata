@@ -118,7 +118,6 @@ const billed = {
   lines: z.array(Line).min(1).max(1000),
   payment_state: z.enum(["unpaid", "partial", "paid"]),
   payment: Payment.optional(),
-  milestone_id: Id.nullable().optional(),
 };
 const cash = {
   ...base,
@@ -256,15 +255,6 @@ export const McpCommandSchema = z.discriminatedUnion("type", [
       reason: Reason,
     })
     .strict(),
-  z
-    .object({
-      type: z.literal("create_milestone"),
-      contract_id: Id,
-      title: Name,
-      amount_paisa: PositiveMoney,
-      due_on: DateOnly.nullable().default(null),
-    })
-    .strict(),
   z.object({ type: z.literal("create_purchase"), ...billed }).strict(),
   z.object({ type: z.literal("create_cost"), ...billed }).strict(),
   z
@@ -274,7 +264,6 @@ export const McpCommandSchema = z.discriminatedUnion("type", [
     .object({
       type: z.literal("record_wage"),
       ...base,
-      milestone_id: Id.nullable().optional(),
       person_id: Id,
       amount_paisa: PositiveMoney,
       payment_state: z.enum(["unpaid", "partial", "paid"]),
@@ -482,7 +471,6 @@ const sum = (values: number[]) => {
 export function requiredMcpScopes(command: McpCommand): string[] {
   if (command.type === "allocate_payment") return ["entries:update"];
   if (command.type === "cancel_payment_allocation") return ["entries:update"];
-  if (command.type === "create_milestone") return ["contracts:write"];
   if (command.type === "attach_receipt" || command.type === "detach_receipt")
     return ["entries:update", "receipts:write"];
   if (command.type === "update_entry") return ["entries:update"];
@@ -930,22 +918,6 @@ export function applyMcpCommand(
     amountPaisa = sum(
       command.allocations.map((allocation) => allocation.amount_paisa),
     );
-  } else if (command.type === "create_milestone") {
-    active(ledger.contracts, command.contract_id, "contract");
-    const id = uuid();
-    ledger.milestones = [
-      ...(ledger.milestones ?? []),
-      {
-        id,
-        contractId: command.contract_id,
-        title: command.title,
-        amount: command.amount_paisa,
-        dueOn: command.due_on,
-        status: "planned",
-      },
-    ];
-    affected(id);
-    amountPaisa = command.amount_paisa;
   } else if (
     command.type === "create_purchase" ||
     command.type === "create_cost" ||
@@ -1050,9 +1022,6 @@ export function applyMcpCommand(
       personId: person,
       account,
       contractId: contract,
-      ...("milestone_id" in command && command.milestone_id
-        ? { milestoneId: command.milestone_id }
-        : {}),
       lines,
       relatedEntryId: returning ? (command.related_entry_id ?? null) : null,
       receipts: receipts(command.receipt_ids, context, ledger),

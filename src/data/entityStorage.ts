@@ -11,7 +11,6 @@ export const ledgerCollections = [
   "paymentPurposes",
   "contracts",
   "entries",
-  "milestones",
   "paymentAllocations",
 ] as const;
 export type LedgerCollection = (typeof ledgerCollections)[number];
@@ -22,7 +21,7 @@ export type LedgerHeaderRow = Pick<
   id: WorkspaceMode;
   collections: Record<LedgerCollection, number>;
   checksum: string;
-  optionalCollections: ("milestones" | "paymentAllocations")[];
+  optionalCollections: "paymentAllocations"[];
 };
 export interface LedgerEntityRow {
   key: string;
@@ -51,7 +50,7 @@ const HeaderSchema = z.object({
     z.number().int().nonnegative().max(100000),
   ),
   checksum: z.string().regex(/^[0-9a-f]{64}$/),
-  optionalCollections: z.array(z.enum(["milestones", "paymentAllocations"])),
+  optionalCollections: z.array(z.literal("paymentAllocations")),
 });
 const key = (
   workspace: WorkspaceMode,
@@ -121,12 +120,8 @@ async function assembleEntityLedger(
         throw new Error("ledger_entity_invalid");
     });
     if (
-      !(["milestones", "paymentAllocations"] as string[]).includes(
-        collection,
-      ) ||
-      header.optionalCollections.includes(
-        collection as "milestones" | "paymentAllocations",
-      )
+      !(["paymentAllocations"] as string[]).includes(collection) ||
+      header.optionalCollections.includes(collection as "paymentAllocations")
     )
       candidate[collection] = records.map((row) => row.value);
     else if (records.length) throw new Error("ledger_entity_invalid");
@@ -195,7 +190,6 @@ export async function writeEntityLedger(
     collections,
     checksum: await Dexie.waitFor(ledgerChecksum(ledger)),
     optionalCollections: [
-      ...(Array.isArray(ledger.milestones) ? ["milestones" as const] : []),
       ...(Array.isArray(ledger.paymentAllocations)
         ? ["paymentAllocations" as const]
         : []),

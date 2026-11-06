@@ -251,15 +251,13 @@
   margin-inline: auto;
 }
 .job-page-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-}
-.job-page-heading > div {
-  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px 16px;
 }
 .job-page-heading h1 {
+  min-width: 0;
   margin: 0;
   font-size: clamp(25px, 5vw, 32px);
   font-weight: 700;
@@ -267,14 +265,33 @@
   overflow-wrap: anywhere;
 }
 .job-page-heading > .icon-button {
-  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+}
+.job-heading-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  min-width: 0;
 }
 .job-worker-link {
   display: inline-flex;
-  gap: 5px;
+  max-width: 100%;
+  gap: 6px;
   align-items: center;
-  margin-top: 4px;
+  margin: 0;
+  text-align: start;
   font-size: 13px;
+}
+.job-worker-link > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.job-worker-link > svg {
+  flex-shrink: 0;
 }
 .job-pay {
   width: 100%;
@@ -628,41 +645,6 @@
   }
 }
 
-.job-milestones {
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface);
-}
-.job-milestones > summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 50px;
-  padding: 14px 18px;
-  color: var(--muted);
-  font-size: 13px;
-  cursor: pointer;
-  list-style: none;
-}
-.job-milestones > summary::-webkit-details-marker {
-  display: none;
-}
-.job-milestones > summary:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: inherit;
-}
-.job-milestones[open] > summary > svg {
-  transform: rotate(180deg);
-}
-.job-milestones > .agreement-milestones {
-  margin: 0;
-  border: 0;
-  border-top: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-}
 @media (max-width: 480px) {
   .job-summary-values,
   .job-detail-money {

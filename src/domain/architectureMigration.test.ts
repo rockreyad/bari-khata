@@ -16,7 +16,6 @@ describe("versioned architecture migration", () => {
     expect(migration.ledger.people[2].roles).toEqual(["supplier"]);
     expect(migration.ledger.people[2].identityType).toBeUndefined();
     expect(migration.ledger.entries).toEqual(original.entries);
-    expect(migration.ledger.milestones).toEqual([]);
     expect(migration.ledger.paymentAllocations).toEqual([]);
     expect(migration.report.before).toEqual(migration.report.after);
     expect(

@@ -142,7 +142,6 @@ export function mcpEntryView(entry: Entry) {
     person_id: entry.personId,
     account: entry.adjustment ? entry.adjustment.account : entry.account,
     contract_id: entry.contractId,
-    milestone_id: entry.milestoneId ?? null,
     payment_context: entry.paymentContext ?? null,
     related_entry_id: entry.relatedEntryId,
     payment_purpose_id: entry.paymentPurposeId,
@@ -600,9 +599,6 @@ export function queryMcpLedger(
     return {
       ...envelope,
       contract: summary.contract,
-      milestones: (ledger.milestones ?? []).filter(
-        (milestone) => milestone.contractId === id,
-      ),
       agreed_paisa: summary.agreed,
       billed_paisa: summary.billed,
       paid_paisa: summary.paid,
@@ -706,13 +702,6 @@ export function queryMcpLedger(
                     entry.id === allocation.paymentId &&
                     entry.personId === args.person_id,
                 ),
-            ),
-            milestones: (ledger.milestones ?? []).filter((milestone) =>
-              ledger.contracts.some(
-                (contract) =>
-                  contract.id === milestone.contractId &&
-                  contract.personId === args.person_id,
-              ),
             ),
           }
         : {}),

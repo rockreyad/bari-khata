@@ -264,16 +264,6 @@ export const ContractSchema = ContractSnapshotSchema.extend({
 });
 export type Contract = z.infer<typeof ContractSchema>;
 
-export const MilestoneSchema = z.object({
-  id: Id,
-  contractId: Id,
-  title: z.string().trim().min(1).max(300),
-  amount: MoneySchema.refine((amount) => amount > 0),
-  dueOn: WorkDateSchema.default(null),
-  status: z.enum(["planned", "ongoing", "done"]).default("planned"),
-});
-export type Milestone = z.infer<typeof MilestoneSchema>;
-
 export const PaymentAllocationSchema = z
   .object({
     id: Id,
@@ -423,7 +413,6 @@ export const EntryCoreSchema = z
     account: AccountSchema.default("materials"),
     paymentPurposeId: Id.nullable().default(null),
     contractId: Id.nullable().default(null),
-    milestoneId: Id.nullable().optional(),
     paymentContext: z.enum(["settlement", "advance", "receivable"]).optional(),
     relatedEntryId: Id.nullable().default(null),
     lines: z.array(EntryLineSchema).max(1000).default([]),
@@ -438,12 +427,6 @@ export const EntryCoreSchema = z
     voided: z.boolean().default(false),
   })
   .superRefine((entry, ctx) => {
-    if (entry.milestoneId && (entry.kind !== "expense" || !entry.contractId))
-      ctx.addIssue({
-        code: "custom",
-        path: ["milestoneId"],
-        message: "A milestone bill needs its agreement",
-      });
     if (
       entry.paymentContext &&
       (!["payment", "refund"].includes(entry.kind) ||
@@ -523,7 +506,6 @@ const LedgerBaseSchema = z.object({
   items: z.array(ItemSchema).max(10000).default([]),
   paymentPurposes: z.array(PaymentPurposeSchema).max(1000).default([]),
   contracts: z.array(ContractSchema).max(10000).default([]),
-  milestones: z.array(MilestoneSchema).max(10000).optional(),
   paymentAllocations: z.array(PaymentAllocationSchema).max(100000).optional(),
   entries: z.array(EntrySchema).max(100000).default([]),
 });
@@ -531,10 +513,7 @@ const LedgerBaseSchema = z.object({
 export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
   const error = (message: string, path: (string | number)[] = []) =>
     ctx.addIssue({ code: "custom", message, path });
-  if (
-    ledger.architectureVersion === 2 &&
-    (!ledger.milestones || !ledger.paymentAllocations)
-  )
+  if (ledger.architectureVersion === 2 && !ledger.paymentAllocations)
     error("Architecture collections are required for version 2");
   const unique = (records: { id: string }[], name: string) => {
     const ids = new Set<string>();
@@ -580,34 +559,6 @@ export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
   );
   const entryIds = unique(ledger.entries, "entries");
   const entriesById = new Map(ledger.entries.map((entry) => [entry.id, entry]));
-  unique(ledger.milestones ?? [], "milestones");
-  const milestones = new Map(
-    (ledger.milestones ?? []).map((row) => [row.id, row]),
-  );
-  const milestoneTotals = new Map<string, bigint>();
-  for (const [index, milestone] of (ledger.milestones ?? []).entries()) {
-    const contract = contractsById.get(milestone.contractId);
-    if (!contract)
-      error("Unknown milestone agreement", ["milestones", index, "contractId"]);
-    const total =
-      (milestoneTotals.get(milestone.contractId) ?? 0n) +
-      BigInt(milestone.amount);
-    milestoneTotals.set(milestone.contractId, total);
-    if (contract && total > BigInt(contract.total))
-      error("Milestones exceed agreement total", [
-        "milestones",
-        index,
-        "amount",
-      ]);
-    if (milestone.dueOn) {
-      const timestamp = Date.parse(`${milestone.dueOn}T00:00:00Z`);
-      if (
-        !Number.isFinite(timestamp) ||
-        new Date(timestamp).toISOString().slice(0, 10) !== milestone.dueOn
-      )
-        error("Invalid milestone date", ["milestones", index, "dueOn"]);
-    }
-  }
   const receiptIds = new Set<string>();
   const kindTotals = {
     expense: 0,
@@ -695,25 +646,6 @@ export const LedgerSchema = LedgerBaseSchema.superRefine((ledger, ctx) => {
   ledger.entries.forEach((entry, index) => {
     const path = ["entries", index];
     for (const snapshot of [entry, ...entry.revisions.map((r) => r.before)]) {
-      if (snapshot.milestoneId) {
-        const milestone = milestones.get(snapshot.milestoneId);
-        const agreement = milestone
-          ? contractsById.get(milestone.contractId)
-          : undefined;
-        if (
-          !milestone ||
-          !agreement ||
-          snapshot.contractId !== milestone.contractId ||
-          snapshot.personId !== agreement.personId ||
-          snapshot.account !== "labour" ||
-          (agreement.scope === "work" &&
-            snapshot.lines.some((line) => line.workId !== agreement.workId))
-        )
-          error("Bill must use its milestone agreement", [
-            ...path,
-            "milestoneId",
-          ]);
-      }
       if (snapshot.kind === "adjustment" && snapshot.adjustment) {
         const job = snapshot.contractId
           ? contractsById.get(snapshot.contractId)

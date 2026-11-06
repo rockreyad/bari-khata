@@ -1,5 +1,10 @@
 import { z } from "zod";
 import {
+  hasRetiredWorkMetadata,
+  ledgerBeforeWorkMetadataRemoval,
+  removeRetiredWorkMetadata,
+} from "../domain/legacyWorkMetadata";
+import {
   assertSupportedArchitecture,
   migrateArchitecture,
   preservesArchitecture,
@@ -65,7 +70,9 @@ const LedgerDocumentShape = z
   })
   .passthrough();
 const PersistedLedgerSchema = LedgerDocumentShape.transform((value) =>
-  LedgerSchema.parse(value),
+  hasRetiredWorkMetadata(value)
+    ? removeRetiredWorkMetadata(value)
+    : LedgerSchema.parse(value),
 );
 const WorkspaceSchema = z.object({
   id: ModeSchema,
@@ -145,12 +152,17 @@ async function backupFingerprint(text: string) {
   );
 }
 
+const originalBackupLedgers = new WeakMap<
+  LedgerBackup,
+  { before: string; after: string }
+>();
+
 export async function verifyBackupIntegrity(backup: LedgerBackup) {
   if (!backup.integrity) return;
-  if (
-    (await backupFingerprint(JSON.stringify(backup.ledger))) !==
-    backup.integrity.ledger
-  )
+  const parsed = JSON.stringify(backup.ledger);
+  const original = originalBackupLedgers.get(backup);
+  const checked = original?.after === parsed ? original.before : parsed;
+  if ((await backupFingerprint(checked)) !== backup.integrity.ledger)
     throw new Error("backup_checksum_mismatch");
   const records = new Map(
     backup.integrity.receipts.map((receipt) => [receipt.id, receipt.checksum]),
@@ -168,7 +180,9 @@ export async function verifyBackupIntegrity(backup: LedgerBackup) {
 export function validateLedger(value: unknown): Ledger {
   assertSupportedArchitecture(value);
   LedgerDocumentShape.parse(value);
-  const ledger = validateDomainLedger(value);
+  const ledger = hasRetiredWorkMetadata(value)
+    ? removeRetiredWorkMetadata(value)
+    : validateDomainLedger(value);
   if (!balanceAdjustmentHistoryIsValid(ledger))
     throw new Error("balance_adjustment_history_invalid");
   receiptReferences(ledger);
@@ -900,7 +914,14 @@ export class LedgerRepository {
 
 export function parseBackup(text: string): LedgerBackup {
   if (text.length > 100 * 1024 * 1024) throw new Error("backup_too_large");
-  const backup = BackupSchema.parse(JSON.parse(text));
+  const raw = JSON.parse(text);
+  const backup = BackupSchema.parse(raw);
+  if (hasRetiredWorkMetadata(raw.ledger)) {
+    originalBackupLedgers.set(backup, {
+      before: JSON.stringify(ledgerBeforeWorkMetadataRemoval(raw.ledger)),
+      after: JSON.stringify(backup.ledger),
+    });
+  }
   backup.ledger = validateLedger(backup.ledger);
   const ids = new Set<string>();
   for (const receipt of backup.receipts) {

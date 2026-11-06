@@ -219,7 +219,6 @@ it("returns to the notebook overview from a directly opened dues page", async ()
 function partyFixture() {
   return LedgerSchema.parse({
     architectureVersion: 2,
-    milestones: [],
     paymentAllocations: [],
     works: [
       { id: "roof", name: "নমুনা ছাদ" },

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
 import { z } from "zod";
-import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
+import { HardHatIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { EntryFrame } from "../../components/EntryFrame";
@@ -113,7 +113,6 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
       personId: params.get("person") ?? undefined,
       workId: workId || undefined,
       contractId: params.get("contract") ?? undefined,
-      milestoneId: params.get("milestone") ?? undefined,
     });
     return {
       draft: {
@@ -144,7 +143,13 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
       payerContact: { id: "", name: "", newId: crypto.randomUUID() },
     };
   }, []);
-  const key = `house-cost:${action}:${params.get("person") ?? "all"}:${params.get("work") ?? "all"}:${params.get("contract") ?? "none"}:${params.get("milestone") ?? "none"}${paidEntry ? ":paid" : ""}`;
+  const defaultKey = `house-cost:${action}:${params.get("person") ?? "all"}:${params.get("work") ?? "all"}:${params.get("contract") ?? "none"}:none${paidEntry ? ":paid" : ""}`;
+  const resumeKey = params.get("draftKey");
+  // Keep the old empty slot so saved forms reopen after the update.
+  const key =
+    resumeKey?.startsWith(`house-cost:${action}:`) && resumeKey.length <= 1500
+      ? resumeKey
+      : defaultKey;
   const { value, update, ready, failed, clear, flush } = useInlineDraft(
     key,
     savedSchema,
@@ -234,7 +239,6 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
           personName: target.name,
           personNewId: target.newId || crypto.randomUUID(),
           contractId: "",
-          milestoneId: "",
         },
       };
     });
@@ -275,7 +279,6 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               ? "labour"
               : "other",
         contractId: "",
-        milestoneId: "",
       },
     }));
   };
@@ -297,7 +300,6 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
           ...current.draft,
           workId,
           contractId: contract?.id ?? "",
-          milestoneId: contract ? current.draft.milestoneId : "",
         },
       };
     });
@@ -354,9 +356,6 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
       row.personId === draft.personId &&
       (row.scope === "house" || !draft.workId || row.workId === draft.workId),
   );
-  const milestones =
-    ledger.milestones?.filter((row) => row.contractId === draft.contractId) ??
-    [];
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (lock.current || !ready || failed || finished.current) return;
@@ -483,7 +482,6 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
         costType,
         account: costType === "labour" ? "labour" : "other",
         contractId: "",
-        milestoneId: "",
       },
     }));
   const savedEntryIds = [draft.id, draft.paymentId, draft.refundId].filter(
@@ -963,10 +961,11 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
             </label>
           ) : null}
           {draft.account === "labour" && contracts.length > 0 ? (
-            <TransactionDetails
-              summary={t("কাজ ও ধাপ")}
-              defaultOpen={Boolean(draft.contractId)}
-            >
+            <section className="house-work-picker" aria-label={t("কাজ")}>
+              <div className="house-work-picker-heading">
+                <HardHatIcon size={20} aria-hidden="true" />
+                <h3>{t("কাজ")}</h3>
+              </div>
               <label>
                 {t("কোন কাজের জন্য")}
                 <AppSelect
@@ -982,7 +981,6 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                       draft: {
                         ...current.draft,
                         contractId: event.target.value,
-                        milestoneId: "",
                         workId:
                           contract?.scope === "work"
                             ? contract.workId!
@@ -999,26 +997,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
                   ))}
                 </AppSelect>
               </label>
-              {milestones.length > 0 ? (
-                <label>
-                  {t("কাজের ধাপ")}
-                  <AppSelect
-                    aria-label={t("কাজের ধাপ")}
-                    value={draft.milestoneId}
-                    onChange={(event) =>
-                      field("milestoneId", event.target.value)
-                    }
-                  >
-                    <option value="">{t("ধাপ ছাড়াই বিল")}</option>
-                    {milestones.map((step) => (
-                      <option key={step.id} value={step.id}>
-                        {formatDigits(step.title)}
-                      </option>
-                    ))}
-                  </AppSelect>
-                </label>
-              ) : null}
-            </TransactionDetails>
+            </section>
           ) : null}
           <div className="transaction-fields">
             <span className="transaction-label">{t("টাকা মিটিয়েছেন?")}</span>

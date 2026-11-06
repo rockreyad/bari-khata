@@ -164,7 +164,6 @@ function EntryRoute() {
     account: AccountSchema.safeParse(params.get("account")).data,
     costType: CostTypeSchema.safeParse(params.get("type")).data,
     contractId: params.get("contract") ?? undefined,
-    milestoneId: params.get("milestone") ?? undefined,
     purpose:
       purpose && ["settle", "advance", "wage", "charge"].includes(purpose)
         ? (purpose as AddOptions["purpose"])

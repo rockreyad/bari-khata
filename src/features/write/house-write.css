@@ -213,3 +213,28 @@
 .house-payment-scope > p {
   margin: 0;
 }
+
+.house-work-picker {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+.house-work-picker-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--accent-strong);
+}
+.house-work-picker-heading h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.house-work-picker > label {
+  min-width: 0;
+}

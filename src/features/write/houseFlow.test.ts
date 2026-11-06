@@ -21,7 +21,6 @@ afterEach(async () => {
 const fixture = () =>
   LedgerSchema.parse({
     architectureVersion: 2,
-    milestones: [],
     paymentAllocations: [],
     works: [{ id: "roof", name: "ছাদ" }],
     people: [

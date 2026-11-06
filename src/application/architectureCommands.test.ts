@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { LedgerSchema } from "../domain/model";
 import { summarize } from "../domain/ledger";
-import { applyMcpCommand } from "./mcpCommands";
+import { applyMcpCommand, McpCommandSchema } from "./mcpCommands";
 import { queryMcpLedger } from "./mcpQueries";
 
 const context = {
@@ -11,7 +11,6 @@ const context = {
 const fixture = () =>
   LedgerSchema.parse({
     architectureVersion: 2,
-    milestones: [],
     paymentAllocations: [],
     works: [{ id: "work", name: "নমুনা কাজ" }],
     people: [
@@ -27,6 +26,29 @@ const fixture = () =>
       lines: [{ id: `${id}-line`, workId: "work", amount: 500 }],
     })),
   });
+
+it("rejects retired work metadata commands and arguments", () => {
+  expect(
+    McpCommandSchema.safeParse({
+      type: "create_milestone",
+      contract_id: "contract",
+      title: "পুরোনো ধাপ",
+      amount_paisa: 400,
+    }).success,
+  ).toBe(false);
+  expect(
+    McpCommandSchema.safeParse({
+      type: "record_wage",
+      person_id: "party",
+      work_id: "work",
+      contract_id: "contract",
+      milestone_id: "retired",
+      date: "2026-11-06",
+      amount_paisa: 400,
+      payment_state: "unpaid",
+    }).success,
+  ).toBe(false);
+});
 
 it("allocates an earlier advance to multiple bills without adding cost or cash", () => {
   const paid = applyMcpCommand(
@@ -108,7 +130,7 @@ it("allocates an earlier advance to multiple bills without adding cost or cash",
   });
 });
 
-it("keeps history when changing roles and records optional milestone bills separately", () => {
+it("keeps history when changing roles and records agreement bills separately", () => {
   const original = fixture();
   const changed = applyMcpCommand(
     original,
@@ -129,26 +151,13 @@ it("keeps history when changing roles and records optional milestone bills separ
     roles: ["professional", "supplier"],
     identityType: "organization",
   });
-  const milestone = applyMcpCommand(
-    changed.ledger,
-    {
-      type: "create_milestone",
-      contract_id: "contract",
-      title: "প্রথম ধাপ",
-      amount_paisa: 400,
-    },
-    context,
-  );
-  expect(milestone.requiredScopes).toEqual(["contracts:write"]);
-  expect(summarize(milestone.ledger).cost).toBe(1000);
   const wage = applyMcpCommand(
-    milestone.ledger,
+    changed.ledger,
     {
       type: "record_wage",
       person_id: "party",
       work_id: "work",
       contract_id: "contract",
-      milestone_id: milestone.affectedIds[0],
       date: "2026-11-05",
       amount_paisa: 400,
       payment_state: "partial",
@@ -158,7 +167,6 @@ it("keeps history when changing roles and records optional milestone bills separ
   );
   expect(wage.ledger.entries.at(-2)).toMatchObject({
     kind: "expense",
-    milestoneId: milestone.affectedIds[0],
   });
   expect(summarize(wage.ledger)).toMatchObject({ cost: 1400, paid: 100 });
 });

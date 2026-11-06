@@ -4,7 +4,6 @@ export function createEmptyLedger(): Ledger {
   return validateLedger({
     schemaVersion: 1,
     architectureVersion: 2,
-    milestones: [],
     paymentAllocations: [],
     isDemo: false,
     project: { id: "my-home", name: "আমার বাড়ি", currency: "BDT" },
@@ -245,7 +244,6 @@ export function createDemoLedger(): Ledger {
   return validateLedger({
     schemaVersion: 1,
     architectureVersion: 2,
-    milestones: [],
     paymentAllocations: [],
     isDemo: true,
     project: { id: "demo-home", name: "নমুনা বাড়ি", currency: "BDT" },

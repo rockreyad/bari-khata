@@ -195,7 +195,6 @@ function isEmptyArchitecture(ledger: Ledger) {
     ledger.paymentPurposes,
     ledger.contracts,
     ledger.entries,
-    ledger.milestones ?? [],
     ledger.paymentAllocations ?? [],
   ].some((records) => records.length);
 }

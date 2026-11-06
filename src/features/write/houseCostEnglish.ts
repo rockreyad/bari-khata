@@ -17,7 +17,6 @@ export const houseCostEnglish: Record<string, string> = {
   "যেমন: বস্তা, টি, দিন": "For example: bags, pieces, days",
   "কর্মী বা দোকান": "Worker or shop",
   "কর্মী বেছে নিন": "Choose a worker",
-  "কাজ ও ধাপ": "Work and milestones",
   "অন্যজন দিয়েছেন": "Someone else paid",
   অন্যজন: "Someone else",
   "হিসাবের সারাংশ": "Entry summary",

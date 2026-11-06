@@ -1,5 +1,9 @@
 import { z } from "zod";
 import {
+  hasRetiredWorkMetadata,
+  removeRetiredWorkMetadata,
+} from "./legacyWorkMetadata.js";
+import {
   createMigrationReview,
   type MigrationReview,
 } from "./migrationReview.js";
@@ -161,7 +165,9 @@ export function migrateArchitecture(value: unknown): {
 } {
   assertSupportedArchitecture(value);
   MigrationEnvelopeSchema.parse(value);
-  const original = LedgerSchema.parse(value);
+  const original = hasRetiredWorkMetadata(value)
+    ? removeRetiredWorkMetadata(value)
+    : LedgerSchema.parse(value);
   if (!balanceAdjustmentHistoryIsValid(original))
     throw new Error("balance_adjustment_history_invalid");
   const receiptMetadata = new Map<
@@ -192,7 +198,6 @@ export function migrateArchitecture(value: unknown): {
   const ledger = LedgerSchema.parse({
     ...original,
     architectureVersion: ARCHITECTURE_VERSION,
-    milestones: original.milestones ?? [],
     paymentAllocations: original.paymentAllocations ?? [],
     people: original.people.map((person) => ({
       ...person,
@@ -244,16 +249,8 @@ export function migrateArchitecture(value: unknown): {
 export function preservesArchitecture(before: Ledger, after: Ledger) {
   if (before.architectureVersion === 2 && after.architectureVersion !== 2)
     return false;
-  if (before.milestones && !after.milestones) return false;
   if (before.paymentAllocations && !after.paymentAllocations) return false;
   if (!preservesPaymentAllocationHistory(before, after)) return false;
-  const milestones = new Set(
-    (after.milestones ?? []).map((milestone) => milestone.id),
-  );
-  if (
-    (before.milestones ?? []).some((milestone) => !milestones.has(milestone.id))
-  )
-    return false;
   const people = new Map(after.people.map((person) => [person.id, person]));
   for (const person of before.people) {
     const next = people.get(person.id);
@@ -266,11 +263,7 @@ export function preservesArchitecture(before: Ledger, after: Ledger) {
   const entries = new Map(after.entries.map((entry) => [entry.id, entry]));
   for (const entry of before.entries) {
     const next = entries.get(entry.id);
-    if (
-      (entry.paymentContext && !next?.paymentContext) ||
-      (entry.milestoneId && !Object.hasOwn(next ?? {}, "milestoneId"))
-    )
-      return false;
+    if (entry.paymentContext && !next?.paymentContext) return false;
   }
   return true;
 }
@@ -281,10 +274,7 @@ export function preservesImportedArchitecture(
   converted: Ledger,
 ) {
   if (!preservesArchitecture(before, converted)) return false;
-  if (
-    (before.milestones?.length && !original.milestones) ||
-    (before.paymentAllocations?.length && !original.paymentAllocations)
-  )
+  if (before.paymentAllocations?.length && !original.paymentAllocations)
     return false;
   const rawPeople = new Map(
     original.people.map((person) => [person.id, person]),

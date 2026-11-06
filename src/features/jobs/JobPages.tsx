@@ -43,7 +43,6 @@ import {
   type JobStatus,
 } from "./jobView";
 import "./jobs.css";
-import { AgreementMilestones } from "./AgreementMilestones";
 
 export function JobsPage() {
   const { ledger, go, entity, base } = useNotebook();
@@ -535,28 +534,7 @@ export function JobPage() {
         {t("ফিরুন")}
       </button>
       <header className="job-page-heading">
-        <div>
-          <h1>{formatDigits(jobName(job, t))}</h1>
-          {worker ? (
-            <button
-              type="button"
-              className="text-button job-worker-link"
-              onClick={() => go(`/parties/${encodeURIComponent(worker.id)}`)}
-            >
-              {formatDigits(worker.name)}
-              <ArrowRightIcon size={14} />
-            </button>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label={t("কাজ বদলাই")}
-          disabled={removal.archived}
-          onClick={() => entity("contract", job.id)}
-        >
-          <PencilSimpleIcon size={20} />
-        </button>
+        <h1>{formatDigits(jobName(job, t))}</h1>
         <AppMenu
           trigger={
             <button
@@ -568,30 +546,55 @@ export function JobPage() {
               <DotsThreeIcon size={23} />
             </button>
           }
-          items={[removal.menuItem]}
+          items={[
+            {
+              label: t("কাজ বদলাই"),
+              icon: <PencilSimpleIcon size={18} />,
+              disabled: removal.archived,
+              onSelect: () => entity("contract", job.id),
+            },
+            { ...removal.menuItem, separatorBefore: true },
+          ]}
         />
+        <div className="job-heading-meta">
+          {worker ? (
+            <button
+              type="button"
+              className="text-button job-worker-link"
+              onClick={() => go(`/parties/${encodeURIComponent(worker.id)}`)}
+            >
+              <span>{formatDigits(worker.name)}</span>
+              <ArrowRightIcon size={14} />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={`job-status-control job-status job-status-${currentStatus}`}
+            aria-label={t("কাজের অবস্থা বদলাই")}
+            aria-expanded={Boolean(editor)}
+            aria-controls="job-status-editor"
+            disabled={savingStatus || removal.archived}
+            onClick={() =>
+              setStatusEditor(
+                editor
+                  ? null
+                  : {
+                      jobId: job.id,
+                      status: job.status,
+                      reason: "",
+                      error: "",
+                    },
+              )
+            }
+          >
+            <i />
+            {t(jobStatusNames[currentStatus])}
+            <CaretDownIcon size={15} />
+          </button>
+        </div>
       </header>
       {removal.notice}
       {removal.dialog}
-      <button
-        type="button"
-        className={`job-status-control job-status job-status-${currentStatus}`}
-        aria-label={t("কাজের অবস্থা বদলাই")}
-        aria-expanded={Boolean(editor)}
-        aria-controls="job-status-editor"
-        disabled={savingStatus || removal.archived}
-        onClick={() =>
-          setStatusEditor(
-            editor
-              ? null
-              : { jobId: job.id, status: job.status, reason: "", error: "" },
-          )
-        }
-      >
-        <i />
-        {t(jobStatusNames[currentStatus])}
-        <CaretDownIcon size={15} />
-      </button>
       {editor ? (
         <form
           id="job-status-editor"
@@ -688,17 +691,6 @@ export function JobPage() {
         <WalletIcon size={21} weight="duotone" />
         {t("টাকা দিই")}
       </button>
-      <details className="job-milestones">
-        <summary>
-          {t("কাজের ধাপ")}
-          <CaretDownIcon size={17} aria-hidden="true" />
-        </summary>
-        <AgreementMilestones
-          key={job.id}
-          contractId={job.id}
-          archived={removal.archived || Boolean(worker?.archivedAt)}
-        />
-      </details>
       <div
         className="job-detail-tabs"
         role="tablist"
