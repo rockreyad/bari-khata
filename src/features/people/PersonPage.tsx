@@ -111,14 +111,12 @@ export function PersonPage() {
     scoped.delete("view");
     scoped.delete("account");
     scoped.set("person", person.id);
-    if (!scoped.has("order")) scoped.set("order", "oldest");
     return (
       <Navigate replace to={`${base ?? ""}/ledger?${scoped.toString()}`} />
     );
   }
   const historyQuery = new URLSearchParams({
     person: person.id,
-    order: "oldest",
   });
   if (workId) historyQuery.set("work", workId);
   const fullHistoryPath = `/ledger?${historyQuery.toString()}`;
@@ -153,7 +151,7 @@ export function PersonPage() {
       person: person.id,
       account: defaults.account,
       back: `${base ?? ""}/parties/${encodeURIComponent(person.id)}${params.size ? `?${params}` : ""}`,
-      purpose: chargeType ? "charge" : "party-payment",
+      purpose: chargeType ? "payment" : "party-payment",
     });
     if (defaults.workId) query.set("work", defaults.workId);
     const contract = ledger.contracts.find(
@@ -165,17 +163,14 @@ export function PersonPage() {
       (!defaults.workId || contractAppliesToWork(contract, defaults.workId))
     )
       query.set("contract", contract.id);
-    if (chargeType) {
-      query.set("type", chargeType);
-      query.set("paid", "yes");
-    } else {
+    if (!chargeType) {
       query.set("dueWork", workId || "all");
       query.set(
         "dueAccount",
         AccountSchema.safeParse(params.get("account")).data ?? "all",
       );
     }
-    go(`${chargeType ? "/write/charge" : "/write"}?${query}`);
+    go(`${chargeType ? "/write/payment" : "/write"}?${query}`);
   };
   const addPurchase = () => {
     const defaults = entryDefaults("materials");

@@ -304,7 +304,7 @@ describe("entry detail navigation", () => {
     expect(go).toHaveBeenLastCalledWith("/sectors/electric");
     fireEvent.click(screen.getByRole("button", { name: "এই নামের সব হিসাব" }));
     expect(go).toHaveBeenLastCalledWith(
-      "/ledger?person=shop&account=materials&order=oldest",
+      "/ledger?person=shop&account=materials",
     );
     expect(screen.queryByText("কখন কী বদলেছে")).toBeNull();
   });

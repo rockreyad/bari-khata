@@ -43,7 +43,7 @@ export function PayablesPage() {
       );
       go(
         hasEntries
-          ? `/ledger?${new URLSearchParams({ person: personId, order: "oldest" })}`
+          ? `/ledger?${new URLSearchParams({ person: personId })}`
           : `/parties/${encodeURIComponent(personId)}?account=labour`,
       );
     } else if (row.entryId) detail(row.entryId);
