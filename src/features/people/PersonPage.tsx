@@ -18,19 +18,12 @@ import { EntryList } from "../../components/ui/EntryList";
 import { SpendingChart } from "../../components/ui/SpendingChart";
 import { AppMenu } from "../../components/ui/AppMenu";
 import {
-  allowedContactActions,
   canCreateContactJob,
   contactAccountLedger,
   contactSummary,
-  contactPaymentAccount,
   personKind,
   sortContactEntries,
 } from "../../domain/contacts";
-import {
-  contactEntryPolicy,
-  getContactEntryDefaults,
-} from "../../domain/contactEntryPolicy";
-import { AccountSchema, type Account } from "../../domain/model";
 import { contractAppliesToWork } from "../../domain/contracts";
 import { personSummary } from "../../domain/ledger";
 import { contactCommitmentSummary } from "../../domain/contactCommitments";
@@ -39,6 +32,7 @@ import { JobPreview } from "../jobs/JobPreview";
 import { PersonMark, kindLabels } from "./ContactIdentity";
 import { StatementSheet } from "./StatementSheet";
 import { phoneLink } from "./people";
+import { contactActionPlan, openContactAction } from "./contactActions";
 import { PersonNotebooks } from "./PersonNotebooks";
 import { TotalAdjustmentSheet } from "../reconciliation/TotalAdjustmentSheet";
 import "./people.css";
@@ -59,9 +53,6 @@ export function PersonPage() {
     () => (person ? partyLedger(ledger, person.id) : null),
     [ledger, person],
   );
-  const defaultAccount = person
-    ? contactPaymentAccount(ledger, person)
-    : "materials";
   const workId = ledger.works.some((work) => work.id === params.get("work"))
     ? params.get("work")!
     : "";
@@ -121,86 +112,20 @@ export function PersonPage() {
   if (workId) historyQuery.set("work", workId);
   const fullHistoryPath = `/ledger?${historyQuery.toString()}`;
   const href = phoneLink(person.phone);
-  const actions = removal.archived ? [] : allowedContactActions(person);
-  const entryDefaults = (account: Account) =>
-    getContactEntryDefaults(ledger, person, {
-      workId: workId || undefined,
-      account,
-    });
-  const addPayment = () => {
-    const policy = contactEntryPolicy(person);
-    const chargeType =
-      kind !== "shop" &&
-      (kind === "worker" || policy.defaultAccount === "labour")
-        ? (policy.chargeCostTypes.find((type) => type === "labour") ??
-          policy.chargeCostTypes[0])
-        : kind === "driver"
-          ? (policy.chargeCostTypes.find((type) => type === "transport") ??
-            policy.chargeCostTypes[0])
-          : undefined;
-    const defaults = getContactEntryDefaults(ledger, person, {
-      workId: workId || undefined,
-      account: chargeType
-        ? chargeType === "labour"
-          ? "labour"
-          : "other"
-        : defaultAccount,
-      contractId: params.get("contract") ?? undefined,
-    });
-    const query = new URLSearchParams({
-      person: person.id,
-      account: defaults.account,
-      back: `${base ?? ""}/parties/${encodeURIComponent(person.id)}${params.size ? `?${params}` : ""}`,
-      purpose: chargeType ? "payment" : "party-payment",
-    });
-    if (defaults.workId) query.set("work", defaults.workId);
-    const contract = ledger.contracts.find(
-      (row) => row.id === defaults.contractId,
-    );
-    if (
-      defaults.account === "labour" &&
-      contract &&
-      (!defaults.workId || contractAppliesToWork(contract, defaults.workId))
-    )
-      query.set("contract", contract.id);
-    if (!chargeType) {
-      query.set("dueWork", workId || "all");
-      query.set(
-        "dueAccount",
-        AccountSchema.safeParse(params.get("account")).data ?? "all",
-      );
-    }
-    go(`${chargeType ? "/write/payment" : "/write"}?${query}`);
-  };
-  const addPurchase = () => {
-    const defaults = entryDefaults("materials");
-    add({
-      kind: "expense",
-      personId: person.id,
-      workId: defaults.workId || undefined,
-      account: defaults.account,
-      costType: "material",
-    });
-  };
-  const addTransport = () => {
-    const defaults = entryDefaults("other");
-    add({
-      kind: "expense",
-      personId: person.id,
-      workId: defaults.workId || undefined,
-      account: defaults.account,
-      costType: "transport",
-    });
-  };
-  const addReturn = () => {
-    const defaults = entryDefaults("materials");
-    add({
-      kind: "return",
-      personId: person.id,
-      workId: defaults.workId || undefined,
-      account: defaults.account,
-    });
-  };
+  const actionPlan = contactActionPlan(ledger, person, {
+    workId: workId || undefined,
+    account: params.get("account") ?? undefined,
+    contractId: params.get("contract") ?? undefined,
+    back: `${base ?? ""}/parties/${encodeURIComponent(person.id)}${params.size ? `?${params}` : ""}`,
+  });
+  const { actions, primary } = actionPlan;
+  const addPayment = () =>
+    openContactAction(actionPlan, "payment", { add, go });
+  const addPurchase = () =>
+    openContactAction(actionPlan, "purchase", { add, go });
+  const addTransport = () =>
+    openContactAction(actionPlan, "transport", { add, go });
+  const addReturn = () => openContactAction(actionPlan, "return", { add, go });
   const personContracts = ledger.contracts.filter(
     (c) =>
       c.personId === person.id && (!workId || contractAppliesToWork(c, workId)),
@@ -454,14 +379,25 @@ export function PersonPage() {
                 actions.includes("return") ? (
                   <div className="contact-shop-secondary">
                     {actions.includes("payment") ? (
-                      <button className="secondary-button" onClick={addPayment}>
+                      <button
+                        className={
+                          primary === "payment"
+                            ? "primary-button"
+                            : "secondary-button"
+                        }
+                        onClick={addPayment}
+                      >
                         <WalletIcon size={18} />
                         {t("টাকা দিই")}
                       </button>
                     ) : null}
                     {actions.includes("transport") ? (
                       <button
-                        className="secondary-button"
+                        className={
+                          primary === "transport"
+                            ? "primary-button"
+                            : "secondary-button"
+                        }
                         onClick={addTransport}
                       >
                         <TruckIcon size={18} />
@@ -469,7 +405,14 @@ export function PersonPage() {
                       </button>
                     ) : null}
                     {actions.includes("return") ? (
-                      <button className="secondary-button" onClick={addReturn}>
+                      <button
+                        className={
+                          primary === "return"
+                            ? "primary-button"
+                            : "secondary-button"
+                        }
+                        onClick={addReturn}
+                      >
                         <ArrowUUpLeftIcon size={18} />
                         {t("মাল ফেরত দিই")}
                       </button>
@@ -493,9 +436,9 @@ export function PersonPage() {
                 {actions.includes("purchase") ? (
                   <button
                     className={
-                      actions.includes("payment")
-                        ? "secondary-button"
-                        : "primary-button"
+                      primary === "purchase"
+                        ? "primary-button"
+                        : "secondary-button"
                     }
                     onClick={addPurchase}
                   >
@@ -506,10 +449,9 @@ export function PersonPage() {
                 {actions.includes("transport") ? (
                   <button
                     className={
-                      actions.includes("payment") ||
-                      actions.includes("purchase")
-                        ? "secondary-button"
-                        : "primary-button"
+                      primary === "transport"
+                        ? "primary-button"
+                        : "secondary-button"
                     }
                     onClick={addTransport}
                   >
@@ -520,11 +462,9 @@ export function PersonPage() {
                 {actions.includes("return") ? (
                   <button
                     className={
-                      actions.some((action) =>
-                        ["payment", "purchase", "transport"].includes(action),
-                      )
-                        ? "secondary-button"
-                        : "primary-button"
+                      primary === "return"
+                        ? "primary-button"
+                        : "secondary-button"
                     }
                     onClick={addReturn}
                   >
