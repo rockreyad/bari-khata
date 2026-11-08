@@ -154,6 +154,86 @@ describe("history load more", () => {
   });
 });
 
+it("opens a person's history newest first, sorts same-day payments by creation, and retains the oldest-first choice", async () => {
+  state.ledger = LedgerSchema.parse({
+    works: [{ id: "work", name: "নমুনা কাজ" }],
+    people: [{ id: "worker", name: "নমুনা মিস্ত্রি", kind: "worker" }],
+    entries: [
+      {
+        id: "old-bill",
+        kind: "expense",
+        personId: "worker",
+        account: "labour",
+        date: "2026-10-31",
+        createdAt: "2026-11-08T10:00:00.000Z",
+        lines: [
+          {
+            id: "old-line",
+            workId: "work",
+            costType: "labour",
+            label: "নমুনা কাজের বিল",
+            amount: 300000,
+          },
+        ],
+      },
+      ...["08", "10"].map((hour) => ({
+        id: `payment-${hour}`,
+        kind: "payment",
+        personId: "worker",
+        account: "labour",
+        date: "2026-11-08",
+        createdAt: `2026-11-08T${hour}:00:00.000Z`,
+        paymentParts: [{ amount: 100000 }],
+        allocations: [{ workId: "work", amount: 100000 }],
+      })),
+      {
+        id: "undated-payment",
+        kind: "payment",
+        personId: "worker",
+        account: "labour",
+        date: null,
+        createdAt: "2026-11-09T10:00:00.000Z",
+        paymentParts: [{ amount: 10000 }],
+        allocations: [{ workId: "work", amount: 10000 }],
+      },
+    ],
+  });
+  const before = structuredClone(state.ledger);
+  const { container } = open("/ledger?person=worker&work=work");
+  const user = userEvent.setup();
+  const rowIds = async () => {
+    state.detail.mockClear();
+    for (const row of container.querySelectorAll(".history-row"))
+      await user.click(row);
+    return state.detail.mock.calls.map(([id]) => id);
+  };
+
+  expect(screen.getByRole("button", { name: "সাম্প্রতিক আগে" })).toBeTruthy();
+  expect(await rowIds()).toEqual([
+    "payment-10",
+    "payment-08",
+    "old-bill",
+    "undated-payment",
+  ]);
+  expect(container.querySelectorAll(".history-payment")).toHaveLength(3);
+  expect(container.querySelectorAll(".history-expense")).toHaveLength(1);
+
+  await user.click(screen.getByRole("button", { name: "সাম্প্রতিক আগে" }));
+  expect(await rowIds()).toEqual([
+    "old-bill",
+    "payment-08",
+    "payment-10",
+    "undated-payment",
+  ]);
+  const params = new URLSearchParams(
+    screen.getByTestId("location").textContent ?? "",
+  );
+  expect(params.get("order")).toBe("oldest");
+  expect(params.get("person")).toBe("worker");
+  expect(params.get("work")).toBe("work");
+  expect(state.ledger).toEqual(before);
+});
+
 it("shows the legacy driver's bill and current payment when opening its full history link", async () => {
   state.ledger = LedgerSchema.parse({
     works: [{ id: "door", name: "দরজা" }],

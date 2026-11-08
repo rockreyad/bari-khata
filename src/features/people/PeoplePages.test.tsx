@@ -622,12 +622,10 @@ describe("minimal people pages", () => {
         1,
       );
       await user.click(screen.getByRole("button", { name: "টাকা দিই" }));
-      expectWritePath("/write/charge", {
+      expectWritePath("/write/payment", {
         person: "worker",
         account: "labour",
-        purpose: "charge",
-        type: "labour",
-        paid: "yes",
+        purpose: "payment",
         back: `/parties/worker${workId ? `?work=${workId}` : ""}`,
         ...(workId ? { work: workId } : {}),
       });
@@ -662,7 +660,7 @@ describe("minimal people pages", () => {
     expect(screen.queryByRole("button", { name: "মাল ফেরত লিখি" })).toBeNull();
     expect(container.textContent).not.toContain("2026-11");
   });
-  it("shows the last five wage entries and navigates to a scoped chronological history page", async () => {
+  it("shows the last five wage entries and navigates to recent scoped history", async () => {
     state.ledger = fixture();
     const user = userEvent.setup();
     const { container } = renderPage();
@@ -671,7 +669,7 @@ describe("minimal people pages", () => {
     expect(screen.queryByRole("button", { name: "মাল কিনলাম" })).toBeNull();
     expect(screen.queryByRole("button", { name: "মাল ফেরত লিখি" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "পুরো হিসাব" }));
-    expect(state.go).toHaveBeenCalledWith("/ledger?person=worker&order=oldest");
+    expect(state.go).toHaveBeenCalledWith("/ledger?person=worker");
     const rows = [...container.querySelectorAll(".history-row")];
     expect(rows).toHaveLength(5);
     expect(rows[0].textContent).toContain("বিল 7");
@@ -757,7 +755,7 @@ describe("minimal people pages", () => {
     const { container } = renderPage();
     expect(container.querySelectorAll(".history-row")).toHaveLength(5);
     await user.click(screen.getByRole("button", { name: "পুরো হিসাব" }));
-    expect(state.go).toHaveBeenCalledWith("/ledger?person=worker&order=oldest");
+    expect(state.go).toHaveBeenCalledWith("/ledger?person=worker");
     expect(container.querySelectorAll(".history-row")).toHaveLength(5);
     expect(container.textContent).toContain("৳710");
     expect(container.textContent).not.toContain("৳800");
@@ -766,12 +764,10 @@ describe("minimal people pages", () => {
     state.ledger = fixture();
     renderPage("/parties/worker?account=materials");
     await userEvent.click(screen.getByRole("button", { name: "টাকা দিই" }));
-    expectWritePath("/write/charge", {
+    expectWritePath("/write/payment", {
       person: "worker",
       account: "labour",
-      purpose: "charge",
-      type: "labour",
-      paid: "yes",
+      purpose: "payment",
       back: "/parties/worker?account=materials",
     });
   });
@@ -1111,7 +1107,7 @@ it.each(["materials", "labour", "other"])(
     expect(history.textContent).toContain("সব হিসাব");
     await user.click(screen.getByRole("button", { name: "পুরো হিসাব" }));
     expect(state.go).toHaveBeenCalledWith(
-      "/ledger?person=sample-person&order=oldest&work=sample",
+      "/ledger?person=sample-person&work=sample",
     );
     expect(state.ledger).toEqual(ledger);
   },
@@ -1314,14 +1310,12 @@ it.each([
     await userEvent.click(
       within(group).getByRole("button", { name: "টাকা দিই" }),
     );
-    expectWritePath(kind === "worker" ? "/write/charge" : "/write", {
+    expectWritePath(kind === "worker" ? "/write/payment" : "/write", {
       person: "sample-person",
       account,
       back: "/parties/sample-person",
-      purpose: kind === "worker" ? "charge" : "party-payment",
-      ...(kind === "worker"
-        ? { type: "labour", paid: "yes" }
-        : { dueWork: "all", dueAccount: "all" }),
+      purpose: kind === "worker" ? "payment" : "party-payment",
+      ...(kind === "worker" ? {} : { dueWork: "all", dueAccount: "all" }),
     });
     expect(state.add).not.toHaveBeenCalled();
     expect(ledger).toEqual(before);
@@ -1468,13 +1462,11 @@ it("keeps the original card actions for multiple roles and never turns a craftsp
     costType: "material",
   });
   fireEvent.click(screen.getByRole("button", { name: "টাকা দিই" }));
-  expectWritePath("/write/charge", {
+  expectWritePath("/write/payment", {
     person: "worker",
     account: "labour",
     work: "work",
-    purpose: "charge",
-    type: "labour",
-    paid: "yes",
+    purpose: "payment",
     back: "/parties/worker",
   });
 });
@@ -1484,7 +1476,7 @@ it.each([
   { requested: "other-job", expected: undefined },
   { requested: undefined, expected: undefined },
 ])(
-  "opens a paid worker bill with explicit work and safe contract $requested",
+  "opens a worker cash payment with explicit work and safe contract $requested",
   ({ requested, expected }) => {
     const ledger = LedgerSchema.parse({
       works: [
@@ -1512,12 +1504,10 @@ it.each([
     const before = JSON.stringify(ledger);
     renderPage(`/parties/worker?${query}`);
     fireEvent.click(screen.getByRole("button", { name: "টাকা দিই" }));
-    expectWritePath("/write/charge", {
+    expectWritePath("/write/payment", {
       person: "worker",
       account: "labour",
-      purpose: "charge",
-      type: "labour",
-      paid: "yes",
+      purpose: "payment",
       work: "work",
       ...(expected ? { contract: expected } : {}),
       back: `/sample/parties/worker?${query}`,
@@ -1581,8 +1571,8 @@ it.each([
   {
     kind: "driver",
     roles: ["transport"],
-    path: "/write/charge",
-    extras: { type: "transport", purpose: "charge", paid: "yes" },
+    path: "/write/payment",
+    extras: { purpose: "payment" },
   },
   {
     kind: "other",
@@ -1591,7 +1581,7 @@ it.each([
     extras: { purpose: "party-payment", dueWork: "all", dueAccount: "all" },
   },
 ] as const)(
-  "keeps the $kind payment entry consistent with enabled charge rules",
+  "keeps the $kind payment entry separate from new bills",
   ({ kind, roles, path, extras }) => {
     state.ledger = LedgerSchema.parse({
       works: [{ id: "work", name: "নমুনা খাতা" }],

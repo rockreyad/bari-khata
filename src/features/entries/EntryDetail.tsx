@@ -448,7 +448,7 @@ export function EntryDetail({ id }: { id: string }) {
                       label: t("এই নামের সব হিসাব"),
                       onSelect: () =>
                         go(
-                          `/ledger?person=${encodeURIComponent(person.id)}&account=${entry.account}&order=oldest`,
+                          `/ledger?person=${encodeURIComponent(person.id)}&account=${entry.account}`,
                         ),
                     },
                   ]

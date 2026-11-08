@@ -242,11 +242,9 @@ it.each(["", "/sample"])(
     const { container } = mount(ledger, "bn", `${base}/dues`);
     await user.click(screen.getByRole("button", { name: /^নমুনা দোকান/ }));
     expect(screen.getByTestId("route").textContent).toBe(
-      `${base}/ledger?person=shop&order=oldest`,
+      `${base}/ledger?person=shop`,
     );
-    expect(state.go).toHaveBeenLastCalledWith(
-      "/ledger?person=shop&order=oldest",
-    );
+    expect(state.go).toHaveBeenLastCalledWith("/ledger?person=shop");
     expect(
       screen.getByRole("heading", { name: "নমুনা দোকান-এর সব হিসাব" }),
     ).toBeTruthy();

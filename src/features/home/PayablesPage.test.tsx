@@ -120,7 +120,7 @@ it("loads 75 dues in batches of 30 while keeping the full total and existing but
 
   await user.click(view.rows()[74]);
   expect(notebook.go).toHaveBeenCalledExactlyOnceWith(
-    "/ledger?person=person-74&order=oldest",
+    "/ledger?person=person-74",
   );
   expect(notebook.detail).not.toHaveBeenCalled();
 });

@@ -142,11 +142,11 @@ it("identifies the creditors behind 4400 taka and opens the selected notebook's 
 
   await user.click(shop);
   expect(notebook.go).toHaveBeenLastCalledWith(
-    "/ledger?person=shop&work=masonry&order=oldest",
+    "/ledger?person=shop&work=masonry",
   );
   await user.click(worker);
   expect(notebook.go).toHaveBeenLastCalledWith(
-    "/ledger?person=worker&work=masonry&order=oldest",
+    "/ledger?person=worker&work=masonry",
   );
   await user.click(anonymous);
   expect(notebook.detail).toHaveBeenCalledExactlyOnceWith("anonymous-bill");
