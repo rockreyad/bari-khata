@@ -1,5 +1,24 @@
 export const ledgerSearchEnglish: Record<string, string> = {
   "খোঁজার হিসাব": "Search totals",
+  "লেনদেনে দিয়েছি": "Recorded payments",
+  "বিলের মোট": "Bill total",
+  "দেওয়া টাকার সংশোধন": "Payment correction",
+  "বিলের সংশোধন": "Bill correction",
+  "বাকি টাকার সংশোধন": "Balance correction",
+  "ফেরত দেওয়া মালের মোট": "Total goods returned",
+  "মোট ফেরত পেয়েছি": "Total refunds received",
+  "{{count}}টি টাকা লেনদেন": "{{count}} cash transactions",
+  "{{count}}টি মাল ফেরতের হিসাব": "{{count}} goods return records",
+  "{{count}}টি পুরোনো লেনদেন এই মোটে ধরা হয়নি।":
+    "{{count}} historical cash records are excluded from this total.",
+  "{{count}}টি সংশোধন যাচাই বাকি। সেগুলো মোটে ধরা হয়নি।":
+    "{{count}} corrections need review and are excluded from the total.",
+  "এগুলো আগের হিসাবের সংশোধন; নতুন টাকা দেওয়া বা খরচ নয়।":
+    "These correct earlier records; they are not new payments or costs.",
+  "এই বাছাইয়ে টাকা দেওয়া বা ফেরত পাওয়ার হিসাব নেই।":
+    "This selection has no payments or refunds.",
+  "টাকা দেওয়া, ফেরত ও দেওয়া টাকার সংশোধন আলাদা দেখানো হয়েছে।":
+    "Payments, refunds and payment corrections are shown separately.",
   "কিছু লেখায় একাধিক মালের নাম বা ধরন মিলেছে। অস্পষ্ট অংশ এই মালের মোটে ধরা হয়নি।":
     "Some records identify conflicting or multiple materials. The uncertain portion is excluded from this material's total.",
   "মাসে মাসে": "By month",

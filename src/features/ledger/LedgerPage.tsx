@@ -3,9 +3,12 @@ import { useSearchParams } from "react-router";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
+  ArrowUUpLeftIcon,
   FunnelSimpleIcon,
   MagnifyingGlassIcon,
   PlusIcon,
+  TruckIcon,
+  WalletIcon,
   XIcon,
 } from "@phosphor-icons/react";
 import { useNotebook } from "../../app/NotebookProvider";
@@ -34,6 +37,18 @@ import {
   type MaterialChoice,
 } from "./searchAnalytics";
 import { LedgerSearchSummary } from "./LedgerSearchSummary";
+import { PartyLedgerSummary } from "./PartyLedgerSummary";
+import {
+  contactActionLabels,
+  contactActionPlan,
+  openContactAction,
+} from "../people/contactActions";
+const contactActionIcons = {
+  payment: WalletIcon,
+  purchase: PlusIcon,
+  transport: TruckIcon,
+  return: ArrowUUpLeftIcon,
+};
 function materialChoiceKind(choice: MaterialChoice) {
   return choice.token.startsWith("group:")
     ? "মালের ধরন"
@@ -42,7 +57,7 @@ function materialChoiceKind(choice: MaterialChoice) {
       : "আগের নাম";
 }
 export function LedgerPage() {
-  const { ledger, add, detail, go } = useNotebook();
+  const { ledger, add, detail, go, base } = useNotebook();
   const { t, number, formatDigits } = useLanguageContext();
   const [params, setParams] = useSearchParams();
   const [filterOpen, setFilterOpen] = useState(false);
@@ -150,6 +165,18 @@ export function LedgerPage() {
   };
   const contact = ledger.people.find((p) => p.id === person),
     selectedWork = ledger.works.find((w) => w.id === work);
+  const actionPlan = contact
+    ? contactActionPlan(ledger, contact, {
+        workId: work || undefined,
+        account: account || undefined,
+        contractId: params.get("contract") ?? undefined,
+        back: `${base ?? ""}/ledger${params.size ? `?${currentParams(params)}` : ""}`,
+      })
+    : null;
+  const primaryAction = actionPlan?.primary;
+  const PrimaryActionIcon = primaryAction
+    ? contactActionIcons[primaryAction]
+    : PlusIcon;
   const filtered = Boolean(
     person ||
     work ||
@@ -260,10 +287,22 @@ export function LedgerPage() {
               : t("নাম, মাল বা খাতার নাম লিখে খুঁজুন।")}
           </p>
         </div>
-        <button className="primary-button" onClick={() => add()}>
-          <PlusIcon size={19} />
-          {t("খরচ লিখি")}
-        </button>
+        {primaryAction && actionPlan ? (
+          <button
+            className="primary-button"
+            onClick={() =>
+              openContactAction(actionPlan, primaryAction, { add, go })
+            }
+          >
+            <PrimaryActionIcon size={19} />
+            {t(contactActionLabels[primaryAction])}
+          </button>
+        ) : !person ? (
+          <button className="primary-button" onClick={() => add()}>
+            <PlusIcon size={19} />
+            {t("খরচ লিখি")}
+          </button>
+        ) : null}
       </header>
       {reviewCount ? (
         <button className="review-warning-v4" onClick={() => go("/review")}>
@@ -425,7 +464,31 @@ export function LedgerPage() {
           {t(order === "oldest" ? "শুরু থেকে" : "সাম্প্রতিক আগে")}
         </button>
       </div>
-      {showAnalytics ? (
+      {showAnalytics && contact ? (
+        <PartyLedgerSummary
+          key={JSON.stringify([
+            q,
+            person,
+            work,
+            kind,
+            account,
+            costType,
+            from,
+            to,
+            includeVoided,
+            material,
+          ])}
+          ledger={ledger}
+          person={contact}
+          result={selection}
+          workId={work}
+          kind={kind}
+          costType={costType}
+          material={material}
+          month={month}
+          onMonthChange={chooseMonth}
+        />
+      ) : showAnalytics ? (
         <LedgerSearchSummary
           key={JSON.stringify([
             q,

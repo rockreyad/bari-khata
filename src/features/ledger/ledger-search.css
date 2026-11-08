@@ -58,6 +58,21 @@
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
+.ledger-party-parts {
+  gap: 8px 24px;
+}
+.ledger-party-parts:empty {
+  display: none;
+}
+.ledger-party-parts > div {
+  flex-wrap: wrap;
+}
+.ledger-party-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
 .ledger-search-context {
   flex-wrap: wrap;
   margin-top: 8px;
