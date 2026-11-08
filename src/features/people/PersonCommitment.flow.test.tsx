@@ -211,7 +211,9 @@ describe("worker remaining promises from list to profile", () => {
       const source = structuredClone(ledger);
       const view = mount(ledger, "/parties");
       const row = screen.getByRole("button", { name: /নমুনা কর্মী/ });
-      expect(amount(row.querySelector(".contact-due"))).toBe(remaining);
+      expect(amount(row.querySelector('[data-balance-kind="due"]'))).toBe(
+        remaining,
+      );
       expect(amount(row.querySelector(".contact-paid-amount"))).toBe(paid);
 
       fireEvent.click(row);
