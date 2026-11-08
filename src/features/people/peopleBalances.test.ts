@@ -91,6 +91,7 @@ const empty = {
   extra: 0,
   credit: 0,
   receivable: 0,
+  recordReviewCount: 0,
   valid: true,
   needsReview: false,
 };
@@ -119,7 +120,7 @@ it("keeps due, explicit advance and refundable cash separate across accounts", (
 it.each([
   { context: "advance", advance: 10000, credit: 0 },
   { context: "settlement", advance: 0, credit: 0 },
-  { context: undefined, advance: 0, credit: 10000 },
+  { context: undefined, advance: 0, credit: 0 },
 ])(
   "does not turn $context cash into another payment purpose",
   ({ context, advance, credit }) => {
@@ -408,3 +409,374 @@ it("does not let a cancelled correction relabel confirmed advance", () => {
   });
   expect(balances(ledger)).toEqual({ ...empty, advance: 4000 });
 });
+
+it.each(["settlement", undefined])(
+  "does not call a %s payment credit when its old bill is historical",
+  (context) => {
+    const ledger = fixture([
+      bill("old-bill", 10000, "labour", { balanceImpact: "historical" }),
+      cash("paid", 10000, "labour", { paymentContext: context }),
+    ]);
+    expect(balances(ledger)).toEqual(empty);
+    expect(
+      peopleBalances(ledger, ledger.people[0]).summary.reconciledNetPaid,
+    ).toBe(10000);
+  },
+);
+
+it.each(["settlement", undefined])(
+  "does not turn a paid-only correction of %s cash into credit without liability evidence",
+  (context) => {
+    const original = fixture([
+      cash("paid", 4000, "labour", { paymentContext: context }),
+    ]);
+    const ledger = appendBalanceAdjustment(original, {
+      target: "person",
+      personId: "person",
+      account: "labour",
+      basis: "paid",
+      expectedBefore: 4000,
+      after: 13000,
+      reason: "নমুনা দেওয়া টাকা ঠিক করেছি",
+    });
+    expect(balances(ledger)).toEqual(empty);
+    expect(
+      peopleBalances(ledger, ledger.people[0]).summary.reconciledNetPaid,
+    ).toBe(13000);
+  },
+);
+
+it("retains only the recorded advance when a paid-total correction has no bill evidence", () => {
+  const original = fixture([
+    cash("advance", 4000, "materials", { paymentContext: "advance" }),
+  ]);
+  const ledger = appendBalanceAdjustment(original, {
+    target: "person",
+    personId: "person",
+    account: "materials",
+    basis: "paid",
+    expectedBefore: 4000,
+    after: 13000,
+    reason: "নমুনা দেওয়া টাকা ঠিক করেছি",
+  });
+  expect(balances(ledger)).toEqual({ ...empty, advance: 4000 });
+});
+
+it("retains credit that the user explicitly recorded as a negative balance", () => {
+  const original = fixture([cash("paid", 4000, "labour")]);
+  const ledger = appendBalanceAdjustment(original, {
+    target: "person",
+    personId: "person",
+    account: "labour",
+    basis: "balance",
+    expectedBefore: -4000,
+    after: -5000,
+    reason: "নমুনা জমা টাকা মিলিয়েছি",
+  });
+  expect(balances(ledger)).toEqual({ ...empty, credit: 5000 });
+});
+
+it.each([
+  { refunded: 3000, credit: 0 },
+  { refunded: 1000, credit: 2000 },
+])(
+  "keeps the known bill and return balance after an unclassified refund of $refunded",
+  ({ refunded, credit }) => {
+    const ledger = fixture([
+      bill("bill", 10000),
+      cash("paid", 10000),
+      bill("return", 3000, "materials", {
+        kind: "expense_credit",
+        relatedEntryId: "bill",
+      }),
+      cash("refund", refunded, "materials", {
+        kind: "refund",
+        paymentContext: undefined,
+      }),
+      cash("unrelated-advance", 2500, "labour", { paymentContext: "advance" }),
+    ]);
+    expect(balances(ledger)).toEqual({ ...empty, credit, advance: 2500 });
+  },
+);
+
+it("keeps unmatched settlement refunds out of contract liability review", () => {
+  const ledger = fixture(
+    [
+      cash("paid", 13000, "labour", { contractId: "first" }),
+      cash("refund", 3000, "labour", {
+        contractId: "first",
+        kind: "refund",
+        paymentContext: undefined,
+      }),
+    ],
+    { contracts: [contracts[0]] },
+  );
+  expect(balances(ledger)).toEqual(empty);
+});
+
+it("guards mixed advance and receivable refunds without hiding another account's known credit", () => {
+  const ledger = fixture([
+    cash("advance", 5000, "materials", { paymentContext: "advance" }),
+    cash("deposit", 3000, "materials", { paymentContext: "receivable" }),
+    cash("refund", 1000, "materials", {
+      kind: "refund",
+      paymentContext: undefined,
+    }),
+    cash("known-deposit", 2000, "other", { paymentContext: "receivable" }),
+    bill("labour", 10000, "labour"),
+    cash("labour-paid", 12000, "labour"),
+  ]);
+  expect(balances(ledger)).toEqual({
+    ...empty,
+    credit: 2000,
+    receivable: 2000,
+    needsReview: true,
+  });
+});
+
+it("does not let a fully consumed old advance make a settled supplier return uncertain", () => {
+  const ledger = fixture(
+    [
+      bill("old-bill", 5000),
+      cash("old-advance", 5000, "materials", { paymentContext: "advance" }),
+      bill("bill", 10000),
+      cash("paid", 10000),
+      bill("return", 3000, "materials", {
+        kind: "expense_credit",
+        relatedEntryId: "bill",
+      }),
+      cash("refund", 3000, "materials", {
+        kind: "refund",
+        paymentContext: undefined,
+      }),
+    ],
+    {
+      paymentAllocations: [
+        {
+          id: "old-allocation",
+          paymentId: "old-advance",
+          billId: "old-bill",
+          workId: "work",
+          amount: 5000,
+          createdAt: "2026-11-08T00:00:00Z",
+        },
+      ],
+    },
+  );
+  expect(balances(ledger)).toEqual(empty);
+});
+
+it("keeps deposit in another work certain when an ordinary refund has no matching context", () => {
+  const ledger = fixture(
+    [
+      bill("bill", 10000),
+      cash("paid", 10000),
+      bill("return", 3000, "materials", {
+        kind: "expense_credit",
+        relatedEntryId: "bill",
+      }),
+      cash("refund", 3000, "materials", {
+        kind: "refund",
+        paymentContext: undefined,
+      }),
+      cash("other-deposit", 2000, "materials", {
+        paymentContext: "receivable",
+        allocations: [{ workId: "second", amount: 2000 }],
+      }),
+    ],
+    {
+      works: [
+        { id: "work", name: "নমুনা খাতা" },
+        { id: "second", name: "নমুনা দ্বিতীয় খাতা" },
+      ],
+    },
+  );
+  expect(balances(ledger)).toEqual({ ...empty, receivable: 2000 });
+});
+
+it("does not call unlinked legacy work cash credit beside fully settled bills in the same work", () => {
+  const ledger = fixture(
+    [
+      bill("first-bill", 5000, "labour"),
+      cash("first-paid", 5000, "labour"),
+      bill("second-bill", 7000, "labour"),
+      cash("second-paid", 7000, "labour"),
+      cash("legacy-work-cash", 2000, "labour", { paymentContext: undefined }),
+    ],
+    {
+      paymentAllocations: ["first", "second"].map((id, index) => ({
+        id: `${id}-allocation`,
+        paymentId: `${id}-paid`,
+        billId: `${id}-bill`,
+        workId: "work",
+        amount: index === 0 ? 5000 : 7000,
+        createdAt: "2026-11-08T00:00:00Z",
+      })),
+    },
+  );
+  expect(balances(ledger)).toEqual(empty);
+  expect(
+    peopleBalances(ledger, ledger.people[0]).summary.reconciledNetPaid,
+  ).toBe(14000);
+});
+
+it("does not let unlinked old work cash revive advance already covered by a current bill", () => {
+  const ledger = fixture([
+    bill("bill", 10000),
+    cash("advance", 10000, "materials", { paymentContext: "advance" }),
+    cash("legacy-work-cash", 5000, "materials", { paymentContext: undefined }),
+  ]);
+  expect(balances(ledger)).toEqual(empty);
+});
+
+it("keeps a legacy payment explicitly linked to its current bill as evidence of real overpayment", () => {
+  const ledger = fixture([
+    bill("bill", 5000),
+    cash("linked", 6000, "materials", {
+      paymentContext: undefined,
+      relatedEntryId: "bill",
+    }),
+  ]);
+  expect(balances(ledger)).toEqual({ ...empty, credit: 1000 });
+});
+
+it.each([
+  { refund: 0, credit: 1000 },
+  { refund: 400, credit: 600 },
+  { refund: 1000, credit: 0 },
+])(
+  "keeps only the goods-return credit after refund $refund beside unrelated old cash",
+  ({ refund, credit }) => {
+    const ledger = fixture([
+      bill("bill", 10000),
+      cash("paid", 10000),
+      bill("return", 1000, "materials", {
+        kind: "expense_credit",
+        relatedEntryId: "bill",
+      }),
+      cash("unlinked", 2000, "materials", { paymentContext: undefined }),
+      ...(refund
+        ? [cash("refund", refund, "materials", { kind: "refund" })]
+        : []),
+    ]);
+    expect(balances(ledger)).toEqual({ ...empty, credit });
+  },
+);
+
+it.each([
+  { paid: 6000, credit: 0 },
+  { paid: 6500, credit: 500 },
+])(
+  "keeps record review separate from the known return balance with $paid paid",
+  ({ paid, credit }) => {
+    const ledger = fixture([
+      bill("first", 5000, "materials", {
+        reviewStatus: "needs_review",
+        reviewReason: "",
+      }),
+      bill("second", 2000, "materials", {
+        reviewStatus: "needs_review",
+        reviewReason: "",
+      }),
+      bill("return", 1000, "materials", {
+        kind: "expense_credit",
+        reviewStatus: "needs_review",
+        reviewReason: "",
+      }),
+      cash("paid", paid, "materials", { paymentContext: undefined }),
+    ]);
+    expect(balances(ledger)).toEqual({
+      ...empty,
+      credit,
+      recordReviewCount: 3,
+    });
+    expect(
+      ledger.entries.filter((entry) => entry.reviewStatus === "needs_review"),
+    ).toHaveLength(3);
+  },
+);
+
+it("does not treat historical review rows as current financial uncertainty", () => {
+  const ledger = fixture([
+    bill("historical", 9000, "materials", {
+      balanceImpact: "historical",
+      reviewStatus: "needs_review",
+    }),
+    bill("bill", 5000),
+    cash("paid", 5000),
+  ]);
+  expect(balances(ledger)).toEqual(empty);
+});
+
+function withRecordedCredit() {
+  const original = fixture([
+    cash("old-work-cash", 4000, "labour", { paymentContext: undefined }),
+  ]);
+  const corrected = appendBalanceAdjustment(
+    original,
+    {
+      target: "person",
+      personId: "person",
+      account: "labour",
+      basis: "balance",
+      expectedBefore: -4000,
+      after: -5000,
+      reason: "নমুনা জমা মিলিয়েছি",
+    },
+    "2026-11-08T01:00:00Z",
+  );
+  return LedgerSchema.parse({
+    ...corrected,
+    entries: [
+      ...corrected.entries,
+      cash("later-work-cash", 2000, "labour", {
+        paymentContext: undefined,
+        createdAt: "2026-11-08T02:00:00Z",
+      }),
+    ],
+  });
+}
+
+it("does not let a past negative balance correction confirm later unknown cash", () => {
+  expect(balances(withRecordedCredit())).toEqual({ ...empty, credit: 5000 });
+});
+
+it("caps recorded credit by the current balance after a later expense", () => {
+  const original = withRecordedCredit();
+  const ledger = LedgerSchema.parse({
+    ...original,
+    entries: [...original.entries, bill("later-bill", 3000, "labour")],
+  });
+  expect(balances(ledger)).toEqual({ ...empty, credit: 4000 });
+});
+
+it.each(["2026-11-08T01:00:00Z", "2026-11-08T03:00:00Z"])(
+  "lets a zero balance correction at %s supersede the older credit without depending on entry order",
+  (at) => {
+    const original = withRecordedCredit();
+    const corrected = appendBalanceAdjustment(
+      original,
+      {
+        target: "person",
+        personId: "person",
+        account: "labour",
+        basis: "balance",
+        expectedBefore: -7000,
+        after: 0,
+        reason: "নমুনা হিসাব মিটিয়েছি",
+      },
+      at,
+    );
+    const ledger = LedgerSchema.parse({
+      ...corrected,
+      entries: [
+        ...corrected.entries,
+        cash("new-work-cash", 1000, "labour", { paymentContext: undefined }),
+      ],
+    });
+    expect(balances(ledger)).toEqual(empty);
+    expect(
+      balances({ ...ledger, entries: [...ledger.entries].reverse() }),
+    ).toEqual(empty);
+  },
+);

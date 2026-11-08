@@ -29,11 +29,17 @@ function ContactBalances({
   balance: ReturnType<typeof peopleBalances>;
 }) {
   const { t, money } = useLanguageContext();
+  const recordReviewId = useId();
+  const recordReviewDescription = t(
+    "কিছু বিল বা মালের ফেরতের তথ্য যাচাই বাকি। এর মানে টাকা বকেয়া আছে, এমন নয়।",
+  );
   const states = [
     {
       kind: "due",
       amount: balance.valid ? balance.remaining : 0,
-      label: balance.needsReview ? "জানা বাকি {{amount}}" : "বাকি {{amount}}",
+      label: balance.needsReview
+        ? "জানা বাকি {{amount}}"
+        : "আরও দিতে হবে {{amount}}",
     },
     { kind: "advance", amount: balance.advance, label: "অগ্রিম {{amount}}" },
     { kind: "extra", amount: balance.extra, label: "বেশি দিয়েছি {{amount}}" },
@@ -44,7 +50,8 @@ function ContactBalances({
       label: "ফেরত পাব {{amount}}",
     },
   ].filter(({ amount }) => amount > 0);
-  if (!states.length && !balance.needsReview) return null;
+  if (!states.length && !balance.needsReview && !balance.recordReviewCount)
+    return null;
   return (
     <span className="contact-row-statuses">
       {states.map(({ kind, amount, label }) => (
@@ -60,6 +67,21 @@ function ContactBalances({
         <span className="contact-balance-status" data-balance-kind="review">
           {t("যাচাই বাকি")}
         </span>
+      ) : null}
+      {balance.recordReviewCount > 0 ? (
+        <>
+          <span
+            className="contact-balance-status"
+            data-balance-kind="record-review"
+            title={recordReviewDescription}
+            aria-describedby={recordReviewId}
+          >
+            {t("বিলের তথ্য যাচাই বাকি")}
+          </span>
+          <span className="visually-hidden" id={recordReviewId}>
+            {recordReviewDescription}
+          </span>
+        </>
       ) : null}
     </span>
   );

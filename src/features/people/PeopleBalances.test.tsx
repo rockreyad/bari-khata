@@ -66,10 +66,23 @@ function fixture() {
   });
   const ledger = LedgerSchema.parse({
     works: [{ id: "sample-work", name: "Sample notebook" }],
-    people: ["mixed", "extra", "credit", "plain", "settled", "empty"].map(
-      (id) => ({ id, name: `Sample ${id}`, kind: "worker" }),
-    ),
+    people: [
+      "mixed",
+      "ongoing",
+      "extra",
+      "credit",
+      "plain",
+      "settled",
+      "empty",
+    ].map((id) => ({ id, name: `Sample ${id}`, kind: "worker" })),
     contracts: [
+      {
+        id: "ongoing-contract",
+        personId: "ongoing",
+        workId: "sample-work",
+        total: 500000,
+        status: "ongoing",
+      },
       {
         id: "sample-contract",
         personId: "extra",
@@ -82,6 +95,14 @@ function fixture() {
       bill("mixed", 10000, "materials"),
       payment("mixed-advance", "mixed", 2500, "labour", "advance"),
       payment("mixed-deposit", "mixed", 3000, "other", "receivable"),
+      payment(
+        "ongoing-payment",
+        "ongoing",
+        200000,
+        "labour",
+        "settlement",
+        "ongoing-contract",
+      ),
       payment(
         "extra-payment",
         "extra",
@@ -141,10 +162,11 @@ it("shows each positive balance without netting unrelated accounts or classifyin
   mount();
 
   expect(statuses("mixed")).toEqual({
-    due: "বাকি ৳\u202f১০০",
+    due: "আরও দিতে হবে ৳\u202f১০০",
     advance: "অগ্রিম ৳\u202f২৫",
     receivable: "ফেরত পাব ৳\u202f৩০",
   });
+  expect(statuses("ongoing")).toEqual({ due: "আরও দিতে হবে ৳\u202f৩,০০০" });
   expect(statuses("extra")).toEqual({ extra: "বেশি দিয়েছি ৳\u202f৩০" });
   expect(statuses("credit")).toEqual({ credit: "আমার জমা ৳\u202f৫০" });
   for (const name of ["plain", "settled", "empty"])
@@ -157,17 +179,18 @@ it("translates balance labels and money through the language provider while reta
   mount("/parties", "en");
 
   expect(statuses("mixed")).toEqual({
-    due: "Due ৳\u202f100",
+    due: "Still to pay ৳\u202f100",
     advance: "Advance ৳\u202f25",
     receivable: "To recover ৳\u202f30",
   });
+  expect(statuses("ongoing")).toEqual({ due: "Still to pay ৳\u202f3,000" });
   expect(statuses("extra")).toEqual({ extra: "Overpaid ৳\u202f30" });
   expect(statuses("credit")).toEqual({ credit: "My credit ৳\u202f50" });
   await userEvent.click(row("mixed"));
   expect(state.go).toHaveBeenCalledExactlyOnceWith("/parties/mixed");
 });
 
-it("marks an unmatched old refund for review instead of claiming certain advance or receivable balances", () => {
+it("marks an unmatched old refund for review while retaining another account's known receivable", () => {
   const base = fixture();
   state.ledger = LedgerSchema.parse({
     ...base,
@@ -188,12 +211,155 @@ it("marks an unmatched old refund for review instead of claiming certain advance
 
   expect(statuses("mixed")).toEqual({
     due: "জানা বাকি ৳\u202f১০০",
+    receivable: "ফেরত পাব ৳\u202f৩০",
     review: "যাচাই বাকি",
   });
 });
 
+it("keeps a settled shop return and a legacy payment without a bill free of invented balances or warnings", () => {
+  state.ledger = LedgerSchema.parse({
+    isDemo: true,
+    works: [{ id: "sample-work", name: "Sample notebook" }],
+    people: [
+      { id: "return", name: "Sample return", kind: "shop" },
+      { id: "legacy", name: "Sample legacy", kind: "worker" },
+    ],
+    entries: [
+      {
+        id: "sample-purchase",
+        kind: "expense",
+        personId: "return",
+        account: "materials",
+        lines: [{ id: "purchase-line", workId: "sample-work", amount: 10000 }],
+      },
+      {
+        id: "sample-settlement",
+        kind: "payment",
+        personId: "return",
+        account: "materials",
+        paymentContext: "settlement",
+        allocations: [{ workId: "sample-work", amount: 10000 }],
+        paymentParts: [{ amount: 10000 }],
+      },
+      {
+        id: "sample-return",
+        kind: "expense_credit",
+        personId: "return",
+        account: "materials",
+        relatedEntryId: "sample-purchase",
+        lines: [{ id: "return-line", workId: "sample-work", amount: 3000 }],
+      },
+      {
+        id: "sample-refund",
+        kind: "refund",
+        personId: "return",
+        account: "materials",
+        allocations: [{ workId: "sample-work", amount: 3000 }],
+        paymentParts: [{ amount: 3000 }],
+      },
+      {
+        id: "sample-legacy-payment",
+        kind: "payment",
+        personId: "legacy",
+        account: "labour",
+        allocations: [{ workId: "sample-work", amount: 16200 }],
+        paymentParts: [{ amount: 16200 }],
+      },
+    ],
+  });
+  const before = structuredClone(state.ledger);
+  mount();
+
+  expect(statuses("return")).toEqual({});
+  expect(statuses("legacy")).toEqual({});
+  expect(row("return").querySelector(".contact-paid-amount")?.textContent).toBe(
+    "৳\u202f৭০",
+  );
+  expect(row("legacy").querySelector(".contact-paid-amount")?.textContent).toBe(
+    "৳\u202f১৬২",
+  );
+  expect(state.ledger).toEqual(before);
+});
+
 it.each([
-  { status: "due", names: ["mixed"] },
+  { language: "bn", refunded: 3000, credit: null },
+  { language: "bn", refunded: 1000, credit: "আমার জমা ৳\u202f২০" },
+  { language: "en", refunded: 3000, credit: null },
+  { language: "en", refunded: 1000, credit: "My credit ৳\u202f20" },
+] as const)(
+  "separates bill-detail review from the known balance in $language after refunding $refunded",
+  ({ language, refunded, credit }) => {
+    state.ledger = LedgerSchema.parse({
+      isDemo: true,
+      works: [{ id: "sample-work", name: "Sample notebook" }],
+      people: [{ id: "records", name: "Sample records", kind: "shop" }],
+      entries: [
+        ...[
+          { id: "sample-bill", kind: "expense", amount: 10000 },
+          { id: "sample-return", kind: "expense_credit", amount: 3000 },
+        ].map(({ id, kind, amount }) => ({
+          id,
+          kind,
+          personId: "records",
+          account: "materials",
+          reviewStatus: "needs_review",
+          reviewReason: "",
+          relatedEntryId: kind === "expense_credit" ? "sample-bill" : null,
+          lines: [
+            {
+              id: `${id}-line`,
+              workId: "sample-work",
+              costType: "material",
+              materialGroupId: null,
+              amount,
+            },
+          ],
+        })),
+        {
+          id: "sample-paid",
+          kind: "payment",
+          personId: "records",
+          account: "materials",
+          paymentContext: "settlement",
+          allocations: [{ workId: "sample-work", amount: 10000 }],
+          paymentParts: [{ amount: 10000 }],
+        },
+        {
+          id: "sample-refund",
+          kind: "refund",
+          personId: "records",
+          account: "materials",
+          allocations: [{ workId: "sample-work", amount: refunded }],
+          paymentParts: [{ amount: refunded }],
+        },
+      ],
+    });
+    const before = structuredClone(state.ledger);
+    mount("/parties", language);
+
+    expect(statuses("records")).toEqual({
+      ...(credit ? { credit } : {}),
+      "record-review":
+        language === "bn" ? "বিলের তথ্য যাচাই বাকি" : "Bill details to check",
+    });
+    const marker = row("records").querySelector<HTMLElement>(
+      '[data-balance-kind="record-review"]',
+    )!;
+    const description =
+      language === "bn"
+        ? "কিছু বিল বা মালের ফেরতের তথ্য যাচাই বাকি। এর মানে টাকা বকেয়া আছে, এমন নয়।"
+        : "Some bill or material return details still need checking. This does not mean money is owed.";
+    expect(marker.title).toBe(description);
+    expect(
+      document.getElementById(marker.getAttribute("aria-describedby")!)
+        ?.textContent,
+    ).toBe(description);
+    expect(state.ledger).toEqual(before);
+  },
+);
+
+it.each([
+  { status: "due", names: ["mixed", "ongoing"] },
   { status: "advance", names: ["credit", "extra", "mixed"] },
   { status: "receivable", names: ["mixed"] },
 ])(

@@ -188,6 +188,10 @@
   --balance-color: var(--state-voided);
   --balance-surface: var(--state-voided-soft);
 }
+.contact-balance-status[data-balance-kind="record-review"] {
+  --balance-color: var(--muted);
+  --balance-surface: var(--surface-muted);
+}
 .contact-row-money > span {
   display: flex;
   justify-content: flex-end;
