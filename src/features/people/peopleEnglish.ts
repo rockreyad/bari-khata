@@ -1,4 +1,9 @@
 export const peopleEnglish: Record<string, string> = {
+  "দেওয়া টাকা, বাকি ও জমা এক নজরে।": "Payments, dues and credits at a glance.",
+  "টাকার অবস্থা অনুযায়ী দেখুন": "View by money status",
+  "অগ্রিম বা জমা আছে": "Advance or credit available",
+  "বেশি দিয়েছি {{amount}}": "Overpaid {{amount}}",
+  "ফেরত পাব {{amount}}": "To recover {{amount}}",
   "আর দিতে হবে": "Still to pay",
   "মোটের সংশোধন": "Total adjustment",
   "জানা বাকি {{amount}}": "Known remaining {{amount}}",
