@@ -610,182 +610,184 @@ function CostAnalyticsPage({
           </button>
         </div>
       ) : null}
-      <section className="report-total">
-        <span>{heading}</span>
-        <strong>{money(totals.total)}</strong>
-        {costCorrection !== 0 ? (
-          <p>
-            {t("সমন্বয়")} · {t("মোট খরচ")}: {money(costCorrection)}
-          </p>
-        ) : null}
-        <small>
-          {formatDigits(scopeLabel)}
-          {section === "material" ? ` · ${t("মালের দাম")}` : ""}
-        </small>
-        {totals.returns ? (
-          <p>
-            {t("মাল ফেরতের {{amount}} বাদ দেওয়া হয়েছে।", {
-              amount: money(totals.returns),
-            })}
-          </p>
-        ) : null}
-        <div className="report-month-controls">
-          {report.search.monthlyRows.length ? (
-            <button
-              type="button"
-              className="text-button"
-              aria-expanded={chartOpen}
-              aria-controls={chartId}
-              onClick={() => setChartOpen((value) => !value)}
-            >
-              <CalendarDotsIcon size={17} aria-hidden="true" />
-              {t("মাসে মাসে")}
-            </button>
+      <div className="report-overview">
+        <section className="report-total">
+          <span>{heading}</span>
+          <strong>{money(totals.total)}</strong>
+          {costCorrection !== 0 ? (
+            <p>
+              {t("সমন্বয়")} · {t("মোট খরচ")}: {money(costCorrection)}
+            </p>
           ) : null}
-          {month ? (
-            <>
-              <span>
-                {month === "undated"
-                  ? t("তারিখ লেখা নেই")
-                  : report.search.monthInvalid
-                    ? t("বাছাইটি পাওয়া যায়নি। আবার বেছে নিন।")
-                    : date(`${month}-01`, {
-                        day: undefined,
-                        month: "long",
-                        year: "numeric",
-                      })}
-              </span>
+          <small>
+            {formatDigits(scopeLabel)}
+            {section === "material" ? ` · ${t("মালের দাম")}` : ""}
+          </small>
+          {totals.returns ? (
+            <p>
+              {t("মাল ফেরতের {{amount}} বাদ দেওয়া হয়েছে।", {
+                amount: money(totals.returns),
+              })}
+            </p>
+          ) : null}
+          <div className="report-month-controls">
+            {report.search.monthlyRows.length ? (
               <button
                 type="button"
                 className="text-button"
-                onClick={() => chooseMonth("")}
+                aria-expanded={chartOpen}
+                aria-controls={chartId}
+                onClick={() => setChartOpen((value) => !value)}
               >
-                {t("সব মাস দেখুন")}
+                <CalendarDotsIcon size={17} aria-hidden="true" />
+                {t("মাসে মাসে")}
               </button>
-            </>
-          ) : null}
-        </div>
-        {chartOpen && report.search.monthlyRows.length ? (
-          <div id={chartId} className="report-cost-chart">
-            <SpendingSeriesChart
-              key={JSON.stringify([filters, section, account])}
-              rows={report.search.monthlyRows}
-              selectedMonth={month}
-              onMonthChange={chooseMonth}
-              presentation="embedded"
-              windowed
-            />
+            ) : null}
+            {month ? (
+              <>
+                <span>
+                  {month === "undated"
+                    ? t("তারিখ লেখা নেই")
+                    : report.search.monthInvalid
+                      ? t("বাছাইটি পাওয়া যায়নি। আবার বেছে নিন।")
+                      : date(`${month}-01`, {
+                          day: undefined,
+                          month: "long",
+                          year: "numeric",
+                        })}
+                </span>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => chooseMonth("")}
+                >
+                  {t("সব মাস দেখুন")}
+                </button>
+              </>
+            ) : null}
           </div>
-        ) : null}
-        {report.search.baseUndatedEntryCount > 0 ? (
-          <button
-            type="button"
-            className="report-undated"
-            aria-pressed={month === "undated"}
-            onClick={() => chooseMonth(month === "undated" ? "" : "undated")}
-          >
-            <span>{t("তারিখ লেখা নেই")}</span>
-            <strong>{money(report.search.baseUndatedCost)}</strong>
-          </button>
-        ) : null}
-        {report.search.groupAmbiguousEntryIds.length ? (
-          <p role="status">
-            {t(
-              "কিছু লেখায় একাধিক মালের নাম বা ধরন মিলেছে। অস্পষ্ট অংশ এই মালের মোটে ধরা হয়নি।",
-            )}
-          </p>
-        ) : null}
-        {report.search.partiallyAmbiguousEntryIds.length ? (
-          <p role="status">
-            {t(
-              "কিছু ফেরতের মালের পরিচয় মেলেনি। শুধু নিশ্চিত অংশ মোটে ধরা হয়েছে।",
-            )}
-          </p>
-        ) : null}
-        {report.search.ambiguousEntryIds.some(
-          (id) => !report.search.groupAmbiguousEntryIds.includes(id),
-        ) ? (
-          <p role="status">
-            {t(
-              "কিছু হিসাব শুধু অন্য তথ্যে মিলেছে। সেগুলো খরচের মোটে ধরা হয়নি।",
-            )}
-          </p>
-        ) : null}
-        {labourPayments ? (
-          <div className="report-paid-summary">
+          {chartOpen && report.search.monthlyRows.length ? (
+            <div id={chartId} className="report-cost-chart">
+              <SpendingSeriesChart
+                key={JSON.stringify([filters, section, account])}
+                rows={report.search.monthlyRows}
+                selectedMonth={month}
+                onMonthChange={chooseMonth}
+                presentation="embedded"
+                windowed
+              />
+            </div>
+          ) : null}
+          {report.search.baseUndatedEntryCount > 0 ? (
             <button
               type="button"
-              onClick={showPayments}
-              aria-label={t("টাকা দেওয়ার হিসাব দেখি")}
+              className="report-undated"
+              aria-pressed={month === "undated"}
+              onClick={() => chooseMonth(month === "undated" ? "" : "undated")}
             >
-              <span>{t("মোট দিয়েছি")}</span>
-              <strong>{money(labourPayments.netPaid)}</strong>
-              <ArrowRightIcon size={18} aria-hidden="true" />
+              <span>{t("তারিখ লেখা নেই")}</span>
+              <strong>{money(report.search.baseUndatedCost)}</strong>
             </button>
-            {labourPayments.refunds > 0 ? (
-              <small>
-                {t("ফেরত পাওয়া {{amount}} বাদ দিয়ে", {
-                  amount: money(labourPayments.refunds),
-                })}
-              </small>
-            ) : null}
-            {corrections?.paidCorrection ? (
-              <small>
-                {t("সমন্বয়")} · {t("মোট দিয়েছি")}:{" "}
-                {money(corrections.paidCorrection)}
-              </small>
-            ) : null}
-          </div>
-        ) : null}
-      </section>
-      <section className="report-breakdown">
-        <div className="report-breakdown-heading">
-          <h2>{t("কোথায় কত গেল")}</h2>
-          <AppSelect
-            aria-label={t("হিসাব কীভাবে দেখাব")}
-            value={dimension}
-            onChange={(e) => {
-              const next = scopedParams();
-              next.set("by", e.target.value);
-              setParams(next, { replace: true });
-            }}
-          >
-            {visibleDimensions.map((d) => (
-              <option key={d.id} value={d.id}>
-                {t(d.label)}
-              </option>
-            ))}
-          </AppSelect>
-        </div>
-        {breakdown.length ? (
-          <div className="report-breakdown-list">
-            {breakdown.map((row) => (
-              <button key={row.id} onClick={() => chooseBreakdown(row.id)}>
-                <span className="report-breakdown-label">
-                  <strong>{t(row.label)}</strong>
-                  <span className="report-mini-track">
-                    <i
-                      style={{
-                        width: `${Math.max(1, (Math.abs(row.amount) / max) * 100)}%`,
-                      }}
-                    />
-                  </span>
-                </span>
-                <strong>{money(row.amount)}</strong>
-                <ArrowRightIcon size={17} />
+          ) : null}
+          {report.search.groupAmbiguousEntryIds.length ? (
+            <p role="status">
+              {t(
+                "কিছু লেখায় একাধিক মালের নাম বা ধরন মিলেছে। অস্পষ্ট অংশ এই মালের মোটে ধরা হয়নি।",
+              )}
+            </p>
+          ) : null}
+          {report.search.partiallyAmbiguousEntryIds.length ? (
+            <p role="status">
+              {t(
+                "কিছু ফেরতের মালের পরিচয় মেলেনি। শুধু নিশ্চিত অংশ মোটে ধরা হয়েছে।",
+              )}
+            </p>
+          ) : null}
+          {report.search.ambiguousEntryIds.some(
+            (id) => !report.search.groupAmbiguousEntryIds.includes(id),
+          ) ? (
+            <p role="status">
+              {t(
+                "কিছু হিসাব শুধু অন্য তথ্যে মিলেছে। সেগুলো খরচের মোটে ধরা হয়নি।",
+              )}
+            </p>
+          ) : null}
+          {labourPayments ? (
+            <div className="report-paid-summary">
+              <button
+                type="button"
+                onClick={showPayments}
+                aria-label={t("টাকা দেওয়ার হিসাব দেখি")}
+              >
+                <span>{t("মোট দিয়েছি")}</span>
+                <strong>{money(labourPayments.netPaid)}</strong>
+                <ArrowRightIcon size={18} aria-hidden="true" />
               </button>
-            ))}
+              {labourPayments.refunds > 0 ? (
+                <small>
+                  {t("ফেরত পাওয়া {{amount}} বাদ দিয়ে", {
+                    amount: money(labourPayments.refunds),
+                  })}
+                </small>
+              ) : null}
+              {corrections?.paidCorrection ? (
+                <small>
+                  {t("সমন্বয়")} · {t("মোট দিয়েছি")}:{" "}
+                  {money(corrections.paidCorrection)}
+                </small>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+        <section className="report-breakdown">
+          <div className="report-breakdown-heading">
+            <h2>{t("কোথায় কত গেল")}</h2>
+            <AppSelect
+              aria-label={t("হিসাব কীভাবে দেখাব")}
+              value={dimension}
+              onChange={(e) => {
+                const next = scopedParams();
+                next.set("by", e.target.value);
+                setParams(next, { replace: true });
+              }}
+            >
+              {visibleDimensions.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {t(d.label)}
+                </option>
+              ))}
+            </AppSelect>
           </div>
-        ) : (
-          <p className="report-no-results">
-            {t(
-              section === "labour"
-                ? "এই বাছাইয়ে মজুরির বিল নেই।"
-                : "এই বাছাইয়ে কোনো খরচ নেই।",
-            )}
-          </p>
-        )}
-      </section>
+          {breakdown.length ? (
+            <div className="report-breakdown-list">
+              {breakdown.map((row) => (
+                <button key={row.id} onClick={() => chooseBreakdown(row.id)}>
+                  <span className="report-breakdown-label">
+                    <strong>{t(row.label)}</strong>
+                    <span className="report-mini-track">
+                      <i
+                        style={{
+                          width: `${Math.max(1, (Math.abs(row.amount) / max) * 100)}%`,
+                        }}
+                      />
+                    </span>
+                  </span>
+                  <strong>{money(row.amount)}</strong>
+                  <ArrowRightIcon size={17} />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="report-no-results">
+              {t(
+                section === "labour"
+                  ? "এই বাছাইয়ে মজুরির বিল নেই।"
+                  : "এই বাছাইয়ে কোনো খরচ নেই।",
+              )}
+            </p>
+          )}
+        </section>
+      </div>
       <section className="report-history">
         <div className="report-history-heading">
           <h2>{t("এই খরচের লেনদেন")}</h2>

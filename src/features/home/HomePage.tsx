@@ -202,7 +202,7 @@ export function HomePage() {
           onEntry={detail}
         />
       </section>
-      <section>
+      <section className="home-ongoing">
         <div className="section-heading">
           <h2>{t("চলমান খাতা")}</h2>
           <button className="text-button" onClick={() => go("/sectors")}>

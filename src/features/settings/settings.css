@@ -1,7 +1,10 @@
 .settings-page {
   display: grid;
   gap: 22px;
-  max-width: 1050px;
+  width: 100%;
+  max-width: 1160px;
+  min-width: 0;
+  margin-inline: auto;
   padding-bottom: 10px;
 }
 .settings-page-heading {
@@ -95,13 +98,14 @@
   color: var(--accent);
   background: color-mix(in srgb, var(--surface) 70%, transparent);
 }
-.settings-dashboard {
+.settings-page .settings-dashboard {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
   align-items: start;
   gap: 26px;
 }
-.settings-group {
+.settings-group,
+.settings-data-column {
   min-width: 0;
 }
 .settings-group > h2 {

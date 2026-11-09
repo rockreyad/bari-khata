@@ -283,6 +283,18 @@
   padding-inline: 4px;
   border-radius: 8px;
 }
+.home-v3 .section-heading {
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.home-v3 .section-heading > h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.home-v3 .work-notebook-card .notebook-card-total > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .home-overview-search:active,
 .home-overview-report:active,
 .home-overview-due:active,
@@ -338,6 +350,33 @@
   .home-overview-cash-note {
     padding-right: 28px;
     padding-left: 28px;
+  }
+}
+@media (min-width: 1200px) {
+  .home-v3.page-flow {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 28px;
+  }
+  .home-v3 > .home-overview,
+  .home-v3 > .old-record-note {
+    grid-column: 1 / -1;
+  }
+  .home-v3 > .home-history-v3 {
+    grid-column: 1;
+  }
+  .home-v3 > .home-ongoing {
+    grid-column: 2;
+  }
+  .home-v3 .home-ongoing .work-carousel {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    gap: 16px;
+    overflow: visible;
+    scroll-snap-type: none;
+    margin: 0;
+    padding: 0;
   }
 }
 @media (max-width: 760px) {

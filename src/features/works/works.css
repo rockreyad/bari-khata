@@ -82,7 +82,7 @@
 }
 .work-payables li > button {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) 16px;
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -104,8 +104,11 @@
   font-size: 12px;
 }
 .work-payable-amount {
+  min-width: 0;
   color: var(--text);
   font-weight: 600;
+  text-align: end;
+  overflow-wrap: anywhere;
 }
 .work-payables svg {
   color: var(--muted);
@@ -339,6 +342,7 @@
 }
 .works-directory .works-search {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 10px;
   height: 50px;
@@ -422,7 +426,8 @@
   font-variant-numeric: tabular-nums;
   opacity: 0.8;
 }
-.works-directory .works-directory-grid {
+.works-directory .notebook-grid.works-directory-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 15px;
 }
 .works-directory .works-directory-empty {

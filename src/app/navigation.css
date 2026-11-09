@@ -6,7 +6,7 @@
 .app-frame > nav.mobile-bottom-nav {
   display: none;
 }
-@media (max-width: 760px) {
+@media (max-width: 1023px) {
   .app-frame > nav.mobile-bottom-nav {
     position: fixed;
     inset: auto 0 0;

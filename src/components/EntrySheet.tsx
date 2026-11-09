@@ -2030,7 +2030,7 @@ function SupportedEntrySheet({
           disabled={saving || processingFiles || !ready}
         >
           {original ? (
-            <div className="entry-edit-canvas">
+            <div className="entry-edit-canvas transaction-layout">
               <section
                 className="transaction-card entry-edit-main"
                 aria-label={t(kindNames[draft.kind])}
@@ -2049,54 +2049,64 @@ function SupportedEntrySheet({
                 {paymentMethodFields}
                 {linkedPaymentFields}
               </section>
-              <details className="transaction-card entry-edit-context">
-                <summary aria-label={t("নাম ও খাতা")}>
-                  <span className="entry-edit-person-mark" aria-hidden="true">
-                    {editPerson?.kind === "shop" ? (
-                      <Store size={21} />
-                    ) : (
-                      <UserRound size={21} />
-                    )}
-                  </span>
-                  <span className="entry-edit-person-copy">
-                    <strong>{editPersonName}</strong>
-                    {editWorkName ? <small>{editWorkName}</small> : null}
-                  </span>
-                  <span className="entry-edit-change">
-                    {t("বদলাই")}
-                    <Pencil size={15} aria-hidden="true" />
-                  </span>
-                  <span className="entry-edit-context-meta">
-                    {editContext.map((label, index) => (
-                      <span key={index}>{label}</span>
-                    ))}
-                  </span>
-                </summary>
-                <div className="entry-edit-context-fields">{contextFields}</div>
-              </details>
-              <TransactionExtras
-                dateField={dateFields}
-                noteField={noteField}
-                hasReceipts={Boolean(original.receipts.length || files.length)}
-              >
-                {attachmentFields}
-              </TransactionExtras>
-              {discardDraftButton}
+              <div className="transaction-aside">
+                <details className="transaction-card entry-edit-context">
+                  <summary aria-label={t("নাম ও খাতা")}>
+                    <span className="entry-edit-person-mark" aria-hidden="true">
+                      {editPerson?.kind === "shop" ? (
+                        <Store size={21} />
+                      ) : (
+                        <UserRound size={21} />
+                      )}
+                    </span>
+                    <span className="entry-edit-person-copy">
+                      <strong>{editPersonName}</strong>
+                      {editWorkName ? <small>{editWorkName}</small> : null}
+                    </span>
+                    <span className="entry-edit-change">
+                      {t("বদলাই")}
+                      <Pencil size={15} aria-hidden="true" />
+                    </span>
+                    <span className="entry-edit-context-meta">
+                      {editContext.map((label, index) => (
+                        <span key={index}>{label}</span>
+                      ))}
+                    </span>
+                  </summary>
+                  <div className="entry-edit-context-fields">
+                    {contextFields}
+                  </div>
+                </details>
+                <TransactionExtras
+                  dateField={dateFields}
+                  noteField={noteField}
+                  hasReceipts={Boolean(
+                    original.receipts.length || files.length,
+                  )}
+                >
+                  {attachmentFields}
+                </TransactionExtras>
+                {discardDraftButton}
+              </div>
             </div>
           ) : (
-            <>
-              {contextFields}
-              {amountFields}
-              {paymentMethodFields}
-              <TransactionExtras
-                dateField={dateFields}
-                noteField={noteField}
-                hasReceipts={Boolean(files.length)}
-              >
-                {attachmentFields}
-              </TransactionExtras>
-              {discardDraftButton}
-            </>
+            <div className="transaction-layout">
+              <div className="transaction-main">
+                {contextFields}
+                {amountFields}
+              </div>
+              <div className="transaction-aside">
+                {paymentMethodFields}
+                <TransactionExtras
+                  dateField={dateFields}
+                  noteField={noteField}
+                  hasReceipts={Boolean(files.length)}
+                >
+                  {attachmentFields}
+                </TransactionExtras>
+                {discardDraftButton}
+              </div>
+            </div>
           )}
         </fieldset>
       </form>
