@@ -39,7 +39,11 @@ import { planHousePayment } from "../../domain/housePayments";
 import { partyDueItems, partyDuePaymentUrl } from "../home/partyDueItems";
 import { savePreferences } from "../../lib/preferences";
 import { latinDigits } from "../../lib/numerals";
-import { setFinancialWritesAllowed } from "../../lib/localWriteBarrier";
+import {
+  setFinancialWritesAllowed,
+  waitForLocalWrites,
+} from "../../lib/localWriteBarrier";
+import * as receiptPreparation from "../../lib/prepareReceiptFile";
 import { HouseCostForm } from "./HouseCostForm";
 import { HousePaymentForm } from "./HousePaymentForm";
 import { HouseWritePage } from "./HouseWritePage";
@@ -93,6 +97,7 @@ afterEach(async () => {
   setActiveOwner(null);
   localStorage.clear();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   api.beforeSave = null;
   api.publish = null;
   vi.unstubAllGlobals();
@@ -257,6 +262,85 @@ async function cost(
   await user.type(screen.getByLabelText(/^মালের দাম [০-৯0-9]+$/), amount);
 }
 const payPath = "/write/payment?person=party&work=roof&account=materials";
+
+it.each(["purchase", "payment"] as const)(
+  "keeps %s save and back unavailable until the processed receipt is in its draft, then reopens and saves it",
+  async (kind) => {
+    const initial = base();
+    const repo = await setup(initial);
+    const user = userEvent.setup();
+    const path =
+      kind === "purchase" ? "/write/purchase?person=party&work=roof" : payPath;
+    const form =
+      kind === "purchase" ? (
+        <HouseCostForm action="purchase" />
+      ) : (
+        <HousePaymentForm />
+      );
+    let page = mount(initial, form, path);
+    await ready();
+    if (kind === "purchase") await cost(user);
+    else await user.type(screen.getByLabelText("কত দিয়েছেন"), "100");
+    await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
+    let complete!: (file: File) => void;
+    vi.spyOn(receiptPreparation, "prepareReceiptFile").mockImplementationOnce(
+      () =>
+        new Promise<File>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    await user.upload(
+      screen.getByLabelText("ভাউচার বা ছবি"),
+      new File(["sample original photo"], "sample-original.png", {
+        type: "image/png",
+      }),
+    );
+    expect(
+      (screen.getByRole("button", { name: "হিসাব রাখুন" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole("button", { name: "ফিরুন" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    fireEvent.submit(page.container.querySelector("form")!);
+    expect(api.save).not.toHaveBeenCalled();
+    expect((await repo.read())!.ledger.entries).toEqual([]);
+    let writesFinished = false;
+    const pendingWrites = waitForLocalWrites().then(() => {
+      writesFinished = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(writesFinished).toBe(false);
+    const prepared = new File(["sample compact photo"], "sample-original.jpg", {
+      type: "image/jpeg",
+    });
+    await act(async () => {
+      complete(prepared);
+      await pendingWrites;
+    });
+    await ready();
+    expect(screen.getByText("sample-original.jpg")).toBeTruthy();
+    page.unmount();
+    repo.database.close();
+    await repo.database.open();
+    page = mount(initial, form, path);
+    await ready();
+    await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
+    expect(screen.getByText("sample-original.jpg")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+    await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+    const saved = (await repo.read())!.ledger;
+    const receipt = saved.entries.flatMap((entry) => entry.receipts)[0];
+    expect(receipt).toMatchObject({
+      name: "sample-original.jpg",
+      mime: "image/jpeg",
+      size: prepared.size,
+    });
+    expect((await repo.getReceipt(receipt.id))!.blob.size).toBe(prepared.size);
+    expect(summarize(saved).netPaid).toBe(10000);
+  },
+);
 
 it("explains a required update on a valid purchase and keeps the entered draft and ledger intact", async () => {
   const initial = base();

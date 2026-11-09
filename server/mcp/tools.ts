@@ -7,6 +7,7 @@ import {
   type Receipt,
 } from "../../src/domain/model.js";
 import { summarize } from "../../src/domain/ledger.js";
+import { NEW_RECEIPT_MAX_BYTES } from "../../src/lib/attachmentLimits.js";
 import {
   McpCommandSchema,
   McpCommandError,
@@ -60,7 +61,9 @@ const FileTypes = z.enum([
   "image/webp",
   "application/pdf",
 ]);
-const MAX_FILE = 10 * 1024 * 1024,
+// Existing upload sessions must finish with their original bytes and checksum.
+const LEGACY_UPLOAD_MAX_BYTES = 10 * 1024 * 1024,
+  RECEIPT_READ_MAX_BYTES = 25 * 1024 * 1024,
   CHUNK = 256 * 1024;
 function requireScopes(principal: Principal, scopes: string[]) {
   if (scopes.some((scope) => !principal.connection.scopes.includes(scope)))
@@ -413,7 +416,7 @@ export function createLedgerMcpServer(
       policy: principal.connection.policy,
       payment_states: ["unpaid", "partial", "paid"],
       max_batch_commands: 20,
-      receipt_max_bytes: MAX_FILE,
+      receipt_max_bytes: NEW_RECEIPT_MAX_BYTES,
       receipt_mime_types: FileTypes.options,
       receipt_chunk_bytes: CHUNK,
       connection_name: principal.connection.name,
@@ -913,13 +916,13 @@ export function createLedgerMcpServer(
   );
   register(
     "create_receipt_upload",
-    "Create a private receipt upload session using a stable idempotency key. Upload via returned URL or chunk tool; finalize before attaching.",
+    "Create a private receipt upload session using a stable idempotency key. Compress images before creating the session; files must be at most 5 MiB. Upload via returned URL or chunk tool; finalize before attaching.",
     z
       .object({
         idempotency_key: Key,
         name: z.string().trim().min(1).max(300),
         mime: FileTypes,
-        size: z.number().int().min(1).max(MAX_FILE),
+        size: z.number().int().min(1).max(LEGACY_UPLOAD_MAX_BYTES),
         sha256: z
           .string()
           .regex(/^[a-f0-9]{64}$/)
@@ -960,6 +963,8 @@ export function createLedgerMcpServer(
         if (existing.status === "uploaded")
           return { receipt: existing, upload_id: id, status: "ready" };
       }
+      if (!existing && Number(args.size) > NEW_RECEIPT_MAX_BYTES)
+        throw new McpError("file_too_large", 413);
       const asset = await store.call<Asset>("create_upload", {
         tokenHash,
         resource,
@@ -976,7 +981,7 @@ export function createLedgerMcpServer(
         upload_url: uploadUrl,
         upload_id: id,
         chunk_bytes: CHUNK,
-        max_bytes: MAX_FILE,
+        max_bytes: Math.max(NEW_RECEIPT_MAX_BYTES, existing?.size ?? 0),
         expires_in: 7200,
         financial_changes_saved: false,
       };
@@ -1069,7 +1074,8 @@ export function createLedgerMcpServer(
         for (const path of chunks) {
           const part = await store.download(path);
           total += part.length;
-          if (total > MAX_FILE) throw new McpError("file_too_large", 413);
+          if (total > LEGACY_UPLOAD_MAX_BYTES)
+            throw new McpError("file_too_large", 413);
           parts.push(part);
         }
         bytes = Buffer.concat(parts);
@@ -1184,7 +1190,7 @@ export function createLedgerMcpServer(
     z
       .object({
         receipt_id: Key,
-        offset: z.number().int().min(0).max(MAX_FILE).default(0),
+        offset: z.number().int().min(0).max(RECEIPT_READ_MAX_BYTES).default(0),
       })
       .strict(),
     true,

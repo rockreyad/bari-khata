@@ -158,6 +158,12 @@ export function HousePaymentForm() {
   const [error, setError, errorNotice] = useFormError();
   const [invalidField, setInvalidField] = useState("");
   const [saving, setSaving] = useState(false);
+  const [processingFiles, setProcessingFiles] = useState(false);
+  const processingFilesRef = useRef(false);
+  const onProcessingFilesChange = (busy: boolean) => {
+    processingFilesRef.current = busy;
+    setProcessingFiles(busy);
+  };
   const [creatingWork, setCreatingWork] = useState(false);
   const lock = useRef(false);
   const finished = useRef(false);
@@ -405,7 +411,14 @@ export function HousePaymentForm() {
   );
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (lock.current || !ready || failed || finished.current) return;
+    if (
+      lock.current ||
+      processingFilesRef.current ||
+      !ready ||
+      failed ||
+      finished.current
+    )
+      return;
     lock.current = true;
     setSaving(true);
     setError("");
@@ -540,7 +553,7 @@ export function HousePaymentForm() {
     );
   return (
     <EntryFrame
-      focusAmountWhenReady={ready && !failed && !saving}
+      focusAmountWhenReady={ready && !failed && !saving && !processingFiles}
       title={t(
         intent === "advance"
           ? "অগ্রিম দিলাম"
@@ -549,16 +562,17 @@ export function HousePaymentForm() {
             : "টাকা দিলাম",
       )}
       className="house-write-page transaction-page"
-      busy={saving}
-      onClose={() =>
+      busy={saving || processingFiles}
+      onClose={() => {
+        if (processingFilesRef.current) return;
         void flush()
           .then(close)
           .catch(() =>
             setError(
               t("অসমাপ্ত লেখা রাখা যায়নি। বন্ধ করার আগে আবার চেষ্টা করুন।"),
             ),
-          )
-      }
+          );
+      }}
       footer={
         <div className="transaction-submit">
           <div>
@@ -569,7 +583,7 @@ export function HousePaymentForm() {
             className="primary-button"
             form="house-payment-form"
             type="submit"
-            disabled={!ready || failed || saving}
+            disabled={!ready || failed || saving || processingFiles}
           >
             {t(saving ? "রাখছি…" : "হিসাব রাখুন")}
           </button>
@@ -593,7 +607,7 @@ export function HousePaymentForm() {
               : error
           }
         />
-        <fieldset disabled={!ready || failed || saving}>
+        <fieldset disabled={!ready || failed || saving || processingFiles}>
           <div className="transaction-card">
             <label>
               {t("কাকে দিয়েছেন")}
@@ -1066,7 +1080,12 @@ export function HousePaymentForm() {
             <HouseAttachments
               files={draft.files}
               entryId={draft.id}
-              onChange={(files) => change("files", files)}
+              onChange={async (files) => {
+                change("files", files);
+                await flush();
+              }}
+              disabled={!ready || failed || saving}
+              onProcessingChange={onProcessingFilesChange}
               onError={setError}
             />
           </TransactionExtras>

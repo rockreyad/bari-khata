@@ -857,7 +857,7 @@ it("records a new cash payment in one work and one method without split controls
   });
 });
 
-it("rejects a new oversized batch atomically and saves an exact 2 MiB receipt after a draft reopens", async () => {
+it("rejects a new oversized batch atomically and saves an exact 5 MiB receipt after a draft reopens", async () => {
   const original = complex("expense");
   const repo = await repository(original);
   const onClose = vi.fn();
@@ -878,17 +878,17 @@ it("rejects a new oversized batch atomically and saves an exact 2 MiB receipt af
   const input =
     page.container.querySelector<HTMLInputElement>('input[type="file"]')!;
   const accepted = new File(
-    [new Uint8Array(2 * 1024 * 1024)],
+    [new Uint8Array(5 * 1024 * 1024)],
     "sample-at-limit.pdf",
     { type: "application/pdf" },
   );
   const oversized = new File(
-    [new Uint8Array(2 * 1024 * 1024 + 1)],
+    [new Uint8Array(5 * 1024 * 1024 + 1)],
     "sample-too-large.pdf",
     { type: "application/pdf" },
   );
   await user.upload(input, [accepted, oversized]);
-  expect(screen.getByRole("alert").textContent).toContain("২ MB");
+  expect(screen.getByRole("alert").textContent).toContain("৫ MB");
   expect(screen.queryByText(accepted.name)).toBeNull();
   expect(screen.queryByText(oversized.name)).toBeNull();
   expect((await repo.read())!.ledger).toEqual(original);
@@ -923,7 +923,7 @@ it("rejects a new oversized batch atomically and saves an exact 2 MiB receipt af
   ).toBe(false);
 });
 
-it("keeps a legacy 3 MiB draft receipt through editing, another reopen and backup restore", async () => {
+it("keeps a legacy 6 MiB draft receipt through editing, another reopen and backup restore", async () => {
   const original = complex("expense");
   const repo = await repository(original);
   const onClose = vi.fn();
@@ -949,7 +949,7 @@ it("keeps a legacy 3 MiB draft receipt through editing, another reopen and backu
     `entry:${billId}`,
   );
   const legacy = new File(
-    [new Uint8Array(3 * 1024 * 1024).fill(51)],
+    [new Uint8Array(6 * 1024 * 1024).fill(51)],
     "sample-legacy-large.pdf",
     { type: "application/pdf" },
   );

@@ -12,6 +12,7 @@ import type { Asset, Connection, McpStore, Principal } from "./store.js";
 import type { OAuthClient } from "./oauth.js";
 import { LedgerSchema } from "../../src/domain/model.js";
 import { summarize } from "../../src/domain/ledger.js";
+import { NEW_RECEIPT_MAX_BYTES } from "../../src/lib/attachmentLimits.js";
 
 const origin = "https://bari.example";
 const resource = `${origin}/api/mcp`;
@@ -148,6 +149,22 @@ class MemoryStore implements McpStore {
       const asset = this.assets.get(String(data.id));
       if (!asset || asset.ownerId !== principal.connection.ownerId)
         throw new McpError("mcp_not_found", 404);
+      return asset;
+    }
+    if (action === "create_upload") {
+      const principal = this.authenticate(data);
+      const asset: Asset & { connectionId: string } = {
+        id: String(data.id),
+        ownerId: principal.connection.ownerId,
+        connectionId: principal.connection.id,
+        path: String(data.path),
+        name: String(data.name),
+        mime: String(data.mime),
+        size: Number(data.size),
+        sha256: String(data.sha256),
+        status: "pending",
+      };
+      this.assets.set(asset.id, asset);
       return asset;
     }
     if (action === "finalize_upload") {
@@ -367,8 +384,8 @@ class MemoryStore implements McpStore {
     if (token !== userSession) throw new McpError("unauthorized", 401);
     return owner;
   }
-  async uploadUrl(): Promise<string> {
-    throw new Error("Unexpected upload");
+  async uploadUrl(path: string): Promise<string> {
+    return `https://storage.example/upload/${path}`;
   }
   async put(path: string, bytes: Uint8Array): Promise<void> {
     this.storageWrites.push(path);
@@ -985,6 +1002,180 @@ describe("MCP HTTP security and protocol integration", () => {
 });
 
 describe("MCP receipt HTTP security", () => {
+  it("advertises and accepts a 5 MiB upload but rejects a larger new session before creating an asset", async () => {
+    const h = harness();
+    expect(NEW_RECEIPT_MAX_BYTES).toBe(5 * 1024 * 1024);
+    const context = toolValue((await h.tool("get_capabilities")).body);
+    expect(context.receipt_max_bytes).toBe(NEW_RECEIPT_MAX_BYTES);
+    const upload = {
+      idempotency_key: "sample-max-size",
+      name: "sample-voucher.pdf",
+      mime: "application/pdf",
+      size: NEW_RECEIPT_MAX_BYTES,
+    };
+    const accepted = toolValue(
+      (await h.tool("create_receipt_upload", upload)).body,
+    );
+    expect(accepted).toMatchObject({
+      max_bytes: NEW_RECEIPT_MAX_BYTES,
+      receipt: { size: NEW_RECEIPT_MAX_BYTES, status: "pending" },
+    });
+    const rejected = await h.tool("create_receipt_upload", {
+      ...upload,
+      idempotency_key: "sample-oversized",
+      size: NEW_RECEIPT_MAX_BYTES + 1,
+    });
+    expect(rejected.body.result?.isError || rejected.body.error).toBeTruthy();
+    expect(h.store.assets.size).toBe(1);
+    expect(
+      h.store.calls.filter(({ action }) => action === "create_upload"),
+    ).toHaveLength(1);
+    expect(h.store.storageWrites).toEqual([]);
+  });
+
+  it("rejects oversized staged bytes for a new session before freezing an immutable receipt", async () => {
+    const h = harness();
+    const created = toolValue(
+      (
+        await h.tool("create_receipt_upload", {
+          idempotency_key: "sample-overfilled-stage",
+          name: "sample-voucher.pdf",
+          mime: "application/pdf",
+          size: NEW_RECEIPT_MAX_BYTES,
+        })
+      ).body,
+    );
+    const bytes = new Uint8Array(NEW_RECEIPT_MAX_BYTES + 1);
+    bytes.set(new TextEncoder().encode("%PDF-1.7"));
+    h.store.files.set(`${owner}/.mcp-staging/${created.upload_id}`, bytes);
+    const result = toolValue(
+      (
+        await h.tool("finalize_receipt_upload", {
+          upload_id: created.upload_id,
+        })
+      ).body,
+    );
+    expect(result).toMatchObject({ error: "invalid_file" });
+    expect(h.store.storageWrites).toEqual([]);
+    expect(h.store.assets.get(created.upload_id)!.status).toBe("pending");
+    expect(h.store.files.has(created.receipt.path)).toBe(false);
+  });
+
+  it("resumes an exact retry of an older upload session above 5 MiB without replacing its staged bytes", async () => {
+    const h = harness();
+    const args = {
+      idempotency_key: "sample-before-upgrade",
+      name: "sample-old-voucher.pdf",
+      mime: "application/pdf",
+      size: NEW_RECEIPT_MAX_BYTES,
+    };
+    const created = toolValue(
+      (await h.tool("create_receipt_upload", args)).body,
+    );
+    const bytes = new Uint8Array(NEW_RECEIPT_MAX_BYTES + 1);
+    bytes.set(new TextEncoder().encode("%PDF-1.7"));
+    const old = h.store.assets.get(created.upload_id)!;
+    old.size = bytes.length;
+    old.sha256 = sha256(bytes);
+    const staging = `${owner}/.mcp-staging/${old.id}`;
+    h.store.files.set(staging, bytes);
+    const retried = toolValue(
+      (
+        await h.tool("create_receipt_upload", {
+          ...args,
+          size: old.size,
+          sha256: old.sha256,
+        })
+      ).body,
+    );
+    expect(retried).toMatchObject({
+      upload_id: old.id,
+      max_bytes: old.size,
+      receipt: { size: bytes.length, sha256: old.sha256 },
+    });
+    expect(h.store.assets.size).toBe(1);
+    expect(sha256(h.store.files.get(staging)!)).toBe(old.sha256);
+    expect(h.store.storageWrites).toEqual([]);
+    const mismatched = toolValue(
+      (
+        await h.tool("create_receipt_upload", {
+          ...args,
+          size: old.size + 1,
+        })
+      ).body,
+    );
+    expect(mismatched).toMatchObject({ error: "operation_payload_mismatch" });
+    expect(sha256(h.store.files.get(staging)!)).toBe(old.sha256);
+  });
+
+  it.each(["staged", "chunked"])(
+    "finishes a pre-upgrade receipt larger than 5 MiB without changing its bytes: %s",
+    async (mode) => {
+      const h = harness();
+      const { asset } = receiptFixture(h, "pending");
+      const bytes = new Uint8Array(NEW_RECEIPT_MAX_BYTES + 1);
+      bytes.set([137, 80, 78, 71, 13, 10, 26, 10]);
+      bytes[bytes.length - 1] = 42;
+      asset.size = bytes.length;
+      asset.sha256 = sha256(bytes);
+      const staging = `${owner}/.mcp-staging/${asset.id}`;
+      if (mode === "staged") h.store.files.set(staging, bytes);
+      else {
+        h.store.files.delete(staging);
+        const chunkSize = 256 * 1024;
+        const lastIndex = Math.floor((bytes.length - 1) / chunkSize);
+        for (let index = 0; index < lastIndex; index++)
+          h.store.files.set(
+            `${owner}/.mcp-chunks/${asset.id}/${String(index).padStart(3, "0")}`,
+            bytes.slice(index * chunkSize, (index + 1) * chunkSize),
+          );
+        const last = toolValue(
+          (
+            await h.tool("upload_receipt_chunk", {
+              upload_id: asset.id,
+              index: lastIndex,
+              data: Buffer.from(bytes.slice(lastIndex * chunkSize)).toString(
+                "base64",
+              ),
+            })
+          ).body,
+        );
+        expect(last).toMatchObject({ status: "uploaded", bytes: 1 });
+      }
+      const finalized = toolValue(
+        (await h.tool("finalize_receipt_upload", { upload_id: asset.id })).body,
+      );
+      expect(finalized).toMatchObject({
+        status: "ready",
+        receipt: { size: bytes.length, sha256: asset.sha256 },
+      });
+      expect(sha256(h.store.files.get(asset.path)!)).toBe(asset.sha256);
+      expect(h.store.files.has(staging)).toBe(false);
+    },
+  );
+
+  it("keeps historical receipt chunks readable beyond the new upload limit", async () => {
+    const h = harness();
+    const id = "sample-historical-voucher";
+    ordinaryReceiptFixture(h, id);
+    const offset = 10 * 1024 * 1024 + 1;
+    const bytes = new Uint8Array(offset + 3);
+    bytes.set([137, 80, 78, 71, 13, 10, 26, 10]);
+    bytes.set([7, 8, 9], offset);
+    h.store.snapshots.get(owner)!.document!.entries[0].receipts[0].size =
+      bytes.length;
+    h.store.files.set(`${owner}/${id}`, bytes);
+    const chunk = toolValue(
+      (await h.tool("read_receipt_chunk", { receipt_id: id, offset })).body,
+    );
+    expect(chunk).toMatchObject({
+      total_bytes: bytes.length,
+      next_offset: null,
+      sha256: sha256(bytes),
+    });
+    expect(Buffer.from(chunk.data, "base64")).toEqual(Buffer.from([7, 8, 9]));
+  });
+
   it.each([
     "../victim/private-file",
     "..\\victim\\private-file",

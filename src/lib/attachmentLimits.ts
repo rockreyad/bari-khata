@@ -1,1 +1,2 @@
-export const NEW_RECEIPT_MAX_BYTES = 2 * 1024 * 1024;
+export const NEW_RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
+export const RECEIPT_IMAGE_SOURCE_MAX_BYTES = 25 * 1024 * 1024;

@@ -3,7 +3,6 @@ import { EntryFrame } from "./EntryFrame";
 import { numericDraftText, moneyInputValue } from "../lib/numericFields";
 import { NumericInput } from "./ui/NumericInput";
 import { latinDigits } from "../lib/numerals";
-import { NEW_RECEIPT_MAX_BYTES } from "../lib/attachmentLimits";
 import {
   useCallback,
   useEffect,
@@ -325,7 +324,7 @@ function SupportedEntrySheet({
   onClose,
 }: EntrySheetProps) {
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode]);
-  const { t, money, number, date, formatDigits } = useLanguageContext();
+  const { t, money, date, formatDigits } = useLanguageContext();
   const original = ledger.entries.find((entry) => entry.id === editEntryId);
   const draftKey = `entry:${editEntryId ?? `${defaultWorkId ?? "all"}:${defaultPersonId ?? "all"}:${initialKind ?? "purchase"}`}`;
   const [draft, setDraft] = useState<Draft>(() =>
@@ -350,7 +349,6 @@ function SupportedEntrySheet({
   const [saving, setSaving] = useState(false);
   const [processingFiles, setProcessingFiles] = useState(false);
   const lock = useRef(false);
-  const fileInput = useRef<HTMLInputElement>(null);
   const mounted = useRef(false);
   const hydrated = useRef(false);
   const finished = useRef(false);
@@ -983,53 +981,14 @@ function SupportedEntrySheet({
     }
   }
 
-  async function addFiles(selected: FileList | null) {
-    if (!selected) return;
-    const incoming = Array.from(selected);
-    if (
-      files.length + (original?.receipts.length ?? 0) + incoming.length >
-      20
-    ) {
-      setError(
-        t("একটি হিসাবে সর্বোচ্চ {{limit}}টি ছবি বা ভাউচার রাখুন।", {
-          limit: number(20),
-        }),
-      );
-      return;
-    }
-    if (
-      incoming.some(
-        (file) =>
-          file.size > NEW_RECEIPT_MAX_BYTES ||
-          ![
-            "image/jpeg",
-            "image/png",
-            "image/webp",
-            "application/pdf",
-          ].includes(file.type),
-      )
-    ) {
-      setError(
-        t("JPG, PNG, WebP ছবি বা PDF দিন। প্রতিটি ২ MB-এর মধ্যে হতে হবে।"),
-      );
-      return;
-    }
-    setProcessingFiles(true);
-    try {
-      const compacted = await Promise.all(incoming.map(compactPhoto));
-      if (compacted.some((file) => file.size > NEW_RECEIPT_MAX_BYTES))
-        throw new Error(t("ছবিটি অনেক বড়। ছোট ছবি দিয়ে আবার চেষ্টা করুন।"));
-      setFiles((current) => [
-        ...current,
-        ...compacted.map((file) => ({ id: crypto.randomUUID(), file })),
-      ]);
-      setError("");
-    } catch {
-      setError(t("ছবিটি পড়া যায়নি। অন্য ছবি দিয়ে চেষ্টা করুন।"));
-    } finally {
-      setProcessingFiles(false);
-      if (fileInput.current) fileInput.current.value = "";
-    }
+  async function addFiles(selected: File[]) {
+    const next = [
+      ...latest.current.files,
+      ...selected.map((file) => ({ id: crypto.randomUUID(), file })),
+    ];
+    latest.current = { ...latest.current, files: next };
+    setFiles(next);
+    await queueDraft(latest.current);
   }
 
   const useSavedChanges = () => {
@@ -1802,10 +1761,12 @@ function SupportedEntrySheet({
   const attachmentFields = (
     <div className="entry-edit-attachments">
       <ReceiptPicker
-        ref={fileInput}
-        onChange={(event) => {
-          void addFiles(event.target.files);
-        }}
+        existingCount={files.length + (original?.receipts.length ?? 0)}
+        scopeKey={draftKey}
+        onFiles={addFiles}
+        onError={setError}
+        onProcessingChange={setProcessingFiles}
+        disabled={saving || !ready}
       />
       {original?.receipts.length ? (
         <p className="form-hint muted">
@@ -1994,7 +1955,7 @@ function SupportedEntrySheet({
         {!original ? (
           <fieldset
             className="entry-kind-grid"
-            disabled={saving || !ready || Boolean(original)}
+            disabled={saving || processingFiles || !ready || Boolean(original)}
             aria-label={t("কী হিসাব লিখবেন")}
           >
             {(
@@ -2108,37 +2069,4 @@ function personIdForHint(draft: Draft) {
   return draft.personId === "__new__"
     ? draft.newPersonName.trim()
     : draft.personId;
-}
-
-async function compactPhoto(file: File) {
-  if (!file.type.startsWith("image/") || file.size < 180 * 1024) return file;
-  const url = URL.createObjectURL(file);
-  try {
-    const photo = new Image();
-    photo.src = url;
-    await photo.decode();
-    const scale = Math.min(
-      1,
-      1600 / Math.max(photo.naturalWidth, photo.naturalHeight),
-    );
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(photo.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.round(photo.naturalHeight * scale));
-    const context = canvas.getContext("2d");
-    if (!context) return file;
-    context.fillStyle = "#fff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(photo, 0, 0, canvas.width, canvas.height);
-    const compressed = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", 0.84),
-    );
-    return compressed && compressed.size < file.size
-      ? new File([compressed], `${file.name.replace(/\.[^.]+$/, "")}.jpg`, {
-          type: "image/jpeg",
-          lastModified: file.lastModified,
-        })
-      : file;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
 }
