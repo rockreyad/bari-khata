@@ -1,10 +1,7 @@
 export const transactionEnglish: Record<string, string> = {
   "রসিদ আছে": "Receipt attached",
   "ছবি বা PDF · সর্বোচ্চ ৫ MB": "Photo or PDF · up to 5 MB",
-  "ক্যামেরায় ছবি তুলুন": "Take a photo",
   "ফাইল গুছিয়ে নিচ্ছি…": "Preparing files…",
-  "ছবি ছোট করে রাখা হবে। PDF-এর লেখা বদলাবে না।":
-    "Photos are made smaller. PDF contents stay unchanged.",
   "ফাইলটি ৫ MB-এর মধ্যে রাখুন। বড় ছবি হলে ছোট করে আবার দিন।":
     "Keep each file within 5 MB. Try a smaller photo if needed.",
   "JPG, PNG, WebP ছবি বা PDF দিন।": "Use JPG, PNG, WebP photos or PDF files.",

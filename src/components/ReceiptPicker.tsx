@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CameraIcon, PaperclipIcon } from "@phosphor-icons/react";
+import { PaperclipIcon } from "@phosphor-icons/react";
 import { useLanguageContext } from "../context/LanguageProvider";
 import { prepareReceiptFile } from "../lib/prepareReceiptFile";
 import { trackLocalWrite } from "../lib/localWriteBarrier";
@@ -120,25 +120,11 @@ export function ReceiptPicker({
           onChange={(event) => select(event.currentTarget)}
         />
       </label>
-      <label className="receipt-camera">
-        <CameraIcon size={19} aria-hidden="true" />
-        <span>{t("ক্যামেরায় ছবি তুলুন")}</span>
-        <input
-          type="file"
-          aria-label={t("ক্যামেরায় ছবি তুলুন")}
-          accept="image/jpeg,image/png,image/webp"
-          capture="environment"
-          disabled={disabled || processing}
-          onChange={(event) => select(event.currentTarget)}
-        />
-      </label>
-      <p className="receipt-upload-hint" role="status">
-        {t(
-          processing
-            ? "ফাইল গুছিয়ে নিচ্ছি…"
-            : "ছবি ছোট করে রাখা হবে। PDF-এর লেখা বদলাবে না।",
-        )}
-      </p>
+      {processing && (
+        <p className="receipt-upload-status" role="status">
+          {t("ফাইল গুছিয়ে নিচ্ছি…")}
+        </p>
+      )}
     </div>
   );
 }

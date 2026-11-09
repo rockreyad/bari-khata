@@ -41,50 +41,18 @@
   gap: 10px;
   min-width: 0;
 }
-.receipt-picker > svg,
-.receipt-camera > svg {
+.receipt-picker > svg {
   flex: none;
 }
-.receipt-picker > span,
-.receipt-camera > span {
+.receipt-picker > span {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.receipt-camera,
-.transaction-extras .receipt-camera {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface-muted);
-  color: var(--text);
-  font-size: 13px;
-  cursor: pointer;
-  overflow: hidden;
-}
-.receipt-camera input[type="file"] {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-}
-.receipt-camera:focus-within {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-.receipt-picker:has(input:disabled),
-.receipt-camera:has(input:disabled) {
+.receipt-picker:has(input:disabled) {
   cursor: wait;
   opacity: 0.65;
 }
-.receipt-upload-hint {
+.receipt-upload-status {
   margin: 0;
   color: var(--muted);
   font-size: 11px;

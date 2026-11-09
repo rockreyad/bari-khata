@@ -55,7 +55,7 @@ function mount(
   );
 }
 
-it("prepares sequentially and commits only a complete valid batch, including camera selections", async () => {
+it("prepares sequentially and commits only a complete valid batch", async () => {
   const first = deferred<File>();
   const onFiles = vi.fn(),
     onError = vi.fn();
@@ -74,6 +74,7 @@ it("prepares sequentially and commits only a complete valid batch, including cam
   });
   expect(prepare).toHaveBeenCalledTimes(1);
   expect(input.disabled).toBe(true);
+  expect(screen.getByRole("status").textContent).toBe("ফাইল গুছিয়ে নিচ্ছি…");
   await act(async () => {
     first.resolve(photo());
   });
@@ -82,12 +83,8 @@ it("prepares sequentially and commits only a complete valid batch, including cam
   expect(onFiles).not.toHaveBeenCalled();
   expect(onError).toHaveBeenLastCalledWith("JPG, PNG, WebP ছবি বা PDF দিন।");
   expect(input.value).toBe("");
-  const camera = screen.getByLabelText(
-    "ক্যামেরায় ছবি তুলুন",
-  ) as HTMLInputElement;
-  expect(camera.getAttribute("capture")).toBe("environment");
-  expect(camera.multiple).toBe(false);
-  await userEvent.upload(camera, photo());
+  expect(screen.queryByRole("status")).toBeNull();
+  await userEvent.upload(input, photo());
   expect(onFiles).toHaveBeenCalledOnce();
 });
 
