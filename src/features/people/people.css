@@ -1,7 +1,9 @@
 .contacts-page {
   display: grid;
   gap: 22px;
-  max-width: 940px;
+  width: 100%;
+  max-width: 1160px;
+  min-width: 0;
   margin: 0 auto;
 }
 .contacts-search {
@@ -67,8 +69,9 @@
   color: var(--muted);
 }
 .contact-row {
-  display: flex;
-  gap: 13px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 9px 13px;
   align-items: center;
   width: 100%;
   text-align: left;
@@ -124,12 +127,72 @@
 }
 .contact-row-money {
   display: grid;
+  min-width: 0;
   gap: 4px;
   text-align: right;
 }
 .contact-row-money > strong {
   font-weight: 650;
   font-size: 17px;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+.contact-row-statuses {
+  grid-column: 2 / 4;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+.contact-balance-status {
+  --balance-color: var(--state-due);
+  --balance-surface: var(--state-due-soft);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  max-width: 100%;
+  padding: 4px 7px;
+  border-radius: 7px;
+  background: var(--balance-surface);
+  color: var(--balance-color);
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.contact-balance-status::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+  align-self: center;
+}
+.contact-balance-status[data-balance-kind="advance"] {
+  --balance-color: var(--state-advance);
+  --balance-surface: var(--state-advance-soft);
+}
+.contact-balance-status[data-balance-kind="extra"] {
+  --balance-color: var(--state-paid);
+  --balance-surface: var(--state-paid-soft);
+}
+.contact-balance-status[data-balance-kind="credit"] {
+  --balance-color: var(--state-credit);
+  --balance-surface: var(--state-credit-soft);
+}
+.contact-balance-status[data-balance-kind="receivable"] {
+  --balance-color: var(--state-refund);
+  --balance-surface: var(--state-refund-soft);
+}
+.contact-balance-status[data-balance-kind="review"] {
+  --balance-color: var(--state-voided);
+  --balance-surface: var(--state-voided-soft);
+}
+.contact-balance-status[data-balance-kind="record-review"] {
+  --balance-color: var(--muted);
+  --balance-surface: var(--surface-muted);
 }
 .contact-row-money > span {
   display: flex;
@@ -476,7 +539,7 @@
   }
   .contact-row {
     padding: 16px 0;
-    gap: 10px;
+    gap: 8px 10px;
   }
   .contact-mark {
     width: 37px;
@@ -593,6 +656,11 @@
   .statement-buttons .primary-button,
   .statement-buttons .secondary-button {
     font-size: 13px;
+  }
+}
+@media (max-width: 360px) {
+  .contact-row-statuses {
+    grid-column: 1 / -1;
   }
 }
 .contact-detail-page {

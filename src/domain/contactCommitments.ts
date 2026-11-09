@@ -18,6 +18,8 @@ export function contactCommitmentSummary(
     baseExtra: 0,
     correctionEffect: 0,
     balanceAmbiguous: false,
+    netBalanceAmbiguous: false,
+    creditAmbiguous: false,
     reviewEntryIds: [] as string[],
     valid: false,
   };
@@ -90,8 +92,15 @@ export function contactCommitmentSummary(
           amount < -BigInt(Number.MAX_SAFE_INTEGER),
       )
     )
-      return { ...empty, balanceAmbiguous: true, reviewEntryIds };
-    const cashAmbiguous = partyLedger(ledger, personId).creditAmbiguous;
+      return {
+        ...empty,
+        balanceAmbiguous: true,
+        netBalanceAmbiguous: true,
+        reviewEntryIds,
+      };
+    const creditAmbiguous = partyLedger(ledger, personId).creditAmbiguous;
+    const netBalanceAmbiguous =
+      totals.balanceAmbiguous || reviewEntryIds.length > 0;
     return {
       remaining: totals.reconciledPayable,
       extra: totals.reconciledAdvance,
@@ -99,14 +108,21 @@ export function contactCommitmentSummary(
       nonContractRemaining: Number(nonContractRemaining),
       baseExtra: Number(baseExtra),
       correctionEffect: Number(correctionEffect),
-      balanceAmbiguous:
-        totals.balanceAmbiguous || cashAmbiguous || reviewEntryIds.length > 0,
+      // Existing consumers keep the conservative warning; net totals have separate certainty.
+      balanceAmbiguous: netBalanceAmbiguous || creditAmbiguous,
+      netBalanceAmbiguous,
+      creditAmbiguous,
       reviewEntryIds: [
         ...new Set([...reviewEntryIds, ...totals.unresolvedAdjustmentIds]),
       ],
       valid: true,
     };
   } catch {
-    return { ...empty, balanceAmbiguous: true, reviewEntryIds };
+    return {
+      ...empty,
+      balanceAmbiguous: true,
+      netBalanceAmbiguous: true,
+      reviewEntryIds,
+    };
   }
 }

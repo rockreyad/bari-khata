@@ -1,5 +1,7 @@
 .appearance-page {
+  width: 100%;
   max-width: 1240px;
+  min-width: 0;
   margin: 0 auto;
   padding-bottom: 36px;
 }
@@ -76,5 +78,10 @@
   }
   .appearance-page .settings-palette-description {
     min-height: 42px;
+  }
+}
+@media (min-width: 768px) {
+  .appearance-page .settings-palette-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
   }
 }

@@ -13,15 +13,80 @@ import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { useComposedSearch } from "../../lib/useComposedSearch";
 import { AppMenu } from "../../components/ui/AppMenu";
-import { contactSummary, personKind } from "../../domain/contacts";
-import { contactCommitmentSummary } from "../../domain/contactCommitments";
+import { personKind } from "../../domain/contacts";
 import { matchesContact } from "./people";
+import { peopleBalances } from "./peopleBalances";
 import { PersonMark, kindLabels } from "./ContactIdentity";
 import { PeopleRoleTabs } from "./PeopleRoleTabs";
 import { peopleRoles, roleKey, visibleRoleTabs } from "./peopleRoles";
 import { usePeopleRoleTabs } from "./usePeopleRoleTabs";
 import { contactRoles, contactPresets } from "./contactPresets";
 import "./people.css";
+
+function ContactBalances({
+  balance,
+}: {
+  balance: ReturnType<typeof peopleBalances>;
+}) {
+  const { t, money } = useLanguageContext();
+  const recordReviewId = useId();
+  const recordReviewDescription = t(
+    "কিছু বিল বা মালের ফেরতের তথ্য যাচাই বাকি। এর মানে টাকা বকেয়া আছে, এমন নয়।",
+  );
+  const states = [
+    {
+      kind: "due",
+      amount: balance.valid ? balance.remaining : 0,
+      label: balance.needsReview
+        ? "জানা বাকি {{amount}}"
+        : "আরও দিতে হবে {{amount}}",
+    },
+    { kind: "advance", amount: balance.advance, label: "অগ্রিম {{amount}}" },
+    { kind: "extra", amount: balance.extra, label: "বেশি দিয়েছি {{amount}}" },
+    { kind: "credit", amount: balance.credit, label: "আমার জমা {{amount}}" },
+    {
+      kind: "receivable",
+      amount: balance.receivable,
+      label: "ফেরত পাব {{amount}}",
+    },
+  ].filter(({ amount }) => amount > 0);
+  if (!states.length && !balance.needsReview && !balance.recordReviewCount)
+    return null;
+  return (
+    <span className="contact-row-statuses">
+      {states.map(({ kind, amount, label }) => (
+        <span
+          className="contact-balance-status"
+          data-balance-kind={kind}
+          key={kind}
+        >
+          {t(label, { amount: money(amount) })}
+        </span>
+      ))}
+      {balance.needsReview ? (
+        <span className="contact-balance-status" data-balance-kind="review">
+          {t("যাচাই বাকি")}
+        </span>
+      ) : null}
+      {balance.recordReviewCount > 0 ? (
+        <>
+          <span
+            className="contact-balance-status"
+            data-balance-kind="record-review"
+            title={recordReviewDescription}
+            aria-describedby={recordReviewId}
+          >
+            {t("বিলের তথ্য যাচাই বাকি")}
+          </span>
+          <span className="visually-hidden" id={recordReviewId}>
+            {recordReviewDescription}
+          </span>
+        </>
+      ) : null}
+    </span>
+  );
+}
+
 export function PeoplePage() {
   const { ledger, entity, go, mode } = useNotebook();
   const { t, money, formatDigits } = useLanguageContext();
@@ -37,7 +102,9 @@ export function PeoplePage() {
       ? (rawKind as keyof typeof kindLabels)
       : "all";
   const rawStatus = params.get("status") ?? "all";
-  const status = ["due", "advance"].includes(rawStatus) ? rawStatus : "all";
+  const status = ["due", "advance", "receivable"].includes(rawStatus)
+    ? rawStatus
+    : "all";
   const roles = useMemo(() => peopleRoles(ledger.people), [ledger.people]);
   const preferences = usePeopleRoleTabs(mode);
   const visibleTabs = visibleRoleTabs(roles, preferences.keys);
@@ -51,29 +118,12 @@ export function PeoplePage() {
     () =>
       ledger.people
         .filter((person) => !person.archivedAt)
-        .map((person) => {
-          const summary = contactSummary(ledger, person);
-          const commitments = ledger.contracts.some(
-            (contract) => contract.personId === person.id,
-          )
-            ? contactCommitmentSummary(ledger, person.id)
-            : null;
-          return {
-            person,
-            summary,
-            remaining: commitments?.remaining ?? summary.reconciledPayable,
-            extra: commitments?.extra ?? summary.reconciledAdvance,
-            valid: commitments?.valid ?? !summary.balanceAmbiguous,
-            needsReview: commitments
-              ? !commitments.valid || commitments.balanceAmbiguous
-              : summary.balanceAmbiguous,
-          };
-        }),
+        .map((person) => ({ person, ...peopleBalances(ledger, person) })),
     [ledger],
   );
   const shown = rows
     .filter(
-      ({ person, remaining, extra, valid }) =>
+      ({ person, remaining, advance, extra, credit, receivable, valid }) =>
         matchesContact(person, query) &&
         (kind === "all" || personKind(person) === kind) &&
         (!activeType ||
@@ -82,7 +132,11 @@ export function PeoplePage() {
             : activeType === "custom")) &&
         (!activeRole || roleKey(person.role) === activeRole) &&
         (status === "all" ||
-          (status === "due" ? valid && remaining > 0 : valid && extra > 0)),
+          (status === "due"
+            ? valid && remaining > 0
+            : status === "receivable"
+              ? receivable > 0
+              : advance > 0 || extra > 0 || credit > 0)),
     )
     .sort(
       (a, b) =>
@@ -156,7 +210,7 @@ export function PeoplePage() {
       <header className="page-heading">
         <div>
           <h1>{t("কর্মী")}</h1>
-          <p>{t("কাকে কত দিয়েছি, এক নজরে।")}</p>
+          <p>{t("দেওয়া টাকা, বাকি ও জমা এক নজরে।")}</p>
         </div>
         <button className="primary-button" onClick={() => entity("person")}>
           <PlusIcon size={19} />
@@ -186,7 +240,7 @@ export function PeoplePage() {
           </button>
         ) : null}
         <AppMenu
-          label={t("বাকি অনুযায়ী দেখুন")}
+          label={t("টাকার অবস্থা অনুযায়ী দেখুন")}
           trigger={
             <button
               className={`icon-button ${status !== "all" ? "is-filtered" : ""}`}
@@ -202,8 +256,12 @@ export function PeoplePage() {
               onSelect: () => filter("status", "due"),
             },
             {
-              label: t("আমার জমা"),
+              label: t("অগ্রিম বা জমা আছে"),
               onSelect: () => filter("status", "advance"),
+            },
+            {
+              label: t("ফেরত পাব"),
+              onSelect: () => filter("status", "receivable"),
             },
           ]}
         />
@@ -239,7 +297,7 @@ export function PeoplePage() {
             <span>{t("নাম")}</span>
             <span>{t("টাকা দিয়েছি")}</span>
           </div>
-          {shown.map(({ person, summary, remaining, valid, needsReview }) => (
+          {shown.map(({ person, summary, ...balance }) => (
             <button
               className="contact-row"
               key={person.id}
@@ -267,21 +325,9 @@ export function PeoplePage() {
                     </span>
                   )}
                 </strong>
-                {valid && remaining > 0 ? (
-                  <small className="contact-due">
-                    {t(
-                      needsReview ? "জানা বাকি {{amount}}" : "বাকি {{amount}}",
-                      {
-                        amount: money(remaining),
-                      },
-                    )}
-                  </small>
-                ) : null}
-                {needsReview ? (
-                  <small className="contact-due">{t("যাচাই বাকি")}</small>
-                ) : null}
               </span>
               <ArrowRightIcon className="contact-row-chevron" size={16} />
+              <ContactBalances balance={{ summary, ...balance }} />
             </button>
           ))}
         </section>

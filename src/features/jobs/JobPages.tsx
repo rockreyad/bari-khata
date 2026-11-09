@@ -673,110 +673,121 @@ export function JobPage() {
           </div>
         </form>
       ) : null}
-      <ContractCard
-        ledger={ledger}
-        contract={job}
-        showHeading={false}
-        showHistory={false}
-      />
-      <button
-        type="button"
-        className="primary-button job-pay"
-        disabled={removal.archived || Boolean(worker?.archivedAt)}
-        onClick={() =>
-          add({
-            kind: "payment",
-            account: "labour",
-            personId: job.personId,
-            workId: job.workId ?? undefined,
-            contractId: job.id,
-          })
-        }
-      >
-        <WalletIcon size={21} weight="duotone" />
-        {t("টাকা দিই")}
-      </button>
-      <div
-        className="job-detail-tabs"
-        role="tablist"
-        aria-label={t("কাজের বিস্তারিত")}
-        onKeyDown={(event) => {
-          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
-            return;
-          event.preventDefault();
-          const next =
-            event.key === "Home"
-              ? "transactions"
-              : event.key === "End"
-                ? "history"
-                : tab === "transactions"
-                  ? "history"
-                  : "transactions";
-          changeTab(next);
-          (next === "history" ? historyTab : transactionsTab).current?.focus();
-        }}
-      >
-        <button
-          id="job-transactions-tab"
-          ref={transactionsTab}
-          tabIndex={tab === "transactions" ? 0 : -1}
-          type="button"
-          role="tab"
-          aria-selected={tab === "transactions"}
-          aria-controls="job-detail-panel"
-          onClick={() => changeTab("transactions")}
-        >
-          {t("লেনদেন")}
-        </button>
-        <button
-          id="job-history-tab"
-          ref={historyTab}
-          tabIndex={tab === "history" ? 0 : -1}
-          type="button"
-          role="tab"
-          aria-selected={tab === "history"}
-          aria-controls="job-detail-panel"
-          onClick={() => changeTab("history")}
-        >
-          {t("পরিবর্তন")}
-        </button>
-      </div>
-      <section
-        id="job-detail-panel"
-        className="job-detail-panel"
-        role="tabpanel"
-        aria-labelledby={
-          tab === "history" ? "job-history-tab" : "job-transactions-tab"
-        }
-      >
-        {tab === "history" ? (
-          <ContractHistory
-            key={job.id}
+      <div className="job-detail-layout">
+        <div className="job-detail-summary">
+          <ContractCard
             ledger={ledger}
             contract={job}
-            alwaysOpen
+            showHeading={false}
+            showHistory={false}
           />
-        ) : (
-          <>
-            <EntryList
-              ledger={ledger}
-              entries={entries.slice(0, count)}
-              onEntry={detail}
-              showKind
-              grouped
-            />
-            <LoadMore
-              hasMore={count < entries.length}
-              onLoadMore={() => setWindow({ jobId, count: count + 12 })}
-            />
-            {!entries.length ? (
-              <p className="job-first-payment">
-                {t("টাকা দিলে এই কাজের হিসাব এখানেই পাবেন।")}
-              </p>
-            ) : null}
-          </>
-        )}
-      </section>
+          <button
+            type="button"
+            className="primary-button job-pay"
+            disabled={removal.archived || Boolean(worker?.archivedAt)}
+            onClick={() =>
+              add({
+                kind: "payment",
+                account: "labour",
+                personId: job.personId,
+                workId: job.workId ?? undefined,
+                contractId: job.id,
+              })
+            }
+          >
+            <WalletIcon size={21} weight="duotone" />
+            {t("টাকা দিই")}
+          </button>
+        </div>
+        <div className="job-detail-content">
+          <div
+            className="job-detail-tabs"
+            role="tablist"
+            aria-label={t("কাজের বিস্তারিত")}
+            onKeyDown={(event) => {
+              if (
+                !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+              )
+                return;
+              event.preventDefault();
+              const next =
+                event.key === "Home"
+                  ? "transactions"
+                  : event.key === "End"
+                    ? "history"
+                    : tab === "transactions"
+                      ? "history"
+                      : "transactions";
+              changeTab(next);
+              (next === "history"
+                ? historyTab
+                : transactionsTab
+              ).current?.focus();
+            }}
+          >
+            <button
+              id="job-transactions-tab"
+              ref={transactionsTab}
+              tabIndex={tab === "transactions" ? 0 : -1}
+              type="button"
+              role="tab"
+              aria-selected={tab === "transactions"}
+              aria-controls="job-detail-panel"
+              onClick={() => changeTab("transactions")}
+            >
+              {t("লেনদেন")}
+            </button>
+            <button
+              id="job-history-tab"
+              ref={historyTab}
+              tabIndex={tab === "history" ? 0 : -1}
+              type="button"
+              role="tab"
+              aria-selected={tab === "history"}
+              aria-controls="job-detail-panel"
+              onClick={() => changeTab("history")}
+            >
+              {t("পরিবর্তন")}
+            </button>
+          </div>
+          <section
+            id="job-detail-panel"
+            className="job-detail-panel"
+            role="tabpanel"
+            aria-labelledby={
+              tab === "history" ? "job-history-tab" : "job-transactions-tab"
+            }
+          >
+            {tab === "history" ? (
+              <ContractHistory
+                key={job.id}
+                ledger={ledger}
+                contract={job}
+                alwaysOpen
+              />
+            ) : (
+              <>
+                <EntryList
+                  ledger={ledger}
+                  entries={entries.slice(0, count)}
+                  onEntry={detail}
+                  showKind
+                  grouped
+                />
+                <LoadMore
+                  hasMore={count < entries.length}
+                  onLoadMore={() => setWindow({ jobId, count: count + 12 })}
+                />
+                {!entries.length ? (
+                  <p className="job-first-payment">
+                    {t("টাকা দিলে এই কাজের হিসাব এখানেই পাবেন।")}
+                  </p>
+                ) : null}
+              </>
+            )}
+          </section>
+        </div>
+      </div>
     </div>
   );
 }

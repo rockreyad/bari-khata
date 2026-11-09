@@ -1,7 +1,16 @@
 export const peopleEnglish: Record<string, string> = {
+  "দেওয়া টাকা, বাকি ও জমা এক নজরে।": "Payments, dues and credits at a glance.",
+  "টাকার অবস্থা অনুযায়ী দেখুন": "View by money status",
+  "অগ্রিম বা জমা আছে": "Advance or credit available",
+  "বেশি দিয়েছি {{amount}}": "Overpaid {{amount}}",
+  "ফেরত পাব {{amount}}": "To recover {{amount}}",
   "আর দিতে হবে": "Still to pay",
+  "আরও দিতে হবে {{amount}}": "Still to pay {{amount}}",
   "মোটের সংশোধন": "Total adjustment",
   "জানা বাকি {{amount}}": "Known remaining {{amount}}",
+  "বিলের তথ্য যাচাই বাকি": "Bill details to check",
+  "কিছু বিল বা মালের ফেরতের তথ্য যাচাই বাকি। এর মানে টাকা বকেয়া আছে, এমন নয়।":
+    "Some bill or material return details still need checking. This does not mean money is owed.",
   "ধরন: {{kind}}": "Type: {{kind}}",
   "পরিচয়: {{role}}": "Description: {{role}}",
   "ধরনের বাছাই মুছুন": "Clear type filter",

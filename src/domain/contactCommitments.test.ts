@@ -5,6 +5,7 @@ import { contactCommitmentSummary } from "./contactCommitments";
 import { contactSummary } from "./contacts";
 import { contractSummary, summarize } from "./ledger";
 import { LedgerSchema } from "./model";
+import { partyLedger } from "./partyLedger";
 
 const cash = (
   id: string,
@@ -30,6 +31,12 @@ const bill = (id: string, amount: number, extra = {}) => ({
   lines: [{ id: `${id}-line`, workId: "roof", amount, costType: "labour" }],
   ...extra,
 });
+const materialBill = (id: string, amount: number, extra = {}) =>
+  bill(id, amount, {
+    account: "materials",
+    lines: [{ id: `${id}-line`, workId: "roof", amount, costType: "material" }],
+    ...extra,
+  });
 function fixture() {
   return LedgerSchema.parse({
     works: [
@@ -92,6 +99,8 @@ describe("contact remaining promises as a separate presentation", () => {
       baseExtra: 0,
       correctionEffect: 0,
       balanceAmbiguous: false,
+      netBalanceAmbiguous: false,
+      creditAmbiguous: false,
       reviewEntryIds: [],
       valid: true,
     });
@@ -256,6 +265,7 @@ describe("contact remaining promises as a separate presentation", () => {
     expect(contactCommitmentSummary(ledger, "worker")).toMatchObject({
       remaining: 6290000,
       balanceAmbiguous: true,
+      netBalanceAmbiguous: true,
       reviewEntryIds: ["old-unknown"],
       valid: true,
     });
@@ -289,6 +299,7 @@ describe("contact remaining promises as a separate presentation", () => {
     expect(contactCommitmentSummary(ledger, "worker")).toMatchObject({
       remaining: 6290000,
       balanceAmbiguous: true,
+      netBalanceAmbiguous: true,
       reviewEntryIds: ["old-discount"],
     });
     expect(jobBalances(ledger).get("sand-job")?.commitmentValid).toBe(false);
@@ -325,6 +336,130 @@ describe("contact remaining promises as a separate presentation", () => {
     expect(
       contactCommitmentSummary(ledger, "worker", { workId: "missing" }).valid,
     ).toBe(false);
+  });
+
+  it.each([
+    { refund: 3000, remaining: 0, extra: 0 },
+    { refund: 2000, remaining: 0, extra: 1000 },
+    { refund: 4000, remaining: 1000, extra: 0 },
+  ])(
+    "keeps a shop's recorded balance known after a legacy refund of $refund",
+    ({ refund, remaining, extra }) => {
+      const ledger = LedgerSchema.parse({
+        works: [{ id: "roof", name: "নমুনা খাতা" }],
+        people: [{ id: "worker", name: "নমুনা দোকান", kind: "shop" }],
+        entries: [
+          materialBill("purchase", 10000),
+          cash("paid", null, "roof", 10000, {
+            account: "materials",
+            paymentContext: "settlement",
+          }),
+          materialBill("returned-goods", 3000, {
+            kind: "expense_credit",
+            relatedEntryId: "purchase",
+          }),
+          cash("legacy-refund", null, "roof", refund, {
+            kind: "refund",
+            account: "materials",
+          }),
+        ],
+      });
+      const before = structuredClone(ledger);
+      const cashBefore = partyLedger(ledger, "worker");
+      expect(cashBefore).toMatchObject({
+        creditAmbiguous: true,
+        unclassifiedRefunds: refund,
+      });
+      expect(contactCommitmentSummary(ledger, "worker")).toMatchObject({
+        remaining,
+        extra,
+        balanceAmbiguous: true,
+        netBalanceAmbiguous: false,
+        creditAmbiguous: true,
+        reviewEntryIds: [],
+        valid: true,
+      });
+      expect(partyLedger(ledger, "worker")).toEqual(cashBefore);
+      expect(ledger).toEqual(before);
+    },
+  );
+
+  it("keeps a corrected net balance known without inventing a source for refunded cash", () => {
+    const original = LedgerSchema.parse({
+      works: [{ id: "roof", name: "নমুনা খাতা" }],
+      people: [{ id: "worker", name: "নমুনা দোকান", kind: "shop" }],
+      entries: [
+        materialBill("purchase", 10000),
+        cash("paid", null, "roof", 10000, {
+          account: "materials",
+          paymentContext: "settlement",
+        }),
+      ],
+    });
+    const corrected = appendBalanceAdjustment(original, {
+      target: "person",
+      basis: "paid",
+      personId: "worker",
+      account: "materials",
+      expectedBefore: 10000,
+      after: 15000,
+      reason: "নমুনা মোট মিলিয়েছি",
+    });
+    const ledger = LedgerSchema.parse({
+      ...corrected,
+      entries: [
+        ...corrected.entries,
+        cash("legacy-refund", null, "roof", 2000, {
+          kind: "refund",
+          account: "materials",
+        }),
+      ],
+    });
+    const before = structuredClone(ledger);
+    expect(
+      contactCommitmentSummary(ledger, "worker", { account: "materials" }),
+    ).toMatchObject({
+      remaining: 0,
+      extra: 3000,
+      balanceAmbiguous: true,
+      netBalanceAmbiguous: false,
+      creditAmbiguous: true,
+      valid: true,
+    });
+    expect(ledger).toEqual(before);
+  });
+
+  it("retains cash classification ambiguity when a refund could use advance or refundable deposit", () => {
+    const ledger = LedgerSchema.parse({
+      works: [{ id: "roof", name: "নমুনা খাতা" }],
+      people: [{ id: "worker", name: "নমুনা কর্মী", kind: "worker" }],
+      entries: [
+        cash("advance", null, "roof", 5000, {
+          paymentContext: "advance",
+        }),
+        cash("deposit", null, "roof", 5000, {
+          paymentContext: "receivable",
+        }),
+        cash("legacy-refund", null, "roof", 2000, { kind: "refund" }),
+      ],
+    });
+    const before = structuredClone(ledger);
+    expect(contactCommitmentSummary(ledger, "worker")).toMatchObject({
+      remaining: 0,
+      extra: 3000,
+      balanceAmbiguous: true,
+      netBalanceAmbiguous: false,
+      creditAmbiguous: true,
+      valid: true,
+    });
+    expect(partyLedger(ledger, "worker")).toMatchObject({
+      advance: 3000,
+      receivable: 3000,
+      ambiguousCredit: 2000,
+      unclassifiedRefunds: 2000,
+      creditAmbiguous: true,
+    });
+    expect(ledger).toEqual(before);
   });
 
   it("keeps allocation reference evidence when an account filter separates legacy transport cash and bills", () => {

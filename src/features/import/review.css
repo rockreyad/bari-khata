@@ -1,8 +1,15 @@
 .review-page {
+  min-width: 0;
   max-width: 1080px;
   margin: auto;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 22px;
+}
+.review-page > *,
+.review-page-heading > div,
+.review-summary > div {
+  min-width: 0;
 }
 .review-page-heading {
   display: flex;
@@ -13,6 +20,7 @@
   margin: 3px 0 0;
   font-size: clamp(23px, 3vw, 32px);
   letter-spacing: -0.7px;
+  overflow-wrap: anywhere;
 }
 .review-page-heading p {
   margin: 0;
@@ -49,6 +57,7 @@
   margin-top: 9px;
   font-weight: 700;
   letter-spacing: -0.8px;
+  overflow-wrap: anywhere;
 }
 .review-summary p {
   font-size: 12px;
@@ -334,6 +343,7 @@
     border-top: 1px solid var(--line);
     padding: 14px 0 0;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 12px;
   }
@@ -356,8 +366,10 @@
   }
   .review-tabs button {
     flex: 1;
+    min-width: 0;
     padding: 8px;
-    white-space: nowrap;
+    white-space: normal;
+    line-height: 1.5;
   }
   .review-information {
     padding: 14px;

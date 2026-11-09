@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
 import {
+  useContext,
   useState,
   type InputHTMLAttributes,
   type SelectHTMLAttributes,
@@ -17,7 +18,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router";
 import {
   NotebookContext,
   type NotebookContextValue,
@@ -38,9 +39,15 @@ import { planHousePayment } from "../../domain/housePayments";
 import { partyDueItems, partyDuePaymentUrl } from "../home/partyDueItems";
 import { savePreferences } from "../../lib/preferences";
 import { latinDigits } from "../../lib/numerals";
-import { setFinancialWritesAllowed } from "../../lib/localWriteBarrier";
+import {
+  setFinancialWritesAllowed,
+  waitForLocalWrites,
+} from "../../lib/localWriteBarrier";
+import * as receiptPreparation from "../../lib/prepareReceiptFile";
 import { HouseCostForm } from "./HouseCostForm";
 import { HousePaymentForm } from "./HousePaymentForm";
+import { HouseWritePage } from "./HouseWritePage";
+import { PersonPage } from "../people/PersonPage";
 
 const nativeFiles = await vi.hoisted(async () => {
   const { Blob, File } = await import("node:buffer");
@@ -90,6 +97,7 @@ afterEach(async () => {
   setActiveOwner(null);
   localStorage.clear();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   api.beforeSave = null;
   api.publish = null;
   vi.unstubAllGlobals();
@@ -213,6 +221,30 @@ function mount(
     </MemoryRouter>,
   );
 }
+function PersonPaymentFlow() {
+  const notebook = useContext(NotebookContext)!;
+  const navigate = useNavigate();
+  return (
+    <NotebookContext.Provider
+      value={{
+        ...notebook,
+        go: (path) => {
+          api.go(path);
+          navigate(path);
+        },
+        close: () => {
+          api.close();
+          navigate("/parties/worker");
+        },
+      }}
+    >
+      <Routes>
+        <Route path="/parties/:personId" element={<PersonPage />} />
+        <Route path="/write/:action" element={<HouseWritePage />} />
+      </Routes>
+    </NotebookContext.Provider>
+  );
+}
 async function ready() {
   await waitFor(() =>
     expect(
@@ -230,6 +262,85 @@ async function cost(
   await user.type(screen.getByLabelText(/^মালের দাম [০-৯0-9]+$/), amount);
 }
 const payPath = "/write/payment?person=party&work=roof&account=materials";
+
+it.each(["purchase", "payment"] as const)(
+  "keeps %s save and back unavailable until the processed receipt is in its draft, then reopens and saves it",
+  async (kind) => {
+    const initial = base();
+    const repo = await setup(initial);
+    const user = userEvent.setup();
+    const path =
+      kind === "purchase" ? "/write/purchase?person=party&work=roof" : payPath;
+    const form =
+      kind === "purchase" ? (
+        <HouseCostForm action="purchase" />
+      ) : (
+        <HousePaymentForm />
+      );
+    let page = mount(initial, form, path);
+    await ready();
+    if (kind === "purchase") await cost(user);
+    else await user.type(screen.getByLabelText("কত দিয়েছেন"), "100");
+    await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
+    let complete!: (file: File) => void;
+    vi.spyOn(receiptPreparation, "prepareReceiptFile").mockImplementationOnce(
+      () =>
+        new Promise<File>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    await user.upload(
+      screen.getByLabelText("ভাউচার বা ছবি"),
+      new File(["sample original photo"], "sample-original.png", {
+        type: "image/png",
+      }),
+    );
+    expect(
+      (screen.getByRole("button", { name: "হিসাব রাখুন" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole("button", { name: "ফিরুন" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    fireEvent.submit(page.container.querySelector("form")!);
+    expect(api.save).not.toHaveBeenCalled();
+    expect((await repo.read())!.ledger.entries).toEqual([]);
+    let writesFinished = false;
+    const pendingWrites = waitForLocalWrites().then(() => {
+      writesFinished = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(writesFinished).toBe(false);
+    const prepared = new File(["sample compact photo"], "sample-original.jpg", {
+      type: "image/jpeg",
+    });
+    await act(async () => {
+      complete(prepared);
+      await pendingWrites;
+    });
+    await ready();
+    expect(screen.getByText("sample-original.jpg")).toBeTruthy();
+    page.unmount();
+    repo.database.close();
+    await repo.database.open();
+    page = mount(initial, form, path);
+    await ready();
+    await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
+    expect(screen.getByText("sample-original.jpg")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+    await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+    const saved = (await repo.read())!.ledger;
+    const receipt = saved.entries.flatMap((entry) => entry.receipts)[0];
+    expect(receipt).toMatchObject({
+      name: "sample-original.jpg",
+      mime: "image/jpeg",
+      size: prepared.size,
+    });
+    expect((await repo.getReceipt(receipt.id))!.blob.size).toBe(prepared.size);
+    expect(summarize(saved).netPaid).toBe(10000);
+  },
+);
 
 it("explains a required update on a valid purchase and keeps the entered draft and ledger intact", async () => {
   const initial = base();
@@ -456,6 +567,134 @@ it("reopens an old settlement cash draft on the ordinary route and saves its rec
   expect(api.save).toHaveBeenCalledOnce();
   expect(api.go).not.toHaveBeenCalled();
 });
+
+it.each([false, true])(
+  "pays a worker contract from the profile without creating a bill, with an existing bill: %s",
+  async (hasBill) => {
+    const initial = LedgerSchema.parse({
+      ...base(),
+      people: [
+        {
+          id: "worker",
+          name: "নমুনা মিস্ত্রি",
+          kind: "worker",
+          contactType: "craftsperson",
+          roles: ["craftsperson"],
+          workIds: ["roof"],
+        },
+      ],
+      contracts: [
+        {
+          id: "job",
+          title: "নমুনা মোট চুক্তি",
+          personId: "worker",
+          workId: "roof",
+          total: 600000,
+          status: "ongoing",
+        },
+      ],
+      entries: hasBill
+        ? [
+            {
+              id: "bill",
+              kind: "expense",
+              personId: "worker",
+              account: "labour",
+              contractId: "job",
+              lines: [
+                {
+                  id: "bill-line",
+                  workId: "roof",
+                  label: "নমুনা কাজের বিল",
+                  costType: "labour",
+                  amount: 100000,
+                },
+              ],
+            },
+          ]
+        : [],
+    });
+    const repo = await setup(initial);
+    const user = userEvent.setup();
+    let page = mount(initial, <PersonPaymentFlow />, "/parties/worker");
+    await user.click(screen.getByRole("button", { name: "টাকা দিই" }));
+    await ready();
+    expect(screen.getByRole("heading", { name: "টাকা দিলাম" })).toBeTruthy();
+    expect(screen.queryByLabelText("বিলের মোট টাকা")).toBeNull();
+    await user.click(screen.getByText("খাতা ও কাজ"));
+    await user.selectOptions(screen.getByLabelText("কোন কাজের জন্য"), "job");
+    await user.type(screen.getByLabelText("কত দিয়েছেন"), "900");
+    await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
+    await user.type(
+      screen.getByLabelText("মনে রাখার কথা"),
+      "নমুনা চুক্তির টাকা",
+    );
+    await user.click(screen.getByRole("button", { name: "ফিরুন" }));
+    await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+    page.unmount();
+    repo.database.close();
+    await repo.database.open();
+    page = mount(
+      (await repo.read())!.ledger,
+      <PersonPaymentFlow />,
+      "/parties/worker",
+    );
+    await user.click(screen.getByRole("button", { name: "টাকা দিই" }));
+    await ready();
+    expect(
+      latinDigits(
+        (screen.getByLabelText("কত দিয়েছেন") as HTMLInputElement).value,
+      ),
+    ).toBe("900");
+    expect(
+      (screen.getByLabelText("কোন কাজের জন্য") as HTMLSelectElement).value,
+    ).toBe("job");
+    expect(
+      (screen.getByLabelText("মনে রাখার কথা") as HTMLTextAreaElement).value,
+    ).toBe("নমুনা চুক্তির টাকা");
+    await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
+    await waitFor(() => expect(api.close).toHaveBeenCalledTimes(2));
+    page.unmount();
+    repo.database.close();
+    await repo.database.open();
+    const saved = (await repo.read())!.ledger;
+    expect(saved.entries.filter((entry) => entry.kind === "expense")).toEqual(
+      initial.entries,
+    );
+    expect(
+      saved.entries.filter((entry) => entry.kind === "payment"),
+    ).toMatchObject([
+      {
+        personId: "worker",
+        account: "labour",
+        contractId: "job",
+        paymentContext: "settlement",
+        note: "নমুনা চুক্তির টাকা",
+        lines: [],
+        paymentParts: [{ amount: 90000 }],
+      },
+    ]);
+    expect(saved.contracts).toEqual(initial.contracts);
+    expect(summarize(saved)).toMatchObject({
+      cost: hasBill ? 100000 : 0,
+      cashPaid: 90000,
+    });
+    expect(partyLedger(saved, "worker")).toMatchObject({
+      explicitAdvance: 0,
+      receivable: 0,
+    });
+    await repo.importBackup(await repo.exportBackup(), { replace: true });
+    expect((await repo.read())!.ledger).toEqual(saved);
+    page = mount(saved, <PersonPaymentFlow />, "/parties/worker");
+    expect(
+      page.container.querySelector(".contact-summary-hero")?.textContent,
+    ).toContain("৯০০");
+    expect(
+      page.container.querySelector(".contact-remaining-hero")?.textContent,
+    ).toContain("৫,১০০");
+    expect(api.save).toHaveBeenCalledOnce();
+  },
+);
 
 it("saves an ordinary worker payment from the party page without requiring a prior bill or associated work", async () => {
   const initial = LedgerSchema.parse({

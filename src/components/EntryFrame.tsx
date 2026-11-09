@@ -37,7 +37,7 @@ export function EntryFrame({
       ref={container}
       onPointerDownCapture={amountFocus.markInteraction}
       onKeyDownCapture={amountFocus.markInteraction}
-      className={`entry-page ${className}`}
+      className={`entry-page entry-frame ${className}`}
       aria-busy={busy}
     >
       <header className="entry-page-header">

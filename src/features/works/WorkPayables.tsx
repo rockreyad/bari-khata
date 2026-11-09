@@ -49,7 +49,6 @@ export function WorkPayables({ workId }: { workId: string }) {
       const params = new URLSearchParams({
         person: row.personId,
         work: workId,
-        order: "oldest",
       });
       go(
         data.recordedPeople.has(row.personId) &&

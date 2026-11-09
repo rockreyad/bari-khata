@@ -1,7 +1,8 @@
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { CalendarDotsIcon, CaretDownIcon } from "@phosphor-icons/react";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { SpendingSeriesChart } from "../../components/ui/SpendingChart";
+import { LedgerSearchNotes } from "./LedgerSearchNotes";
 import type { LedgerSearchResult } from "./searchAnalytics";
 import "./ledger-search.css";
 
@@ -9,19 +10,19 @@ export function LedgerSearchSummary({
   result,
   month,
   onMonthChange,
+  details,
+  variant = "cost",
 }: {
   result: LedgerSearchResult | null;
   month: string;
   onMonthChange: (month: string) => void;
+  details?: ReactNode;
+  variant?: "cost" | "returns";
 }) {
   const { t, money, number, date } = useLanguageContext();
   const [expanded, setExpanded] = useState(Boolean(month));
   const chartId = useId();
   const invalidScope = result?.materialInvalid || result?.monthInvalid;
-  const groupAmbiguities = new Set(result?.groupAmbiguousEntryIds ?? []);
-  const otherAmbiguityCount =
-    result?.ambiguousEntryIds.filter((id) => !groupAmbiguities.has(id))
-      .length ?? 0;
   return (
     <section className="ledger-search-summary" aria-label={t("খোঁজার হিসাব")}>
       {!result || invalidScope ? (
@@ -47,8 +48,10 @@ export function LedgerSearchSummary({
         <>
           <div className="ledger-search-total">
             <div className="ledger-search-total-heading">
-              <span>{t("মোট খরচ")}</span>
-              {result.monthlyRows.length ? (
+              <span>
+                {t(variant === "returns" ? "ফেরত দেওয়া মালের মোট" : "মোট খরচ")}
+              </span>
+              {variant === "cost" && result.monthlyRows.length ? (
                 <button
                   type="button"
                   className="ledger-search-chart-toggle"
@@ -63,9 +66,9 @@ export function LedgerSearchSummary({
               ) : null}
             </div>
             <output className="ledger-search-total-value" aria-live="polite">
-              {money(result.totalCost)}
+              {money(variant === "returns" ? result.returns : result.totalCost)}
             </output>
-            {result.returns > 0 ? (
+            {variant === "cost" && result.returns > 0 ? (
               <dl className="ledger-search-parts">
                 <div>
                   <dt>{t("কেনা")}</dt>
@@ -77,11 +80,17 @@ export function LedgerSearchSummary({
                 </div>
               </dl>
             ) : null}
+            {details}
             <div className="ledger-search-context">
               <span>
-                {t("{{count}}টি খরচের হিসাব", {
-                  count: number(result.costEntryCount),
-                })}
+                {t(
+                  variant === "returns"
+                    ? "{{count}}টি মাল ফেরতের হিসাব"
+                    : "{{count}}টি খরচের হিসাব",
+                  {
+                    count: number(result.costEntryCount),
+                  },
+                )}
                 {month ? (
                   <>
                     {" · "}
@@ -106,7 +115,7 @@ export function LedgerSearchSummary({
               ) : null}
             </div>
           </div>
-          {expanded && result.monthlyRows.length ? (
+          {variant === "cost" && expanded && result.monthlyRows.length ? (
             <div id={chartId}>
               <SpendingSeriesChart
                 rows={result.monthlyRows}
@@ -135,63 +144,16 @@ export function LedgerSearchSummary({
                   })}
                 </small>
               </span>
-              <strong>{money(result.baseUndatedCost)}</strong>
+              <strong>
+                {money(
+                  variant === "returns"
+                    ? -result.baseUndatedCost
+                    : result.baseUndatedCost,
+                )}
+              </strong>
             </button>
           ) : null}
-          {otherAmbiguityCount > 0 ? (
-            <p className="ledger-search-note" role="status">
-              {t(
-                "{{count}}টি বিল শুধু অন্য তথ্যে মিলেছে। সেগুলো খরচের মোটে ধরা হয়নি।",
-                { count: number(otherAmbiguityCount) },
-              )}
-            </p>
-          ) : null}
-          {groupAmbiguities.size > 0 ? (
-            <p className="ledger-search-note" role="status">
-              {t(
-                "কিছু লেখায় একাধিক মালের নাম বা ধরন মিলেছে। অস্পষ্ট অংশ এই মালের মোটে ধরা হয়নি।",
-              )}
-            </p>
-          ) : null}
-          {result.partiallyAmbiguousEntryIds?.length ? (
-            <p className="ledger-search-note" role="status">
-              {t(
-                "কিছু ফেরতের মালের পরিচয় মেলেনি। শুধু নিশ্চিত অংশ মোটে ধরা হয়েছে।",
-              )}
-            </p>
-          ) : null}
-          {result.unassignedAdjustmentCount > 0 ? (
-            <p className="ledger-search-note">
-              {t(
-                "মোট খরচে বিল ও মালের ফেরত আছে। আলাদা সমন্বয় এখানে যোগ করা হয়নি।",
-              )}
-            </p>
-          ) : null}
-          {result.reviewEntryCount > 0 || result.historicalEntryCount > 0 ? (
-            <p className="ledger-search-note">
-              {[
-                result.reviewEntryCount > 0
-                  ? t("{{count}}টি হিসাব যাচাই বাকি", {
-                      count: number(result.reviewEntryCount),
-                    })
-                  : "",
-                result.historicalEntryCount > 0
-                  ? t("{{count}}টি পুরোনো খরচের হিসাব আছে", {
-                      count: number(result.historicalEntryCount),
-                    })
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
-          ) : null}
-          {result.costEntryCount === 0 && result.entries.length > 0 ? (
-            <p className="ledger-search-note">
-              {t(
-                "এই বাছাইয়ে খরচের বিল নেই। টাকা দেওয়ার রেকর্ড খরচে আবার যোগ হয় না।",
-              )}
-            </p>
-          ) : null}
+          <LedgerSearchNotes result={result} />
         </>
       )}
     </section>

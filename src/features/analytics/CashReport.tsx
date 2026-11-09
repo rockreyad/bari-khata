@@ -160,105 +160,109 @@ export function CashReport({
           <span>{t("বেছে দেখুন")}</span>
         </button>
       </section>
-      <section className="report-total" aria-label={t("মোট টাকা দিয়েছি")}>
-        <span>{t("মোট টাকা দিয়েছি")}</span>
-        <strong>{money(result.netPaid)}</strong>
-        {corrections.paidCorrection !== 0 ? (
-          <p>
-            {t("সমন্বয়")} · {t("মোট দিয়েছি")}:{" "}
-            {money(corrections.paidCorrection)}
-          </p>
-        ) : null}
-        <small>
-          {formatDigits(
-            works.get(workId) ??
-              people.get(personId) ??
-              (personId === "__anonymous__"
-                ? t("নাম দেওয়া নেই")
-                : t("সব কাজ মিলিয়ে")),
-          )}
-          {account ? ` · ${t(accountNames[account])}` : ""}
-        </small>
-        {result.refunds > 0 ? (
-          <p>
-            {t("ফেরত পাওয়া {{amount}} বাদ দিয়ে", {
-              amount: money(result.refunds),
-            })}
-          </p>
-        ) : null}
-      </section>
-      {filtered ? (
-        <button
-          className="text-button"
-          onClick={() => {
-            search.clear();
-            setParams({});
-          }}
-        >
-          {t("সব বাছাই মুছুন")}
-        </button>
-      ) : null}
-      <section className="report-breakdown">
-        <div className="report-breakdown-heading">
-          <h2>{t("ভাগ করে দেখি")}</h2>
-          <AppSelect
-            aria-label={t("হিসাব কীভাবে দেখাব")}
-            value={byPerson ? "person" : "work"}
-            onChange={(event) => update("by", event.target.value)}
-          >
-            <option value="work">{t("কাজ অনুযায়ী")}</option>
-            <option value="person">{t("কাকে দিয়েছি")}</option>
-          </AppSelect>
+      <div className="report-overview">
+        <div className="report-summary">
+          <section className="report-total" aria-label={t("মোট টাকা দিয়েছি")}>
+            <span>{t("মোট টাকা দিয়েছি")}</span>
+            <strong>{money(result.netPaid)}</strong>
+            {corrections.paidCorrection !== 0 ? (
+              <p>
+                {t("সমন্বয়")} · {t("মোট দিয়েছি")}:{" "}
+                {money(corrections.paidCorrection)}
+              </p>
+            ) : null}
+            <small>
+              {formatDigits(
+                works.get(workId) ??
+                  people.get(personId) ??
+                  (personId === "__anonymous__"
+                    ? t("নাম দেওয়া নেই")
+                    : t("সব কাজ মিলিয়ে")),
+              )}
+              {account ? ` · ${t(accountNames[account])}` : ""}
+            </small>
+            {result.refunds > 0 ? (
+              <p>
+                {t("ফেরত পাওয়া {{amount}} বাদ দিয়ে", {
+                  amount: money(result.refunds),
+                })}
+              </p>
+            ) : null}
+          </section>
+          {filtered ? (
+            <button
+              className="text-button"
+              onClick={() => {
+                search.clear();
+                setParams({});
+              }}
+            >
+              {t("সব বাছাই মুছুন")}
+            </button>
+          ) : null}
         </div>
-        {groups.length ? (
-          <div className="report-breakdown-list">
-            {groups.slice(0, groupPage * 30).map((row) => (
-              <button
-                key={row.id ?? "__anonymous__"}
-                onClick={() =>
-                  update(
-                    byPerson ? "person" : "work",
-                    row.id ?? "__anonymous__",
-                  )
-                }
-              >
-                <span className="report-breakdown-label">
-                  <strong>
-                    {formatDigits(
-                      (byPerson
-                        ? people.get(row.id ?? "")
-                        : works.get(row.id ?? "")) ?? t("নাম দেওয়া নেই"),
-                    )}
-                  </strong>
-                </span>
-                <strong>{money(row.amount)}</strong>
-                <ArrowRightIcon size={17} />
-              </button>
-            ))}
+        <section className="report-breakdown">
+          <div className="report-breakdown-heading">
+            <h2>{t("ভাগ করে দেখি")}</h2>
+            <AppSelect
+              aria-label={t("হিসাব কীভাবে দেখাব")}
+              value={byPerson ? "person" : "work"}
+              onChange={(event) => update("by", event.target.value)}
+            >
+              <option value="work">{t("কাজ অনুযায়ী")}</option>
+              <option value="person">{t("কাকে দিয়েছি")}</option>
+            </AppSelect>
           </div>
-        ) : (
-          <p className="report-no-results">
-            {t("এখানে টাকা দেওয়ার হিসাব নেই।")}
-          </p>
-        )}
-        {groups.length > groupPage * 30 ? (
-          <button
-            className="history-load-more"
-            onClick={() =>
-              setParams(
-                (previous) => {
-                  const next = new URLSearchParams(previous);
-                  next.set("groups", String(groupPage + 1));
-                  return next;
-                },
-                { replace: true, preventScrollReset: true },
-              )
-            }
-          >
-            {t("আরও দেখুন")}
-          </button>
-        ) : null}
-      </section>
+          {groups.length ? (
+            <div className="report-breakdown-list">
+              {groups.slice(0, groupPage * 30).map((row) => (
+                <button
+                  key={row.id ?? "__anonymous__"}
+                  onClick={() =>
+                    update(
+                      byPerson ? "person" : "work",
+                      row.id ?? "__anonymous__",
+                    )
+                  }
+                >
+                  <span className="report-breakdown-label">
+                    <strong>
+                      {formatDigits(
+                        (byPerson
+                          ? people.get(row.id ?? "")
+                          : works.get(row.id ?? "")) ?? t("নাম দেওয়া নেই"),
+                      )}
+                    </strong>
+                  </span>
+                  <strong>{money(row.amount)}</strong>
+                  <ArrowRightIcon size={17} />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="report-no-results">
+              {t("এখানে টাকা দেওয়ার হিসাব নেই।")}
+            </p>
+          )}
+          {groups.length > groupPage * 30 ? (
+            <button
+              className="history-load-more"
+              onClick={() =>
+                setParams(
+                  (previous) => {
+                    const next = new URLSearchParams(previous);
+                    next.set("groups", String(groupPage + 1));
+                    return next;
+                  },
+                  { replace: true, preventScrollReset: true },
+                )
+              }
+            >
+              {t("আরও দেখুন")}
+            </button>
+          ) : null}
+        </section>
+      </div>
       {filterOpen ? (
         <Sheet
           title={t("কোন হিসাব দেখবেন?")}

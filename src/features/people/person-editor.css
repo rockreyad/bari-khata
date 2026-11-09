@@ -1,10 +1,12 @@
 .person-editor-page {
   background: var(--bg);
 }
+.entry-frame.person-editor-page {
+  --entry-content-width: 688px;
+}
 .person-editor-page .entry-page-header-inner {
-  max-width: 688px;
   min-height: 90px;
-  padding: 16px 24px;
+  padding: 16px var(--entry-content-gutter, 24px);
 }
 .person-editor-page .entry-page-header h1 {
   font-size: 20px;
@@ -23,11 +25,7 @@
   display: none;
 }
 .person-editor-page .entry-page-body {
-  max-width: 688px;
-  padding: 26px 24px 20px;
-}
-.person-editor-page .entry-page-footer > div {
-  max-width: 640px;
+  padding: 26px var(--entry-content-gutter, 24px) 20px;
 }
 .person-editor-page .entry-page-footer .primary-button {
   min-height: 52px;
@@ -328,10 +326,9 @@
 @media (max-width: 540px) {
   .person-editor-page .entry-page-header-inner {
     min-height: 84px;
-    padding-inline: 18px;
   }
   .person-editor-page .entry-page-body {
-    padding: 23px 18px 12px;
+    padding-block: 23px 12px;
   }
   .person-editor-page .entry-page-header h1 {
     font-size: 19px;

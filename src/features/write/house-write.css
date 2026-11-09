@@ -99,6 +99,31 @@
 .house-payment-preview .house-result dd {
   font-size: 23px;
 }
+.house-cost-summary dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) fit-content(55%);
+  gap: 8px 16px;
+}
+.house-cost-summary dt,
+.house-cost-summary dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.house-cost-summary dd {
+  text-align: end;
+}
+.house-cost-summary dl > div:last-child {
+  margin-top: 2px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.house-cost-summary dl > div:last-child dt {
+  color: var(--text);
+  font-weight: 500;
+}
+.house-cost-summary dl > div:last-child dd {
+  font-size: 20px;
+}
 .house-allocation-preview {
   margin: 0 0 16px;
   padding: 0 0 16px;
@@ -145,11 +170,15 @@
   color: var(--text);
   line-height: 1.7;
 }
-.house-check input {
-  margin-top: 3px;
-  flex-shrink: 0;
+.house-check > input[type="checkbox"] {
+  margin: 2px 0 0;
+  flex: 0 0 18px;
   width: 18px;
+  min-width: 18px;
   height: 18px;
+  min-height: 18px;
+  padding: 0;
+  border-radius: 4px;
   accent-color: var(--accent);
 }
 .house-attachments {

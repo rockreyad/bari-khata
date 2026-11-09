@@ -158,6 +158,12 @@ export function HousePaymentForm() {
   const [error, setError, errorNotice] = useFormError();
   const [invalidField, setInvalidField] = useState("");
   const [saving, setSaving] = useState(false);
+  const [processingFiles, setProcessingFiles] = useState(false);
+  const processingFilesRef = useRef(false);
+  const onProcessingFilesChange = (busy: boolean) => {
+    processingFilesRef.current = busy;
+    setProcessingFiles(busy);
+  };
   const [creatingWork, setCreatingWork] = useState(false);
   const lock = useRef(false);
   const finished = useRef(false);
@@ -405,7 +411,14 @@ export function HousePaymentForm() {
   );
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (lock.current || !ready || failed || finished.current) return;
+    if (
+      lock.current ||
+      processingFilesRef.current ||
+      !ready ||
+      failed ||
+      finished.current
+    )
+      return;
     lock.current = true;
     setSaving(true);
     setError("");
@@ -540,7 +553,7 @@ export function HousePaymentForm() {
     );
   return (
     <EntryFrame
-      focusAmountWhenReady={ready && !failed && !saving}
+      focusAmountWhenReady={ready && !failed && !saving && !processingFiles}
       title={t(
         intent === "advance"
           ? "অগ্রিম দিলাম"
@@ -549,16 +562,17 @@ export function HousePaymentForm() {
             : "টাকা দিলাম",
       )}
       className="house-write-page transaction-page"
-      busy={saving}
-      onClose={() =>
+      busy={saving || processingFiles}
+      onClose={() => {
+        if (processingFilesRef.current) return;
         void flush()
           .then(close)
           .catch(() =>
             setError(
               t("অসমাপ্ত লেখা রাখা যায়নি। বন্ধ করার আগে আবার চেষ্টা করুন।"),
             ),
-          )
-      }
+          );
+      }}
       footer={
         <div className="transaction-submit">
           <div>
@@ -569,7 +583,7 @@ export function HousePaymentForm() {
             className="primary-button"
             form="house-payment-form"
             type="submit"
-            disabled={!ready || failed || saving}
+            disabled={!ready || failed || saving || processingFiles}
           >
             {t(saving ? "রাখছি…" : "হিসাব রাখুন")}
           </button>
@@ -593,218 +607,255 @@ export function HousePaymentForm() {
               : error
           }
         />
-        <fieldset disabled={!ready || failed || saving}>
-          <div className="transaction-card">
-            <label>
-              {t("কাকে দিয়েছেন")}
-              <AppSelect
-                aria-label={t("কাকে দিয়েছেন")}
-                aria-invalid={invalidField === "invalid_person"}
-                aria-describedby={
-                  invalidField === "invalid_person"
-                    ? "house-payment-person-error"
-                    : undefined
-                }
-                value={draft.personId}
-                onChange={(event) => change("personId", event.target.value)}
-              >
-                <option value="">{t("নাম বেছে নিন")}</option>
-                {ledger.people
-                  .filter(
-                    (person) =>
-                      person.id === draft.personId ||
-                      contactEntryPolicy(person).payment,
-                  )
-                  .map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {formatDigits(person.name)}
-                    </option>
-                  ))}
-                <option value="__new__">{t("+ নাম লিখব")}</option>
-              </AppSelect>
-            </label>
-            {draft.personId === "__new__" ? (
+        <fieldset
+          className="transaction-layout"
+          disabled={!ready || failed || saving || processingFiles}
+        >
+          <div className="transaction-main">
+            <div className="transaction-card">
               <label>
-                {t("নাম")}
-                <input
-                  aria-label={t("নতুন নাম")}
+                {t("কাকে দিয়েছেন")}
+                <AppSelect
+                  aria-label={t("কাকে দিয়েছেন")}
                   aria-invalid={invalidField === "invalid_person"}
                   aria-describedby={
                     invalidField === "invalid_person"
                       ? "house-payment-person-error"
                       : undefined
                   }
-                  required
-                  maxLength={200}
-                  value={draft.personName}
-                  onChange={(event) => change("personName", event.target.value)}
-                />
+                  value={draft.personId}
+                  onChange={(event) => change("personId", event.target.value)}
+                >
+                  <option value="">{t("নাম বেছে নিন")}</option>
+                  {ledger.people
+                    .filter(
+                      (person) =>
+                        person.id === draft.personId ||
+                        contactEntryPolicy(person).payment,
+                    )
+                    .map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {formatDigits(person.name)}
+                      </option>
+                    ))}
+                  <option value="__new__">{t("+ নাম লিখব")}</option>
+                </AppSelect>
               </label>
-            ) : null}
-            {!ledger.people.some((person) => !person.archivedAt) && (
-              <button
-                type="button"
-                className="text-button"
-                onClick={() => void flush().then(() => entity("person"))}
-              >
-                {t("আগে নাম যোগ করুন")}
-              </button>
-            )}
-            {invalidField === "invalid_person" && (
-              <p
-                id="house-payment-person-error"
-                className="transaction-field-error"
-              >
-                {error}
-              </p>
-            )}
-            <label>
-              {t("কোন খাতায়")}
-              <AppSelect
-                aria-label={t("কোন খাতায়")}
-                required={intent === "advance"}
-                value={draft.workId}
-                aria-invalid={invalidField === "invalid_work"}
-                aria-describedby={
-                  invalidField === "invalid_work"
-                    ? "house-payment-error"
-                    : undefined
-                }
-                onChange={(event) => {
-                  const workId = event.target.value;
-                  if (workId === "__new__") {
-                    void flush()
-                      .then(() => setCreatingWork(true))
-                      .catch(() =>
-                        setError(
-                          t(
-                            "অসমাপ্ত লেখা রাখা যায়নি। বন্ধ করার আগে আবার চেষ্টা করুন।",
-                          ),
-                        ),
-                      );
-                  } else change("workId", workId);
-                }}
-              >
-                <option value="">
-                  {t(intent === "advance" ? "খাতা বেছে নিন" : "বিল অনুযায়ী")}
-                </option>
-                {ledger.works
-                  .filter((work) => !work.archivedAt)
-                  .map((work) => (
-                    <option key={work.id} value={work.id}>
-                      {formatDigits(work.name)}
-                    </option>
-                  ))}
-                <option value="__new__">{t("+ নতুন খাতা")}</option>
-              </AppSelect>
-            </label>
-            {person &&
-              intent !== "advance" &&
-              (presentation.beforeDue ?? 0) > 0 && (
-                <p className="house-payment-balance">
-                  {t("মোট বাকি {{amount}}", {
-                    amount: money(presentation.beforeDue ?? 0),
-                  })}
+              {draft.personId === "__new__" ? (
+                <label>
+                  {t("নাম")}
+                  <input
+                    aria-label={t("নতুন নাম")}
+                    aria-invalid={invalidField === "invalid_person"}
+                    aria-describedby={
+                      invalidField === "invalid_person"
+                        ? "house-payment-person-error"
+                        : undefined
+                    }
+                    required
+                    maxLength={200}
+                    value={draft.personName}
+                    onChange={(event) =>
+                      change("personName", event.target.value)
+                    }
+                  />
+                </label>
+              ) : null}
+              {!ledger.people.some((person) => !person.archivedAt) && (
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => void flush().then(() => entity("person"))}
+                >
+                  {t("আগে নাম যোগ করুন")}
+                </button>
+              )}
+              {invalidField === "invalid_person" && (
+                <p
+                  id="house-payment-person-error"
+                  className="transaction-field-error"
+                >
+                  {error}
                 </p>
               )}
-            <TransactionAmount
-              label={t("কত দিয়েছেন")}
-              value={draft.amount}
-              onChange={(value) => change("amount", value)}
-              required
-              hint={
-                selectedBill
-                  ? formatDigits(
-                      selectedBill.entry.note ||
-                        selectedBill.entry.lines
-                          .map((line) => line.label)
-                          .filter(Boolean)
-                          .join(" · ") ||
-                        t("বিল"),
-                    )
-                  : undefined
-              }
-              error={
-                invalidField === "invalid_amount" ||
-                invalidField === "exceeds_due"
-                  ? error
-                  : undefined
-              }
-            />
-            {intent === "receivable" && (
-              <div
-                className="transaction-choice"
-                role="group"
-                aria-label={t("টাকা দেওয়ার কারণ")}
-              >
-                {(
-                  [
-                    ["payment", "টাকা দিলাম", "টাকা দিলাম"],
-                    ["advance", "অগ্রিম দিলাম", "অগ্রিম — আগে টাকা দিলাম"],
-                  ] as const
-                ).map(([value, label, accessible]) => (
-                  <button
-                    type="button"
-                    key={value}
-                    aria-label={t(accessible)}
-                    onClick={() => change("intent", value)}
-                  >
-                    {t(label)}
-                  </button>
-                ))}
-              </div>
-            )}
-            {intent === "receivable" && (
-              <p className="field-hint">{t("টাকা দেওয়ার ধরন বেছে নিন।")}</p>
-            )}
-            {intent === "advance" && (
               <label>
-                {t("কারণ")} <span className="field-hint">{t("ইচ্ছেমতো")}</span>
-                <input
-                  aria-label={t("কারণ")}
-                  value={draft.note}
-                  maxLength={10000}
-                  onChange={(event) => change("note", event.target.value)}
-                />
+                {t("কোন খাতায়")}
+                <AppSelect
+                  aria-label={t("কোন খাতায়")}
+                  required={intent === "advance"}
+                  value={draft.workId}
+                  aria-invalid={invalidField === "invalid_work"}
+                  aria-describedby={
+                    invalidField === "invalid_work"
+                      ? "house-payment-error"
+                      : undefined
+                  }
+                  onChange={(event) => {
+                    const workId = event.target.value;
+                    if (workId === "__new__") {
+                      void flush()
+                        .then(() => setCreatingWork(true))
+                        .catch(() =>
+                          setError(
+                            t(
+                              "অসমাপ্ত লেখা রাখা যায়নি। বন্ধ করার আগে আবার চেষ্টা করুন।",
+                            ),
+                          ),
+                        );
+                    } else change("workId", workId);
+                  }}
+                >
+                  <option value="">
+                    {t(intent === "advance" ? "খাতা বেছে নিন" : "বিল অনুযায়ী")}
+                  </option>
+                  {ledger.works
+                    .filter((work) => !work.archivedAt)
+                    .map((work) => (
+                      <option key={work.id} value={work.id}>
+                        {formatDigits(work.name)}
+                      </option>
+                    ))}
+                  <option value="__new__">{t("+ নতুন খাতা")}</option>
+                </AppSelect>
               </label>
-            )}
-            {showScope && (
-              <TransactionDetails
-                summary={t("খাতা ও কাজ")}
-                className="house-payment-scope"
-                defaultOpen={
-                  (remainderConfirmed &&
-                    plan.issues.includes("choose_scope")) ||
-                  [
-                    "choose_scope",
-                    "invalid_work",
-                    "invalid_account",
-                    "invalid_contract",
-                  ].includes(invalidField)
+              {person &&
+                intent !== "advance" &&
+                (presentation.beforeDue ?? 0) > 0 && (
+                  <p className="house-payment-balance">
+                    {t("মোট বাকি {{amount}}", {
+                      amount: money(presentation.beforeDue ?? 0),
+                    })}
+                  </p>
+                )}
+              <TransactionAmount
+                label={t("কত দিয়েছেন")}
+                value={draft.amount}
+                onChange={(value) => change("amount", value)}
+                required
+                hint={
+                  selectedBill
+                    ? formatDigits(
+                        selectedBill.entry.note ||
+                          selectedBill.entry.lines
+                            .map((line) => line.label)
+                            .filter(Boolean)
+                            .join(" · ") ||
+                          t("বিল"),
+                      )
+                    : undefined
                 }
-              >
-                <div className="transaction-grid">
-                  {showAccount && (
+                error={
+                  invalidField === "invalid_amount" ||
+                  invalidField === "exceeds_due"
+                    ? error
+                    : undefined
+                }
+              />
+              {intent === "receivable" && (
+                <div
+                  className="transaction-choice"
+                  role="group"
+                  aria-label={t("টাকা দেওয়ার কারণ")}
+                >
+                  {(
+                    [
+                      ["payment", "টাকা দিলাম", "টাকা দিলাম"],
+                      ["advance", "অগ্রিম দিলাম", "অগ্রিম — আগে টাকা দিলাম"],
+                    ] as const
+                  ).map(([value, label, accessible]) => (
+                    <button
+                      type="button"
+                      key={value}
+                      aria-label={t(accessible)}
+                      onClick={() => change("intent", value)}
+                    >
+                      {t(label)}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {intent === "receivable" && (
+                <p className="field-hint">{t("টাকা দেওয়ার ধরন বেছে নিন।")}</p>
+              )}
+              {intent === "advance" && (
+                <label>
+                  {t("কারণ")}{" "}
+                  <span className="field-hint">{t("ইচ্ছেমতো")}</span>
+                  <input
+                    aria-label={t("কারণ")}
+                    value={draft.note}
+                    maxLength={10000}
+                    onChange={(event) => change("note", event.target.value)}
+                  />
+                </label>
+              )}
+              {showScope && (
+                <TransactionDetails
+                  summary={t("খাতা ও কাজ")}
+                  className="house-payment-scope"
+                  defaultOpen={
+                    (remainderConfirmed &&
+                      plan.issues.includes("choose_scope")) ||
+                    [
+                      "choose_scope",
+                      "invalid_work",
+                      "invalid_account",
+                      "invalid_contract",
+                    ].includes(invalidField)
+                  }
+                >
+                  <div className="transaction-grid">
+                    {showAccount && (
+                      <label>
+                        {t("কী বাবদ")}
+                        <AppSelect
+                          aria-label={t("কী বাবদ")}
+                          aria-invalid={
+                            invalidField === "invalid_account" ||
+                            (invalidField === "choose_scope" && !draft.account)
+                          }
+                          aria-describedby={
+                            invalidField === "invalid_account" ||
+                            invalidField === "choose_scope"
+                              ? "house-payment-error"
+                              : undefined
+                          }
+                          value={draft.account}
+                          onChange={(event) =>
+                            change(
+                              "account",
+                              event.target.value as Draft["account"],
+                            )
+                          }
+                        >
+                          <option value="">
+                            {t(
+                              intent === "settlement"
+                                ? "বিল অনুযায়ী"
+                                : "বেছে নিন",
+                            )}
+                          </option>
+                          {allowedAccounts.includes("materials") && (
+                            <option value="materials">{t("মালের টাকা")}</option>
+                          )}
+                          {allowedAccounts.includes("labour") && (
+                            <option value="labour">{t("মজুরি")}</option>
+                          )}
+                          {allowedAccounts.includes("other") && (
+                            <option value="other">{t("অন্য খরচ")}</option>
+                          )}
+                        </AppSelect>
+                      </label>
+                    )}
+                  </div>
+                  {(contracts.length > 0 || draft.contractId) && (
                     <label>
-                      {t("কী বাবদ")}
+                      {t("কোন কাজের জন্য")}
                       <AppSelect
-                        aria-label={t("কী বাবদ")}
-                        aria-invalid={
-                          invalidField === "invalid_account" ||
-                          (invalidField === "choose_scope" && !draft.account)
-                        }
-                        aria-describedby={
-                          invalidField === "invalid_account" ||
-                          invalidField === "choose_scope"
-                            ? "house-payment-error"
-                            : undefined
-                        }
-                        value={draft.account}
+                        aria-label={t("কোন কাজের জন্য")}
+                        value={draft.contractId}
                         onChange={(event) =>
-                          change(
-                            "account",
-                            event.target.value as Draft["account"],
-                          )
+                          change("contractId", event.target.value)
                         }
                       >
                         <option value="">
@@ -814,262 +865,244 @@ export function HousePaymentForm() {
                               : "বেছে নিন",
                           )}
                         </option>
-                        {allowedAccounts.includes("materials") && (
-                          <option value="materials">{t("মালের টাকা")}</option>
-                        )}
-                        {allowedAccounts.includes("labour") && (
-                          <option value="labour">{t("মজুরি")}</option>
-                        )}
-                        {allowedAccounts.includes("other") && (
-                          <option value="other">{t("অন্য খরচ")}</option>
-                        )}
+                        {contracts.map((contract) => (
+                          <option key={contract.id} value={contract.id}>
+                            {formatDigits(contract.title || t("কাজ"))}
+                          </option>
+                        ))}
                       </AppSelect>
                     </label>
                   )}
-                </div>
-                {(contracts.length > 0 || draft.contractId) && (
-                  <label>
-                    {t("কোন কাজের জন্য")}
-                    <AppSelect
-                      aria-label={t("কোন কাজের জন্য")}
-                      value={draft.contractId}
-                      onChange={(event) =>
-                        change("contractId", event.target.value)
-                      }
-                    >
-                      <option value="">
-                        {t(
-                          intent === "settlement" ? "বিল অনুযায়ী" : "বেছে নিন",
-                        )}
-                      </option>
-                      {contracts.map((contract) => (
-                        <option key={contract.id} value={contract.id}>
-                          {formatDigits(contract.title || t("কাজ"))}
-                        </option>
-                      ))}
-                    </AppSelect>
-                  </label>
-                )}
-              </TransactionDetails>
-            )}
-          </div>
-          {person &&
-            total > 0 &&
-            intent === "settlement" &&
-            !noMatchingBills &&
-            plan.remainder > 0 && (
-              <div className="house-payment-question">
-                <button
-                  type="button"
-                  className="transaction-secondary house-payment-advance"
-                  aria-pressed={remainderConfirmed}
-                  onClick={() => {
-                    setError("");
-                    setInvalidField("");
-                    update((current) => ({
-                      ...current,
-                      confirmRemainderAdvance: !remainderConfirmed,
-                      confirmRemainderSignature: !remainderConfirmed
-                        ? plan.signature
-                        : "",
-                    }));
-                  }}
-                >
-                  {presentation.excess !== null && presentation.excess > 0
-                    ? t("বাড়তি {{amount}} অগ্রিম রাখি", {
-                        amount: money(presentation.excess),
-                      })
-                    : t("বিলের বাইরে {{amount}} টাকাও রাখি", {
-                        amount: money(plan.remainder),
-                      })}
-                </button>
-              </div>
-            )}
-          {showOutcome && (
-            <div
-              className="house-payment-outcome"
-              role="status"
-              aria-label={t("টাকা দেওয়ার পরে")}
-            >
-              <strong>
-                {intent === "advance"
-                  ? t("আগাম দিলেন {{amount}}", { amount: money(total) })
-                  : t("বাকি থাকবে {{amount}}", {
-                      amount: money(presentation.afterDue ?? 0),
-                    })}
-              </strong>
-              {intent === "settlement" &&
-                presentation.excess !== null &&
-                presentation.excess > 0 && (
-                  <span>
-                    {t("অগ্রিম {{amount}}", {
-                      amount: money(presentation.excess),
-                    })}
-                  </span>
-                )}
+                </TransactionDetails>
+              )}
             </div>
-          )}
-          {person &&
-            total > 0 &&
-            intent === "settlement" &&
-            plan.requiresCashReview && (
-              <TransactionDetails
-                summary={t("আগের টাকা মিলিয়ে দেখি")}
-                defaultOpen={
-                  !cashConfirmed || invalidField === "unassigned_cash"
-                }
-              >
-                <p className="field-hint">
-                  {t(
-                    "আগে দেওয়া {{amount}} টাকার বিলের সম্পর্ক জানা নেই। এগুলো অক্ষত আছে।",
-                    { amount: money(plan.existingUnallocatedCash) },
-                  )}
-                </p>
-                <label className="house-check">
-                  <input
-                    type="checkbox"
-                    checked={cashConfirmed}
-                    onChange={(event) =>
+          </div>
+          <div className="transaction-aside">
+            {person &&
+              total > 0 &&
+              intent === "settlement" &&
+              !noMatchingBills &&
+              plan.remainder > 0 && (
+                <div className="house-payment-question">
+                  <button
+                    type="button"
+                    className="transaction-secondary house-payment-advance"
+                    aria-pressed={remainderConfirmed}
+                    onClick={() => {
+                      setError("");
+                      setInvalidField("");
                       update((current) => ({
                         ...current,
-                        confirmUnallocatedCash: event.target.checked,
-                        confirmCashSignature: event.target.checked
-                          ? planHousePayment(planningLedger, {
-                              ...request,
-                              confirmUnallocatedCash: true,
-                            }).signature
+                        confirmRemainderAdvance: !remainderConfirmed,
+                        confirmRemainderSignature: !remainderConfirmed
+                          ? plan.signature
                           : "",
-                      }))
-                    }
-                  />
-                  <span>{t("দেখেছি—এটি নতুন করে দেওয়া টাকা।")}</span>
-                </label>
-              </TransactionDetails>
-            )}
-          <PaymentMethodField
-            value={draft.method}
-            onChange={(method) => change("method", method)}
-          />
-          {person &&
-            total > 0 &&
-            (intent === "settlement" || intent === "payment") &&
-            !settlement &&
-            choices.length > 0 && (
-              <TransactionDetails
-                summary={t("কোন বিলে কত যাবে")}
-                defaultOpen={
-                  invalidAllocations || invalidField === "invalid_allocation"
-                }
+                      }));
+                    }}
+                  >
+                    {presentation.excess !== null && presentation.excess > 0
+                      ? t("বাড়তি {{amount}} অগ্রিম রাখি", {
+                          amount: money(presentation.excess),
+                        })
+                      : t("বিলের বাইরে {{amount}} টাকাও রাখি", {
+                          amount: money(plan.remainder),
+                        })}
+                  </button>
+                </div>
+              )}
+            {showOutcome && (
+              <div
+                className="house-payment-outcome"
+                role="status"
+                aria-label={t("টাকা দেওয়ার পরে")}
               >
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() =>
-                    change(
-                      "allocations",
-                      draft.allocations
-                        ? null
-                        : Object.fromEntries(
-                            choices.map((choice) => [
-                              choice.key,
-                              moneyInputValue(
-                                plan.allocations.find(
-                                  (row) =>
-                                    row.billId === choice.billId &&
-                                    row.workId === choice.workId,
-                                )?.amount ?? 0,
-                              ),
-                            ]),
-                          ),
-                    )
+                <strong>
+                  {intent === "advance"
+                    ? t("আগাম দিলেন {{amount}}", { amount: money(total) })
+                    : t("বাকি থাকবে {{amount}}", {
+                        amount: money(presentation.afterDue ?? 0),
+                      })}
+                </strong>
+                {intent === "settlement" &&
+                  presentation.excess !== null &&
+                  presentation.excess > 0 && (
+                    <span>
+                      {t("অগ্রিম {{amount}}", {
+                        amount: money(presentation.excess),
+                      })}
+                    </span>
+                  )}
+              </div>
+            )}
+            {person &&
+              total > 0 &&
+              intent === "settlement" &&
+              plan.requiresCashReview && (
+                <TransactionDetails
+                  summary={t("আগের টাকা মিলিয়ে দেখি")}
+                  defaultOpen={
+                    !cashConfirmed || invalidField === "unassigned_cash"
                   }
                 >
-                  {t(draft.allocations ? "আগের প্রস্তাবে ফিরি" : "বদলাই")}
-                </button>
-                {draft.allocations ? (
-                  <div className="house-allocation-edit">
-                    {choices.map((choice) => (
-                      <label key={choice.key}>
-                        <span>
-                          {formatDigits(choice.name || t("বিল"))}
-                          <small>
-                            {t("এই বিলে মেলানো যাবে {{amount}}", {
-                              amount: money(choice.outstanding),
-                            })}
-                          </small>
-                        </span>
-                        <MoneyInput
-                          aria-label={t("এই বিলে দিচ্ছি: {{name}}", {
-                            name: choice.name || t("বিল"),
-                          })}
-                          value={draft.allocations?.[choice.key] ?? ""}
-                          onChange={(event) =>
-                            change("allocations", {
-                              ...draft.allocations,
-                              [choice.key]: event.target.value,
-                            })
-                          }
-                        />
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <ul className="house-allocation-preview">
-                    {plan.allocations.map((row) => {
-                      const choice = choices.find(
-                        (choice) =>
-                          choice.billId === row.billId &&
-                          choice.workId === row.workId,
-                      );
-                      return (
-                        <li key={JSON.stringify([row.billId, row.workId])}>
-                          <span>
-                            {formatDigits(choice?.name || t("বিল"))}
-                            {choice?.date && <small>{date(choice.date)}</small>}
-                          </span>
-                          <strong>{money(row.amount)}</strong>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </TransactionDetails>
-            )}
-          <TransactionExtras
-            defaultOpen={invalidField === "invalid_date"}
-            hasReceipts={draft.files.length > 0}
-            dateField={
-              <label>
-                {t("তারিখ")}
-                <AppDatePicker
-                  aria-label={t("তারিখ")}
-                  aria-invalid={invalidField === "invalid_date"}
-                  aria-describedby={
-                    invalidField === "invalid_date"
-                      ? "house-payment-error"
-                      : undefined
-                  }
-                  value={draft.date}
-                  onChange={(event) => change("date", event.target.value)}
-                />
-              </label>
-            }
-            noteField={
-              intent !== "advance" && (
-                <TransactionNoteField
-                  value={draft.note}
-                  onChange={(value) => change("note", value)}
-                />
-              )
-            }
-          >
-            <HouseAttachments
-              files={draft.files}
-              entryId={draft.id}
-              onChange={(files) => change("files", files)}
-              onError={setError}
+                  <p className="field-hint">
+                    {t(
+                      "আগে দেওয়া {{amount}} টাকার বিলের সম্পর্ক জানা নেই। এগুলো অক্ষত আছে।",
+                      { amount: money(plan.existingUnallocatedCash) },
+                    )}
+                  </p>
+                  <label className="house-check">
+                    <input
+                      type="checkbox"
+                      checked={cashConfirmed}
+                      onChange={(event) =>
+                        update((current) => ({
+                          ...current,
+                          confirmUnallocatedCash: event.target.checked,
+                          confirmCashSignature: event.target.checked
+                            ? planHousePayment(planningLedger, {
+                                ...request,
+                                confirmUnallocatedCash: true,
+                              }).signature
+                            : "",
+                        }))
+                      }
+                    />
+                    <span>{t("দেখেছি—এটি নতুন করে দেওয়া টাকা।")}</span>
+                  </label>
+                </TransactionDetails>
+              )}
+            <PaymentMethodField
+              value={draft.method}
+              onChange={(method) => change("method", method)}
             />
-          </TransactionExtras>
+            {person &&
+              total > 0 &&
+              (intent === "settlement" || intent === "payment") &&
+              !settlement &&
+              choices.length > 0 && (
+                <TransactionDetails
+                  summary={t("কোন বিলে কত যাবে")}
+                  defaultOpen={
+                    invalidAllocations || invalidField === "invalid_allocation"
+                  }
+                >
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() =>
+                      change(
+                        "allocations",
+                        draft.allocations
+                          ? null
+                          : Object.fromEntries(
+                              choices.map((choice) => [
+                                choice.key,
+                                moneyInputValue(
+                                  plan.allocations.find(
+                                    (row) =>
+                                      row.billId === choice.billId &&
+                                      row.workId === choice.workId,
+                                  )?.amount ?? 0,
+                                ),
+                              ]),
+                            ),
+                      )
+                    }
+                  >
+                    {t(draft.allocations ? "আগের প্রস্তাবে ফিরি" : "বদলাই")}
+                  </button>
+                  {draft.allocations ? (
+                    <div className="house-allocation-edit">
+                      {choices.map((choice) => (
+                        <label key={choice.key}>
+                          <span>
+                            {formatDigits(choice.name || t("বিল"))}
+                            <small>
+                              {t("এই বিলে মেলানো যাবে {{amount}}", {
+                                amount: money(choice.outstanding),
+                              })}
+                            </small>
+                          </span>
+                          <MoneyInput
+                            aria-label={t("এই বিলে দিচ্ছি: {{name}}", {
+                              name: choice.name || t("বিল"),
+                            })}
+                            value={draft.allocations?.[choice.key] ?? ""}
+                            onChange={(event) =>
+                              change("allocations", {
+                                ...draft.allocations,
+                                [choice.key]: event.target.value,
+                              })
+                            }
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <ul className="house-allocation-preview">
+                      {plan.allocations.map((row) => {
+                        const choice = choices.find(
+                          (choice) =>
+                            choice.billId === row.billId &&
+                            choice.workId === row.workId,
+                        );
+                        return (
+                          <li key={JSON.stringify([row.billId, row.workId])}>
+                            <span>
+                              {formatDigits(choice?.name || t("বিল"))}
+                              {choice?.date && (
+                                <small>{date(choice.date)}</small>
+                              )}
+                            </span>
+                            <strong>{money(row.amount)}</strong>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </TransactionDetails>
+              )}
+            <TransactionExtras
+              defaultOpen={invalidField === "invalid_date"}
+              hasReceipts={draft.files.length > 0}
+              dateField={
+                <label>
+                  {t("তারিখ")}
+                  <AppDatePicker
+                    aria-label={t("তারিখ")}
+                    aria-invalid={invalidField === "invalid_date"}
+                    aria-describedby={
+                      invalidField === "invalid_date"
+                        ? "house-payment-error"
+                        : undefined
+                    }
+                    value={draft.date}
+                    onChange={(event) => change("date", event.target.value)}
+                  />
+                </label>
+              }
+              noteField={
+                intent !== "advance" && (
+                  <TransactionNoteField
+                    value={draft.note}
+                    onChange={(value) => change("note", value)}
+                  />
+                )
+              }
+            >
+              <HouseAttachments
+                files={draft.files}
+                entryId={draft.id}
+                onChange={async (files) => {
+                  change("files", files);
+                  await flush();
+                }}
+                disabled={!ready || failed || saving}
+                onProcessingChange={onProcessingFilesChange}
+                onError={setError}
+              />
+            </TransactionExtras>
+          </div>
         </fieldset>
       </form>
     </EntryFrame>
