@@ -1,13 +1,14 @@
 export const transactionEnglish: Record<string, string> = {
   "রসিদ আছে": "Receipt attached",
-  "ছবি বা PDF · সর্বোচ্চ ২ MB": "Photo or PDF · up to 2 MB",
-  "প্রতিটি ছবি বা PDF সর্বোচ্চ ২ MB।": "Each photo or PDF can be up to 2 MB.",
-  "JPG, PNG, WebP ছবি বা PDF দিন। প্রতিটি ২ MB-এর মধ্যে হতে হবে।":
-    "Use JPG, PNG, WebP or PDF files, each up to 2 MB.",
-  "ছবি বা PDF দিন। প্রতিটি ২ MB-এর মধ্যে, সর্বোচ্চ ২০টি।":
-    "Use photos or PDFs, each up to 2 MB, with at most 20 files.",
-  "প্রতিটি ভাউচার ২ MB-এর মধ্যে রাখুন। সর্বোচ্চ ২০টি।":
-    "Keep each receipt within 2 MB, with at most 20 files.",
+  "ছবি বা PDF · সর্বোচ্চ ৫ MB": "Photo or PDF · up to 5 MB",
+  "ফাইল গুছিয়ে নিচ্ছি…": "Preparing files…",
+  "ফাইলটি ৫ MB-এর মধ্যে রাখুন। বড় ছবি হলে ছোট করে আবার দিন।":
+    "Keep each file within 5 MB. Try a smaller photo if needed.",
+  "JPG, PNG, WebP ছবি বা PDF দিন।": "Use JPG, PNG, WebP photos or PDF files.",
+  "ফাইলটি পড়া যায়নি। অন্য ছবি বা PDF দিয়ে চেষ্টা করুন।":
+    "This file could not be read. Try another photo or PDF.",
+  "ফাইলটি রাখা যায়নি। আবার চেষ্টা করুন।":
+    "The file could not be saved. Try again.",
   "বিলের বাইরে {{amount}} টাকাও রাখি":
     "Also record the {{amount}} not linked to bills",
   "বাকি মেটাবেন, নাকি আগাম দিয়েছেন—বেছে নিন।":

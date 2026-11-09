@@ -147,7 +147,7 @@ it("keeps date, note and payment methods visible while folding optional receipts
   await ready();
   const optional = screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!;
   expect(optional.open).toBe(false);
-  expect(screen.getByLabelText("ভাউচারের ছবি / PDF").closest("details")).toBe(
+  expect(screen.getByLabelText("ভাউচার বা ছবি").closest("details")).toBe(
     optional,
   );
   expect(screen.getByLabelText("মনে রাখার কথা").closest("details")).toBe(
@@ -164,7 +164,7 @@ it("keeps date, note and payment methods visible while folding optional receipts
   await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
   await user.type(screen.getByLabelText("মনে রাখার কথা"), "নমুনা অগ্রিম");
   await user.upload(
-    screen.getByLabelText("ভাউচারের ছবি / PDF"),
+    screen.getByLabelText("ভাউচার বা ছবি"),
     new File(["sample"], "sample-voucher.pdf", { type: "application/pdf" }),
   );
   await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
@@ -845,7 +845,7 @@ it("keeps daily wage inputs and a receipt through back/reopen, then records one 
   const receipt = new File(["voucher"], "wage.pdf", {
     type: "application/pdf",
   });
-  await user.upload(screen.getByLabelText("ভাউচারের ছবি / PDF"), receipt);
+  await user.upload(screen.getByLabelText("ভাউচার বা ছবি"), receipt);
   await user.click(screen.getByRole("button", { name: "ফিরুন" }));
   await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
   view.unmount();
@@ -1408,7 +1408,7 @@ it("keeps amounts and receipts isolated between two selected jobs for the same w
   await user.type(screen.getByLabelText("কত টাকা"), "1700");
   await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
   await user.upload(
-    screen.getByLabelText("ভাউচারের ছবি / PDF"),
+    screen.getByLabelText("ভাউচার বা ছবি"),
     new File(["job a"], "job-a.pdf", { type: "application/pdf" }),
   );
   await user.click(screen.getByRole("button", { name: "ফিরুন" }));
@@ -1428,7 +1428,7 @@ it("keeps amounts and receipts isolated between two selected jobs for the same w
   await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
   expect(screen.queryByText("job-a.pdf")).toBeNull();
   await user.upload(
-    screen.getByLabelText("ভাউচারের ছবি / PDF"),
+    screen.getByLabelText("ভাউচার বা ছবি"),
     new File(["job b"], "job-b.pdf", { type: "application/pdf" }),
   );
   await user.click(screen.getByRole("button", { name: "ফিরুন" }));
@@ -2015,7 +2015,7 @@ describe("NARC-131 preferred payment job", () => {
   });
 });
 
-it("rejects a new batch above 2 MiB without changing the amount and saves a receipt at the limit", async () => {
+it("rejects a new batch above 5 MiB without changing the amount and saves a receipt at the limit", async () => {
   state.notebook.ledger = LedgerSchema.parse({
     works: [{ id: "sample-work", name: "নমুনা খাতা" }],
     people: [{ id: "worker", name: "নমুনা কর্মী", kind: "worker" }],
@@ -2036,19 +2036,19 @@ it("rejects a new batch above 2 MiB without changing the amount and saves a rece
   await ready();
   await user.type(screen.getByLabelText("কত টাকা"), "500");
   await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
-  const input = screen.getByLabelText("ভাউচারের ছবি / PDF");
+  const input = screen.getByLabelText("ভাউচার বা ছবি");
   const accepted = new File(
-    [new Uint8Array(2 * 1024 * 1024)],
+    [new Uint8Array(5 * 1024 * 1024)],
     "sample-boundary.pdf",
     { type: "application/pdf" },
   );
   const oversized = new File(
-    [new Uint8Array(2 * 1024 * 1024 + 1)],
+    [new Uint8Array(5 * 1024 * 1024 + 1)],
     "sample-over-limit.pdf",
     { type: "application/pdf" },
   );
   await user.upload(input, [accepted, oversized]);
-  expect(screen.getByRole("alert").textContent).toContain("২ MB");
+  expect(screen.getByRole("alert").textContent).toContain("৫ MB");
   expect(screen.queryByText(accepted.name)).toBeNull();
   expect(screen.queryByText(oversized.name)).toBeNull();
   expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
@@ -2066,4 +2066,60 @@ it("rejects a new batch above 2 MiB without changing the amount and saves a rece
     paymentParts: [{ method: "cash", amount: 50000 }],
     receipts: [{ name: accepted.name, size: accepted.size }],
   });
+});
+
+it("blocks saving and closing until selected receipts have been stored in the draft", async () => {
+  state.notebook.ledger = LedgerSchema.parse({
+    works: [{ id: "sample-work", name: "নমুনা খাতা" }],
+    people: [{ id: "worker", name: "নমুনা কর্মী", kind: "worker" }],
+  });
+  const user = userEvent.setup();
+  render(
+    <QuickEntrySheet
+      presentation="page"
+      options={{
+        kind: "payment",
+        personId: "worker",
+        workId: "sample-work",
+        account: "labour",
+        purpose: "advance",
+      }}
+    />,
+  );
+  await ready();
+  await user.type(screen.getByLabelText("কত টাকা"), "500");
+  await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const started = vi.fn(async (_key: string, value: unknown) => {
+    if ((value as { files: unknown[] }).files.length) await pending;
+  });
+  state.beforeWrite = started;
+  await user.upload(
+    screen.getByLabelText("ভাউচার বা ছবি"),
+    new File(["sample receipt"], "sample-pending.pdf", {
+      type: "application/pdf",
+    }),
+  );
+  await waitFor(() => expect(started).toHaveBeenCalled());
+  const save = screen.getByRole("button", {
+    name: "রাখুন",
+  }) as HTMLButtonElement;
+  expect(save.disabled).toBe(true);
+  await user.click(screen.getByRole("button", { name: "ফিরুন" }));
+  fireEvent.submit(save.form!);
+  expect(state.notebook.close).not.toHaveBeenCalled();
+  expect(state.notebook.save).not.toHaveBeenCalled();
+  await act(async () => {
+    release();
+    await pending;
+  });
+  await waitFor(() => expect(save.disabled).toBe(false));
+  await user.click(save);
+  await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
+  expect(
+    (state.notebook.ledger as Ledger).entries[0].receipts[0],
+  ).toMatchObject({ name: "sample-pending.pdf", size: 14 });
 });

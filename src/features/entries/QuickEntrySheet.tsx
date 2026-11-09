@@ -8,7 +8,6 @@ import {
   type FormEvent,
 } from "react";
 import {
-  CameraIcon,
   PackageIcon,
   CheckIcon,
   PlusIcon,
@@ -27,7 +26,7 @@ import { AppDatePicker } from "../../components/ui/AppDatePicker";
 import { MoneyInput } from "../../components/ui/MoneyInput";
 import { TransactionExtras } from "../../components/TransactionExtras";
 import { TransactionNoteField } from "../../components/TransactionNoteField";
-import { NEW_RECEIPT_MAX_BYTES } from "../../lib/attachmentLimits";
+import { ReceiptPicker } from "../../components/ReceiptPicker";
 import {
   TransactionAmount,
   TransactionDetails,
@@ -137,6 +136,7 @@ export function QuickEntrySheet({
   const [error, setError, errorNotice] = useFormError();
   const [invalidField, setInvalidField] = useState("");
   const [saving, setSaving] = useState(false);
+  const [processingFiles, setProcessingFiles] = useState(false);
   const locked = useRef(false);
   const mounted = useRef(false);
   const hydrated = useRef(false);
@@ -346,7 +346,7 @@ export function QuickEntrySheet({
       );
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (locked.current || !ready || finished.current) return;
+    if (locked.current || processingFiles || !ready || finished.current) return;
     if (needsIntent) {
       setError(t(intentMessage));
       return;
@@ -446,7 +446,7 @@ export function QuickEntrySheet({
     }
   }
   async function requestClose() {
-    if (locked.current) return;
+    if (locked.current || processingFiles) return;
     if (!hydrated.current) {
       close();
       return;
@@ -618,7 +618,9 @@ export function QuickEntrySheet({
               : "খরচ লিখি";
   return (
     <Frame
-      focusAmountWhenReady={ready && !saving && !needsIntent}
+      focusAmountWhenReady={
+        ready && !saving && !processingFiles && !needsIntent
+      }
       title={t(title)}
       className="transaction-page legacy-transaction-page"
       onClose={() => void requestClose()}
@@ -632,7 +634,7 @@ export function QuickEntrySheet({
             className="primary-button"
             form={formId}
             type="submit"
-            disabled={saving || !ready || needsIntent}
+            disabled={saving || processingFiles || !ready || needsIntent}
           >
             <CheckIcon size={19} />
             {t(saving ? "রাখছি…" : "রাখুন")}
@@ -653,7 +655,10 @@ export function QuickEntrySheet({
         onSubmit={submit}
       >
         <FormError {...errorNotice} id={`${formId}-error`} />
-        <fieldset disabled={saving || !ready} className="entry-fields-v3">
+        <fieldset
+          disabled={saving || processingFiles || !ready}
+          className="entry-fields-v3"
+        >
           {!cash && !charge && !returning && draft.kind !== "wage" ? (
             <div
               className="expense-sections"
@@ -1484,44 +1489,28 @@ export function QuickEntrySheet({
                 }
               >
                 <div className="legacy-transaction-attachments">
-                  <label className="attachment-button transaction-secondary">
-                    <CameraIcon size={20} />
-                    {t("ভাউচারের ছবি / PDF")}
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,application/pdf"
-                      multiple
-                      onChange={(e) => {
-                        const incoming = Array.from(e.target.files ?? []);
-                        if (
-                          incoming.some(
-                            (file) => file.size > NEW_RECEIPT_MAX_BYTES,
-                          ) ||
-                          files.length + incoming.length > 20
-                        ) {
-                          setError(
-                            t(
-                              "প্রতিটি ভাউচার ২ MB-এর মধ্যে রাখুন। সর্বোচ্চ ২০টি।",
-                            ),
-                          );
-                          return;
-                        }
-                        setFiles([
-                          ...files,
-                          ...incoming.map((file) => ({
-                            id: crypto.randomUUID(),
-                            entryId: draft.id,
-                            name: file.name,
-                            file,
-                          })),
-                        ]);
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                  <p className="form-hint muted">
-                    {t("প্রতিটি ছবি বা PDF সর্বোচ্চ ২ MB।")}
-                  </p>
+                  <ReceiptPicker
+                    existingCount={files.length}
+                    scopeKey={key}
+                    onError={setError}
+                    onProcessingChange={setProcessingFiles}
+                    disabled={saving || !ready}
+                    onFiles={async (selected) => {
+                      if (!sameOwner()) throw new Error("account_changed");
+                      const next = [
+                        ...latest.current.files,
+                        ...selected.map((file) => ({
+                          id: crypto.randomUUID(),
+                          entryId: draft.id,
+                          name: file.name,
+                          file,
+                        })),
+                      ];
+                      latest.current = { ...latest.current, files: next };
+                      setFiles(next);
+                      await queueDraft(latest.current);
+                    }}
+                  />
                   {files.map((f) => (
                     <div className="attachment-row" key={f.id}>
                       <span>{formatDigits(f.name ?? t("ভাউচার"))}</span>

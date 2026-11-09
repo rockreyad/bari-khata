@@ -200,6 +200,12 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
   const [error, setError, errorNotice] = useFormError();
   const [invalidField, setInvalidField] = useState("");
   const [saving, setSaving] = useState(false);
+  const [processingFiles, setProcessingFiles] = useState(false);
+  const processingFilesRef = useRef(false);
+  const onProcessingFilesChange = (busy: boolean) => {
+    processingFilesRef.current = busy;
+    setProcessingFiles(busy);
+  };
   const [creatingWork, setCreatingWork] = useState(false);
   const lock = useRef(false);
   const finished = useRef(false);
@@ -305,6 +311,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
     });
   };
   const newWork = async () => {
+    if (processingFilesRef.current) return;
     try {
       await flush();
       setCreatingWork(true);
@@ -358,7 +365,14 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
   );
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (lock.current || !ready || failed || finished.current) return;
+    if (
+      lock.current ||
+      processingFilesRef.current ||
+      !ready ||
+      failed ||
+      finished.current
+    )
+      return;
     lock.current = true;
     setSaving(true);
     setError("");
@@ -518,6 +532,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
       />
     );
   const closeSafely = async () => {
+    if (processingFilesRef.current) return;
     try {
       await flush();
       close();
@@ -594,10 +609,10 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
     );
   return (
     <EntryFrame
-      focusAmountWhenReady={ready && !failed && !saving}
+      focusAmountWhenReady={ready && !failed && !saving && !processingFiles}
       title={t(action === "purchase" ? "মাল কিনেছি" : "কাজের বিল")}
       onClose={() => void closeSafely()}
-      busy={saving}
+      busy={saving || processingFiles}
       className="transaction-page"
       footer={
         <div className="transaction-submit">
@@ -609,7 +624,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
             className="primary-button"
             form="house-cost-form"
             type="submit"
-            disabled={!ready || failed || saving}
+            disabled={!ready || failed || saving || processingFiles}
           >
             {t(saving ? "রাখছি…" : "হিসাব রাখুন")}
           </button>
@@ -635,7 +650,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
         />
         <fieldset
           className="transaction-layout"
-          disabled={!ready || failed || saving}
+          disabled={!ready || failed || saving || processingFiles}
         >
           <div className="transaction-main">
             <div className="transaction-line-list">
@@ -1165,7 +1180,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
             ) : null}
             {total > 0 && (
               <section
-                className="transaction-summary"
+                className="transaction-summary house-cost-summary"
                 aria-label={t("হিসাবের সারাংশ")}
                 aria-live="polite"
               >
@@ -1214,7 +1229,12 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               <HouseAttachments
                 files={files}
                 entryId={draft.id}
-                onChange={(next) => update({ ...value, files: next })}
+                onChange={async (next) => {
+                  update((current) => ({ ...current, files: next }));
+                  await flush();
+                }}
+                disabled={!ready || failed || saving}
+                onProcessingChange={onProcessingFilesChange}
                 onError={setError}
               />
             </TransactionExtras>
