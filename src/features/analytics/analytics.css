@@ -6,6 +6,23 @@
 .report-page > * {
   min-width: 0;
 }
+.report-overview,
+.report-summary {
+  display: grid;
+  align-items: start;
+  gap: 21px;
+  min-width: 0;
+}
+.report-overview > *,
+.report-summary > * {
+  min-width: 0;
+}
+.report-summary > .text-button {
+  justify-self: start;
+}
+.report-page .report-summary > .report-total {
+  border-bottom: 1px solid var(--line);
+}
 .report-mode-action {
   display: flex;
   align-items: center;
@@ -22,6 +39,7 @@
   margin-top: 5px;
 }
 .report-download {
+  flex: none;
   background: var(--surface);
   border: 1px solid var(--line);
   color: var(--muted);
@@ -72,6 +90,13 @@
   padding: 5px 9px;
   color: var(--muted);
   background: var(--surface);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.report-filter-chips > button > svg {
+  flex: none;
 }
 .report-filter-chips > button.report-clear-all {
   background: none;
@@ -88,6 +113,15 @@
   border: 1px solid var(--line);
   border-radius: 20px;
   box-shadow: var(--shadow);
+}
+.report-total > * {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+:root .report-page .report-total > strong {
+  white-space: normal;
+  overflow: visible;
 }
 .report-total > span {
   font-size: 14px;
@@ -146,6 +180,14 @@
 .report-undated[aria-pressed="true"] {
   color: var(--accent-strong);
 }
+.report-undated > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.report-undated > strong {
+  max-width: 60%;
+  text-align: right;
+}
 .report-paid-summary {
   width: 100%;
   margin-top: 16px;
@@ -164,10 +206,13 @@
 }
 .report-paid-summary > button > span {
   flex: 1;
+  min-width: 0;
   font-size: 14px;
   color: var(--muted);
 }
 .report-paid-summary > button > strong {
+  min-width: 0;
+  max-width: 60%;
   font-size: clamp(17px, 5vw, 23px);
   overflow-wrap: anywhere;
 }
@@ -194,6 +239,7 @@
 }
 .report-breakdown-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
@@ -202,12 +248,15 @@
 .report-breakdown-heading h2,
 .report-history-heading h2 {
   font-size: 17px;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .report-breakdown-heading > button,
 .report-breakdown-heading > div {
+  flex: 1 1 160px;
   width: auto;
-  max-width: 240px;
+  max-width: min(240px, 100%);
+  margin-left: auto;
   font-size: 12px;
 }
 .report-breakdown-list {
@@ -227,10 +276,13 @@
   padding-bottom: 2px;
 }
 .report-breakdown-list > button > strong {
+  min-width: 0;
+  max-width: 50%;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  text-align: right;
   color: var(--text);
 }
 .report-breakdown-list > button > svg {
@@ -305,8 +357,16 @@
 .report-extra-filters[open] > label {
   margin-top: 17px;
 }
+@media (min-width: 1200px) {
+  .report-overview {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    gap: 24px;
+  }
+}
 @media (max-width: 760px) {
-  .report-page {
+  .report-page,
+  .report-overview,
+  .report-summary {
     gap: 18px;
   }
   .report-page .page-heading h1 {

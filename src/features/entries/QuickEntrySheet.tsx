@@ -695,831 +695,872 @@ export function QuickEntrySheet({
               {t("মুছে রাখা নাম, খাতা বা কাজ আগে ফিরিয়ে আনুন।")}
             </p>
           ) : null}
-          <div className="entry-assignment transaction-card transaction-grid">
-            <label>
-              {t("খাতা")}
-              <AppSelect
-                aria-label={t("খাতা")}
-                aria-invalid={Boolean(error) && invalidField === "work"}
-                aria-describedby={
-                  error && invalidField === "work"
-                    ? `${formId}-error`
-                    : undefined
-                }
-                value={draft.workId}
-                onChange={(e) => {
-                  if (e.target.value === "__new__") setCreatingWork(true);
-                  else field("workId", e.target.value);
-                }}
-              >
-                <option value="">
-                  {t(cash || wage ? "খাতা বেছে নিন" : "সাধারণ খরচ")}
-                </option>
-                {ledger.works
-                  .filter((w) => !w.archivedAt || w.id === draft.workId)
-                  .map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {formatDigits(w.name)}
-                      {w.archivedAt ? ` · ${t("মুছে রাখা")} ` : ""}
-                    </option>
-                  ))}
-                {canCreateWork ? (
-                  <option value="__new__">{t("+ নতুন খাতা বানান")}</option>
-                ) : null}
-              </AppSelect>
-            </label>
-            <label>
-              {t(
-                cash || wage || charge
-                  ? "কাকে দিচ্ছেন"
-                  : labour
-                    ? "কোন কর্মী"
-                    : transport
-                      ? "গাড়ির লোক / শ্রমিক"
-                      : material
-                        ? "কোন দোকান"
-                        : "কার সঙ্গে হিসাব",
-              )}
-              <AppSelect
-                value={draft.personId}
-                aria-invalid={
-                  Boolean(error) &&
-                  ["person", "person_kind"].includes(invalidField)
-                }
-                aria-describedby={
-                  error && ["person", "person_kind"].includes(invalidField)
-                    ? `${formId}-error`
-                    : undefined
-                }
-                onChange={(e) => field("personId", e.target.value)}
-              >
-                <option value="">
-                  {t(cash || labour ? "নাম বেছে নিন" : "নাম না দিলেও হবে")}
-                </option>
-                {allowedPeople.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-                {selectedPerson &&
-                !allowedPeople.some((p) => p.id === selectedPerson.id) ? (
-                  <option value={selectedPerson.id}>
-                    {formatDigits(selectedPerson.name)}
-                    {selectedPerson.archivedAt ? ` · ${t("মুছে রাখা")}` : ""}
-                  </option>
-                ) : null}
-                <option value="__new__">{t("+ নাম লিখব")}</option>
-              </AppSelect>
-            </label>
-          </div>
-          {canCreateWork && !draft.workId ? (
-            <button
-              className="text-button"
-              type="button"
-              onClick={() => setCreatingWork(true)}
-            >
-              <PlusIcon size={17} />
-              {t(
-                ledger.works.some((work) => !work.archivedAt)
-                  ? "নতুন খাতা বানান"
-                  : "আগে খাতা বানান",
-              )}
-            </button>
-          ) : null}
-          {draft.personId === "__new__" ? (
-            <label>
-              {t(
-                cash
-                  ? "নাম"
-                  : labour
-                    ? "কর্মীর নাম"
-                    : transport
-                      ? "নাম"
-                      : material
-                        ? "দোকানের নাম"
-                        : "নাম",
-              )}
-              <input
-                value={draft.personName}
-                onChange={(e) => field("personName", e.target.value)}
-              />
-            </label>
-          ) : null}
-          {((selectedKind === "worker" && draft.account === "labour") ||
-            (draft.kind === "payment" && draft.account === "labour")) &&
-          !returning ? (
-            <section className="entry-worker-flow">
-              {contracts.length || removedJob ? (
+          <div className="transaction-layout">
+            <div className="transaction-main">
+              <div className="entry-assignment transaction-card transaction-grid">
                 <label>
-                  {t("কাজ")}
+                  {t("খাতা")}
                   <AppSelect
-                    aria-label={t("কাজ")}
-                    value={draft.contractId}
+                    aria-label={t("খাতা")}
+                    aria-invalid={Boolean(error) && invalidField === "work"}
+                    aria-describedby={
+                      error && invalidField === "work"
+                        ? `${formId}-error`
+                        : undefined
+                    }
+                    value={draft.workId}
                     onChange={(e) => {
-                      const job = contracts.find(
-                        (job) => job.id === e.target.value,
-                      );
-                      financialScopeChosen.current = true;
-                      jobScopeChosen.current = true;
-                      setDraft((current) => {
-                        const scope = {
-                          personId: job?.personId ?? current.personId,
-                          account: "labour" as const,
-                          contractId: job?.id ?? "",
-                        };
-                        return {
-                          ...current,
-                          ...scope,
-                          workId:
-                            job?.scope === "work"
-                              ? job.workId!
-                              : current.workId,
-                          kind: "payment",
-                          purpose: hasPaymentWriting(current)
-                            ? current.purpose
-                            : paymentPurpose(
-                                ledger,
-                                scope,
-                                current.purpose === "advance"
-                                  ? "advance"
-                                  : undefined,
-                              ),
-                          costType: "labour",
-                        };
-                      });
+                      if (e.target.value === "__new__") setCreatingWork(true);
+                      else field("workId", e.target.value);
                     }}
                   >
-                    <option value="">{t("অন্য কাজ")}</option>
-                    {removedJob ? (
-                      <option value={removedJob.id}>
-                        {formatDigits(removedJob.title || t("কাজ"))} ·{" "}
-                        {t("মুছে রাখা")}
+                    <option value="">
+                      {t(cash || wage ? "খাতা বেছে নিন" : "সাধারণ খরচ")}
+                    </option>
+                    {ledger.works
+                      .filter((w) => !w.archivedAt || w.id === draft.workId)
+                      .map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {formatDigits(w.name)}
+                          {w.archivedAt ? ` · ${t("মুছে রাখা")} ` : ""}
+                        </option>
+                      ))}
+                    {canCreateWork ? (
+                      <option value="__new__">{t("+ নতুন খাতা বানান")}</option>
+                    ) : null}
+                  </AppSelect>
+                </label>
+                <label>
+                  {t(
+                    cash || wage || charge
+                      ? "কাকে দিচ্ছেন"
+                      : labour
+                        ? "কোন কর্মী"
+                        : transport
+                          ? "গাড়ির লোক / শ্রমিক"
+                          : material
+                            ? "কোন দোকান"
+                            : "কার সঙ্গে হিসাব",
+                  )}
+                  <AppSelect
+                    value={draft.personId}
+                    aria-invalid={
+                      Boolean(error) &&
+                      ["person", "person_kind"].includes(invalidField)
+                    }
+                    aria-describedby={
+                      error && ["person", "person_kind"].includes(invalidField)
+                        ? `${formId}-error`
+                        : undefined
+                    }
+                    onChange={(e) => field("personId", e.target.value)}
+                  >
+                    <option value="">
+                      {t(cash || labour ? "নাম বেছে নিন" : "নাম না দিলেও হবে")}
+                    </option>
+                    {allowedPeople.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                    {selectedPerson &&
+                    !allowedPeople.some((p) => p.id === selectedPerson.id) ? (
+                      <option value={selectedPerson.id}>
+                        {formatDigits(selectedPerson.name)}
+                        {selectedPerson.archivedAt
+                          ? ` · ${t("মুছে রাখা")}`
+                          : ""}
                       </option>
                     ) : null}
-                    {contracts.map((contract) => (
-                      <option key={contract.id} value={contract.id}>
-                        {contract.title || money(contract.total)}
-                        {!draft.personId
-                          ? ` · ${ledger.people.find((person) => person.id === contract.personId)?.name ?? ""}`
-                          : ""}
+                    <option value="__new__">{t("+ নাম লিখব")}</option>
+                  </AppSelect>
+                </label>
+              </div>
+              {canCreateWork && !draft.workId ? (
+                <button
+                  className="text-button"
+                  type="button"
+                  onClick={() => setCreatingWork(true)}
+                >
+                  <PlusIcon size={17} />
+                  {t(
+                    ledger.works.some((work) => !work.archivedAt)
+                      ? "নতুন খাতা বানান"
+                      : "আগে খাতা বানান",
+                  )}
+                </button>
+              ) : null}
+              {draft.personId === "__new__" ? (
+                <label>
+                  {t(
+                    cash
+                      ? "নাম"
+                      : labour
+                        ? "কর্মীর নাম"
+                        : transport
+                          ? "নাম"
+                          : material
+                            ? "দোকানের নাম"
+                            : "নাম",
+                  )}
+                  <input
+                    value={draft.personName}
+                    onChange={(e) => field("personName", e.target.value)}
+                  />
+                </label>
+              ) : null}
+              {((selectedKind === "worker" && draft.account === "labour") ||
+                (draft.kind === "payment" && draft.account === "labour")) &&
+              !returning ? (
+                <section className="entry-worker-flow">
+                  {contracts.length || removedJob ? (
+                    <label>
+                      {t("কাজ")}
+                      <AppSelect
+                        aria-label={t("কাজ")}
+                        value={draft.contractId}
+                        onChange={(e) => {
+                          const job = contracts.find(
+                            (job) => job.id === e.target.value,
+                          );
+                          financialScopeChosen.current = true;
+                          jobScopeChosen.current = true;
+                          setDraft((current) => {
+                            const scope = {
+                              personId: job?.personId ?? current.personId,
+                              account: "labour" as const,
+                              contractId: job?.id ?? "",
+                            };
+                            return {
+                              ...current,
+                              ...scope,
+                              workId:
+                                job?.scope === "work"
+                                  ? job.workId!
+                                  : current.workId,
+                              kind: "payment",
+                              purpose: hasPaymentWriting(current)
+                                ? current.purpose
+                                : paymentPurpose(
+                                    ledger,
+                                    scope,
+                                    current.purpose === "advance"
+                                      ? "advance"
+                                      : undefined,
+                                  ),
+                              costType: "labour",
+                            };
+                          });
+                        }}
+                      >
+                        <option value="">{t("অন্য কাজ")}</option>
+                        {removedJob ? (
+                          <option value={removedJob.id}>
+                            {formatDigits(removedJob.title || t("কাজ"))} ·{" "}
+                            {t("মুছে রাখা")}
+                          </option>
+                        ) : null}
+                        {contracts.map((contract) => (
+                          <option key={contract.id} value={contract.id}>
+                            {contract.title || money(contract.total)}
+                            {!draft.personId
+                              ? ` · ${ledger.people.find((person) => person.id === contract.personId)?.name ?? ""}`
+                              : ""}
+                          </option>
+                        ))}
+                      </AppSelect>
+                    </label>
+                  ) : null}
+                </section>
+              ) : null}
+              {draft.kind === "payment" ? (
+                <div
+                  className="entry-intent-options transaction-choice"
+                  role="group"
+                  aria-label={t("টাকার কারণ")}
+                >
+                  {!intent.hasJob ? (
+                    <button
+                      type="button"
+                      aria-pressed={
+                        !legacyReceivable &&
+                        ["charge", "wage"].includes(draft.purpose)
+                      }
+                      className={
+                        !legacyReceivable &&
+                        ["charge", "wage"].includes(draft.purpose)
+                          ? "selected"
+                          : ""
+                      }
+                      onClick={() => choosePurpose("charge")}
+                    >
+                      {t("নতুন বিল ও টাকা")}
+                    </button>
+                  ) : null}
+                  {intent.canSettle ? (
+                    <button
+                      type="button"
+                      aria-pressed={
+                        !legacyReceivable && draft.purpose === "settle"
+                      }
+                      className={
+                        !legacyReceivable && draft.purpose === "settle"
+                          ? "selected"
+                          : ""
+                      }
+                      onClick={() => choosePurpose("settle")}
+                    >
+                      {t("বাকি মেটাই")}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    aria-pressed={
+                      !legacyReceivable && draft.purpose === "advance"
+                    }
+                    className={
+                      !legacyReceivable && draft.purpose === "advance"
+                        ? "selected"
+                        : ""
+                    }
+                    onClick={() => choosePurpose("advance")}
+                  >
+                    {t("অগ্রিম")}
+                  </button>
+                </div>
+              ) : null}
+              {draft.kind === "refund" ? (
+                <label>
+                  {t("কোন টাকার ফেরত")}
+                  <AppSelect
+                    aria-label={t("কোন টাকার ফেরত")}
+                    value={draft.refundContext}
+                    onChange={(event) =>
+                      field(
+                        "refundContext",
+                        event.target.value as QuickDraft["refundContext"],
+                      )
+                    }
+                  >
+                    <option value="unknown">{t("সম্পর্ক জানা নেই")}</option>
+                    <option value="settlement">
+                      {t("বিলের জন্য দেওয়া টাকা")}
+                    </option>
+                    <option value="advance">{t("অগ্রিম দেওয়া টাকা")}</option>
+                    <option value="receivable">{t("ফেরত পাওয়ার টাকা")}</option>
+                  </AppSelect>
+                </label>
+              ) : null}
+              {needsIntent ? (
+                <p className="field-hint" role="status">
+                  {t(intentMessage)}
+                </p>
+              ) : null}
+              {transport && !cash && selectedKind !== "driver" ? (
+                <div
+                  className="small-switch"
+                  role="group"
+                  aria-label={t("খরচের ধরন")}
+                >
+                  <button
+                    type="button"
+                    className={draft.costType === "transport" ? "selected" : ""}
+                    aria-pressed={draft.costType === "transport"}
+                    onClick={() => chooseType("transport")}
+                  >
+                    {t("গাড়িভাড়া")}
+                  </button>
+                  <button
+                    type="button"
+                    className={draft.costType === "unload" ? "selected" : ""}
+                    aria-pressed={draft.costType === "unload"}
+                    onClick={() => chooseType("unload")}
+                  >
+                    {t("মাল নামানোর খরচ")}
+                  </button>
+                </div>
+              ) : null}
+              {(wage || charge) && draft.account === "labour" ? (
+                <section className="entry-wage-basis">
+                  <div
+                    className="entry-intent-options transaction-choice"
+                    role="group"
+                    aria-label={t("মজুরির হিসাব")}
+                  >
+                    {(
+                      [
+                        ["total", "মোট টাকা"],
+                        ["day", "দিন হিসাবে"],
+                      ] as const
+                    ).map(([basis, label]) => (
+                      <button
+                        type="button"
+                        key={basis}
+                        className={draft.wageBasis === basis ? "selected" : ""}
+                        aria-pressed={draft.wageBasis === basis}
+                        onClick={() => {
+                          financialScopeChosen.current = true;
+                          setDraft((current) => ({
+                            ...current,
+                            wageBasis: basis,
+                            purpose:
+                              current.kind === "payment"
+                                ? basis === "day"
+                                  ? "wage"
+                                  : "charge"
+                                : current.purpose,
+                            amount:
+                              basis === "total" && current.wageBasis === "day"
+                                ? moneyInputValue(quickWageAmount(current))
+                                : current.amount,
+                          }));
+                        }}
+                      >
+                        {t(label)}
+                      </button>
+                    ))}
+                  </div>
+                  {draft.wageBasis === "day" ? (
+                    <div className="field-grid">
+                      <label>
+                        {t("কত দিন")}
+                        <NumericInput
+                          aria-label={t("কত দিন")}
+                          value={draft.wageDays}
+                          onChange={(e) => field("wageDays", e.target.value)}
+                        />
+                      </label>
+                      <label>
+                        {t("দিনে কত টাকা")}
+                        <MoneyInput
+                          aria-label={t("দিনে কত টাকা")}
+                          value={draft.wageRate}
+                          onChange={(e) => field("wageRate", e.target.value)}
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
+              {cash || wage || charge ? (
+                <div className="transaction-card">
+                  <TransactionAmount
+                    label={t("কত টাকা")}
+                    value={
+                      wage && draft.wageBasis === "day"
+                        ? moneyInputValue(total)
+                        : draft.amount
+                    }
+                    disabled={wage && draft.wageBasis === "day"}
+                    onChange={(value) => field("amount", value)}
+                  />
+                </div>
+              ) : (
+                <div className="purchase-lines-v3">
+                  {draft.rows.map((r, index) => (
+                    <div
+                      className="purchase-line-v3 transaction-card"
+                      key={r.id}
+                    >
+                      <TransactionAmount
+                        label={t("কত টাকা")}
+                        value={r.amount}
+                        onChange={(value) => changeRow(r.id, { amount: value })}
+                      />
+                      <label>
+                        {t(
+                          labour
+                            ? "কী কাজের মজুরি"
+                            : !material
+                              ? "কী বাবদ খরচ"
+                              : returning
+                                ? "কোন মাল ফেরত দিলেন"
+                                : "কী কিনলেন",
+                        )}
+                        <AppCombobox
+                          aria-invalid={
+                            Boolean(error) &&
+                            invalidField === "label" &&
+                            !r.label.trim()
+                          }
+                          aria-describedby={
+                            error && invalidField === "label" && !r.label.trim()
+                              ? `${formId}-error`
+                              : undefined
+                          }
+                          suggestions={material ? materialChoices : []}
+                          value={r.label}
+                          placeholder={t(
+                            labour
+                              ? "যেমন: এই সপ্তাহের প্লাস্টার"
+                              : !material
+                                ? transport
+                                  ? "যেমন: দরজা আনার ভাড়া"
+                                  : "যেমন: কাজের জায়গায় খাবার"
+                                : "যেমন: সিমেন্ট, টাইলসের আঠা",
+                          )}
+                          onChange={(e) => {
+                            changeRow(
+                              r.id,
+                              !material
+                                ? { label: e.target.value }
+                                : materialSuggestion(
+                                    suggestedItems,
+                                    e.target.value,
+                                    r,
+                                  ),
+                            );
+                          }}
+                        />
+                      </label>
+                      {index ? (
+                        <button
+                          type="button"
+                          className="text-button danger-text"
+                          onClick={() =>
+                            field(
+                              "rows",
+                              draft.rows.filter((v) => v.id !== r.id),
+                            )
+                          }
+                        >
+                          <TrashIcon size={15} />
+                          {t(material ? "এই মাল বাদ দিন" : "এই খরচ বাদ দিন")}
+                        </button>
+                      ) : null}
+                      {material || transport ? (
+                        <TransactionDetails
+                          summary={t(
+                            material
+                              ? "ব্র্যান্ড ও পরিমাণ"
+                              : "কিসের মাল এনেছেন",
+                          )}
+                          defaultOpen={
+                            material && Boolean(r.brand || r.quantity || r.unit)
+                          }
+                        >
+                          <section className="line-meta-v3 transaction-fields">
+                            {material ? (
+                              <label>
+                                {t("ব্র্যান্ড")}
+                                <input
+                                  value={r.brand}
+                                  placeholder={t("ইচ্ছা হলে লিখুন")}
+                                  onChange={(e) =>
+                                    changeRow(r.id, { brand: e.target.value })
+                                  }
+                                />
+                              </label>
+                            ) : null}
+                            {material ? (
+                              <div className="transaction-grid">
+                                <label>
+                                  {t("পরিমাণ")}
+                                  <NumericInput
+                                    value={r.quantity}
+                                    inputMode="decimal"
+                                    onChange={(e) =>
+                                      changeRow(r.id, {
+                                        quantity: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </label>
+                                <label>
+                                  {t("একক")}
+                                  <input
+                                    value={r.unit}
+                                    placeholder={t("বস্তা / ফুট")}
+                                    onChange={(e) =>
+                                      changeRow(r.id, { unit: e.target.value })
+                                    }
+                                  />
+                                </label>
+                              </div>
+                            ) : null}
+                            <label>
+                              {t("মালের ধরন")}
+                              <AppSelect
+                                value={r.groupId}
+                                onChange={(e) =>
+                                  changeRow(r.id, { groupId: e.target.value })
+                                }
+                              >
+                                <option value="">{t("এখন দরকার নেই")}</option>
+                                {groups.map((g) => (
+                                  <option key={g.id} value={g.id}>
+                                    {g.name}
+                                  </option>
+                                ))}
+                                <option value="__new__">
+                                  {t("+ নতুন ধরন")}
+                                </option>
+                              </AppSelect>
+                            </label>
+                            {r.groupId === "__new__" ? (
+                              <label>
+                                {t("নতুন মালের ধরন")}
+                                <input
+                                  value={r.groupName}
+                                  onChange={(e) =>
+                                    changeRow(r.id, {
+                                      groupName: e.target.value,
+                                    })
+                                  }
+                                />
+                              </label>
+                            ) : null}
+                            <label>
+                              {t("কোথায় ব্যবহার হবে")}
+                              <input
+                                value={r.usage}
+                                placeholder={t("যেমন: প্লাস্টারের বালু")}
+                                onChange={(e) =>
+                                  changeRow(r.id, { usage: e.target.value })
+                                }
+                              />
+                            </label>
+                          </section>
+                        </TransactionDetails>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!cash && !wage && !charge && !labour && !transport ? (
+                <button
+                  className="text-button add-line-v3"
+                  type="button"
+                  onClick={() => field("rows", [...draft.rows, row()])}
+                >
+                  <PlusIcon size={17} />
+                  {t(material ? "আরেকটি মাল" : "আরেকটি খরচ")}
+                </button>
+              ) : null}
+            </div>
+            <div className="transaction-aside">
+              {cash || charge || wage ? (
+                <section className="cash-purpose-v3">
+                  <details
+                    className="entry-cash-reason"
+                    open={
+                      !selectedKind ||
+                      selectedKind === "other" ||
+                      !!draft.paymentPurposeId
+                    }
+                  >
+                    <summary>
+                      {t("কারণ লিখি")}
+                      <CaretDownIcon size={16} aria-hidden="true" />
+                    </summary>
+                    <div className="entry-cash-reason-body">
+                      <label>
+                        {t("কিসের টাকা")}
+                        <AppSelect
+                          value={draft.paymentPurposeId || draft.account}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            const custom = ledger.paymentPurposes.find(
+                              (p) => p.id === value,
+                            );
+                            financialScopeChosen.current = true;
+                            setDraft((d) => {
+                              const account =
+                                custom?.account ??
+                                (["materials", "labour", "other"].includes(
+                                  value,
+                                )
+                                  ? (value as QuickDraft["account"])
+                                  : d.account);
+                              return paymentScopeChange(ledger, d, {
+                                paymentPurposeId: custom
+                                  ? custom.id
+                                  : value === "__new__"
+                                    ? value
+                                    : "",
+                                paymentPurposeName: "",
+                                account,
+                                kind:
+                                  d.kind === "wage" && account !== "labour"
+                                    ? "payment"
+                                    : d.kind,
+                                contractId:
+                                  account === "labour" ? d.contractId : "",
+                                costType:
+                                  account === d.account
+                                    ? d.costType
+                                    : account === "labour"
+                                      ? "labour"
+                                      : account === "materials"
+                                        ? "material"
+                                        : "other",
+                              });
+                            });
+                          }}
+                        >
+                          <option value="materials">{t("মালের টাকা")}</option>
+                          <option value="labour">{t("মজুরি")}</option>
+                          <option value="other">
+                            {t("গাড়িভাড়া / অন্য খরচ")}
+                          </option>
+                          {ledger.paymentPurposes.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                          <option value="__new__">
+                            {t("+ নতুন কারণ লিখি")}
+                          </option>
+                        </AppSelect>
+                      </label>
+                      {draft.paymentPurposeId === "__new__" ? (
+                        <div className="payment-purpose-create">
+                          <label>
+                            {t("কিসের টাকা লিখুন")}
+                            <input
+                              value={draft.paymentPurposeName}
+                              maxLength={200}
+                              aria-describedby={`${formId}-purpose-hint`}
+                              placeholder={t("যেমন: মাল নামানোর টাকা")}
+                              onChange={(e) =>
+                                field("paymentPurposeName", e.target.value)
+                              }
+                            />
+                          </label>
+                          <label>
+                            {t("কোন হিসাবের অংশ")}
+                            <AppSelect
+                              value={draft.account}
+                              onChange={(e) => {
+                                financialScopeChosen.current = true;
+                                setDraft((d) =>
+                                  paymentScopeChange(ledger, d, {
+                                    account: e.target
+                                      .value as QuickDraft["account"],
+                                    kind:
+                                      d.kind === "wage" &&
+                                      e.target.value !== "labour"
+                                        ? "payment"
+                                        : d.kind,
+                                    contractId:
+                                      e.target.value === "labour"
+                                        ? d.contractId
+                                        : "",
+                                    costType:
+                                      e.target.value === "labour"
+                                        ? "labour"
+                                        : e.target.value === "materials"
+                                          ? "material"
+                                          : "other",
+                                  }),
+                                );
+                              }}
+                            >
+                              <option value="materials">
+                                {t("মালের টাকা")}
+                              </option>
+                              <option value="labour">{t("মজুরি")}</option>
+                              <option value="other">{t("অন্য খরচ")}</option>
+                            </AppSelect>
+                          </label>
+                          <p
+                            className="field-hint"
+                            id={`${formId}-purpose-hint`}
+                          >
+                            {t(
+                              "টাকা রাখার সঙ্গে এই কারণও রাখা হবে। পরের বার তালিকায় পাবেন।",
+                            )}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  </details>
+                </section>
+              ) : null}
+              {!cash && !returning ? (
+                <section className="payment-state-v3">
+                  <span>
+                    {t(
+                      draft.payment === "worker"
+                        ? "কর্মী নিজের টাকা দিয়েছেন"
+                        : "টাকা দিয়েছেন?",
+                    )}
+                  </span>
+                  <div className="choice-chips">
+                    {(["full", "partial", "due"] as const).map((p) => (
+                      <button
+                        type="button"
+                        key={p}
+                        className={draft.payment === p ? "selected" : ""}
+                        onClick={() => field("payment", p)}
+                      >
+                        {t(
+                          p === "full"
+                            ? "পুরো দিয়েছি"
+                            : p === "partial"
+                              ? "টাকা লিখি"
+                              : "পরে দেব",
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  {draft.payment === "partial" ? (
+                    <label>
+                      {t("এখন কত দিলেন")}
+                      <MoneyInput
+                        aria-label={t("এখন কত দিলেন")}
+                        value={draft.paid}
+                        onChange={(e) => field("paid", e.target.value)}
+                        inputMode="decimal"
+                        placeholder="0"
+                      />
+                    </label>
+                  ) : null}
+                </section>
+              ) : null}
+              {!returning &&
+              !legacyReceivable &&
+              draft.kind !== "refund" &&
+              selectedPerson ? (
+                agreement ? (
+                  <section className="entry-contract-progress">
+                    <h3>{t("কাজের হিসাব")}</h3>
+                    {agreement.balanceAmbiguous ? (
+                      <p>{t("বাকি এখনও পরিষ্কার নয়")}</p>
+                    ) : (
+                      <EntryPaymentPreview
+                        previousBalance={intent.balance ?? 0}
+                        currentCost={0}
+                        payment={paidNow}
+                      />
+                    )}
+                    {agreement.unearnedCommitment > 0 && (
+                      <p className="field-hint">
+                        {t("চুক্তির বাকি কাজ: {{amount}}", {
+                          amount: money(agreement.unearnedCommitment),
+                        })}
+                      </p>
+                    )}
+                  </section>
+                ) : prior?.balance === null ? (
+                  <p className="form-hint" role="status">
+                    {t(
+                      "কিছু মজুরির বিল কোন কাজের, তা মেলানো নেই। কাজ বেছে নিয়ে হিসাব দেখুন।",
+                    )}
+                  </p>
+                ) : prior &&
+                  (prior.balance !== 0 || total > 0 || paidNow > 0) ? (
+                  <EntryPaymentPreview
+                    previousBalance={prior.balance}
+                    acrossJobs={prior.acrossJobs}
+                    currentCost={cash ? 0 : total}
+                    payment={paidNow}
+                  />
+                ) : null
+              ) : null}
+              {cash ||
+              (!returning && ["full", "partial"].includes(draft.payment)) ? (
+                <PaymentMethodField
+                  label={
+                    draft.kind === "refund" ? t("কীভাবে পেয়েছেন") : undefined
+                  }
+                  value={draft.method}
+                  onChange={(method) => field("method", method)}
+                />
+              ) : null}
+              <TransactionExtras
+                hasReceipts={files.length > 0}
+                dateField={
+                  <label>
+                    {t("তারিখ")}
+                    <AppDatePicker
+                      required
+                      value={draft.date}
+                      onChange={(event) => field("date", event.target.value)}
+                    />
+                  </label>
+                }
+                noteField={
+                  <TransactionNoteField
+                    value={draft.note}
+                    onChange={(value) => field("note", value)}
+                  />
+                }
+              >
+                <div className="legacy-transaction-attachments">
+                  <ReceiptPicker
+                    existingCount={files.length}
+                    scopeKey={key}
+                    onError={setError}
+                    onProcessingChange={setProcessingFiles}
+                    disabled={saving || !ready}
+                    onFiles={async (selected) => {
+                      if (!sameOwner()) throw new Error("account_changed");
+                      const next = [
+                        ...latest.current.files,
+                        ...selected.map((file) => ({
+                          id: crypto.randomUUID(),
+                          entryId: draft.id,
+                          name: file.name,
+                          file,
+                        })),
+                      ];
+                      latest.current = { ...latest.current, files: next };
+                      setFiles(next);
+                      await queueDraft(latest.current);
+                    }}
+                  />
+                  {files.map((f) => (
+                    <div className="attachment-row" key={f.id}>
+                      <span>{formatDigits(f.name ?? t("ভাউচার"))}</span>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label={t("বাদ দিন")}
+                        onClick={() =>
+                          setFiles(files.filter((v) => v.id !== f.id))
+                        }
+                      >
+                        <TrashIcon size={17} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </TransactionExtras>
+              {!cash &&
+              !labour &&
+              !returning &&
+              (!selectedKind || selectedKind === "other") ? (
+                <label>
+                  {t("খরচের ধরন")}
+                  <AppSelect
+                    value={draft.costType}
+                    onChange={(event) =>
+                      chooseType(event.target.value as QuickDraft["costType"])
+                    }
+                  >
+                    {Object.entries(costNames).map(([id, label]) => (
+                      <option key={id} value={id}>
+                        {t(label)}
                       </option>
                     ))}
                   </AppSelect>
                 </label>
               ) : null}
-            </section>
-          ) : null}
-          {draft.kind === "payment" ? (
-            <div
-              className="entry-intent-options transaction-choice"
-              role="group"
-              aria-label={t("টাকার কারণ")}
-            >
-              {!intent.hasJob ? (
-                <button
-                  type="button"
-                  aria-pressed={
-                    !legacyReceivable &&
-                    ["charge", "wage"].includes(draft.purpose)
-                  }
-                  className={
-                    !legacyReceivable &&
-                    ["charge", "wage"].includes(draft.purpose)
-                      ? "selected"
-                      : ""
-                  }
-                  onClick={() => choosePurpose("charge")}
-                >
-                  {t("নতুন বিল ও টাকা")}
-                </button>
-              ) : null}
-              {intent.canSettle ? (
-                <button
-                  type="button"
-                  aria-pressed={!legacyReceivable && draft.purpose === "settle"}
-                  className={
-                    !legacyReceivable && draft.purpose === "settle"
-                      ? "selected"
-                      : ""
-                  }
-                  onClick={() => choosePurpose("settle")}
-                >
-                  {t("বাকি মেটাই")}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                aria-pressed={!legacyReceivable && draft.purpose === "advance"}
-                className={
-                  !legacyReceivable && draft.purpose === "advance"
-                    ? "selected"
-                    : ""
-                }
-                onClick={() => choosePurpose("advance")}
-              >
-                {t("অগ্রিম")}
-              </button>
-            </div>
-          ) : null}
-          {draft.kind === "refund" ? (
-            <label>
-              {t("কোন টাকার ফেরত")}
-              <AppSelect
-                aria-label={t("কোন টাকার ফেরত")}
-                value={draft.refundContext}
-                onChange={(event) =>
-                  field(
-                    "refundContext",
-                    event.target.value as QuickDraft["refundContext"],
-                  )
-                }
-              >
-                <option value="unknown">{t("সম্পর্ক জানা নেই")}</option>
-                <option value="settlement">{t("বিলের জন্য দেওয়া টাকা")}</option>
-                <option value="advance">{t("অগ্রিম দেওয়া টাকা")}</option>
-                <option value="receivable">{t("ফেরত পাওয়ার টাকা")}</option>
-              </AppSelect>
-            </label>
-          ) : null}
-          {needsIntent ? (
-            <p className="field-hint" role="status">
-              {t(intentMessage)}
-            </p>
-          ) : null}
-          {transport && !cash && selectedKind !== "driver" ? (
-            <div
-              className="small-switch"
-              role="group"
-              aria-label={t("খরচের ধরন")}
-            >
-              <button
-                type="button"
-                className={draft.costType === "transport" ? "selected" : ""}
-                aria-pressed={draft.costType === "transport"}
-                onClick={() => chooseType("transport")}
-              >
-                {t("গাড়িভাড়া")}
-              </button>
-              <button
-                type="button"
-                className={draft.costType === "unload" ? "selected" : ""}
-                aria-pressed={draft.costType === "unload"}
-                onClick={() => chooseType("unload")}
-              >
-                {t("মাল নামানোর খরচ")}
-              </button>
-            </div>
-          ) : null}
-          {(wage || charge) && draft.account === "labour" ? (
-            <section className="entry-wage-basis">
-              <div
-                className="entry-intent-options transaction-choice"
-                role="group"
-                aria-label={t("মজুরির হিসাব")}
-              >
-                {(
-                  [
-                    ["total", "মোট টাকা"],
-                    ["day", "দিন হিসাবে"],
-                  ] as const
-                ).map(([basis, label]) => (
-                  <button
-                    type="button"
-                    key={basis}
-                    className={draft.wageBasis === basis ? "selected" : ""}
-                    aria-pressed={draft.wageBasis === basis}
-                    onClick={() => {
-                      financialScopeChosen.current = true;
-                      setDraft((current) => ({
-                        ...current,
-                        wageBasis: basis,
-                        purpose:
-                          current.kind === "payment"
-                            ? basis === "day"
-                              ? "wage"
-                              : "charge"
-                            : current.purpose,
-                        amount:
-                          basis === "total" && current.wageBasis === "day"
-                            ? moneyInputValue(quickWageAmount(current))
-                            : current.amount,
-                      }));
-                    }}
-                  >
-                    {t(label)}
-                  </button>
-                ))}
-              </div>
-              {draft.wageBasis === "day" ? (
-                <div className="field-grid">
-                  <label>
-                    {t("কত দিন")}
-                    <NumericInput
-                      aria-label={t("কত দিন")}
-                      value={draft.wageDays}
-                      onChange={(e) => field("wageDays", e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    {t("দিনে কত টাকা")}
-                    <MoneyInput
-                      aria-label={t("দিনে কত টাকা")}
-                      value={draft.wageRate}
-                      onChange={(e) => field("wageRate", e.target.value)}
-                    />
-                  </label>
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-          {cash || wage || charge ? (
-            <div className="transaction-card">
-              <TransactionAmount
-                label={t("কত টাকা")}
-                value={
-                  wage && draft.wageBasis === "day"
-                    ? moneyInputValue(total)
-                    : draft.amount
-                }
-                disabled={wage && draft.wageBasis === "day"}
-                onChange={(value) => field("amount", value)}
-              />
-            </div>
-          ) : (
-            <div className="purchase-lines-v3">
-              {draft.rows.map((r, index) => (
-                <div className="purchase-line-v3 transaction-card" key={r.id}>
-                  <TransactionAmount
-                    label={t("কত টাকা")}
-                    value={r.amount}
-                    onChange={(value) => changeRow(r.id, { amount: value })}
-                  />
-                  <label>
-                    {t(
-                      labour
-                        ? "কী কাজের মজুরি"
-                        : !material
-                          ? "কী বাবদ খরচ"
-                          : returning
-                            ? "কোন মাল ফেরত দিলেন"
-                            : "কী কিনলেন",
-                    )}
-                    <AppCombobox
-                      aria-invalid={
-                        Boolean(error) &&
-                        invalidField === "label" &&
-                        !r.label.trim()
-                      }
-                      aria-describedby={
-                        error && invalidField === "label" && !r.label.trim()
-                          ? `${formId}-error`
-                          : undefined
-                      }
-                      suggestions={material ? materialChoices : []}
-                      value={r.label}
-                      placeholder={t(
-                        labour
-                          ? "যেমন: এই সপ্তাহের প্লাস্টার"
-                          : !material
-                            ? transport
-                              ? "যেমন: দরজা আনার ভাড়া"
-                              : "যেমন: কাজের জায়গায় খাবার"
-                            : "যেমন: সিমেন্ট, টাইলসের আঠা",
-                      )}
-                      onChange={(e) => {
-                        changeRow(
-                          r.id,
-                          !material
-                            ? { label: e.target.value }
-                            : materialSuggestion(
-                                suggestedItems,
-                                e.target.value,
-                                r,
-                              ),
-                        );
-                      }}
-                    />
-                  </label>
-                  {index ? (
-                    <button
-                      type="button"
-                      className="text-button danger-text"
-                      onClick={() =>
-                        field(
-                          "rows",
-                          draft.rows.filter((v) => v.id !== r.id),
-                        )
-                      }
-                    >
-                      <TrashIcon size={15} />
-                      {t(material ? "এই মাল বাদ দিন" : "এই খরচ বাদ দিন")}
-                    </button>
-                  ) : null}
-                  {material || transport ? (
-                    <TransactionDetails
-                      summary={t(
-                        material ? "ব্র্যান্ড ও পরিমাণ" : "কিসের মাল এনেছেন",
-                      )}
-                      defaultOpen={
-                        material && Boolean(r.brand || r.quantity || r.unit)
-                      }
-                    >
-                      <section className="line-meta-v3 transaction-fields">
-                        {material ? (
-                          <label>
-                            {t("ব্র্যান্ড")}
-                            <input
-                              value={r.brand}
-                              placeholder={t("ইচ্ছা হলে লিখুন")}
-                              onChange={(e) =>
-                                changeRow(r.id, { brand: e.target.value })
-                              }
-                            />
-                          </label>
-                        ) : null}
-                        {material ? (
-                          <div className="transaction-grid">
-                            <label>
-                              {t("পরিমাণ")}
-                              <NumericInput
-                                value={r.quantity}
-                                inputMode="decimal"
-                                onChange={(e) =>
-                                  changeRow(r.id, { quantity: e.target.value })
-                                }
-                              />
-                            </label>
-                            <label>
-                              {t("একক")}
-                              <input
-                                value={r.unit}
-                                placeholder={t("বস্তা / ফুট")}
-                                onChange={(e) =>
-                                  changeRow(r.id, { unit: e.target.value })
-                                }
-                              />
-                            </label>
-                          </div>
-                        ) : null}
-                        <label>
-                          {t("মালের ধরন")}
-                          <AppSelect
-                            value={r.groupId}
-                            onChange={(e) =>
-                              changeRow(r.id, { groupId: e.target.value })
-                            }
-                          >
-                            <option value="">{t("এখন দরকার নেই")}</option>
-                            {groups.map((g) => (
-                              <option key={g.id} value={g.id}>
-                                {g.name}
-                              </option>
-                            ))}
-                            <option value="__new__">{t("+ নতুন ধরন")}</option>
-                          </AppSelect>
-                        </label>
-                        {r.groupId === "__new__" ? (
-                          <label>
-                            {t("নতুন মালের ধরন")}
-                            <input
-                              value={r.groupName}
-                              onChange={(e) =>
-                                changeRow(r.id, { groupName: e.target.value })
-                              }
-                            />
-                          </label>
-                        ) : null}
-                        <label>
-                          {t("কোথায় ব্যবহার হবে")}
-                          <input
-                            value={r.usage}
-                            placeholder={t("যেমন: প্লাস্টারের বালু")}
-                            onChange={(e) =>
-                              changeRow(r.id, { usage: e.target.value })
-                            }
-                          />
-                        </label>
-                      </section>
-                    </TransactionDetails>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!cash && !wage && !charge && !labour && !transport ? (
-            <button
-              className="text-button add-line-v3"
-              type="button"
-              onClick={() => field("rows", [...draft.rows, row()])}
-            >
-              <PlusIcon size={17} />
-              {t(material ? "আরেকটি মাল" : "আরেকটি খরচ")}
-            </button>
-          ) : null}
-          {cash || charge || wage ? (
-            <section className="cash-purpose-v3">
-              <details
-                className="entry-cash-reason"
-                open={
-                  !selectedKind ||
-                  selectedKind === "other" ||
-                  !!draft.paymentPurposeId
-                }
-              >
-                <summary>
-                  {t("কারণ লিখি")}
-                  <CaretDownIcon size={16} aria-hidden="true" />
-                </summary>
-                <div className="entry-cash-reason-body">
-                  <label>
-                    {t("কিসের টাকা")}
-                    <AppSelect
-                      value={draft.paymentPurposeId || draft.account}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        const custom = ledger.paymentPurposes.find(
-                          (p) => p.id === value,
-                        );
-                        financialScopeChosen.current = true;
-                        setDraft((d) => {
-                          const account =
-                            custom?.account ??
-                            (["materials", "labour", "other"].includes(value)
-                              ? (value as QuickDraft["account"])
-                              : d.account);
-                          return paymentScopeChange(ledger, d, {
-                            paymentPurposeId: custom
-                              ? custom.id
-                              : value === "__new__"
-                                ? value
-                                : "",
-                            paymentPurposeName: "",
-                            account,
-                            kind:
-                              d.kind === "wage" && account !== "labour"
-                                ? "payment"
-                                : d.kind,
-                            contractId:
-                              account === "labour" ? d.contractId : "",
-                            costType:
-                              account === d.account
-                                ? d.costType
-                                : account === "labour"
-                                  ? "labour"
-                                  : account === "materials"
-                                    ? "material"
-                                    : "other",
-                          });
-                        });
-                      }}
-                    >
-                      <option value="materials">{t("মালের টাকা")}</option>
-                      <option value="labour">{t("মজুরি")}</option>
-                      <option value="other">{t("গাড়িভাড়া / অন্য খরচ")}</option>
-                      {ledger.paymentPurposes.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                      <option value="__new__">{t("+ নতুন কারণ লিখি")}</option>
-                    </AppSelect>
-                  </label>
-                  {draft.paymentPurposeId === "__new__" ? (
-                    <div className="payment-purpose-create">
-                      <label>
-                        {t("কিসের টাকা লিখুন")}
-                        <input
-                          value={draft.paymentPurposeName}
-                          maxLength={200}
-                          aria-describedby={`${formId}-purpose-hint`}
-                          placeholder={t("যেমন: মাল নামানোর টাকা")}
-                          onChange={(e) =>
-                            field("paymentPurposeName", e.target.value)
-                          }
-                        />
-                      </label>
-                      <label>
-                        {t("কোন হিসাবের অংশ")}
-                        <AppSelect
-                          value={draft.account}
-                          onChange={(e) => {
-                            financialScopeChosen.current = true;
-                            setDraft((d) =>
-                              paymentScopeChange(ledger, d, {
-                                account: e.target
-                                  .value as QuickDraft["account"],
-                                kind:
-                                  d.kind === "wage" &&
-                                  e.target.value !== "labour"
-                                    ? "payment"
-                                    : d.kind,
-                                contractId:
-                                  e.target.value === "labour"
-                                    ? d.contractId
-                                    : "",
-                                costType:
-                                  e.target.value === "labour"
-                                    ? "labour"
-                                    : e.target.value === "materials"
-                                      ? "material"
-                                      : "other",
-                              }),
-                            );
-                          }}
-                        >
-                          <option value="materials">{t("মালের টাকা")}</option>
-                          <option value="labour">{t("মজুরি")}</option>
-                          <option value="other">{t("অন্য খরচ")}</option>
-                        </AppSelect>
-                      </label>
-                      <p className="field-hint" id={`${formId}-purpose-hint`}>
-                        {t(
-                          "টাকা রাখার সঙ্গে এই কারণও রাখা হবে। পরের বার তালিকায় পাবেন।",
-                        )}
-                      </p>
-                    </div>
-                  ) : null}
-                </div>
-              </details>
-            </section>
-          ) : null}
-          {!cash && !returning ? (
-            <section className="payment-state-v3">
-              <span>
-                {t(
-                  draft.payment === "worker"
-                    ? "কর্মী নিজের টাকা দিয়েছেন"
-                    : "টাকা দিয়েছেন?",
-                )}
-              </span>
-              <div className="choice-chips">
-                {(["full", "partial", "due"] as const).map((p) => (
-                  <button
-                    type="button"
-                    key={p}
-                    className={draft.payment === p ? "selected" : ""}
-                    onClick={() => field("payment", p)}
-                  >
-                    {t(
-                      p === "full"
-                        ? "পুরো দিয়েছি"
-                        : p === "partial"
-                          ? "টাকা লিখি"
-                          : "পরে দেব",
-                    )}
-                  </button>
-                ))}
-              </div>
-              {draft.payment === "partial" ? (
+              {returning ? (
                 <label>
-                  {t("এখন কত দিলেন")}
+                  {t("ক্যাশ ফেরত পেলে লিখুন")}
                   <MoneyInput
-                    aria-label={t("এখন কত দিলেন")}
-                    value={draft.paid}
-                    onChange={(e) => field("paid", e.target.value)}
-                    inputMode="decimal"
+                    aria-label={t("ক্যাশ ফেরত পেলে লিখুন")}
+                    value={draft.refund}
                     placeholder="0"
+                    onChange={(event) => field("refund", event.target.value)}
                   />
                 </label>
               ) : null}
-            </section>
-          ) : null}
-          {!returning &&
-          !legacyReceivable &&
-          draft.kind !== "refund" &&
-          selectedPerson ? (
-            agreement ? (
-              <section className="entry-contract-progress">
-                <h3>{t("কাজের হিসাব")}</h3>
-                {agreement.balanceAmbiguous ? (
-                  <p>{t("বাকি এখনও পরিষ্কার নয়")}</p>
-                ) : (
-                  <EntryPaymentPreview
-                    previousBalance={intent.balance ?? 0}
-                    currentCost={0}
-                    payment={paidNow}
-                  />
-                )}
-                {agreement.unearnedCommitment > 0 && (
-                  <p className="field-hint">
-                    {t("চুক্তির বাকি কাজ: {{amount}}", {
-                      amount: money(agreement.unearnedCommitment),
-                    })}
-                  </p>
-                )}
-              </section>
-            ) : prior?.balance === null ? (
-              <p className="form-hint" role="status">
-                {t(
-                  "কিছু মজুরির বিল কোন কাজের, তা মেলানো নেই। কাজ বেছে নিয়ে হিসাব দেখুন।",
-                )}
-              </p>
-            ) : prior && (prior.balance !== 0 || total > 0 || paidNow > 0) ? (
-              <EntryPaymentPreview
-                previousBalance={prior.balance}
-                acrossJobs={prior.acrossJobs}
-                currentCost={cash ? 0 : total}
-                payment={paidNow}
-              />
-            ) : null
-          ) : null}
-          {cash ||
-          (!returning && ["full", "partial"].includes(draft.payment)) ? (
-            <PaymentMethodField
-              label={draft.kind === "refund" ? t("কীভাবে পেয়েছেন") : undefined}
-              value={draft.method}
-              onChange={(method) => field("method", method)}
-            />
-          ) : null}
-          <TransactionExtras
-            hasReceipts={files.length > 0}
-            dateField={
-              <label>
-                {t("তারিখ")}
-                <AppDatePicker
-                  required
-                  value={draft.date}
-                  onChange={(event) => field("date", event.target.value)}
-                />
-              </label>
-            }
-            noteField={
-              <TransactionNoteField
-                value={draft.note}
-                onChange={(value) => field("note", value)}
-              />
-            }
-          >
-            <div className="legacy-transaction-attachments">
-              <ReceiptPicker
-                existingCount={files.length}
-                scopeKey={key}
-                onError={setError}
-                onProcessingChange={setProcessingFiles}
-                disabled={saving || !ready}
-                onFiles={async (selected) => {
-                  if (!sameOwner()) throw new Error("account_changed");
-                  const next = [
-                    ...latest.current.files,
-                    ...selected.map((file) => ({
-                      id: crypto.randomUUID(),
-                      entryId: draft.id,
-                      name: file.name,
-                      file,
-                    })),
-                  ];
-                  latest.current = { ...latest.current, files: next };
-                  setFiles(next);
-                  await queueDraft(latest.current);
-                }}
-              />
-              {files.map((f) => (
-                <div className="attachment-row" key={f.id}>
-                  <span>{formatDigits(f.name ?? t("ভাউচার"))}</span>
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label={t("বাদ দিন")}
-                    onClick={() => setFiles(files.filter((v) => v.id !== f.id))}
-                  >
-                    <TrashIcon size={17} />
-                  </button>
-                </div>
-              ))}
             </div>
-          </TransactionExtras>
-          {!cash &&
-          !labour &&
-          !returning &&
-          (!selectedKind || selectedKind === "other") ? (
-            <label>
-              {t("খরচের ধরন")}
-              <AppSelect
-                value={draft.costType}
-                onChange={(event) =>
-                  chooseType(event.target.value as QuickDraft["costType"])
-                }
-              >
-                {Object.entries(costNames).map(([id, label]) => (
-                  <option key={id} value={id}>
-                    {t(label)}
-                  </option>
-                ))}
-              </AppSelect>
-            </label>
-          ) : null}
-          {returning ? (
-            <label>
-              {t("ক্যাশ ফেরত পেলে লিখুন")}
-              <MoneyInput
-                aria-label={t("ক্যাশ ফেরত পেলে লিখুন")}
-                value={draft.refund}
-                placeholder="0"
-                onChange={(event) => field("refund", event.target.value)}
-              />
-            </label>
-          ) : null}
+          </div>
         </fieldset>
       </form>
     </Frame>

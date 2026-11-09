@@ -10,6 +10,7 @@ import "./styles-v4.css";
 import "./theme.css";
 import "./semantic-colors.css";
 import "./scrollbars.css";
+import "./app/responsive.css";
 import { applyPalette, applyTheme, readPreferences } from "./lib/preferences";
 
 const preferences = readPreferences();

@@ -24,6 +24,10 @@
   padding-bottom: 130px;
   background: var(--bg);
 }
+.entry-frame {
+  --entry-content-width: 760px;
+  --entry-content-gutter: 24px;
+}
 .entry-page-header {
   position: sticky;
   top: 0;
@@ -33,12 +37,16 @@
   backdrop-filter: blur(20px);
 }
 .entry-page-header-inner {
-  max-width: 780px;
+  max-width: var(--entry-content-width);
   margin: auto;
-  padding: 18px 24px;
+  padding: 18px var(--entry-content-gutter);
   display: flex;
   gap: 14px;
   align-items: center;
+}
+.entry-page-header-inner > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .entry-page-header h1 {
   font-size: 23px;
@@ -63,6 +71,7 @@
   flex-shrink: 0;
 }
 .entry-private {
+  flex-shrink: 0;
   margin-left: auto;
   width: 35px;
   height: 35px;
@@ -73,9 +82,9 @@
   background: var(--bg-soft, var(--surface));
 }
 .entry-page-body {
-  max-width: 760px;
+  max-width: var(--entry-content-width);
   margin: auto;
-  padding: 24px;
+  padding: 24px var(--entry-content-gutter);
 }
 .entry-page-footer {
   position: fixed;
@@ -86,11 +95,12 @@
   background: color-mix(in srgb, var(--surface) 96%, transparent);
   backdrop-filter: blur(20px);
   border-top: 1px solid var(--line);
-  padding: 14px 24px max(14px, env(safe-area-inset-bottom));
+  padding: 14px var(--entry-content-gutter)
+    max(14px, env(safe-area-inset-bottom));
   box-shadow: 0 -8px 30px #00000004;
 }
 .entry-page-footer > div {
-  max-width: 712px;
+  max-width: calc(var(--entry-content-width) - 2 * var(--entry-content-gutter));
   margin: auto;
 }
 .entry-page-footer .save-bar {
@@ -134,18 +144,21 @@
   gap: 10px;
 }
 @media (max-width: 760px) {
+  .entry-frame {
+    --entry-content-gutter: 18px;
+  }
   .entry-page-header-inner {
-    padding: 15px 18px;
+    padding-block: 15px;
     gap: 12px;
   }
   .entry-page-header h1 {
     font-size: 21px;
   }
   .entry-page-body {
-    padding: 20px 18px;
+    padding-block: 20px;
   }
   .entry-page-footer {
-    padding: 13px 18px max(13px, env(safe-area-inset-bottom));
+    padding-block: 13px max(13px, env(safe-area-inset-bottom));
   }
   .entry-page {
     padding-bottom: 125px;

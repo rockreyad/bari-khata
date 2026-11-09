@@ -323,242 +323,251 @@ export function PersonPage() {
       </header>
       {removal.notice}
       {removal.dialog}
-      <section
-        className={`contact-summary-card contact-summary-${kind}`}
-        aria-label={t("এই নামের মোট হিসাব")}
-      >
-        <div
-          className={`contact-summary-top ${metrics.length ? "has-balance" : ""} ${prominentRemaining ? "has-remaining" : ""}`}
+      <div className="contact-detail-layout">
+        <section
+          className={`contact-summary-card contact-summary-${kind}`}
+          aria-label={t("এই নামের মোট হিসাব")}
         >
-          <div className="contact-summary-hero">
-            <span>{t("মোট টাকা দিয়েছি")}</span>
-            <strong>{money(summary.reconciledNetPaid)}</strong>
-            {summary.refunds > 0 ? <small>{t("ফেরত বাদে")}</small> : null}
-            {balanceNeedsReview ? (
-              <small role="status">{t("বাকির হিসাব যাচাই বাকি")}</small>
+          <div
+            className={`contact-summary-top ${metrics.length ? "has-balance" : ""} ${prominentRemaining ? "has-remaining" : ""}`}
+          >
+            <div className="contact-summary-hero">
+              <span>{t("মোট টাকা দিয়েছি")}</span>
+              <strong>{money(summary.reconciledNetPaid)}</strong>
+              {summary.refunds > 0 ? <small>{t("ফেরত বাদে")}</small> : null}
+              {balanceNeedsReview ? (
+                <small role="status">{t("বাকির হিসাব যাচাই বাকি")}</small>
+              ) : null}
+            </div>
+            {prominentRemaining ? (
+              <div className="contact-remaining-hero">
+                <span>
+                  {t(balanceNeedsReview ? "জানা বাকি" : "আর দিতে হবে")}
+                </span>
+                <strong>{money(remaining)}</strong>
+              </div>
+            ) : null}
+            {metrics.length ? (
+              <dl className="contact-summary-metrics">
+                {metrics.map((metric) => (
+                  <div key={metric.label}>
+                    <dt>{t(metric.label)}</dt>
+                    <dd className={metric.tone}>{money(metric.amount)}</dd>
+                  </div>
+                ))}
+              </dl>
             ) : null}
           </div>
-          {prominentRemaining ? (
-            <div className="contact-remaining-hero">
-              <span>{t(balanceNeedsReview ? "জানা বাকি" : "আর দিতে হবে")}</span>
-              <strong>{money(remaining)}</strong>
+          {showMainActions ? (
+            <div
+              className={`contact-main-actions ${kind === "shop" ? "contact-shop-actions" : ""}`}
+              role="group"
+              aria-label={t("হিসাব লেখার বোতাম")}
+            >
+              {kind === "shop" ? (
+                <>
+                  {actions.includes("purchase") ? (
+                    <button className="primary-button" onClick={addPurchase}>
+                      <PlusIcon size={20} />
+                      <span>{t("মাল কিনলাম")}</span>
+                      <ArrowRightIcon
+                        className="contact-action-arrow"
+                        size={18}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  ) : null}
+                  {actions.includes("payment") ||
+                  actions.includes("transport") ||
+                  actions.includes("return") ? (
+                    <div className="contact-shop-secondary">
+                      {actions.includes("payment") ? (
+                        <button
+                          className={
+                            primary === "payment"
+                              ? "primary-button"
+                              : "secondary-button"
+                          }
+                          onClick={addPayment}
+                        >
+                          <WalletIcon size={18} />
+                          {t("টাকা দিই")}
+                        </button>
+                      ) : null}
+                      {actions.includes("transport") ? (
+                        <button
+                          className={
+                            primary === "transport"
+                              ? "primary-button"
+                              : "secondary-button"
+                          }
+                          onClick={addTransport}
+                        >
+                          <TruckIcon size={18} />
+                          {t("আনার খরচ লিখি")}
+                        </button>
+                      ) : null}
+                      {actions.includes("return") ? (
+                        <button
+                          className={
+                            primary === "return"
+                              ? "primary-button"
+                              : "secondary-button"
+                          }
+                          onClick={addReturn}
+                        >
+                          <ArrowUUpLeftIcon size={18} />
+                          {t("মাল ফেরত দিই")}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  {actions.includes("payment") ? (
+                    <button className="primary-button" onClick={addPayment}>
+                      <WalletIcon size={20} weight="duotone" />
+                      <span>{t("টাকা দিই")}</span>
+                      <ArrowRightIcon
+                        className="contact-action-arrow"
+                        size={18}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  ) : null}
+                  {actions.includes("purchase") ? (
+                    <button
+                      className={
+                        primary === "purchase"
+                          ? "primary-button"
+                          : "secondary-button"
+                      }
+                      onClick={addPurchase}
+                    >
+                      <PlusIcon size={19} />
+                      {t("মাল কিনলাম")}
+                    </button>
+                  ) : null}
+                  {actions.includes("transport") ? (
+                    <button
+                      className={
+                        primary === "transport"
+                          ? "primary-button"
+                          : "secondary-button"
+                      }
+                      onClick={addTransport}
+                    >
+                      <TruckIcon size={20} />
+                      {t("আনার খরচ লিখি")}
+                    </button>
+                  ) : null}
+                  {actions.includes("return") ? (
+                    <button
+                      className={
+                        primary === "return"
+                          ? "primary-button"
+                          : "secondary-button"
+                      }
+                      onClick={addReturn}
+                    >
+                      <ArrowUUpLeftIcon size={19} />
+                      {t("মাল ফেরত দিই")}
+                    </button>
+                  ) : null}
+                </>
+              )}
             </div>
           ) : null}
-          {metrics.length ? (
-            <dl className="contact-summary-metrics">
-              {metrics.map((metric) => (
-                <div key={metric.label}>
-                  <dt>{t(metric.label)}</dt>
-                  <dd className={metric.tone}>{money(metric.amount)}</dd>
-                </div>
-              ))}
-            </dl>
+          {showAdvanceDetails || costMetric || correctionEffect !== 0 ? (
+            <details className="contact-reconciliation">
+              <summary>
+                {t("আরও হিসাব")}
+                <CaretDownIcon size={16} />
+              </summary>
+              {showAdvanceDetails ? (
+                <dl>
+                  <dt>
+                    {t(
+                      commitmentOverview
+                        ? "বেশি দিয়েছি"
+                        : summary.owedCorrection !== 0
+                          ? "আমার জমা"
+                          : "অগ্রিম দিয়েছি",
+                    )}
+                  </dt>
+                  <dd>{money(displayedAdvance)}</dd>
+                </dl>
+              ) : null}
+              {correctionEffect !== 0 ? (
+                <dl className="contact-total-correction">
+                  <dt>{t("মোটের সংশোধন")}</dt>
+                  <dd>{money(correctionEffect)}</dd>
+                </dl>
+              ) : null}
+              {costMetric ? (
+                <dl className="contact-detail-metrics">
+                  <dt>{t(costMetric.label)}</dt>
+                  <dd>{money(costMetric.amount)}</dd>
+                </dl>
+              ) : null}
+            </details>
           ) : null}
-        </div>
-        {showMainActions ? (
-          <div
-            className={`contact-main-actions ${kind === "shop" ? "contact-shop-actions" : ""}`}
-            role="group"
-            aria-label={t("হিসাব লেখার বোতাম")}
-          >
-            {kind === "shop" ? (
-              <>
-                {actions.includes("purchase") ? (
-                  <button className="primary-button" onClick={addPurchase}>
-                    <PlusIcon size={20} />
-                    <span>{t("মাল কিনলাম")}</span>
-                    <ArrowRightIcon
-                      className="contact-action-arrow"
-                      size={18}
-                      aria-hidden="true"
-                    />
-                  </button>
-                ) : null}
-                {actions.includes("payment") ||
-                actions.includes("transport") ||
-                actions.includes("return") ? (
-                  <div className="contact-shop-secondary">
-                    {actions.includes("payment") ? (
-                      <button
-                        className={
-                          primary === "payment"
-                            ? "primary-button"
-                            : "secondary-button"
-                        }
-                        onClick={addPayment}
-                      >
-                        <WalletIcon size={18} />
-                        {t("টাকা দিই")}
-                      </button>
-                    ) : null}
-                    {actions.includes("transport") ? (
-                      <button
-                        className={
-                          primary === "transport"
-                            ? "primary-button"
-                            : "secondary-button"
-                        }
-                        onClick={addTransport}
-                      >
-                        <TruckIcon size={18} />
-                        {t("আনার খরচ লিখি")}
-                      </button>
-                    ) : null}
-                    {actions.includes("return") ? (
-                      <button
-                        className={
-                          primary === "return"
-                            ? "primary-button"
-                            : "secondary-button"
-                        }
-                        onClick={addReturn}
-                      >
-                        <ArrowUUpLeftIcon size={18} />
-                        {t("মাল ফেরত দিই")}
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <>
-                {actions.includes("payment") ? (
-                  <button className="primary-button" onClick={addPayment}>
-                    <WalletIcon size={20} weight="duotone" />
-                    <span>{t("টাকা দিই")}</span>
-                    <ArrowRightIcon
-                      className="contact-action-arrow"
-                      size={18}
-                      aria-hidden="true"
-                    />
-                  </button>
-                ) : null}
-                {actions.includes("purchase") ? (
-                  <button
-                    className={
-                      primary === "purchase"
-                        ? "primary-button"
-                        : "secondary-button"
-                    }
-                    onClick={addPurchase}
-                  >
-                    <PlusIcon size={19} />
-                    {t("মাল কিনলাম")}
-                  </button>
-                ) : null}
-                {actions.includes("transport") ? (
-                  <button
-                    className={
-                      primary === "transport"
-                        ? "primary-button"
-                        : "secondary-button"
-                    }
-                    onClick={addTransport}
-                  >
-                    <TruckIcon size={20} />
-                    {t("আনার খরচ লিখি")}
-                  </button>
-                ) : null}
-                {actions.includes("return") ? (
-                  <button
-                    className={
-                      primary === "return"
-                        ? "primary-button"
-                        : "secondary-button"
-                    }
-                    onClick={addReturn}
-                  >
-                    <ArrowUUpLeftIcon size={19} />
-                    {t("মাল ফেরত দিই")}
-                  </button>
-                ) : null}
-              </>
-            )}
+        </section>
+        <div className="contact-detail-content">
+          <div className="contact-trend-card">
+            <SpendingChart
+              ledger={chartLedger}
+              personId={person.id}
+              workId={workId || undefined}
+              basis="paid"
+              title="মাসের হিসাব"
+              presentation="embedded"
+            />
           </div>
-        ) : null}
-        {showAdvanceDetails || costMetric || correctionEffect !== 0 ? (
-          <details className="contact-reconciliation">
-            <summary>
-              {t("আরও হিসাব")}
-              <CaretDownIcon size={16} />
-            </summary>
-            {showAdvanceDetails ? (
-              <dl>
-                <dt>
-                  {t(
-                    commitmentOverview
-                      ? "বেশি দিয়েছি"
-                      : summary.owedCorrection !== 0
-                        ? "আমার জমা"
-                        : "অগ্রিম দিয়েছি",
-                  )}
-                </dt>
-                <dd>{money(displayedAdvance)}</dd>
-              </dl>
-            ) : null}
-            {correctionEffect !== 0 ? (
-              <dl className="contact-total-correction">
-                <dt>{t("মোটের সংশোধন")}</dt>
-                <dd>{money(correctionEffect)}</dd>
-              </dl>
-            ) : null}
-            {costMetric ? (
-              <dl className="contact-detail-metrics">
-                <dt>{t(costMetric.label)}</dt>
-                <dd>{money(costMetric.amount)}</dd>
-              </dl>
-            ) : null}
-          </details>
-        ) : null}
-      </section>
-      <div className="contact-trend-card">
-        <SpendingChart
-          ledger={chartLedger}
-          personId={person.id}
-          workId={workId || undefined}
-          basis="paid"
-          title="মাসের হিসাব"
-          presentation="embedded"
-        />
+          {canCreateContactJob(person) || personContracts.length > 0 ? (
+            <JobPreview
+              ledger={ledger}
+              contracts={personContracts}
+              personId={person.id}
+              allowCreate={canCreateContactJob(person)}
+              workId={workId || undefined}
+            />
+          ) : null}
+          {summary.historicalCount ? (
+            <p className="contact-old-note">
+              {t(
+                "পুরোনো খাতার পরিশোধ পরিষ্কার নয়। সেই তথ্য দিয়ে বাকি বা আগাম ধরে নেওয়া হয়নি।",
+              )}
+            </p>
+          ) : null}
+          <section className="contact-history">
+            <div className="contact-history-heading">
+              <div>
+                <h2>{t("শেষ ৫টি লেনদেন")}</h2>
+                <p>{t("সব হিসাব")}</p>
+              </div>
+              <button
+                className="text-button"
+                onClick={() => go(fullHistoryPath)}
+              >
+                {t("পুরো হিসাব")}
+                <ArrowRightIcon size={17} />
+              </button>
+            </div>
+            <EntryList
+              showKind
+              ledger={ledger}
+              entries={entries.slice(0, 5)}
+              order="newest"
+              hidePerson
+              hideWork={Boolean(workId)}
+              workId={workId || undefined}
+              onEntry={detail}
+            />
+          </section>
+        </div>
       </div>
-      {canCreateContactJob(person) || personContracts.length > 0 ? (
-        <JobPreview
-          ledger={ledger}
-          contracts={personContracts}
-          personId={person.id}
-          allowCreate={canCreateContactJob(person)}
-          workId={workId || undefined}
-        />
-      ) : null}
-      {summary.historicalCount ? (
-        <p className="contact-old-note">
-          {t(
-            "পুরোনো খাতার পরিশোধ পরিষ্কার নয়। সেই তথ্য দিয়ে বাকি বা আগাম ধরে নেওয়া হয়নি।",
-          )}
-        </p>
-      ) : null}
-      <section className="contact-history">
-        <div className="contact-history-heading">
-          <div>
-            <h2>{t("শেষ ৫টি লেনদেন")}</h2>
-            <p>{t("সব হিসাব")}</p>
-          </div>
-          <button className="text-button" onClick={() => go(fullHistoryPath)}>
-            {t("পুরো হিসাব")}
-            <ArrowRightIcon size={17} />
-          </button>
-        </div>
-        <EntryList
-          showKind
-          ledger={ledger}
-          entries={entries.slice(0, 5)}
-          order="newest"
-          hidePerson
-          hideWork={Boolean(workId)}
-          workId={workId || undefined}
-          onEntry={detail}
-        />
-      </section>
       {shareOpen ? (
         <StatementSheet
           person={person}

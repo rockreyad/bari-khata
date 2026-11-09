@@ -1,7 +1,9 @@
 .contacts-page {
   display: grid;
   gap: 22px;
-  max-width: 940px;
+  width: 100%;
+  max-width: 1160px;
+  min-width: 0;
   margin: 0 auto;
 }
 .contacts-search {
