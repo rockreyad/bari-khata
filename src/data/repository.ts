@@ -302,6 +302,7 @@ export class LedgerRepository {
     files: ReceiptInput[],
   ): Promise<void> {
     const prepared = files.map((input): ReceiptRow => {
+      // Older drafts can contain larger receipts; the new limit applies at intake.
       if (
         !allowedTypes.has(input.file.type) ||
         input.file.size > 10 * 1024 * 1024
