@@ -18,6 +18,8 @@ export const houseCostEnglish: Record<string, string> = {
   "কর্মী বা দোকান": "Worker or shop",
   "কর্মী বেছে নিন": "Choose a worker",
   "অন্যজন দিয়েছেন": "Someone else paid",
+  পুরোটা: "In full",
+  কিছু: "Partly",
   অন্যজন: "Someone else",
   "হিসাবের সারাংশ": "Entry summary",
   "তারিখ ও বাড়তি কথা": "Date and notes",

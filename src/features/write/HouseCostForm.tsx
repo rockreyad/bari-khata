@@ -1147,7 +1147,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
           ) : null}
           {total > 0 && (
             <section
-              className="transaction-summary"
+              className="transaction-summary house-cost-summary"
               aria-label={t("হিসাবের সারাংশ")}
               aria-live="polite"
             >
