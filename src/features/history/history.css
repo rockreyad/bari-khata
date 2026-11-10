@@ -182,9 +182,7 @@
 .history-list .history-row .history-row-amount {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 48%;
-  overflow-wrap: anywhere;
-  white-space: normal;
+  max-width: 62%;
   text-align: end;
 }
 .history-row.is-void .history-row-amount,
