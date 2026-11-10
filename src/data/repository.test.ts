@@ -237,13 +237,14 @@ describe("offline ledger persistence", () => {
       markStarted();
       return conversion;
     });
-    vi.spyOn(db.drafts, "put").mockImplementationOnce(async () => {
-      await db.drafts.get(`real:${key}`);
-      throw new DOMException(
-        "Error preparing Blob/File data to be stored in object store",
-        "UnknownError",
-      );
-    });
+    vi.spyOn(db.drafts, "put").mockImplementationOnce(() =>
+      db.drafts.get(`real:${key}`).then(() => {
+        throw new DOMException(
+          "Error preparing Blob/File data to be stored in object store",
+          "UnknownError",
+        );
+      }),
+    );
     const older = saveDraft(key, { file });
     await started;
     const newer = saveDraft(key, { note: "newer" });

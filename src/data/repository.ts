@@ -67,12 +67,14 @@ async function writeReceiptRows(database: LedgerDatabase, rows: ReceiptRow[]) {
   } catch (error) {
     if (!isBlobStorageError(error)) throw error;
     // WebKit can reject Blob writes while still accepting their bytes.
-    const binary = await Dexie.waitFor(() =>
-      Promise.all(
-        rows.map(async (row) => ({
-          ...row,
-          blob: await row.blob.arrayBuffer(),
-        })),
+    const binary = await Dexie.waitFor(
+      Dexie.ignoreTransaction(() =>
+        Promise.all(
+          rows.map(async (row) => ({
+            ...row,
+            blob: await row.blob.arrayBuffer(),
+          })),
+        ),
       ),
     );
     await database.receipts.bulkPut(binary);
@@ -934,8 +936,10 @@ export class LedgerRepository {
           const incoming = incomingReceipts.get(ref.id);
           if (existing && incoming) {
             // Blob পড়ার সময়ও IndexedDB-এর transaction সচল রাখতে হবে।
-            const contents = await Dexie.waitFor(() =>
-              blobToBase64(readStoredReceipt(existing).blob),
+            const contents = await Dexie.waitFor(
+              Dexie.ignoreTransaction(() =>
+                blobToBase64(readStoredReceipt(existing).blob),
+              ),
             );
             if (
               existing.entryId !== incoming.entryId ||
@@ -1206,7 +1210,9 @@ function storeDraft(
       } catch (error) {
         if (!isBlobStorageError(error)) throw error;
         // Some WebKit sessions can write bytes even when IndexedDB rejects Blobs.
-        const packed = await Dexie.waitFor(() => packDraftBlobBytes(row.value));
+        const packed = await Dexie.waitFor(
+          Dexie.ignoreTransaction(() => packDraftBlobBytes(row.value)),
+        );
         return database.drafts.put({ ...row, value: packed });
       }
     }),
