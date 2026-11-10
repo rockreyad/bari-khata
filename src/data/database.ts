@@ -10,6 +10,7 @@ import {
   type LedgerHeaderRow,
 } from "./entityStorage";
 import Dexie, { type EntityTable } from "dexie";
+import { isArrayBuffer } from "./blobStorage";
 import type { Ledger } from "../domain/model";
 import {
   migrateArchitecture,
@@ -119,7 +120,7 @@ const StoredReceiptSchema = z.object({
   name: z.string().max(300),
   mime: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]),
   blob: z.union([
-    z.instanceof(ArrayBuffer),
+    z.custom<ArrayBuffer>(isArrayBuffer),
     z.custom<Blob>((value) => {
       if (!value || typeof value !== "object") return false;
       try {
@@ -142,7 +143,7 @@ const StoredReceiptSchema = z.object({
 });
 
 function receiptSize(blob: ReceiptBinary) {
-  return blob instanceof ArrayBuffer ? blob.byteLength : blob.size;
+  return isArrayBuffer(blob) ? blob.byteLength : blob.size;
 }
 
 export function readStoredReceipt(row: StoredReceiptRow): ReceiptRow {
@@ -150,12 +151,12 @@ export function readStoredReceipt(row: StoredReceiptRow): ReceiptRow {
   const { blob, mime } = checked;
   if (
     receiptSize(blob) > maxReceiptBytes ||
-    (!(blob instanceof ArrayBuffer) && blob.type !== mime)
+    (!isArrayBuffer(blob) && blob.type !== mime)
   )
     throw new Error("receipt_metadata_mismatch");
   return {
     ...checked,
-    blob: blob instanceof ArrayBuffer ? new Blob([blob], { type: mime }) : blob,
+    blob: isArrayBuffer(blob) ? new Blob([blob], { type: mime }) : blob,
   };
 }
 
@@ -185,7 +186,7 @@ export function validateMigrationReceipts(
       row.workspace !== mode ||
       row.key !== `${mode}:${row.id}` ||
       keys.has(row.key) ||
-      (!(row.blob instanceof ArrayBuffer) && row.mime !== row.blob.type) ||
+      (!isArrayBuffer(row.blob) && row.mime !== row.blob.type) ||
       size > maxReceiptBytes ||
       (reference &&
         (reference.entryId !== row.entryId ||

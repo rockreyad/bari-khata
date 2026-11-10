@@ -22,7 +22,7 @@ import {
   type MigrationReview,
 } from "../domain/migrationReview";
 import { readEntityLedger, writeEntityLedger } from "./entityStorage";
-import { isBlobStorageError } from "./blobStorage";
+import { isArrayBuffer, isBlobStorageError } from "./blobStorage";
 import {
   planBackupMerge,
   preservesBackupPersonWorkLinks,
@@ -1067,7 +1067,7 @@ const DraftBlobBytesSchema = z.strictObject({
   __bariBlobBytes: z.literal(1),
   mime: z.string().refine((type) => allowedTypes.has(type)),
   bytes: z
-    .instanceof(ArrayBuffer)
+    .custom<ArrayBuffer>(isArrayBuffer)
     .refine((bytes) => bytes.byteLength <= 10 * 1024 * 1024),
 });
 const DraftStoredBlobSchema = z.union([DraftBlobSchema, DraftBlobBytesSchema]);

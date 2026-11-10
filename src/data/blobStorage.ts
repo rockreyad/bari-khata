@@ -1,6 +1,21 @@
 const blobStorageMessage =
   "Error preparing Blob/File data to be stored in object store";
 
+const byteLength = Object.getOwnPropertyDescriptor(
+  ArrayBuffer.prototype,
+  "byteLength",
+)!.get!;
+
+export function isArrayBuffer(value: unknown): value is ArrayBuffer {
+  if (typeof value !== "object" || value === null) return false;
+  try {
+    Reflect.apply(byteLength, value, []);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function isBlobStorageError(error: unknown): boolean {
   function matches(value: unknown, parents: Set<object>): boolean {
     if (!value || typeof value !== "object" || parents.has(value)) return false;
