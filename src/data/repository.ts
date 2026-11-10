@@ -292,6 +292,14 @@ export class LedgerRepository {
     mode: WorkspaceMode = "real",
     files: ReceiptInput[] = [],
   ): Promise<void> {
+    await this.saveWithSnapshot(change, mode, files);
+  }
+
+  saveWithSnapshot(
+    change: LedgerChange,
+    mode: WorkspaceMode,
+    files: ReceiptInput[],
+  ): Promise<WorkspaceRow> {
     assertFinancialWritesAllowed();
     return trackLocalWrite(this.persistChange(change, mode, files));
   }
@@ -300,7 +308,7 @@ export class LedgerRepository {
     change: LedgerChange,
     mode: WorkspaceMode,
     files: ReceiptInput[],
-  ): Promise<void> {
+  ): Promise<WorkspaceRow> {
     const prepared = files.map((input): ReceiptRow => {
       // Older drafts can contain larger receipts; the new limit applies at intake.
       if (
@@ -323,7 +331,7 @@ export class LedgerRepository {
         uploadedFor: null,
       };
     });
-    await this.database.transaction(
+    return this.database.transaction(
       "rw",
       [...this.database.workspaceTables(), this.database.receipts],
       async () => {
@@ -376,13 +384,15 @@ export class LedgerRepository {
             throw new Error("receipt_missing");
         }
         await this.database.receipts.bulkPut(prepared);
-        await this.writeWorkspace({
+        const committed = {
           ...current,
           ledger,
           generation: current.generation + 1,
           pending: mode === "real",
           updatedAt: now(),
-        });
+        };
+        await this.writeWorkspace(committed);
+        return committed;
       },
     );
   }

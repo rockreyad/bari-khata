@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { migrateArchitecture } from "../../domain/architectureMigration";
 import "fake-indexeddb/auto";
+import Dexie from "dexie";
 import type { InputHTMLAttributes, SelectHTMLAttributes } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import {
@@ -9,8 +10,11 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter, useSearchParams } from "react-router";
+import { NotebookProvider } from "../../app/NotebookProvider";
 import { LanguageProvider } from "../../context/LanguageProvider";
 import { LedgerSchema, type Ledger } from "../../domain/model";
 import { entryTotal, summarize } from "../../domain/ledger";
@@ -28,6 +32,8 @@ import { savePreferences } from "../../lib/preferences";
 import { EntrySheet } from "../../components/EntrySheet";
 import { EntitySheet } from "../../components/EntitySheet";
 import { EntryList } from "../../components/ui/EntryList";
+import { LedgerPage } from "../ledger/LedgerPage";
+import { EntryDetail } from "./EntryDetail";
 
 vi.mock("../../components/ui/AppSelect", () => ({
   AppSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => (
@@ -45,6 +51,7 @@ afterEach(async () => {
   setActiveOwner(null);
   for (const database of databases.splice(0)) await database.delete();
   localStorage.clear();
+  vi.unstubAllGlobals();
 });
 function fixture() {
   return LedgerSchema.parse({
@@ -114,6 +121,87 @@ async function repository(ledger: Ledger) {
   await repo.ensure("real", ledger);
   return repo;
 }
+
+function LedgerWithEntryDetail() {
+  const [params] = useSearchParams();
+  const id = params.get("_entry");
+  return (
+    <>
+      <LedgerPage />
+      {id && <EntryDetail id={id} />}
+    </>
+  );
+}
+
+it("removes a cancelled transaction from the active ledger as soon as the first save succeeds", async () => {
+  savePreferences({ language: "bn" });
+  vi.stubGlobal("matchMedia", () => ({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
+  const original = fixture();
+  const repo = await repository(original);
+  const read = LedgerRepository.prototype.read;
+  let releaseLiveRead!: () => void;
+  const delayedLiveRead = new Promise<void>((resolve) => {
+    releaseLiveRead = resolve;
+  });
+  const observation = vi
+    .spyOn(LedgerRepository.prototype, "read")
+    .mockImplementation(async function (this: LedgerRepository, mode) {
+      const inTransaction = Boolean(Dexie.currentTransaction);
+      const row = await read.call(this, mode);
+      if (!inTransaction && row?.generation === 1) await delayedLiveRead;
+      return row;
+    });
+  const mount = () =>
+    render(
+      <MemoryRouter initialEntries={["/ledger"]}>
+        <LanguageProvider>
+          <NotebookProvider mode="real">
+            <LedgerWithEntryDetail />
+          </NotebookProvider>
+        </LanguageProvider>
+      </MemoryRouter>,
+    );
+  const user = userEvent.setup();
+  const view = mount();
+  try {
+    await user.click(await screen.findByRole("button", { name: /^দরজা/ }));
+    await user.click(screen.getByRole("button", { name: "আরও" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "হিসাব বাতিল করুন" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "হিসাবটি বাদ দেবেন?" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "হিসাব বাদ দিন" }),
+    );
+    expect(await screen.findByText("হিসাব রাখা হয়েছে")).toBeTruthy();
+    expect(
+      within(view.container).queryByRole("button", { name: /^দরজা/ }),
+    ).toBeNull();
+  } finally {
+    view.unmount();
+    releaseLiveRead();
+    observation.mockRestore();
+  }
+
+  repo.database.close();
+  await repo.database.open();
+  const reopened = (await repo.read())!;
+  expect(reopened.ledger.entries[0]).toMatchObject({
+    voided: true,
+    revisions: [{ before: { voided: false } }],
+  });
+  expect(reopened.ledger.entries[1]).toEqual(original.entries[1]);
+  expect(reopened.pending).toBe(true);
+
+  const nextView = mount();
+  const ledger = within(nextView.container);
+  await ledger.findByRole("button", { name: /^দোকান/ });
+  expect(ledger.queryByRole("button", { name: /^দরজা/ })).toBeNull();
+});
 
 it.each([
   { id: "bill", field: /^মোট দাম/, next: "1600" },
