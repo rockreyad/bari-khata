@@ -51,6 +51,8 @@ import { TransactionExtras } from "./TransactionExtras";
 import { TransactionNoteField } from "./TransactionNoteField";
 import { ReceiptPicker } from "./ReceiptPicker";
 import { ReceiptGallery } from "./ReceiptGallery";
+import { replaceDraftReceipt } from "../lib/replaceDraftReceipt";
+import { voucherFilename } from "../lib/voucherFilename";
 import { PaymentMethodField } from "./PaymentMethodField";
 import { PersonSchema } from "../domain/model";
 import { Sheet } from "./Sheet";
@@ -130,7 +132,7 @@ type Draft = z.infer<typeof DraftSchema>;
 type DraftRow = z.infer<typeof RowSchema>;
 export type EntryAttachments = {
   entryId: string;
-  files: Array<{ id: string; file: File }>;
+  files: Array<{ id: string; file: File; name?: string }>;
 };
 export type EntrySheetProps = {
   presentation?: "sheet" | "page";
@@ -541,7 +543,7 @@ function SupportedEntrySheet({
   useEffect(() => {
     if (!ready || saving || finished.current) return;
     const timer = window.setTimeout(() => {
-      void queueDraft({ draft, files }).catch(() =>
+      void queueDraft(latest.current).catch(() =>
         setDraftNotice(
           t("অসমাপ্ত হিসাবটি রাখা যায়নি। বন্ধ করার আগে সংরক্ষণ করুন।"),
         ),
@@ -726,11 +728,20 @@ function SupportedEntrySheet({
 
       const contractId =
         account === "labour" ? selectedContractId || null : null;
+      const attachments = files.map((file, index) => ({
+        ...file,
+        name: voucherFilename(
+          (original?.receipts.length ?? 0) + index + 1,
+          draft.unknownDate ? null : draft.date,
+          original?.createdAt ?? now,
+          file.file.type,
+        ),
+      }));
       const receipts = [
         ...(original?.receipts ?? []),
-        ...files.map(({ id, file }) => ({
+        ...attachments.map(({ id, file, name }) => ({
           id,
-          name: file.name,
+          name,
           mime: file.type,
           size: file.size,
         })),
@@ -944,7 +955,9 @@ function SupportedEntrySheet({
       await queueDraft(latest.current);
       await onSave(
         next,
-        files.length ? { entryId: entry.id, files } : undefined,
+        attachments.length
+          ? { entryId: entry.id, files: attachments }
+          : undefined,
       );
       finished.current = true;
       await queue.current.catch(() => {});
@@ -1774,6 +1787,21 @@ function SupportedEntrySheet({
         onRemove={(id) =>
           setFiles((current) => current.filter((item) => item.id !== id))
         }
+        onCrop={async (id, cropped, original) => {
+          const previous = latest.current.files;
+          const next = replaceDraftReceipt(previous, id, original, cropped);
+          latest.current = { ...latest.current, files: next };
+          setFiles(next);
+          try {
+            await queueDraft(latest.current);
+          } catch (error) {
+            if (mounted.current && latest.current.files === next) {
+              latest.current = { ...latest.current, files: previous };
+              setFiles(previous);
+            }
+            throw error;
+          }
+        }}
         removeDisabled={saving || processingFiles || !ready}
       />
     </div>

@@ -631,7 +631,7 @@ it("flushes an edited entry's amount, note and voucher on immediate unmount and 
       target: { files: [file] },
     },
   );
-  await screen.findByText("door.pdf");
+  await screen.findByText("voucher-1-undated.pdf");
   storage.writes.mockClear();
   vi.useFakeTimers();
   fireEvent.change(screen.getByRole("textbox", { name: /^মোট দাম/ }), {
@@ -660,7 +660,7 @@ it("flushes an edited entry's amount, note and voucher on immediate unmount and 
     (reveal(screen.getByLabelText("মনে রাখার কথা")) as HTMLTextAreaElement)
       .value,
   ).toBe("ডেলিভারিসহ দাম");
-  expect(screen.getByText("door.pdf")).toBeTruthy();
+  expect(screen.getByText("voucher-1-undated.pdf")).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "সংরক্ষণ করুন" }));
   await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
   expect(onSave.mock.calls[0][0].entries[0]).toMatchObject({
@@ -769,7 +769,7 @@ async function savedEntryChanges() {
       target: { files: [file] },
     },
   );
-  await screen.findByText("my-changes.pdf");
+  await screen.findByText("voucher-1-2026-11-01.pdf");
   fireEvent.change(screen.getByRole("textbox", { name: /^মোট দাম/ }), {
     target: { value: "94000" },
   });
@@ -830,7 +830,7 @@ it("shows a stale edit and its voucher for read-only review without overwriting 
     (reveal(screen.getByLabelText("মনে রাখার কথা")) as HTMLTextAreaElement)
       .value,
   ).toBe("আমার অসমাপ্ত কথা");
-  expect(screen.getByText("my-changes.pdf")).toBeTruthy();
+  expect(screen.getByText("voucher-1-2026-11-01.pdf")).toBeTruthy();
   expect(view.container.querySelector("fieldset")?.disabled).toBe(true);
   expect(
     (screen.getByRole("button", { name: "সংরক্ষণ করুন" }) as HTMLButtonElement)
@@ -881,7 +881,7 @@ it("rebases a stale draft only after explicit choice and audits the current entr
     (reveal(screen.getByLabelText("মনে রাখার কথা")) as HTMLTextAreaElement)
       .value,
   ).toBe("আমার অসমাপ্ত কথা");
-  expect(screen.getByText("my-changes.pdf")).toBeTruthy();
+  expect(screen.getByText("voucher-1-2026-11-01.pdf")).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "সংরক্ষণ করুন" }));
   await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
   const entry = onSave.mock.calls[0][0].entries[0];

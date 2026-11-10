@@ -25,6 +25,7 @@ import {
   getContactEntryDefaults,
 } from "../../domain/contactEntryPolicy";
 import { moneyInputValue } from "../../lib/numericFields";
+import { voucherFilename } from "../../lib/voucherFilename";
 import { entryContext } from "../entries/entryContext";
 import {
   QuickSavedDraftSchema,
@@ -415,6 +416,15 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
       )
         throw new Error("amount");
       await flush();
+      const attachments = files.map((receipt, index) => ({
+        ...receipt,
+        name: voucherFilename(
+          index + 1,
+          draft.date,
+          undefined,
+          receipt.file.type,
+        ),
+      }));
       await save((current) => {
         const normalized = {
           ...draft,
@@ -432,9 +442,9 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
         let next = recordHouseCost(
           current,
           normalized,
-          files.map((file) => ({
+          attachments.map((file) => ({
             id: file.id,
-            name: file.name ?? t("ভাউচার"),
+            name: file.name,
             mime: file.file.type,
             size: file.file.size,
           })),
@@ -443,7 +453,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
         if (advanceAmount && advance)
           next = applyHouseBillAdvance(next, draft.id, advance);
         return next;
-      }, files);
+      }, attachments);
       finished.current = true;
       try {
         await clear(initial);

@@ -321,20 +321,20 @@ it.each(["purchase", "payment"] as const)(
       await pendingWrites;
     });
     await ready();
-    expect(screen.getByText("sample-original.jpg")).toBeTruthy();
+    expect(screen.getByText(/^voucher-1-\d{4}-\d{2}-\d{2}\.jpg$/)).toBeTruthy();
     page.unmount();
     repo.database.close();
     await repo.database.open();
     page = mount(initial, form, path);
     await ready();
     await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
-    expect(screen.getByText("sample-original.jpg")).toBeTruthy();
+    expect(screen.getByText(/^voucher-1-\d{4}-\d{2}-\d{2}\.jpg$/)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
     await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
     const saved = (await repo.read())!.ledger;
     const receipt = saved.entries.flatMap((entry) => entry.receipts)[0];
     expect(receipt).toMatchObject({
-      name: "sample-original.jpg",
+      name: expect.stringMatching(/^voucher-1-\d{4}-\d{2}-\d{2}\.jpg$/),
       mime: "image/jpeg",
       size: prepared.size,
     });
@@ -549,7 +549,11 @@ it("reopens an old settlement cash draft on the ordinary route and saves its rec
     account: "materials",
     note: "নমুনা বিল ছাড়া দেওয়া টাকা",
     paymentParts: [{ method: "bank", amount: 5000 }],
-    receipts: [expect.objectContaining({ name: "sample-no-bill.pdf" })],
+    receipts: [
+      expect.objectContaining({
+        name: expect.stringMatching(/^voucher-1-\d{4}-\d{2}-\d{2}\.pdf$/),
+      }),
+    ],
   });
   expect(saved.entries[0].paymentContext).toBe("settlement");
   expect(summarize(saved)).toMatchObject({ cost: 0, cashPaid: 5000 });
@@ -944,7 +948,7 @@ it("restores brand, quantity, unit, receipt and partial payment after reopening,
   expect(
     screen.getByRole("button", { name: "কিছু দিয়েছি", pressed: true }),
   ).toBeTruthy();
-  expect(screen.getByText("sample.png")).toBeTruthy();
+  expect(screen.getByText(/^voucher-1-\d{4}-\d{2}-\d{2}\.png$/)).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
   const saved = (await repo.read())!.ledger;
@@ -1276,7 +1280,7 @@ it("keeps a purchase draft and attachment on reopening, then stores one cost and
   expect((screen.getByLabelText(/^মালের নাম/) as HTMLInputElement).value).toBe(
     "নমুনা কেনা মাল",
   );
-  expect(screen.getByText("sample.pdf")).toBeTruthy();
+  expect(screen.getByText(/^voucher-1-\d{4}-\d{2}-\d{2}\.pdf$/)).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
   const saved = (await repo.read())!.ledger;
@@ -2183,7 +2187,7 @@ it("folds date, note and receipts together and restores them alongside the selec
   async function openExtraVoucher() {
     await user.click(
       screen.getByRole("button", {
-        name: "ভাউচার দেখি: sample-bank-extra.pdf",
+        name: "ভাউচার দেখি: voucher-2-2026-11-08.pdf",
       }),
     );
     const download = await screen.findByRole("link", { name: "ভাউচার নামান" });
@@ -2215,8 +2219,8 @@ it("folds date, note and receipts together and restores them alongside the selec
     date: "2026-11-08",
     paymentParts: [{ method: "bank", amount: 5000 }],
     receipts: [
-      expect.objectContaining({ name: "sample-bank.pdf" }),
-      expect.objectContaining({ name: "sample-bank-extra.pdf" }),
+      expect.objectContaining({ name: "voucher-1-2026-11-08.pdf" }),
+      expect.objectContaining({ name: "voucher-2-2026-11-08.pdf" }),
     ],
   });
   expect(

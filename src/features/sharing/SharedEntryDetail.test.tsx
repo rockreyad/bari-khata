@@ -441,7 +441,9 @@ it("fetches a PDF only on explicit request and revokes its download URL on close
   render(<SharedEntryDetail {...callbacks} />);
   await screen.findByText("নমুনা বিবরণ");
   await userEvent.click(
-    screen.getByRole("button", { name: "ভাউচার দেখি: sample.pdf" }),
+    screen.getByRole("button", {
+      name: "ভাউচার দেখি: voucher-1-2026-11-01.pdf",
+    }),
   );
   const link = await screen.findByRole("link", { name: "ভাউচার নামান" });
   expect(link.getAttribute("href")).toBe("blob:sample-voucher");
@@ -462,9 +464,11 @@ it("fetches a PDF only on explicit request and revokes its download URL on close
   );
   await userEvent.click(screen.getByRole("button", { name: "বন্ধ করুন" }));
   expect(callbacks.onClose).not.toHaveBeenCalled();
-  expect(screen.getByRole("button", { name: "ভাউচার দেখি: sample.pdf" })).toBe(
-    document.activeElement,
-  );
+  expect(
+    screen.getByRole("button", {
+      name: "ভাউচার দেখি: voucher-1-2026-11-01.pdf",
+    }),
+  ).toBe(document.activeElement);
   expect(mocked.revoke).toHaveBeenCalledExactlyOnceWith("blob:sample-voucher");
 });
 it("keeps only one image preview and revokes each object URL on close and unmount", async () => {
@@ -485,20 +489,28 @@ it("keeps only one image preview and revokes each object URL on close and unmoun
   const view = render(<SharedEntryDetail {...props()} />);
   await screen.findByText("নমুনা বিবরণ");
   await userEvent.click(
-    screen.getByRole("button", { name: "ভাউচার দেখি: one.png" }),
+    screen.getByRole("button", {
+      name: "ভাউচার দেখি: voucher-1-2026-11-01.png",
+    }),
   );
   expect(
-    (await screen.findByRole("img", { name: "one.png" })).getAttribute("src"),
+    (
+      await screen.findByRole("img", { name: "voucher-1-2026-11-01.png" })
+    ).getAttribute("src"),
   ).toBe("blob:first");
   await userEvent.keyboard("{Escape}");
   await userEvent.click(
-    screen.getByRole("button", { name: "ভাউচার দেখি: two.png" }),
+    screen.getByRole("button", {
+      name: "ভাউচার দেখি: voucher-2-2026-11-01.png",
+    }),
   );
-  await screen.findByRole("img", { name: "two.png" });
+  await screen.findByRole("img", { name: "voucher-2-2026-11-01.png" });
   expect(
     screen.getByRole("link", { name: "ভাউচার নামান" }).getAttribute("download"),
   ).toBe("voucher-2-2026-11-01.png");
-  expect(screen.queryByRole("img", { name: "one.png" })).toBeNull();
+  expect(
+    screen.queryByRole("img", { name: "voucher-1-2026-11-01.png" }),
+  ).toBeNull();
   expect(mocked.revoke).toHaveBeenCalledWith("blob:first");
   view.unmount();
   expect(mocked.revoke).toHaveBeenCalledWith("blob:second");
@@ -512,7 +524,9 @@ it("aborts a pending voucher on unmount and never creates a URL from its late by
   const view = render(<SharedEntryDetail {...props()} />);
   await screen.findByText("নমুনা বিবরণ");
   await userEvent.click(
-    screen.getByRole("button", { name: "ভাউচার দেখি: sample.pdf" }),
+    screen.getByRole("button", {
+      name: "ভাউচার দেখি: voucher-1-2026-11-01.pdf",
+    }),
   );
   const signal = mocked.receipt.mock.calls[0][4].signal as AbortSignal;
   view.unmount();
@@ -531,7 +545,9 @@ it.each(["share_unavailable", "share_changed"])(
     render(<SharedEntryDetail {...callbacks} />);
     await screen.findByText("নমুনা বিবরণ");
     await userEvent.click(
-      screen.getByRole("button", { name: "ভাউচার দেখি: sample.pdf" }),
+      screen.getByRole("button", {
+        name: "ভাউচার দেখি: voucher-1-2026-11-01.pdf",
+      }),
     );
     await screen.findByRole("alert");
     expect(screen.queryByText("নমুনা পরিশোধের নোট")).toBeNull();
@@ -548,7 +564,9 @@ it("rejects an unsafe voucher type without exposing a browser URL", async () => 
   render(<SharedEntryDetail {...props()} />);
   await screen.findByText("নমুনা বিবরণ");
   await userEvent.click(
-    screen.getByRole("button", { name: "ভাউচার দেখি: sample.pdf" }),
+    screen.getByRole("button", {
+      name: "ভাউচার দেখি: voucher-1-2026-11-01.pdf",
+    }),
   );
   await screen.findByText("ভাউচার খোলা যায়নি। আবার চেষ্টা করুন।");
   expect(mocked.create).not.toHaveBeenCalled();
@@ -577,7 +595,9 @@ it("keeps a valid detail available through a temporary receipt failure and lets 
   await screen.findByText("নমুনা বিবরণ");
   const user = userEvent.setup();
   await user.click(
-    screen.getByRole("button", { name: "ভাউচার দেখি: sample.pdf" }),
+    screen.getByRole("button", {
+      name: "ভাউচার দেখি: voucher-1-2026-11-01.pdf",
+    }),
   );
   await screen.findByText("ভাউচার খোলা যায়নি। আবার চেষ্টা করুন।");
   expect(screen.getByText("নমুনা পরিশোধের নোট")).toBeTruthy();
@@ -585,7 +605,9 @@ it("keeps a valid detail available through a temporary receipt failure and lets 
   expect(callbacks.onStale).not.toHaveBeenCalled();
   await user.keyboard("{Escape}");
   await user.click(
-    screen.getByRole("button", { name: "ভাউচার দেখি: sample.pdf" }),
+    screen.getByRole("button", {
+      name: "ভাউচার দেখি: voucher-1-2026-11-01.pdf",
+    }),
   );
   await screen.findByRole("link", { name: "ভাউচার নামান" });
   expect(screen.queryByRole("alert")).toBeNull();
@@ -616,7 +638,9 @@ it("never creates a voucher URL after the capability hash changes before its nav
   render(<SharedEntryDetail {...callbacks} />);
   await screen.findByText("নমুনা বিবরণ");
   await userEvent.click(
-    screen.getByRole("button", { name: "ভাউচার দেখি: sample.pdf" }),
+    screen.getByRole("button", {
+      name: "ভাউচার দেখি: voucher-1-2026-11-01.pdf",
+    }),
   );
   await act(async () => {
     window.history.replaceState(null, "", `#${"b".repeat(64)}`);
