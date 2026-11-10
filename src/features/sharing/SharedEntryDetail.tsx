@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { appendSharedPayments } from "./shareModel";
 import { Sheet } from "../../components/Sheet";
+import { ReceiptGallery } from "../../components/ReceiptGallery";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import {
   readSharedEntry,
@@ -37,7 +38,6 @@ const allowed = new Set([
   "image/webp",
   "application/pdf",
 ]);
-type Preview = { id: string; url: string; name: string; mime: string };
 
 export function SharedEntryDetail(props: SharedEntryDetailProps) {
   return (
@@ -87,30 +87,18 @@ function Detail({
   const [entry, setEntry] = useState<SharedEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [receiptError, setReceiptError] = useState("");
-  const [receiptBusy, setReceiptBusy] = useState<string | null>(null);
   const [paymentsBusy, setPaymentsBusy] = useState(false);
   const [paymentsError, setPaymentsError] = useState("");
-  const [preview, setPreview] = useState<Preview | null>(null);
   const alive = useRef(false);
   const detailAbort = useRef<AbortController | null>(null);
-  const receiptAbort = useRef<AbortController | null>(null);
   const paymentsAbort = useRef<AbortController | null>(null);
-  const receiptLock = useRef(false);
   const paymentsLock = useRef(false);
-  const url = useRef<string | null>(null);
   const callbacks = useRef({ onClose, onUnavailable, onStale });
   callbacks.current = { onClose, onUnavailable, onStale };
-  function revoke() {
-    if (url.current) URL.revokeObjectURL(url.current);
-    url.current = null;
-  }
   function stop() {
     alive.current = false;
     detailAbort.current?.abort();
-    receiptAbort.current?.abort();
     paymentsAbort.current?.abort();
-    revoke();
   }
   function current() {
     return alive.current && token === window.location.hash.slice(1);
@@ -123,7 +111,6 @@ function Detail({
     stop();
     setLoading(false);
     setEntry(null);
-    setPreview(null);
     setError(
       t(
         stale
@@ -171,7 +158,6 @@ function Detail({
       if (token !== window.location.hash.slice(1)) {
         stop();
         setEntry(null);
-        setPreview(null);
         callbacks.current.onClose();
       }
     };
@@ -221,24 +207,14 @@ function Detail({
       if (current()) setPaymentsBusy(false);
     }
   }
-  async function openReceipt(receipt: SharedEntry["receipts"][number]) {
-    if (!current() || receiptLock.current || !entry) return;
-    receiptLock.current = true;
-    setReceiptBusy(receipt.id);
-    setReceiptError("");
-    revoke();
-    setPreview(null);
-    const controller = new AbortController();
-    receiptAbort.current = controller;
+  async function loadReceipt(id: string, signal: AbortSignal) {
+    const receipt = entry?.receipts.find((item) => item.id === id);
+    if (!current() || !receipt) return;
     try {
-      const blob = await readSharedReceipt(
-        token,
-        entryId,
-        receipt.id,
-        revision,
-        { signal: controller.signal },
-      );
-      if (!current() || controller.signal.aborted) return;
+      const blob = await readSharedReceipt(token, entryId, id, revision, {
+        signal,
+      });
+      if (!current() || signal.aborted) return;
       if (
         !allowed.has(blob.type) ||
         blob.type !== receipt.mime ||
@@ -247,30 +223,13 @@ function Detail({
         blob.size > 10 * 1024 * 1024
       )
         throw new Error("share_receipt_failed");
-      const next = URL.createObjectURL(blob);
-      url.current = next;
-      setPreview({
-        id: receipt.id,
-        url: next,
-        name: receipt.name,
-        mime: blob.type,
-      });
+      return blob;
     } catch (cause) {
-      if (!current() || controller.signal.aborted) return;
+      if (!current() || signal.aborted) return;
       const code = cause instanceof Error ? cause.message : "";
       if (code === "share_changed") unavailable(true);
       else if (code === "share_unavailable") unavailable(false);
-      else
-        setReceiptError(
-          t(
-            code === "share_receipt_too_large"
-              ? "ভাউচারটি অনেক বড়। যিনি পাঠিয়েছেন তাঁর কাছ থেকে নিন।"
-              : "ভাউচার খোলা যায়নি। আবার চেষ্টা করুন।",
-          ),
-        );
-    } finally {
-      receiptLock.current = false;
-      if (current()) setReceiptBusy(null);
+      else throw cause;
     }
   }
   const amount =
@@ -465,37 +424,19 @@ function Detail({
             {entry.receipts.length ? (
               <section>
                 <h3>{t("ছবি ও ভাউচার")}</h3>
-                <div className="shared-detail-receipts">
-                  {entry.receipts.map((receipt) => (
-                    <button
-                      key={receipt.id}
-                      className="secondary-button"
-                      type="button"
-                      disabled={receiptBusy !== null}
-                      onClick={() => void openReceipt(receipt)}
-                      aria-label={`${t("ভাউচার দেখি")}: ${formatDigits(receipt.name)}`}
-                    >
-                      {receiptBusy === receipt.id
-                        ? t("অপেক্ষা করুন…")
-                        : formatDigits(receipt.name)}
-                    </button>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-            {receiptError ? <p role="alert">{receiptError}</p> : null}
-            {preview ? (
-              <section className="shared-detail-preview">
-                {preview.mime.startsWith("image/") ? (
-                  <img src={preview.url} alt={formatDigits(preview.name)} />
-                ) : null}
-                <a
-                  href={preview.url}
-                  download={preview.name}
-                  className="secondary-button"
-                >
-                  {t("ভাউচার নামান")}
-                </a>
+                <ReceiptGallery
+                  receipts={entry.receipts}
+                  date={entry.date}
+                  loadFile={({ id }, signal) => loadReceipt(id, signal)}
+                  loadError={(cause) =>
+                    t(
+                      cause instanceof Error &&
+                        cause.message === "share_receipt_too_large"
+                        ? "ভাউচারটি অনেক বড়। যিনি পাঠিয়েছেন তাঁর কাছ থেকে নিন।"
+                        : "ভাউচার খোলা যায়নি। আবার চেষ্টা করুন।",
+                    )
+                  }
+                />
               </section>
             ) : null}
           </>

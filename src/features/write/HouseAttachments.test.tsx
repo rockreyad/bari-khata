@@ -131,3 +131,48 @@ it("reports a rejected draft write when removing a receipt", async () => {
   );
   expect(onChange).toHaveBeenCalledWith([]);
 });
+
+it("keeps a restored unsupported voucher removable without creating a preview or download URL", async () => {
+  const createObjectURL = vi.fn();
+  const NativeURL = URL;
+  vi.stubGlobal(
+    "URL",
+    class extends NativeURL {
+      static createObjectURL = createObjectURL;
+    },
+  );
+  try {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <LanguageProvider>
+        <HouseAttachments
+          files={[
+            {
+              id: "sample-invalid",
+              entryId: "sample-entry",
+              name: "sample-invalid.html",
+              file: new Blob(["<html>sample</html>"], { type: "text/html" }),
+            },
+          ]}
+          entryId="sample-entry"
+          onError={vi.fn()}
+          onChange={onChange}
+        />
+      </LanguageProvider>,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "ভাউচার দেখি: sample-invalid.html" }),
+    );
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "ভাউচার নামান" })).toBeNull();
+    expect(createObjectURL).not.toHaveBeenCalled();
+    await user.keyboard("{Escape}");
+    await user.click(
+      screen.getByRole("button", { name: "সরান: sample-invalid.html" }),
+    );
+    expect(onChange).toHaveBeenCalledWith([]);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

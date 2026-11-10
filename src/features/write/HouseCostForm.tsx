@@ -1229,6 +1229,7 @@ export function HouseCostForm({ action }: { action: "purchase" | "charge" }) {
               <HouseAttachments
                 files={files}
                 entryId={draft.id}
+                date={draft.date}
                 onChange={async (next) => {
                   update((current) => ({ ...current, files: next }));
                   await flush();

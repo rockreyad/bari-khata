@@ -12,7 +12,6 @@ import {
   type FormEvent,
 } from "react";
 import {
-  Download,
   ChevronRight,
   Pencil,
   Plus,
@@ -51,6 +50,7 @@ import { TransactionAmount, TransactionDetails } from "./TransactionFields";
 import { TransactionExtras } from "./TransactionExtras";
 import { TransactionNoteField } from "./TransactionNoteField";
 import { ReceiptPicker } from "./ReceiptPicker";
+import { ReceiptGallery } from "./ReceiptGallery";
 import { PaymentMethodField } from "./PaymentMethodField";
 import { PersonSchema } from "../domain/model";
 import { Sheet } from "./Sheet";
@@ -324,7 +324,7 @@ function SupportedEntrySheet({
   onClose,
 }: EntrySheetProps) {
   const storage = useMemo(() => createWorkspaceStorage(mode), [mode]);
-  const { t, money, date, formatDigits } = useLanguageContext();
+  const { t, money, date } = useLanguageContext();
   const original = ledger.entries.find((entry) => entry.id === editEntryId);
   const draftKey = `entry:${editEntryId ?? `${defaultWorkId ?? "all"}:${defaultPersonId ?? "all"}:${initialKind ?? "purchase"}`}`;
   const [draft, setDraft] = useState<Draft>(() =>
@@ -1008,22 +1008,6 @@ function SupportedEntrySheet({
     hydrated.current = true;
     setReady(true);
   };
-
-  async function downloadReceipt(id: string, name: string) {
-    try {
-      const stored = await storage.getReceipt(id);
-      if (!stored) throw new Error("receipt_missing");
-      const url = URL.createObjectURL(stored.blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = name;
-      link.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 10000);
-    } catch {
-      if (mounted.current)
-        setError(t("ভাউচার এই ফোনে পাওয়া যায়নি। অনলাইনে সিঙ্ক করে দেখুন।"));
-    }
-  }
 
   function reviewLatestPayment() {
     setError("");
@@ -1775,34 +1759,23 @@ function SupportedEntrySheet({
           })}
         </p>
       ) : null}
-      {original?.receipts.map((receipt) => (
-        <button
-          type="button"
-          className="entry-saved-receipt"
-          key={receipt.id}
-          onClick={() => void downloadReceipt(receipt.id, receipt.name)}
-        >
-          <Receipt size={18} aria-hidden="true" />
-          <span>{formatDigits(receipt.name)}</span>
-          <Download size={16} aria-hidden="true" />
-        </button>
-      ))}
-      {files.map(({ id, file }) => (
-        <div className="attachment-row" key={id}>
-          <Receipt size={17} />
-          <span>{formatDigits(file.name)}</span>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={t("ভাউচার সরান")}
-            onClick={() =>
-              setFiles((current) => current.filter((item) => item.id !== id))
-            }
-          >
-            <Trash2 size={15} />
-          </button>
-        </div>
-      ))}
+      <ReceiptGallery
+        key={draftKey}
+        receipts={[
+          ...(original?.receipts ?? []),
+          ...files.map(({ id, file }) => ({ id, name: file.name, file })),
+        ]}
+        date={draft.unknownDate ? null : draft.date}
+        createdAt={original?.createdAt}
+        loadFile={async ({ id }) => {
+          const stored = await storage.getReceipt(id);
+          return stored?.entryId === original?.id ? stored?.blob : undefined;
+        }}
+        onRemove={(id) =>
+          setFiles((current) => current.filter((item) => item.id !== id))
+        }
+        removeDisabled={saving || processingFiles || !ready}
+      />
     </div>
   );
   const linkedPaymentFields = (

@@ -1416,23 +1416,6 @@ h3 {
   color: var(--muted);
   white-space: pre-wrap;
 }
-.receipt-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 13px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  font-size: 13px;
-  color: var(--accent);
-  margin-top: 10px;
-  text-align: left;
-}
-.receipt-row span {
-  flex: 1;
-  overflow-wrap: anywhere;
-}
 .detail-footer {
   display: flex;
   justify-content: space-between;

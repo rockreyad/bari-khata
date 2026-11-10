@@ -2,7 +2,6 @@ import { useMemo, useRef, useState } from "react";
 import {
   ArrowRightIcon,
   ArrowsLeftRightIcon,
-  ArrowSquareOutIcon,
   ClockCounterClockwiseIcon,
   DotsThreeIcon,
   FileTextIcon,
@@ -14,6 +13,7 @@ import { useNotebook } from "../../app/NotebookProvider";
 import { useLanguageContext } from "../../context/LanguageProvider";
 import { ConfirmationDialog } from "../../components/ui/ConfirmationDialog";
 import { Sheet } from "../../components/Sheet";
+import { ReceiptGallery } from "../../components/ReceiptGallery";
 import { AppMenu } from "../../components/ui/AppMenu";
 import { PaymentIcon } from "../../components/ui/Icons";
 import { entryTotal, entryWorkIds, setEntryVoided } from "../../domain/ledger";
@@ -202,20 +202,6 @@ export function EntryDetail({ id }: { id: string }) {
         )
       : t("সময় লেখা নেই");
   };
-  async function receipt(id: string, name: string) {
-    try {
-      const record = await storage.getReceipt(id);
-      if (!record) throw new Error();
-      const url = URL.createObjectURL(record.blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = name;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    } catch {
-      notify(t("ভাউচার এই ফোনে পাওয়া যায়নি। অনলাইনে সিঙ্ক করে দেখুন।"), true);
-    }
-  }
   function fieldText(
     field: EntryChangeField,
     value: unknown,
@@ -764,17 +750,16 @@ export function EntryDetail({ id }: { id: string }) {
               {t("ভাউচার")}
             </summary>
             <section>
-              {entry.receipts.map((file) => (
-                <button
-                  className="receipt-row"
-                  key={file.id}
-                  onClick={() => void receipt(file.id, file.name)}
-                >
-                  <ReceiptIcon size={20} />
-                  <span>{formatDigits(file.name)}</span>
-                  <ArrowSquareOutIcon size={17} />
-                </button>
-              ))}
+              <ReceiptGallery
+                key={entry.id}
+                receipts={entry.receipts}
+                date={entry.date}
+                createdAt={entry.createdAt}
+                loadFile={async ({ id }) => {
+                  const stored = await storage.getReceipt(id);
+                  return stored?.entryId === entry.id ? stored.blob : undefined;
+                }}
+              />
             </section>
           </details>
         ) : null}

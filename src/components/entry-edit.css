@@ -151,6 +151,7 @@
 .entry-edit-attachments {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 .entry-edit-attachments > p {
   margin: 0;
@@ -266,26 +267,6 @@
 .entry-editor-form .linked-payment-correction > summary strong {
   color: var(--text);
   font-size: 19px;
-}
-
-.entry-saved-receipt {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  color: var(--text);
-  text-align: start;
-}
-.entry-saved-receipt > span {
-  flex: 1;
-  overflow-wrap: anywhere;
-}
-.entry-saved-receipt > svg {
-  flex: none;
-  color: var(--muted);
 }
 
 .entry-editor-form .method-row {
