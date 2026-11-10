@@ -119,10 +119,6 @@
   max-width: 100%;
   overflow-wrap: anywhere;
 }
-:root .report-page .report-total > strong {
-  white-space: normal;
-  overflow: visible;
-}
 .report-total > span {
   font-size: 14px;
   font-weight: 550;

@@ -48,6 +48,7 @@ import { HouseCostForm } from "./HouseCostForm";
 import { HousePaymentForm } from "./HousePaymentForm";
 import { HouseWritePage } from "./HouseWritePage";
 import { PersonPage } from "../people/PersonPage";
+import { EntryDetail } from "../entries/EntryDetail";
 
 const nativeFiles = await vi.hoisted(async () => {
   const { Blob, File } = await import("node:buffer");
@@ -320,20 +321,20 @@ it.each(["purchase", "payment"] as const)(
       await pendingWrites;
     });
     await ready();
-    expect(screen.getByText("sample-original.jpg")).toBeTruthy();
+    expect(screen.getByText(/^voucher-1-\d{4}-\d{2}-\d{2}\.jpg$/)).toBeTruthy();
     page.unmount();
     repo.database.close();
     await repo.database.open();
     page = mount(initial, form, path);
     await ready();
     await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
-    expect(screen.getByText("sample-original.jpg")).toBeTruthy();
+    expect(screen.getByText(/^voucher-1-\d{4}-\d{2}-\d{2}\.jpg$/)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
     await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
     const saved = (await repo.read())!.ledger;
     const receipt = saved.entries.flatMap((entry) => entry.receipts)[0];
     expect(receipt).toMatchObject({
-      name: "sample-original.jpg",
+      name: expect.stringMatching(/^voucher-1-\d{4}-\d{2}-\d{2}\.jpg$/),
       mime: "image/jpeg",
       size: prepared.size,
     });
@@ -548,7 +549,11 @@ it("reopens an old settlement cash draft on the ordinary route and saves its rec
     account: "materials",
     note: "নমুনা বিল ছাড়া দেওয়া টাকা",
     paymentParts: [{ method: "bank", amount: 5000 }],
-    receipts: [expect.objectContaining({ name: "sample-no-bill.pdf" })],
+    receipts: [
+      expect.objectContaining({
+        name: expect.stringMatching(/^voucher-1-\d{4}-\d{2}-\d{2}\.pdf$/),
+      }),
+    ],
   });
   expect(saved.entries[0].paymentContext).toBe("settlement");
   expect(summarize(saved)).toMatchObject({ cost: 0, cashPaid: 5000 });
@@ -943,7 +948,7 @@ it("restores brand, quantity, unit, receipt and partial payment after reopening,
   expect(
     screen.getByRole("button", { name: "কিছু দিয়েছি", pressed: true }),
   ).toBeTruthy();
-  expect(screen.getByText("sample.png")).toBeTruthy();
+  expect(screen.getByText(/^voucher-1-\d{4}-\d{2}-\d{2}\.png$/)).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
   const saved = (await repo.read())!.ledger;
@@ -1275,7 +1280,7 @@ it("keeps a purchase draft and attachment on reopening, then stores one cost and
   expect((screen.getByLabelText(/^মালের নাম/) as HTMLInputElement).value).toBe(
     "নমুনা কেনা মাল",
   );
-  expect(screen.getByText("sample.pdf")).toBeTruthy();
+  expect(screen.getByText(/^voucher-1-\d{4}-\d{2}-\d{2}\.pdf$/)).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
   const saved = (await repo.read())!.ledger;
@@ -2157,11 +2162,14 @@ it("folds date, note and receipts together and restores them alongside the selec
   await user.type(screen.getByLabelText("কত দিয়েছেন"), "50");
   await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
   await user.type(screen.getByLabelText("মনে রাখার কথা"), "নমুনা ব্যাংক হিসাব");
+  fireEvent.change(screen.getByLabelText("তারিখ"), {
+    target: { value: "2026-11-08" },
+  });
   await user.upload(
     screen.getByLabelText("ভাউচার বা ছবি"),
-    new File(["sample receipt"], "sample-bank.pdf", {
-      type: "application/pdf",
-    }),
+    ["sample-bank.pdf", "sample-bank-extra.pdf"].map(
+      (name) => new File(["sample receipt"], name, { type: "application/pdf" }),
+    ),
   );
   await waitFor(async () =>
     expect(
@@ -2170,11 +2178,25 @@ it("folds date, note and receipts together and restores them alongside the selec
       method: "bank",
       amount: "50",
       note: "নমুনা ব্যাংক হিসাব",
-      files: [expect.objectContaining({ name: "sample-bank.pdf" })],
+      files: [
+        expect.objectContaining({ name: "sample-bank.pdf" }),
+        expect.objectContaining({ name: "sample-bank-extra.pdf" }),
+      ],
     }),
   );
+  async function openExtraVoucher() {
+    await user.click(
+      screen.getByRole("button", {
+        name: "ভাউচার দেখি: voucher-2-2026-11-08.pdf",
+      }),
+    );
+    const download = await screen.findByRole("link", { name: "ভাউচার নামান" });
+    expect(download.getAttribute("download")).toBe("voucher-2-2026-11-08.pdf");
+    await user.keyboard("{Escape}");
+  }
+  await openExtraVoucher();
   first.unmount();
-  mount(initial, <HousePaymentForm />, payPath);
+  const reopened = mount(initial, <HousePaymentForm />, payPath);
   await ready();
   expect(
     screen.getByRole("button", { name: "ব্যাংক" }).getAttribute("aria-pressed"),
@@ -2184,18 +2206,33 @@ it("folds date, note and receipts together and restores them alongside the selec
       screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open,
     ).toBe(true),
   );
+  await openExtraVoucher();
   await user.click(screen.getByRole("button", { name: "হিসাব রাখুন" }));
   await waitFor(() => expect(api.close).toHaveBeenCalledOnce());
+  reopened.unmount();
+  repo.database.close();
+  await repo.database.open();
   const saved = (await repo.read())!.ledger;
   const payment = saved.entries.find((entry) => entry.kind === "payment")!;
   expect(payment).toMatchObject({
     note: "নমুনা ব্যাংক হিসাব",
+    date: "2026-11-08",
     paymentParts: [{ method: "bank", amount: 5000 }],
-    receipts: [expect.objectContaining({ name: "sample-bank.pdf" })],
+    receipts: [
+      expect.objectContaining({ name: "voucher-1-2026-11-08.pdf" }),
+      expect.objectContaining({ name: "voucher-2-2026-11-08.pdf" }),
+    ],
   });
   expect(
     (await repo.getReceipt(payment.receipts[0].id))?.blob.size,
   ).toBeGreaterThan(0);
+  vi.stubGlobal("matchMedia", () => ({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
+  mount(saved, <EntryDetail id={payment.id} />);
+  await openExtraVoucher();
 });
 
 it("requires explicit ordinary payment intent before saving an old deposit draft", async () => {

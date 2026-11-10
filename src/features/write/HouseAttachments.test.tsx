@@ -61,8 +61,8 @@ it("limits only new selections to 5 MiB and preserves a restored larger receipt 
     "ফাইলটি ৫ MB-এর মধ্যে রাখুন। বড় ছবি হলে ছোট করে আবার দিন।",
   );
   expect(changed).not.toHaveBeenCalled();
-  expect(screen.getByText(legacy.name!)).toBeTruthy();
-  expect(screen.queryByText(accepted.name)).toBeNull();
+  expect(screen.getByText("voucher-1-undated.pdf")).toBeTruthy();
+  expect(screen.queryByText("voucher-2-undated.pdf")).toBeNull();
   await user.upload(input, accepted);
   expect(changed).toHaveBeenCalledOnce();
   const next = changed.mock.calls[0][0] as ReceiptInput[];
@@ -72,7 +72,7 @@ it("limits only new selections to 5 MiB and preserves a restored larger receipt 
     name: accepted.name,
     file: accepted,
   });
-  expect(screen.getByText(accepted.name)).toBeTruthy();
+  expect(screen.getByText("voucher-2-undated.pdf")).toBeTruthy();
 });
 
 it("explains the new file limit through the real English language provider", async () => {
@@ -124,10 +124,59 @@ it("reports a rejected draft write when removing a receipt", async () => {
     </LanguageProvider>,
   );
   await userEvent.click(
-    screen.getByRole("button", { name: "সরান: sample.pdf" }),
+    screen.getByRole("button", { name: "ভাউচার সরান: voucher-1-undated.pdf" }),
   );
   await waitFor(() =>
     expect(failed).toHaveBeenCalledWith("ফাইলটি রাখা যায়নি। আবার চেষ্টা করুন।"),
   );
   expect(onChange).toHaveBeenCalledWith([]);
+});
+
+it("keeps a restored unsupported voucher removable without creating a preview or download URL", async () => {
+  const createObjectURL = vi.fn();
+  const NativeURL = URL;
+  vi.stubGlobal(
+    "URL",
+    class extends NativeURL {
+      static createObjectURL = createObjectURL;
+    },
+  );
+  try {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <LanguageProvider>
+        <HouseAttachments
+          files={[
+            {
+              id: "sample-invalid",
+              entryId: "sample-entry",
+              name: "sample-invalid.html",
+              file: new Blob(["<html>sample</html>"], { type: "text/html" }),
+            },
+          ]}
+          entryId="sample-entry"
+          onError={vi.fn()}
+          onChange={onChange}
+        />
+      </LanguageProvider>,
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "ভাউচার দেখি: voucher-1-undated.bin",
+      }),
+    );
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "ভাউচার নামান" })).toBeNull();
+    expect(createObjectURL).not.toHaveBeenCalled();
+    await user.keyboard("{Escape}");
+    await user.click(
+      screen.getByRole("button", {
+        name: "ভাউচার সরান: voucher-1-undated.bin",
+      }),
+    );
+    expect(onChange).toHaveBeenCalledWith([]);
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

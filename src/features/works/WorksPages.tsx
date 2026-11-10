@@ -124,7 +124,7 @@ export function WorkCard({
       </div>
       <div className="notebook-card-total">
         <span>{t("মোট টাকা দিয়েছি")}</span>
-        <strong>
+        <strong className={balance.valid ? "money" : undefined}>
           {balance.valid
             ? money(balance.reconciledNetPaid)
             : t("টাকার অঙ্ক বেশি হয়েছে।")}
@@ -545,7 +545,7 @@ export function WorkPage() {
         <div className="work-overview-total">
           <div>
             <span>{t("মোট টাকা দিয়েছি")}</span>
-            <strong>
+            <strong className={balance.valid ? "money" : undefined}>
               {balance.valid
                 ? money(balance.reconciledNetPaid)
                 : t("টাকার অঙ্ক বেশি হয়েছে।")}

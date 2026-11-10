@@ -117,7 +117,7 @@
   :root
     :is(
       .home-total-heading strong,
-      .work-overview-total strong,
+      .work-overview-total strong.money,
       .contact-summary-hero > strong,
       .entry-amount-card-v5 > strong,
       .shared-total-main > strong,
@@ -196,8 +196,6 @@
     min-width: 0;
     max-width: 100%;
     font-size: clamp(24px, 9vw, 32px);
-    white-space: nowrap;
-    overflow-x: auto;
   }
 
   :root .work-chart-toggle {

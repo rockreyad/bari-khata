@@ -10,6 +10,7 @@ import {
   type LedgerHeaderRow,
 } from "./entityStorage";
 import Dexie, { type EntityTable } from "dexie";
+import { isArrayBuffer, isBlobStorageError } from "./blobStorage";
 import type { Ledger } from "../domain/model";
 import {
   migrateArchitecture,
@@ -46,6 +47,39 @@ export interface ReceiptRow {
   uploadedFor: string | null;
 }
 
+type ReceiptBinary = Blob | ArrayBuffer;
+export type StoredReceiptRow = Omit<ReceiptRow, "blob"> & {
+  blob: ReceiptBinary;
+};
+
+export async function writeWithReceiptBytes<T>(
+  rows: StoredReceiptRow[],
+  write: (rows: StoredReceiptRow[]) => PromiseLike<T>,
+): Promise<T> {
+  try {
+    return await write(rows);
+  } catch (error) {
+    if (
+      !isBlobStorageError(error) ||
+      !rows.some((row) => !isArrayBuffer(row.blob))
+    )
+      throw error;
+    // WebKit can reject Blob writes while still accepting their bytes.
+    const binary = await Dexie.waitFor(
+      Dexie.ignoreTransaction(() =>
+        Promise.all(
+          rows.map(async (row) =>
+            isArrayBuffer(row.blob)
+              ? row
+              : { ...row, blob: await row.blob.arrayBuffer() },
+          ),
+        ),
+      ),
+    );
+    return write(binary);
+  }
+}
+
 export interface OutboxRow {
   id: string;
   workspace: WorkspaceMode;
@@ -75,7 +109,7 @@ interface RecoveryRow {
   id: string;
   workspace: WorkspaceMode;
   ledger: Ledger;
-  receipts: ReceiptRow[];
+  receipts: StoredReceiptRow[];
   reason: "restore" | "cloud-conflict";
   createdAt: string;
 }
@@ -85,7 +119,7 @@ export interface ArchitectureMigrationRow {
   workspace: WorkspaceMode;
   source: "local" | "cloud" | "backup";
   before: WorkspaceRow;
-  receipts: ReceiptRow[];
+  receipts: StoredReceiptRow[];
   afterLedger: Ledger;
   generationAfter: number;
   report: ArchitectureMigrationReport;
@@ -105,39 +139,61 @@ const WorkspaceMigrationMetadataSchema = z.object({
   lastSyncedAt: z.string().nullable().default(null),
   updatedAt: z.string(),
 });
-const MigrationReceiptSchema = z.object({
+const maxReceiptBytes = 10 * 1024 * 1024;
+const StoredReceiptSchema = z.object({
   key: z.string().min(1),
   id: z.string().min(1).max(200),
   workspace: z.enum(["real", "demo"]),
   entryId: z.string().min(1).max(200),
   name: z.string().max(300),
   mime: z.enum(["image/jpeg", "image/png", "image/webp", "application/pdf"]),
-  // File uploads and cross-window Blobs share the native Blob storage.
-  blob: z.custom<Blob>((value) => {
-    if (!value || typeof value !== "object") return false;
-    try {
-      Blob.prototype.slice.call(value, 0, 0);
-      const blob = value as Blob;
-      return (
-        Number.isSafeInteger(blob.size) &&
-        blob.size >= 0 &&
-        typeof blob.type === "string" &&
-        typeof blob.arrayBuffer === "function" &&
-        typeof blob.slice === "function"
-      );
-    } catch {
-      return false;
-    }
-  }),
+  blob: z.union([
+    z.custom<ArrayBuffer>(isArrayBuffer),
+    z.custom<Blob>((value) => {
+      if (!value || typeof value !== "object") return false;
+      try {
+        Blob.prototype.slice.call(value, 0, 0);
+        const blob = value as Blob;
+        return (
+          Number.isSafeInteger(blob.size) &&
+          blob.size >= 0 &&
+          typeof blob.type === "string" &&
+          typeof blob.arrayBuffer === "function" &&
+          typeof blob.slice === "function"
+        );
+      } catch {
+        return false;
+      }
+    }),
+  ]),
   createdAt: z.string(),
   uploadedFor: z.string().nullable(),
 });
+
+function receiptSize(blob: ReceiptBinary) {
+  return isArrayBuffer(blob) ? blob.byteLength : blob.size;
+}
+
+export function readStoredReceipt(row: StoredReceiptRow): ReceiptRow {
+  const checked = StoredReceiptSchema.parse(row);
+  const { blob, mime } = checked;
+  if (
+    receiptSize(blob) > maxReceiptBytes ||
+    (!isArrayBuffer(blob) && blob.type !== mime)
+  )
+    throw new Error("receipt_metadata_mismatch");
+  return {
+    ...checked,
+    blob: isArrayBuffer(blob) ? new Blob([blob], { type: mime }) : blob,
+  };
+}
+
 export function validateMigrationReceipts(
-  rows: ReceiptRow[],
+  rows: StoredReceiptRow[],
   mode: WorkspaceMode,
   ledger: Ledger,
 ) {
-  z.array(MigrationReceiptSchema).parse(rows);
+  z.array(StoredReceiptSchema).parse(rows);
   const references = new Map(
     ledger.entries.flatMap((entry) => [
       ...entry.receipts.map(
@@ -153,16 +209,17 @@ export function validateMigrationReceipts(
   const keys = new Set<string>();
   for (const row of rows) {
     const reference = references.get(row.id);
+    const size = receiptSize(row.blob);
     if (
       row.workspace !== mode ||
       row.key !== `${mode}:${row.id}` ||
       keys.has(row.key) ||
-      row.mime !== row.blob.type ||
-      row.blob.size > 10 * 1024 * 1024 ||
+      (!isArrayBuffer(row.blob) && row.mime !== row.blob.type) ||
+      size > maxReceiptBytes ||
       (reference &&
         (reference.entryId !== row.entryId ||
           reference.mime !== row.mime ||
-          reference.size !== row.blob.size))
+          reference.size !== size))
     )
       throw new Error("migration_receipt_invalid");
     keys.add(row.key);
@@ -180,7 +237,7 @@ export class LedgerDatabase extends Dexie {
       metadata: StoredWorkspaceRow;
       header: unknown;
       entities: LedgerEntityRow[];
-      receipts: ReceiptRow[];
+      receipts: StoredReceiptRow[];
       createdAt: string;
     },
     "id"
@@ -189,7 +246,7 @@ export class LedgerDatabase extends Dexie {
     { id: string; workspace: WorkspaceMode; report: MigrationReview },
     "id"
   >;
-  receipts!: EntityTable<ReceiptRow, "key">;
+  receipts!: EntityTable<StoredReceiptRow, "key">;
   outbox!: EntityTable<OutboxRow, "id">;
   conflicts!: EntityTable<ConflictRow, "id">;
   drafts!: EntityTable<DraftRow, "id">;

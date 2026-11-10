@@ -598,7 +598,10 @@ it("reopens brand and quantity drafts, keeps vouchers reachable, and preserves t
   expect(screen.getByLabelText("তারিখ").closest("details")).toBe(extras);
   expect(
     screen
-      .getByRole("button", { name: "sample.pdf", hidden: true })
+      .getByRole("button", {
+        name: "ভাউচার দেখি: voucher-1-2026-11-01.pdf",
+        hidden: true,
+      })
       .closest("details"),
   ).toBe(extras);
   fireEvent.change(screen.getAllByLabelText("ব্র্যান্ড")[0], {
@@ -889,11 +892,13 @@ it("rejects a new oversized batch atomically and saves an exact 5 MiB receipt af
   );
   await user.upload(input, [accepted, oversized]);
   expect(screen.getByRole("alert").textContent).toContain("৫ MB");
-  expect(screen.queryByText(accepted.name)).toBeNull();
-  expect(screen.queryByText(oversized.name)).toBeNull();
+  expect(screen.queryByText("voucher-2-2026-11-01.pdf")).toBeNull();
+  expect(screen.queryByText("voucher-3-2026-11-01.pdf")).toBeNull();
   expect((await repo.read())!.ledger).toEqual(original);
   await user.upload(input, accepted);
-  await waitFor(() => expect(screen.getByText(accepted.name)).toBeTruthy());
+  await waitFor(() =>
+    expect(screen.getByText("voucher-2-2026-11-01.pdf")).toBeTruthy(),
+  );
   await user.click(screen.getByRole("button", { name: "ফিরুন" }));
   await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
   page.unmount();
@@ -904,7 +909,7 @@ it("rejects a new oversized batch atomically and saves an exact 5 MiB receipt af
   });
   page = mount(original, billId, onSave, onClose);
   await ready();
-  expect(screen.getByText(accepted.name)).toBeTruthy();
+  expect(screen.getByText("voucher-2-2026-11-01.pdf")).toBeTruthy();
   await collapse(page.container, user);
   await user.click(save());
   await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
@@ -914,12 +919,12 @@ it("rejects a new oversized batch atomically and saves an exact 5 MiB receipt af
   const saved = (await repo.read())!.ledger.entries[0];
   expect(saved.lines).toEqual(original.entries[0].lines);
   const receipt = saved.receipts.find(
-    (receipt) => receipt.name === accepted.name,
+    (receipt) => receipt.name === "voucher-2-2026-11-01.pdf",
   )!;
   expect(receipt.size).toBe(accepted.size);
   expect((await repo.getReceipt(receipt.id))!.blob.size).toBe(accepted.size);
   expect(
-    saved.receipts.some((receipt) => receipt.name === oversized.name),
+    saved.receipts.some((receipt) => receipt.size === oversized.size),
   ).toBe(false);
 });
 
@@ -959,7 +964,9 @@ it("keeps a legacy 6 MiB draft receipt through editing, another reopen and backu
   });
   page = mount(original, billId, onSave, onClose);
   await ready();
-  await waitFor(() => expect(screen.getByText(legacy.name)).toBeTruthy());
+  await waitFor(() =>
+    expect(screen.getByText("voucher-2-2026-11-01.pdf")).toBeTruthy(),
+  );
   fireEvent.change(screen.getByLabelText("মনে রাখার কথা"), {
     target: { value: "নমুনা পুরোনো রসিদ রাখা হলো" },
   });
@@ -977,7 +984,11 @@ it("keeps a legacy 6 MiB draft receipt through editing, another reopen and backu
   );
   page = mount(firstSave, billId, onSave, onClose);
   await ready();
-  expect(screen.getByRole("button", { name: legacy.name })).toBeTruthy();
+  expect(
+    screen.getByRole("button", {
+      name: "ভাউচার দেখি: voucher-2-2026-11-01.pdf",
+    }),
+  ).toBeTruthy();
   await collapse(page.container, user);
   await user.click(save());
   await waitFor(() => expect(onClose).toHaveBeenCalledTimes(3));

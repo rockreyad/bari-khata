@@ -25,6 +25,65 @@ async function digest(file: Blob) {
     .digest("hex");
 }
 
+const rejectedBlob = () =>
+  new DOMException(
+    "Error preparing Blob/File data to be stored in object store",
+    "UnknownError",
+  );
+
+it("saves and restores voucher bytes when IndexedDB rejects native Blobs", async () => {
+  const source = new LedgerRepository(
+    new LedgerDatabase(`receipt-webkit-${crypto.randomUUID()}`),
+  );
+  const target = new LedgerRepository(
+    new LedgerDatabase(`receipt-webkit-restore-${crypto.randomUUID()}`),
+  );
+  databases.push(source.database, target.database);
+  const file = new File(["%PDF-sample"], "voucher.pdf", {
+    type: "application/pdf",
+  });
+  const receipt = {
+    id: "voucher",
+    name: file.name,
+    mime: file.type,
+    size: file.size,
+  };
+  const ledger = LedgerSchema.parse({
+    ...createEmptyLedger(),
+    works: [{ id: "roof", name: "নমুনা ছাদ" }],
+    entries: [
+      {
+        id: "bill",
+        kind: "expense",
+        lines: [
+          { id: "line", workId: "roof", label: "নমুনা মাল", amount: 10000 },
+        ],
+        receipts: [receipt],
+      },
+    ],
+  });
+  await source.ensure("real", createEmptyLedger());
+  vi.spyOn(source.database.receipts, "bulkPut").mockRejectedValueOnce(
+    rejectedBlob(),
+  );
+  await source.save(ledger, "real", [
+    { id: receipt.id, entryId: "bill", file },
+  ]);
+  expect(
+    (await source.database.receipts.get("real:voucher"))?.blob,
+  ).toBeInstanceOf(ArrayBuffer);
+  source.database.close();
+  await source.database.open();
+  const reopened = (await source.getReceipt(receipt.id))!;
+  expect(reopened.blob.type).toBe(file.type);
+  expect(await digest(reopened.blob)).toBe(await digest(file));
+  await target.importBackup(await source.exportBackup(), { replace: true });
+  expect((await target.read())?.ledger).toEqual(ledger);
+  expect(await digest((await target.getReceipt(receipt.id))!.blob)).toBe(
+    await digest(file),
+  );
+});
+
 it("keeps a pre-upgrade voucher above 5 MiB through draft reopen, save, sync retry and backup restore", async () => {
   const owner = crypto.randomUUID();
   setActiveOwner(owner);
@@ -118,6 +177,15 @@ it("keeps a pre-upgrade voucher above 5 MiB through draft reopen, save, sync ret
     expect(await digest(attempt.blob)).toBe(await digest(file));
 
   const backup = await source.exportBackup();
+  vi.spyOn(source.database.recoveries, "add").mockRejectedValueOnce(
+    rejectedBlob(),
+  );
+  await source.importBackup(backup, { replace: true });
+  const recovery = (await source.database.recoveries.toCollection().first())!;
+  expect(recovery.receipts[0].blob).toBeInstanceOf(ArrayBuffer);
+  expect(await digest((await source.getReceipt(receipt.id))!.blob)).toBe(
+    await digest(file),
+  );
   const target = new LedgerRepository(
     new LedgerDatabase(`receipt-restore-${crypto.randomUUID()}`),
   );

@@ -1,6 +1,6 @@
 {
   "name": "bari-khata",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -33,6 +33,7 @@
     "dexie": "^4.0.0",
     "dexie-react-hooks": "^1.1.7",
     "lucide-react": "^0.468.0",
+    "pdfjs-dist": "6.5.438",
     "react": "^19.0.0",
     "react-day-picker": "^10.0.2",
     "react-dom": "^19.0.0",

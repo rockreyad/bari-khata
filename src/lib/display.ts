@@ -28,13 +28,13 @@ export const statusNames = {
   done: "শেষ",
 };
 
-export function todayDhaka() {
+export function todayDhaka(at = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Dhaka",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(new Date());
+  }).formatToParts(at);
   return ["year", "month", "day"]
     .map((type) => parts.find((part) => part.type === type)!.value)
     .join("-");

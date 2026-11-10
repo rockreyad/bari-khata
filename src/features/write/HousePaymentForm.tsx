@@ -33,6 +33,7 @@ import { useInlineDraft } from "../entries/useInlineDraft";
 import { QuickSavedDraftSchema } from "../entries/quickEntry";
 import { HouseSavedNotice } from "./HouseSavedNotice";
 import { HouseAttachments } from "./HouseAttachments";
+import { voucherFilename } from "../../lib/voucherFilename";
 import { TransactionExtras } from "../../components/TransactionExtras";
 import { TransactionNoteField } from "../../components/TransactionNoteField";
 import { paymentPresentation } from "./paymentPresentation";
@@ -447,40 +448,47 @@ export function HousePaymentForm() {
       if (plan.issues.length) throw new Error(plan.issues[0]);
       await flush();
       const firstId = plan.groups.length > 1 ? `${draft.id}:0` : draft.id;
-      await save(
-        (current) => {
-          if (
-            newPerson &&
-            current.people.some((person) => person.id === newPerson.id)
-          )
-            throw new Error("house_person_changed");
-          const next = newPerson
-            ? { ...current, people: [...current.people, newPerson] }
-            : current;
-          const latestLimit = currentSettlementLimit(next);
-          if (latestLimit !== null && total > latestLimit)
-            throw new Error("exceeds_due");
-          return recordHousePayment(
-            next,
-            {
-              ...request,
-              id: draft.id,
-              date: draft.date,
-              method: draft.method,
-              note: draft.note,
-              confirmRemainderAdvance: remainderConfirmed,
-              receipts: draft.files.map((file) => ({
-                id: file.id,
-                name: file.name ?? t("ভাউচার"),
-                mime: file.file.type,
-                size: file.file.size,
-              })),
-            },
-            plan,
-          );
-        },
-        draft.files.map((file) => ({ ...file, entryId: firstId })),
-      );
+      const attachments = draft.files.map((receipt, index) => ({
+        ...receipt,
+        entryId: firstId,
+        name: voucherFilename(
+          index + 1,
+          draft.date,
+          undefined,
+          receipt.file.type,
+        ),
+      }));
+      await save((current) => {
+        if (
+          newPerson &&
+          current.people.some((person) => person.id === newPerson.id)
+        )
+          throw new Error("house_person_changed");
+        const next = newPerson
+          ? { ...current, people: [...current.people, newPerson] }
+          : current;
+        const latestLimit = currentSettlementLimit(next);
+        if (latestLimit !== null && total > latestLimit)
+          throw new Error("exceeds_due");
+        return recordHousePayment(
+          next,
+          {
+            ...request,
+            id: draft.id,
+            date: draft.date,
+            method: draft.method,
+            note: draft.note,
+            confirmRemainderAdvance: remainderConfirmed,
+            receipts: attachments.map((file) => ({
+              id: file.id,
+              name: file.name,
+              mime: file.file.type,
+              size: file.file.size,
+            })),
+          },
+          plan,
+        );
+      }, attachments);
       finished.current = true;
       try {
         await clear(initial);
@@ -1093,6 +1101,7 @@ export function HousePaymentForm() {
               <HouseAttachments
                 files={draft.files}
                 entryId={draft.id}
+                date={draft.date}
                 onChange={async (files) => {
                   change("files", files);
                   await flush();

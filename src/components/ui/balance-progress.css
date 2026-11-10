@@ -91,7 +91,7 @@
 }
 .balance-progress-amounts {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr));
   gap: 10px;
 }
 .balance-progress-amounts > span {

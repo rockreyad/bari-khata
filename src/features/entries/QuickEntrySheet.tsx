@@ -27,6 +27,9 @@ import { MoneyInput } from "../../components/ui/MoneyInput";
 import { TransactionExtras } from "../../components/TransactionExtras";
 import { TransactionNoteField } from "../../components/TransactionNoteField";
 import { ReceiptPicker } from "../../components/ReceiptPicker";
+import { ReceiptGallery } from "../../components/ReceiptGallery";
+import { replaceDraftReceipt } from "../../lib/replaceDraftReceipt";
+import { voucherFilename } from "../../lib/voucherFilename";
 import {
   TransactionAmount,
   TransactionDetails,
@@ -358,6 +361,15 @@ export function QuickEntrySheet({
     try {
       if (!sameOwner()) throw new Error("account_changed");
       await queueDraft({ draft, files });
+      const attachments = files.map((receipt, index) => ({
+        ...receipt,
+        name: voucherFilename(
+          index + 1,
+          draft.date,
+          undefined,
+          receipt.file.type,
+        ),
+      }));
       await save((current) => {
         if (!sameOwner()) throw new Error("account_changed");
         const enriched = current.materialGroups.length
@@ -366,12 +378,9 @@ export function QuickEntrySheet({
         return buildQuickEntry(
           enriched,
           draft,
-          files.map(({ id, file, name }) => ({
+          attachments.map(({ id, file, name }) => ({
             id,
-            name:
-              typeof File !== "undefined" && file instanceof File
-                ? file.name
-                : (name ?? t("ভাউচার")),
+            name,
             mime: file.type,
             size: file.size,
           })),
@@ -384,7 +393,7 @@ export function QuickEntrySheet({
                 : "কাজের বিল",
           ),
         );
-      }, files);
+      }, attachments);
       finished.current = true;
       await queue.current.catch(() => {});
       try {
@@ -1511,21 +1520,41 @@ export function QuickEntrySheet({
                       await queueDraft(latest.current);
                     }}
                   />
-                  {files.map((f) => (
-                    <div className="attachment-row" key={f.id}>
-                      <span>{formatDigits(f.name ?? t("ভাউচার"))}</span>
-                      <button
-                        type="button"
-                        className="icon-button"
-                        aria-label={t("বাদ দিন")}
-                        onClick={() =>
-                          setFiles(files.filter((v) => v.id !== f.id))
+                  <ReceiptGallery
+                    key={key}
+                    receipts={files}
+                    date={draft.date}
+                    onRemove={(id) =>
+                      setFiles((current) =>
+                        current.filter((item) => item.id !== id),
+                      )
+                    }
+                    onCrop={async (id, cropped, original) => {
+                      if (!sameOwner()) throw new Error("account_changed");
+                      const previous = latest.current.files;
+                      const next = replaceDraftReceipt(
+                        previous,
+                        id,
+                        original,
+                        cropped,
+                      );
+                      latest.current = { ...latest.current, files: next };
+                      setFiles(next);
+                      try {
+                        await queueDraft(latest.current);
+                      } catch (error) {
+                        if (mounted.current && latest.current.files === next) {
+                          latest.current = {
+                            ...latest.current,
+                            files: previous,
+                          };
+                          setFiles(previous);
                         }
-                      >
-                        <TrashIcon size={17} />
-                      </button>
-                    </div>
-                  ))}
+                        throw error;
+                      }
+                    }}
+                    removeDisabled={saving || processingFiles || !ready}
+                  />
                 </div>
               </TransactionExtras>
               {!cash &&

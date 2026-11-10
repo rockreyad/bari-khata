@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { PaperclipIcon } from "@phosphor-icons/react";
+import { useEffect, useId, useRef, useState, type DragEvent } from "react";
+import { CloudArrowUpIcon } from "@phosphor-icons/react";
 import { useLanguageContext } from "../context/LanguageProvider";
 import { prepareReceiptFile } from "../lib/prepareReceiptFile";
 import { trackLocalWrite } from "../lib/localWriteBarrier";
@@ -26,7 +26,10 @@ export function ReceiptPicker({
   "aria-label": label,
 }: ReceiptPickerProps) {
   const { t, number } = useLanguageContext();
+  const hintId = useId();
   const [processing, setProcessing] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
   const locked = useRef(false);
   const mounted = useRef(false);
   const current = useRef({ scopeKey, onFiles, existingCount });
@@ -37,9 +40,7 @@ export function ReceiptPicker({
       mounted.current = false;
     };
   }, []);
-  const select = (input: HTMLInputElement) => {
-    const incoming = Array.from(input.files ?? []);
-    input.value = "";
+  const select = (incoming: File[]) => {
     if (!incoming.length || locked.current || disabled) return;
     if (existingCount + incoming.length > 20) {
       onError(
@@ -103,21 +104,61 @@ export function ReceiptPicker({
       })(),
     );
   };
+  const fileDrag = (event: DragEvent) =>
+    Array.from(event.dataTransfer.types).includes("Files");
+  const blocked = disabled || processing;
   return (
     <div className="receipt-upload-control" aria-busy={processing}>
-      <label className="receipt-picker">
-        <PaperclipIcon size={21} aria-hidden="true" />
-        <span>
-          {t("ভাউচার যোগ করুন")}
-          <small>{t("ছবি বা PDF · সর্বোচ্চ ৫ MB")}</small>
+      <label
+        className={`receipt-picker${dragging && !blocked ? " is-dragging" : ""}`}
+        data-vaul-no-drag
+        onDragEnter={(event) => {
+          if (!fileDrag(event)) return;
+          event.preventDefault();
+          dragDepth.current += 1;
+          setDragging(true);
+        }}
+        onDragLeave={() => {
+          dragDepth.current = Math.max(0, dragDepth.current - 1);
+          if (dragDepth.current === 0) setDragging(false);
+        }}
+        onDragOver={(event) => {
+          if (!fileDrag(event)) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = blocked ? "none" : "copy";
+        }}
+        onDrop={(event) => {
+          if (!fileDrag(event) && !event.dataTransfer.files.length) return;
+          event.preventDefault();
+          dragDepth.current = 0;
+          setDragging(false);
+          select(Array.from(event.dataTransfer.files));
+        }}
+      >
+        <span className="receipt-picker-icon">
+          <CloudArrowUpIcon size={24} aria-hidden="true" />
+        </span>
+        <span className="receipt-picker-copy">
+          <strong>{t("ভাউচার যোগ করুন")}</strong>
+          <small id={hintId}>
+            {t("ছবি বা PDF টেনে দিন · প্রতি ফাইল ৫ MB")}
+          </small>
+        </span>
+        <span className="receipt-picker-action" aria-hidden="true">
+          {t("ফাইল বাছুন")}
         </span>
         <input
           type="file"
           aria-label={label ?? t("ভাউচার বা ছবি")}
+          aria-describedby={hintId}
           multiple
           accept="image/jpeg,image/png,image/webp,application/pdf"
-          disabled={disabled || processing}
-          onChange={(event) => select(event.currentTarget)}
+          disabled={blocked}
+          onChange={(event) => {
+            const incoming = Array.from(event.currentTarget.files ?? []);
+            event.currentTarget.value = "";
+            select(incoming);
+          }}
         />
       </label>
       {processing && (

@@ -22,6 +22,7 @@ import {
   type MigrationReview,
 } from "../domain/migrationReview";
 import { readEntityLedger, writeEntityLedger } from "./entityStorage";
+import { isArrayBuffer, isBlobStorageError } from "./blobStorage";
 import {
   planBackupMerge,
   preservesBackupPersonWorkLinks,
@@ -51,8 +52,11 @@ import {
   getActiveOwner,
   getWorkspaceDatabase,
   LedgerDatabase,
+  readStoredReceipt,
   receiptKey,
+  writeWithReceiptBytes,
   type ReceiptRow,
+  type StoredReceiptRow,
   type WorkspaceMode,
   type WorkspaceRow,
 } from "./database";
@@ -292,6 +296,14 @@ export class LedgerRepository {
     mode: WorkspaceMode = "real",
     files: ReceiptInput[] = [],
   ): Promise<void> {
+    await this.saveWithSnapshot(change, mode, files);
+  }
+
+  saveWithSnapshot(
+    change: LedgerChange,
+    mode: WorkspaceMode,
+    files: ReceiptInput[],
+  ): Promise<WorkspaceRow> {
     assertFinancialWritesAllowed();
     return trackLocalWrite(this.persistChange(change, mode, files));
   }
@@ -300,7 +312,7 @@ export class LedgerRepository {
     change: LedgerChange,
     mode: WorkspaceMode,
     files: ReceiptInput[],
-  ): Promise<void> {
+  ): Promise<WorkspaceRow> {
     const prepared = files.map((input): ReceiptRow => {
       // Older drafts can contain larger receipts; the new limit applies at intake.
       if (
@@ -323,7 +335,7 @@ export class LedgerRepository {
         uploadedFor: null,
       };
     });
-    await this.database.transaction(
+    return this.database.transaction(
       "rw",
       [...this.database.workspaceTables(), this.database.receipts],
       async () => {
@@ -375,14 +387,18 @@ export class LedgerRepository {
           )
             throw new Error("receipt_missing");
         }
-        await this.database.receipts.bulkPut(prepared);
-        await this.writeWorkspace({
+        await writeWithReceiptBytes(prepared, (receipts) =>
+          this.database.receipts.bulkPut(receipts),
+        );
+        const committed = {
           ...current,
           ledger,
           generation: current.generation + 1,
           pending: mode === "real",
           updatedAt: now(),
-        });
+        };
+        await this.writeWorkspace(committed);
+        return committed;
       },
     );
   }
@@ -411,18 +427,20 @@ export class LedgerRepository {
           .equals(mode)
           .toArray();
         validateMigrationReceipts(receipts, mode, migration.ledger);
-        await this.database.migrations.add({
-          id,
-          workspace: mode,
-          source: "local",
-          before: current,
-          receipts,
-          afterLedger: migration.ledger,
-          generationAfter: current.generation + 1,
-          report: migration.report,
-          status: "completed",
-          createdAt: at,
-        });
+        await writeWithReceiptBytes(receipts, (storedReceipts) =>
+          this.database.migrations.add({
+            id,
+            workspace: mode,
+            source: "local",
+            before: current,
+            receipts: storedReceipts,
+            afterLedger: migration.ledger,
+            generationAfter: current.generation + 1,
+            report: migration.report,
+            status: "completed",
+            createdAt: at,
+          }),
+        );
         await this.writeWorkspace({
           ...current,
           ledger: migration.ledger,
@@ -440,7 +458,7 @@ export class LedgerRepository {
     current: WorkspaceRow,
     source: "cloud" | "backup",
     sourceKey: string,
-    sourceReceipts?: ReceiptRow[],
+    sourceReceipts?: StoredReceiptRow[],
   ) {
     const migration = migrateArchitecture(document);
     if (migration.changed) {
@@ -453,24 +471,26 @@ export class LedgerRepository {
             .equals(current.id)
             .toArray());
         validateMigrationReceipts(receipts, current.id, migration.ledger);
-        await this.database.migrations.add({
-          id,
-          workspace: current.id,
-          source,
-          before: {
-            ...current,
-            ledger: document,
-            ...(source === "cloud"
-              ? { cloudRevision: Number(sourceKey), pending: false }
-              : {}),
-          },
-          receipts,
-          afterLedger: migration.ledger,
-          generationAfter: current.generation + 1,
-          report: migration.report,
-          status: "completed",
-          createdAt: now(),
-        });
+        await writeWithReceiptBytes(receipts, (storedReceipts) =>
+          this.database.migrations.add({
+            id,
+            workspace: current.id,
+            source,
+            before: {
+              ...current,
+              ledger: document,
+              ...(source === "cloud"
+                ? { cloudRevision: Number(sourceKey), pending: false }
+                : {}),
+            },
+            receipts: storedReceipts,
+            afterLedger: migration.ledger,
+            generationAfter: current.generation + 1,
+            report: migration.report,
+            status: "completed",
+            createdAt: now(),
+          }),
+        );
       }
     }
     return migration;
@@ -542,7 +562,9 @@ export class LedgerRepository {
           pending: current.id === "real",
           updatedAt: now(),
         });
-        await this.database.receipts.bulkPut(migration.receipts);
+        await writeWithReceiptBytes(migration.receipts, (receipts) =>
+          this.database.receipts.bulkPut(receipts),
+        );
         await this.database.migrations.update(id, { status: "rolled-back" });
       },
     );
@@ -589,7 +611,39 @@ export class LedgerRepository {
     id: string,
     mode: WorkspaceMode = "real",
   ): Promise<ReceiptRow | null> {
-    return (await this.database.receipts.get(receiptKey(mode, id))) ?? null;
+    const row = await this.database.receipts.get(receiptKey(mode, id));
+    if (!row) return null;
+    const receipt = readStoredReceipt(row);
+    if (receipt.workspace !== mode || receipt.id !== id)
+      throw new Error("receipt_metadata_mismatch");
+    return receipt;
+  }
+
+  async storeDownloadedReceipt(receipt: ReceiptRow) {
+    await this.database.transaction("rw", this.database.receipts, () =>
+      writeWithReceiptBytes([receipt], (receipts) =>
+        this.database.receipts.bulkPut(receipts),
+      ),
+    );
+  }
+
+  private async keepBackupRecovery(workspace: WorkspaceMode, ledger: Ledger) {
+    const receipts = await this.database.receipts
+      .where("workspace")
+      .equals(workspace)
+      .toArray();
+    const id = crypto.randomUUID();
+    const createdAt = now();
+    await writeWithReceiptBytes(receipts, (storedReceipts) =>
+      this.database.recoveries.add({
+        id,
+        workspace,
+        ledger,
+        receipts: storedReceipts,
+        reason: "restore",
+        createdAt,
+      }),
+    );
   }
 
   async exportBackup(mode: WorkspaceMode = "real"): Promise<string> {
@@ -606,10 +660,14 @@ export class LedgerRepository {
         if (!row) throw new Error("workspace_missing");
         const receipts: ReceiptRow[] = [];
         for (const ref of receiptReferences(row.ledger)) {
-          const receipt = await this.database.receipts.get(
-            receiptKey(mode, ref.id),
-          );
+          const receipt = await this.getReceipt(ref.id, mode);
           if (!receipt) throw new Error("receipt_missing");
+          if (
+            receipt.entryId !== ref.entryId ||
+            receipt.mime !== ref.mime ||
+            receipt.blob.size !== ref.size
+          )
+            throw new Error("receipt_metadata_mismatch");
           receipts.push(receipt);
         }
         const sourceReviews = (
@@ -697,11 +755,11 @@ export class LedgerRepository {
     const mode = options.mode ?? "real";
     if (backup.ledger.isDemo !== (mode === "demo"))
       throw new Error("workspace_mode_mismatch");
-    const receipts: ReceiptRow[] = backup.receipts.map((receipt) => ({
+    const receipts: StoredReceiptRow[] = backup.receipts.map((receipt) => ({
       ...receipt,
       key: receiptKey(mode, receipt.id),
       workspace: mode,
-      blob: base64ToBlob(receipt.base64, receipt.mime),
+      blob: base64ToBuffer(receipt.base64),
       uploadedFor: null,
     }));
     assertFinancialWritesAllowed();
@@ -746,18 +804,7 @@ export class LedgerRepository {
           !preservesBalanceAdjustments(current.ledger, backup.ledger)
         )
           throw new Error("balance_adjustment_would_be_lost");
-        if (current)
-          await this.database.recoveries.add({
-            id: crypto.randomUUID(),
-            workspace: mode,
-            ledger: current.ledger,
-            receipts: await this.database.receipts
-              .where("workspace")
-              .equals(mode)
-              .toArray(),
-            reason: "restore",
-            createdAt: now(),
-          });
+        if (current) await this.keepBackupRecovery(mode, current.ledger);
         await this.recordIncomingMigration(
           originalLedger,
           current ?? {
@@ -879,7 +926,7 @@ export class LedgerRepository {
           throw new Error("balance_adjustment_would_be_lost");
         if (!preservesBackupPersonWorkLinks(current.ledger, ledger))
           throw new Error("person_work_links_would_be_lost");
-        const prepared: ReceiptRow[] = [];
+        const prepared: StoredReceiptRow[] = [];
         for (const ref of receiptReferences(ledger)) {
           const existing = await this.database.receipts.get(
             receiptKey(mode, ref.id),
@@ -887,7 +934,11 @@ export class LedgerRepository {
           const incoming = incomingReceipts.get(ref.id);
           if (existing && incoming) {
             // Blob পড়ার সময়ও IndexedDB-এর transaction সচল রাখতে হবে।
-            const contents = await Dexie.waitFor(blobToBase64(existing.blob));
+            const contents = await Dexie.waitFor(
+              Dexie.ignoreTransaction(() =>
+                blobToBase64(readStoredReceipt(existing).blob),
+              ),
+            );
             if (
               existing.entryId !== incoming.entryId ||
               existing.mime !== incoming.mime ||
@@ -901,7 +952,7 @@ export class LedgerRepository {
               ...incoming,
               key: receiptKey(mode, incoming.id),
               workspace: mode,
-              blob: base64ToBlob(incoming.base64, incoming.mime),
+              blob: base64ToBuffer(incoming.base64),
               uploadedFor: null,
             });
           }
@@ -923,21 +974,11 @@ export class LedgerRepository {
             ...receipt,
             key: receiptKey(mode, receipt.id),
             workspace: mode,
-            blob: base64ToBlob(receipt.base64, receipt.mime),
+            blob: base64ToBuffer(receipt.base64),
             uploadedFor: null,
           })),
         );
-        await this.database.recoveries.add({
-          id: crypto.randomUUID(),
-          workspace: mode,
-          ledger: current.ledger,
-          receipts: await this.database.receipts
-            .where("workspace")
-            .equals(mode)
-            .toArray(),
-          reason: "restore",
-          createdAt: now(),
-        });
+        await this.keepBackupRecovery(mode, current.ledger);
         await this.database.receipts.bulkPut(prepared);
         await this.writeWorkspace({
           ...current,
@@ -994,11 +1035,15 @@ async function blobToBase64(blob: Blob): Promise<string> {
   return btoa(binary);
 }
 
-function base64ToBlob(base64: string, mime: string): Blob {
+function base64ToBuffer(base64: string): ArrayBuffer {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new Blob([bytes], { type: mime });
+  return bytes.buffer;
+}
+
+function base64ToBlob(base64: string, mime: string): Blob {
+  return new Blob([base64ToBuffer(base64)], { type: mime });
 }
 
 const DraftBlobSchema = z
@@ -1006,32 +1051,46 @@ const DraftBlobSchema = z
   .refine(
     (blob) => allowedTypes.has(blob.type) && blob.size <= 10 * 1024 * 1024,
   );
-const JsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
-  z.union([
-    DraftBlobSchema,
-    z.string(),
-    z.number().finite(),
-    z.boolean(),
-    z.null(),
-    z.array(JsonValueSchema),
-    z
-      .custom<Record<string, unknown>>(
-        (value) =>
-          value !== null &&
-          typeof value === "object" &&
-          (Object.getPrototypeOf(value) === Object.prototype ||
-            Object.getPrototypeOf(value) === null),
-      )
-      .pipe(z.record(z.string(), JsonValueSchema)),
-  ]),
-);
+const DraftBlobBytesSchema = z.strictObject({
+  __bariBlobBytes: z.literal(1),
+  mime: z.string().refine((type) => allowedTypes.has(type)),
+  bytes: z
+    .custom<ArrayBuffer>(isArrayBuffer)
+    .refine((bytes) => bytes.byteLength <= 10 * 1024 * 1024),
+});
+const DraftStoredBlobSchema = z.union([DraftBlobSchema, DraftBlobBytesSchema]);
+function draftValueSchema(blob: z.ZodType<unknown>) {
+  const value: z.ZodType<unknown> = z.lazy(() =>
+    z.union([
+      blob,
+      z.string(),
+      z.number().finite(),
+      z.boolean(),
+      z.null(),
+      z.array(value),
+      z
+        .custom<Record<string, unknown>>(
+          (item) =>
+            item !== null &&
+            typeof item === "object" &&
+            (Object.getPrototypeOf(item) === Object.prototype ||
+              Object.getPrototypeOf(item) === null),
+        )
+        .pipe(z.record(z.string(), value)),
+    ]),
+  );
+  return value;
+}
+
+const DraftInputSchema = draftValueSchema(DraftBlobSchema);
+const StoredDraftSchema = draftValueSchema(DraftStoredBlobSchema);
 
 const FileEnvelopeSchema = z
   .object({
     __bariFile: z.literal(1),
     name: z.string().max(300),
     lastModified: z.number().finite(),
-    blob: DraftBlobSchema,
+    blob: DraftStoredBlobSchema,
   })
   .strict();
 
@@ -1052,14 +1111,43 @@ function packDraft(value: unknown): unknown {
   return value;
 }
 
+async function packDraftBlobBytes(value: unknown): Promise<unknown> {
+  if (value instanceof Blob)
+    return {
+      __bariBlobBytes: 1,
+      mime: value.type,
+      bytes: await value.arrayBuffer(),
+    };
+  if (Array.isArray(value)) return Promise.all(value.map(packDraftBlobBytes));
+  if (value !== null && typeof value === "object")
+    return Object.fromEntries(
+      await Promise.all(
+        Object.entries(value).map(async ([key, item]) => [
+          key,
+          await packDraftBlobBytes(item),
+        ]),
+      ),
+    );
+  return value;
+}
+
+function unpackDraftBlob(value: z.infer<typeof DraftStoredBlobSchema>): Blob {
+  return value instanceof Blob
+    ? value
+    : new Blob([value.bytes], { type: value.mime });
+}
+
 function unpackDraft(value: unknown): unknown {
   if (value instanceof Blob) return value;
   if (Array.isArray(value)) return value.map(unpackDraft);
   if (value !== null && typeof value === "object") {
+    if ("__bariBlobBytes" in value)
+      return unpackDraftBlob(DraftBlobBytesSchema.parse(value));
     if ("__bariFile" in value) {
       const file = FileEnvelopeSchema.parse(value);
-      return new File([file.blob], file.name, {
-        type: file.blob.type,
+      const blob = unpackDraftBlob(file.blob);
+      return new File([blob], file.name, {
+        type: blob.type,
         lastModified: file.lastModified,
       });
     }
@@ -1097,13 +1185,24 @@ function storeDraft(
   key: string,
   value: unknown,
 ) {
-  const parsed = JsonValueSchema.parse(value);
+  const row = {
+    id: `${mode}:${key}`,
+    workspace: mode,
+    value: packDraft(DraftInputSchema.parse(value)),
+    updatedAt: now(),
+  };
   return trackLocalWrite(
-    database.drafts.put({
-      id: `${mode}:${key}`,
-      workspace: mode,
-      value: packDraft(parsed),
-      updatedAt: now(),
+    database.transaction("rw", database.drafts, async () => {
+      try {
+        return await database.drafts.put(row);
+      } catch (error) {
+        if (!isBlobStorageError(error)) throw error;
+        // Some WebKit sessions can write bytes even when IndexedDB rejects Blobs.
+        const packed = await Dexie.waitFor(
+          Dexie.ignoreTransaction(() => packDraftBlobBytes(row.value)),
+        );
+        return database.drafts.put({ ...row, value: packed });
+      }
     }),
     draftWriteKey(database.name, mode, key),
   );
@@ -1114,7 +1213,7 @@ async function loadDraft<T>(
   key: string,
 ): Promise<T | null> {
   const row = await database.drafts.get(`${mode}:${key}`);
-  return row ? (unpackDraft(JsonValueSchema.parse(row.value)) as T) : null;
+  return row ? (unpackDraft(StoredDraftSchema.parse(row.value)) as T) : null;
 }
 
 export function createWorkspaceStorage(mode: WorkspaceMode = "real") {
