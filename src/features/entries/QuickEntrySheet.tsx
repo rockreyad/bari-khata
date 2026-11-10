@@ -27,6 +27,7 @@ import { MoneyInput } from "../../components/ui/MoneyInput";
 import { TransactionExtras } from "../../components/TransactionExtras";
 import { TransactionNoteField } from "../../components/TransactionNoteField";
 import { ReceiptPicker } from "../../components/ReceiptPicker";
+import { ReceiptGallery } from "../../components/ReceiptGallery";
 import {
   TransactionAmount,
   TransactionDetails,
@@ -1511,21 +1512,17 @@ export function QuickEntrySheet({
                       await queueDraft(latest.current);
                     }}
                   />
-                  {files.map((f) => (
-                    <div className="attachment-row" key={f.id}>
-                      <span>{formatDigits(f.name ?? t("ভাউচার"))}</span>
-                      <button
-                        type="button"
-                        className="icon-button"
-                        aria-label={t("বাদ দিন")}
-                        onClick={() =>
-                          setFiles(files.filter((v) => v.id !== f.id))
-                        }
-                      >
-                        <TrashIcon size={17} />
-                      </button>
-                    </div>
-                  ))}
+                  <ReceiptGallery
+                    key={key}
+                    receipts={files}
+                    date={draft.date}
+                    onRemove={(id) =>
+                      setFiles((current) =>
+                        current.filter((item) => item.id !== id),
+                      )
+                    }
+                    removeDisabled={saving || processingFiles || !ready}
+                  />
                 </div>
               </TransactionExtras>
               {!cash &&

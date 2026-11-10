@@ -1093,6 +1093,7 @@ export function HousePaymentForm() {
               <HouseAttachments
                 files={draft.files}
                 entryId={draft.id}
+                date={draft.date}
                 onChange={async (files) => {
                   change("files", files);
                   await flush();

@@ -42,6 +42,7 @@ export const transactionEnglish: Record<string, string> = {
   "আরও তথ্য": "More details",
   "ভাউচার যোগ করুন": "Add voucher",
   "ভাউচারের ছবি": "Voucher image",
+  "PDF দেখতে ভাউচারটি নামান।": "Download the voucher to view the PDF.",
   "ছবি বা PDF": "Photo or PDF",
   "তারিখ ও নোট": "Date and note",
   "ছবি বা রসিদ": "Photo or receipt",

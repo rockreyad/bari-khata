@@ -598,7 +598,7 @@ it("reopens brand and quantity drafts, keeps vouchers reachable, and preserves t
   expect(screen.getByLabelText("তারিখ").closest("details")).toBe(extras);
   expect(
     screen
-      .getByRole("button", { name: "sample.pdf", hidden: true })
+      .getByRole("button", { name: "ভাউচার দেখি: sample.pdf", hidden: true })
       .closest("details"),
   ).toBe(extras);
   fireEvent.change(screen.getAllByLabelText("ব্র্যান্ড")[0], {
@@ -977,7 +977,9 @@ it("keeps a legacy 6 MiB draft receipt through editing, another reopen and backu
   );
   page = mount(firstSave, billId, onSave, onClose);
   await ready();
-  expect(screen.getByRole("button", { name: legacy.name })).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: `ভাউচার দেখি: ${legacy.name}` }),
+  ).toBeTruthy();
   await collapse(page.container, user);
   await user.click(save());
   await waitFor(() => expect(onClose).toHaveBeenCalledTimes(3));
