@@ -7,6 +7,22 @@ import type {
 } from "pdfjs-dist";
 import { useLanguageContext } from "../context/LanguageProvider";
 
+const codecAssets = new Map([
+  ["jbig2.wasm", () => import("pdfjs-dist/wasm/jbig2.wasm?url")],
+  ["openjpeg.wasm", () => import("pdfjs-dist/wasm/openjpeg.wasm?url")],
+]);
+
+class PdfCodecDataFactory {
+  async fetch({ kind, filename }: { kind: string; filename: string }) {
+    const load = kind === "wasmUrl" ? codecAssets.get(filename) : undefined;
+    if (!load) throw new Error("pdf_resource_unsupported");
+    const { default: url } = await load();
+    const response = await fetch(url, { mode: "same-origin" });
+    if (!response.ok) throw new Error("pdf_codec_unavailable");
+    return new Uint8Array(await response.arrayBuffer());
+  }
+}
+
 export function ReceiptPdfPreview({ file, url }: { file: Blob; url: string }) {
   const { t, number } = useLanguageContext();
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -28,6 +44,7 @@ export function ReceiptPdfPreview({ file, url }: { file: Blob; url: string }) {
         library.GlobalWorkerOptions.workerSrc = worker.default;
         task = library.getDocument({
           data,
+          BinaryDataFactory: PdfCodecDataFactory,
           maxImageSize: 50_000_000,
           canvasMaxAreaInBytes: 24_000_000,
         });
