@@ -54,32 +54,12 @@ import {
   LedgerDatabase,
   readStoredReceipt,
   receiptKey,
+  writeWithReceiptBytes,
   type ReceiptRow,
   type StoredReceiptRow,
   type WorkspaceMode,
   type WorkspaceRow,
 } from "./database";
-
-async function writeReceiptRows(database: LedgerDatabase, rows: ReceiptRow[]) {
-  if (!rows.length) return;
-  try {
-    await database.receipts.bulkPut(rows);
-  } catch (error) {
-    if (!isBlobStorageError(error)) throw error;
-    // WebKit can reject Blob writes while still accepting their bytes.
-    const binary = await Dexie.waitFor(
-      Dexie.ignoreTransaction(() =>
-        Promise.all(
-          rows.map(async (row) => ({
-            ...row,
-            blob: await row.blob.arrayBuffer(),
-          })),
-        ),
-      ),
-    );
-    await database.receipts.bulkPut(binary);
-  }
-}
 
 const ModeSchema = z.enum(["real", "demo"]);
 const LedgerDocumentShape = z
@@ -407,7 +387,9 @@ export class LedgerRepository {
           )
             throw new Error("receipt_missing");
         }
-        await writeReceiptRows(this.database, prepared);
+        await writeWithReceiptBytes(prepared, (receipts) =>
+          this.database.receipts.bulkPut(receipts),
+        );
         const committed = {
           ...current,
           ledger,
@@ -445,18 +427,20 @@ export class LedgerRepository {
           .equals(mode)
           .toArray();
         validateMigrationReceipts(receipts, mode, migration.ledger);
-        await this.database.migrations.add({
-          id,
-          workspace: mode,
-          source: "local",
-          before: current,
-          receipts,
-          afterLedger: migration.ledger,
-          generationAfter: current.generation + 1,
-          report: migration.report,
-          status: "completed",
-          createdAt: at,
-        });
+        await writeWithReceiptBytes(receipts, (storedReceipts) =>
+          this.database.migrations.add({
+            id,
+            workspace: mode,
+            source: "local",
+            before: current,
+            receipts: storedReceipts,
+            afterLedger: migration.ledger,
+            generationAfter: current.generation + 1,
+            report: migration.report,
+            status: "completed",
+            createdAt: at,
+          }),
+        );
         await this.writeWorkspace({
           ...current,
           ledger: migration.ledger,
@@ -487,24 +471,26 @@ export class LedgerRepository {
             .equals(current.id)
             .toArray());
         validateMigrationReceipts(receipts, current.id, migration.ledger);
-        await this.database.migrations.add({
-          id,
-          workspace: current.id,
-          source,
-          before: {
-            ...current,
-            ledger: document,
-            ...(source === "cloud"
-              ? { cloudRevision: Number(sourceKey), pending: false }
-              : {}),
-          },
-          receipts,
-          afterLedger: migration.ledger,
-          generationAfter: current.generation + 1,
-          report: migration.report,
-          status: "completed",
-          createdAt: now(),
-        });
+        await writeWithReceiptBytes(receipts, (storedReceipts) =>
+          this.database.migrations.add({
+            id,
+            workspace: current.id,
+            source,
+            before: {
+              ...current,
+              ledger: document,
+              ...(source === "cloud"
+                ? { cloudRevision: Number(sourceKey), pending: false }
+                : {}),
+            },
+            receipts: storedReceipts,
+            afterLedger: migration.ledger,
+            generationAfter: current.generation + 1,
+            report: migration.report,
+            status: "completed",
+            createdAt: now(),
+          }),
+        );
       }
     }
     return migration;
@@ -576,7 +562,9 @@ export class LedgerRepository {
           pending: current.id === "real",
           updatedAt: now(),
         });
-        await this.database.receipts.bulkPut(migration.receipts);
+        await writeWithReceiptBytes(migration.receipts, (receipts) =>
+          this.database.receipts.bulkPut(receipts),
+        );
         await this.database.migrations.update(id, { status: "rolled-back" });
       },
     );
@@ -633,7 +621,28 @@ export class LedgerRepository {
 
   async storeDownloadedReceipt(receipt: ReceiptRow) {
     await this.database.transaction("rw", this.database.receipts, () =>
-      writeReceiptRows(this.database, [receipt]),
+      writeWithReceiptBytes([receipt], (receipts) =>
+        this.database.receipts.bulkPut(receipts),
+      ),
+    );
+  }
+
+  private async keepBackupRecovery(workspace: WorkspaceMode, ledger: Ledger) {
+    const receipts = await this.database.receipts
+      .where("workspace")
+      .equals(workspace)
+      .toArray();
+    const id = crypto.randomUUID();
+    const createdAt = now();
+    await writeWithReceiptBytes(receipts, (storedReceipts) =>
+      this.database.recoveries.add({
+        id,
+        workspace,
+        ledger,
+        receipts: storedReceipts,
+        reason: "restore",
+        createdAt,
+      }),
     );
   }
 
@@ -795,18 +804,7 @@ export class LedgerRepository {
           !preservesBalanceAdjustments(current.ledger, backup.ledger)
         )
           throw new Error("balance_adjustment_would_be_lost");
-        if (current)
-          await this.database.recoveries.add({
-            id: crypto.randomUUID(),
-            workspace: mode,
-            ledger: current.ledger,
-            receipts: await this.database.receipts
-              .where("workspace")
-              .equals(mode)
-              .toArray(),
-            reason: "restore",
-            createdAt: now(),
-          });
+        if (current) await this.keepBackupRecovery(mode, current.ledger);
         await this.recordIncomingMigration(
           originalLedger,
           current ?? {
@@ -980,17 +978,7 @@ export class LedgerRepository {
             uploadedFor: null,
           })),
         );
-        await this.database.recoveries.add({
-          id: crypto.randomUUID(),
-          workspace: mode,
-          ledger: current.ledger,
-          receipts: await this.database.receipts
-            .where("workspace")
-            .equals(mode)
-            .toArray(),
-          reason: "restore",
-          createdAt: now(),
-        });
+        await this.keepBackupRecovery(mode, current.ledger);
         await this.database.receipts.bulkPut(prepared);
         await this.writeWorkspace({
           ...current,

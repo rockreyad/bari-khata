@@ -1,7 +1,7 @@
 import { legacyArchitectureFixture } from "../domain/testing/legacyArchitecture";
 import { migrateArchitecture } from "../domain/architectureMigration";
 import "fake-indexeddb/auto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createEmptyLedger } from "../domain/demo";
 import { ContractSchema, validateLedger, type Ledger } from "../domain/model";
 import { saveContractChange } from "../domain/contracts";
@@ -144,6 +144,63 @@ describe("recoverable cloud synchronization", () => {
       (await repo.database.conflicts.get("real"))?.ledger.project.name,
     ).toBe("অন্য ডিভাইস");
     expect(cloud.writes()).toBe(0);
+  });
+
+  it("keeps corrupt or mismatched vouchers pending while syncing the remaining ones", async () => {
+    const repo = await makeRepository();
+    const file = new Blob(["%PDF-sample"], { type: "application/pdf" });
+    const receipts = ["broken", "mismatched", "healthy"].map((id) => ({
+      id,
+      name: `${id}.pdf`,
+      mime: file.type,
+      size: file.size,
+    }));
+    await repo.save(
+      (ledger) =>
+        validateLedger({
+          ...ledger,
+          works: [{ id: "roof", name: "নমুনা ছাদ" }],
+          entries: [
+            {
+              id: "bill",
+              kind: "expense",
+              lines: [
+                { id: "line", workId: "roof", label: "নমুনা মাল", amount: 100 },
+              ],
+              receipts,
+            },
+          ],
+        }),
+      "real",
+      receipts.map(({ id, name }) => ({ id, name, entryId: "bill", file })),
+    );
+    await repo.database.receipts.update("real:broken", {
+      blob: new Blob(["sample"], { type: "text/html" }),
+    });
+    await repo.database.receipts.update("real:mismatched", {
+      blob: new Blob(["short"], { type: file.type }),
+    });
+    const cloud = memoryCloud();
+    const uploadReceipt = vi.fn();
+    const downloadReceipt = vi.fn();
+    const transport = { ...cloud.transport, uploadReceipt, downloadReceipt };
+    await expect(synchronizeWorkspace(transport, repo)).resolves.toEqual({
+      status: "synced",
+      pendingReceipts: 2,
+    });
+    expect(uploadReceipt).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ id: "healthy" }),
+    );
+    expect(downloadReceipt).not.toHaveBeenCalled();
+    expect(await repo.getReceipt("healthy")).toMatchObject({
+      uploadedFor: transport.ownerId,
+    });
+    expect(
+      (await repo.database.receipts.get("real:broken"))?.uploadedFor,
+    ).toBeNull();
+    expect(
+      (await repo.database.receipts.get("real:mismatched"))?.uploadedFor,
+    ).toBeNull();
   });
 
   it("refuses to upload a bound ledger to another account", async () => {

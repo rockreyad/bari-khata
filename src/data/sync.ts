@@ -23,6 +23,7 @@ import { preservesBalanceAdjustments } from "../domain/adjustmentHistory.js";
 import {
   getActiveOwner,
   receiptKey,
+  writeWithReceiptBytes,
   type OutboxRow,
   type ReceiptRow,
 } from "./database";
@@ -437,22 +438,25 @@ export async function synchronizeWorkspace(
     });
   let pendingReceipts = 0;
   for (const ref of receiptReferences(latest.ledger)) {
-    const receipt = await repo.getReceipt(ref.id, "real");
-    if (
-      receipt &&
-      receipt.uploadedFor !== transport.ownerId &&
-      transport.uploadReceipt
-    ) {
-      try {
+    try {
+      const receipt = await repo.getReceipt(ref.id, "real");
+      if (
+        receipt &&
+        (receipt.entryId !== ref.entryId ||
+          receipt.mime !== ref.mime ||
+          receipt.blob.size !== ref.size)
+      )
+        throw new Error("receipt_metadata_mismatch");
+      if (
+        receipt &&
+        receipt.uploadedFor !== transport.ownerId &&
+        transport.uploadReceipt
+      ) {
         await transport.uploadReceipt(receipt);
         await repo.database.receipts.update(receipt.key, {
           uploadedFor: transport.ownerId,
         });
-      } catch {
-        pendingReceipts++;
-      }
-    } else if (!receipt && transport.downloadReceipt) {
-      try {
+      } else if (!receipt && transport.downloadReceipt) {
         const blob = await transport.downloadReceipt(ref.id);
         if (blob.size !== ref.size || blob.type !== ref.mime)
           throw new Error("receipt_metadata_mismatch");
@@ -467,9 +471,9 @@ export async function synchronizeWorkspace(
           createdAt: new Date().toISOString(),
           uploadedFor: transport.ownerId,
         });
-      } catch {
-        pendingReceipts++;
       }
+    } catch {
+      pendingReceipts++;
     }
   }
   return { status: "synced", pendingReceipts };
@@ -551,18 +555,24 @@ async function resolveConflict(
           (current.ownerId && current.ownerId !== session.user.id)
         )
           throw new Error("owner_mismatch");
-        if (choice === "use-cloud")
-          await db.recoveries.add({
-            id: crypto.randomUUID(),
-            workspace: "real",
-            ledger: current.ledger,
-            receipts: await db.receipts
-              .where("workspace")
-              .equals("real")
-              .toArray(),
-            reason: "cloud-conflict",
-            createdAt: new Date().toISOString(),
-          });
+        if (choice === "use-cloud") {
+          const receipts = await db.receipts
+            .where("workspace")
+            .equals("real")
+            .toArray();
+          const id = crypto.randomUUID();
+          const createdAt = new Date().toISOString();
+          await writeWithReceiptBytes(receipts, (rows) =>
+            db.recoveries.add({
+              id,
+              workspace: "real",
+              ledger: current.ledger,
+              receipts: rows,
+              reason: "cloud-conflict",
+              createdAt,
+            }),
+          );
+        }
         const incoming =
           choice === "use-cloud"
             ? await repository.recordIncomingMigration(

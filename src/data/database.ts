@@ -10,7 +10,7 @@ import {
   type LedgerHeaderRow,
 } from "./entityStorage";
 import Dexie, { type EntityTable } from "dexie";
-import { isArrayBuffer } from "./blobStorage";
+import { isArrayBuffer, isBlobStorageError } from "./blobStorage";
 import type { Ledger } from "../domain/model";
 import {
   migrateArchitecture,
@@ -51,6 +51,34 @@ type ReceiptBinary = Blob | ArrayBuffer;
 export type StoredReceiptRow = Omit<ReceiptRow, "blob"> & {
   blob: ReceiptBinary;
 };
+
+export async function writeWithReceiptBytes<T>(
+  rows: StoredReceiptRow[],
+  write: (rows: StoredReceiptRow[]) => PromiseLike<T>,
+): Promise<T> {
+  try {
+    return await write(rows);
+  } catch (error) {
+    if (
+      !isBlobStorageError(error) ||
+      !rows.some((row) => !isArrayBuffer(row.blob))
+    )
+      throw error;
+    // WebKit can reject Blob writes while still accepting their bytes.
+    const binary = await Dexie.waitFor(
+      Dexie.ignoreTransaction(() =>
+        Promise.all(
+          rows.map(async (row) =>
+            isArrayBuffer(row.blob)
+              ? row
+              : { ...row, blob: await row.blob.arrayBuffer() },
+          ),
+        ),
+      ),
+    );
+    return write(binary);
+  }
+}
 
 export interface OutboxRow {
   id: string;

@@ -25,6 +25,12 @@ async function digest(file: Blob) {
     .digest("hex");
 }
 
+const rejectedBlob = () =>
+  new DOMException(
+    "Error preparing Blob/File data to be stored in object store",
+    "UnknownError",
+  );
+
 it("saves and restores voucher bytes when IndexedDB rejects native Blobs", async () => {
   const source = new LedgerRepository(
     new LedgerDatabase(`receipt-webkit-${crypto.randomUUID()}`),
@@ -58,10 +64,7 @@ it("saves and restores voucher bytes when IndexedDB rejects native Blobs", async
   });
   await source.ensure("real", createEmptyLedger());
   vi.spyOn(source.database.receipts, "bulkPut").mockRejectedValueOnce(
-    new DOMException(
-      "Error preparing Blob/File data to be stored in object store",
-      "UnknownError",
-    ),
+    rejectedBlob(),
   );
   await source.save(ledger, "real", [
     { id: receipt.id, entryId: "bill", file },
@@ -174,6 +177,15 @@ it("keeps a pre-upgrade voucher above 5 MiB through draft reopen, save, sync ret
     expect(await digest(attempt.blob)).toBe(await digest(file));
 
   const backup = await source.exportBackup();
+  vi.spyOn(source.database.recoveries, "add").mockRejectedValueOnce(
+    rejectedBlob(),
+  );
+  await source.importBackup(backup, { replace: true });
+  const recovery = (await source.database.recoveries.toCollection().first())!;
+  expect(recovery.receipts[0].blob).toBeInstanceOf(ArrayBuffer);
+  expect(await digest((await source.getReceipt(receipt.id))!.blob)).toBe(
+    await digest(file),
+  );
   const target = new LedgerRepository(
     new LedgerDatabase(`receipt-restore-${crypto.randomUUID()}`),
   );
