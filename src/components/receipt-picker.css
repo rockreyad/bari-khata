@@ -1,29 +1,76 @@
+.receipt-upload-control {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
 .receipt-picker,
 .transaction-extras .receipt-picker {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  min-height: 64px;
-  padding: 14px 18px;
+  min-height: 76px;
+  padding: 12px;
   border: 1px dashed var(--control-border, var(--line));
-  border-radius: 18px;
+  border-radius: 14px;
+  background: var(--surface-muted);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.receipt-picker:hover,
+.receipt-picker.is-dragging {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.receipt-picker.is-dragging {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.receipt-picker-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
   color: var(--accent-strong);
   background: var(--surface);
-  cursor: pointer;
-  overflow: hidden;
 }
-.receipt-picker > span {
-  font-size: 13px;
-  font-weight: 550;
+
+.receipt-picker-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
-.receipt-picker small {
-  display: block;
+
+.receipt-picker-copy strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.receipt-picker-copy small,
+.receipt-upload-status {
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 400;
-  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.5;
 }
+
+.receipt-picker-action {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .receipt-picker input[type="file"] {
   position: absolute;
   inset: 0;
@@ -32,29 +79,33 @@
   opacity: 0;
   cursor: pointer;
 }
+
 .receipt-picker:focus-within {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
-.receipt-upload-control {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
+
+.receipt-picker:has(input:disabled),
+.receipt-picker input:disabled {
+  cursor: default;
 }
-.receipt-picker > svg {
-  flex: none;
-}
-.receipt-picker > span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
+
 .receipt-picker:has(input:disabled) {
-  cursor: wait;
   opacity: 0.65;
 }
+
 .receipt-upload-status {
   margin: 0;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.7;
+}
+
+@media (max-width: 400px) {
+  .receipt-picker,
+  .transaction-extras .receipt-picker {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .receipt-picker-action {
+    grid-column: 2;
+    justify-self: start;
+  }
 }

@@ -177,7 +177,9 @@ it("keeps date, note and payment methods visible while folding optional receipts
     paymentContext: "advance",
     note: "নমুনা অগ্রিম",
     paymentParts: [{ method: "bank", amount: 50000 }],
-    receipts: [{ name: "sample-voucher.pdf" }],
+    receipts: [
+      { name: expect.stringMatching(/^voucher-1-\d{4}-\d{2}-\d{2}\.pdf$/) },
+    ],
   });
 });
 
@@ -445,7 +447,7 @@ describe("quick entry creation flow", () => {
         screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open,
       ).toBe(true),
     );
-    expect(screen.getByText("labour.pdf")).toBeTruthy();
+    expect(screen.getByText(`voucher-1-${draft.date}.pdf`)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "ফিরুন" }));
     await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
     expect(state.drafts.get(key)).toEqual(saved);
@@ -866,7 +868,7 @@ it("keeps daily wage inputs and a receipt through back/reopen, then records one 
       screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open,
     ).toBe(true),
   );
-  expect(screen.getByText("wage.pdf")).toBeTruthy();
+  expect(screen.getByText(/^voucher-1-\d{4}-\d{2}-\d{2}\.pdf$/)).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
   const saved = state.notebook.ledger as Ledger;
@@ -881,7 +883,9 @@ it("keeps daily wage inputs and a receipt through back/reopen, then records one 
     unit: "দিন",
     amount: 300125,
   });
-  expect(saved.entries[0].receipts[0].name).toBe("wage.pdf");
+  expect(saved.entries[0].receipts[0].name).toMatch(
+    /^voucher-1-\d{4}-\d{2}-\d{2}\.pdf$/,
+  );
 });
 
 it.each([undefined, "settle", "advance"] as const)(
@@ -1426,7 +1430,7 @@ it("keeps amounts and receipts isolated between two selected jobs for the same w
   expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe("");
   await user.type(screen.getByLabelText("কত টাকা"), "2300");
   await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
-  expect(screen.queryByText("job-a.pdf")).toBeNull();
+  expect(screen.queryByRole("list", { name: "ভাউচার" })).toBeNull();
   await user.upload(
     screen.getByLabelText("ভাউচার বা ছবি"),
     new File(["job b"], "job-b.pdf", { type: "application/pdf" }),
@@ -1451,14 +1455,17 @@ it("keeps amounts and receipts isolated between two selected jobs for the same w
       screen.getByText("ভাউচার, নোট ও তারিখ").closest("details")!.open,
     ).toBe(true),
   );
-  expect(screen.getByText("job-a.pdf")).toBeTruthy();
-  expect(screen.queryByText("job-b.pdf")).toBeNull();
   expect(
-    state.drafts.has("quick-v2:payment:door:worker:account=labour:job=job-a"),
-  ).toBe(true);
+    within(screen.getByRole("list", { name: "ভাউচার" })).getAllByRole(
+      "listitem",
+    ),
+  ).toHaveLength(1);
   expect(
-    state.drafts.has("quick-v2:payment:door:worker:account=labour:job=job-b"),
-  ).toBe(true);
+    state.drafts.get("quick-v2:payment:door:worker:account=labour:job=job-a"),
+  ).toMatchObject({ files: [{ name: "job-a.pdf" }] });
+  expect(
+    state.drafts.get("quick-v2:payment:door:worker:account=labour:job=job-b"),
+  ).toMatchObject({ files: [{ name: "job-b.pdf" }] });
 });
 
 it.each(["job-a", "job-b"])(
@@ -1524,8 +1531,8 @@ it.each(["job-a", "job-b"])(
       ).toBe(contractId === "job-a"),
     );
     if (contractId === "job-a")
-      expect(screen.getByText("older-job-a.pdf")).toBeTruthy();
-    else expect(screen.queryByText("older-job-a.pdf")).toBeNull();
+      expect(screen.getByText(`voucher-1-${draft.date}.pdf`)).toBeTruthy();
+    else expect(screen.queryByRole("list", { name: "ভাউচার" })).toBeNull();
     expect(
       state.drafts.get("quick-v2:payment:door:worker:account=labour"),
     ).toBe(oldCopy);
@@ -2049,14 +2056,14 @@ it("rejects a new batch above 5 MiB without changing the amount and saves a rece
   );
   await user.upload(input, [accepted, oversized]);
   expect(screen.getByRole("alert").textContent).toContain("৫ MB");
-  expect(screen.queryByText(accepted.name)).toBeNull();
-  expect(screen.queryByText(oversized.name)).toBeNull();
+  expect(screen.queryByText(/^voucher-1-\d{4}-\d{2}-\d{2}\.pdf$/)).toBeNull();
+  expect(screen.queryByText(/^voucher-2-\d{4}-\d{2}-\d{2}\.pdf$/)).toBeNull();
   expect((screen.getByLabelText("কত টাকা") as HTMLInputElement).value).toBe(
     "500",
   );
   expect(state.notebook.save).not.toHaveBeenCalled();
   await user.upload(input, accepted);
-  expect(screen.getByText(accepted.name)).toBeTruthy();
+  expect(screen.getByText(/^voucher-1-\d{4}-\d{2}-\d{2}\.pdf$/)).toBeTruthy();
   await user.click(screen.getByText("ভাউচার, নোট ও তারিখ"));
   await user.click(screen.getByRole("button", { name: "রাখুন" }));
   await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
@@ -2064,7 +2071,12 @@ it("rejects a new batch above 5 MiB without changing the amount and saves a rece
     kind: "payment",
     allocations: [{ workId: "sample-work", amount: 50000 }],
     paymentParts: [{ method: "cash", amount: 50000 }],
-    receipts: [{ name: accepted.name, size: accepted.size }],
+    receipts: [
+      {
+        name: expect.stringMatching(/^voucher-1-\d{4}-\d{2}-\d{2}\.pdf$/),
+        size: accepted.size,
+      },
+    ],
   });
 });
 
@@ -2121,5 +2133,8 @@ it("blocks saving and closing until selected receipts have been stored in the dr
   await waitFor(() => expect(state.notebook.close).toHaveBeenCalledOnce());
   expect(
     (state.notebook.ledger as Ledger).entries[0].receipts[0],
-  ).toMatchObject({ name: "sample-pending.pdf", size: 14 });
+  ).toMatchObject({
+    name: expect.stringMatching(/^voucher-1-\d{4}-\d{2}-\d{2}\.pdf$/),
+    size: 14,
+  });
 });

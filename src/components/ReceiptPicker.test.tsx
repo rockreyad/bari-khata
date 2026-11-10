@@ -185,3 +185,17 @@ it("counts saved receipts before preparing any files and allows selecting the sa
   await userEvent.upload(input, selected);
   expect(onFiles).toHaveBeenCalledOnce();
 });
+
+it("accepts a dropped batch through the same preparation path as the file chooser", async () => {
+  const onFiles = vi.fn();
+  mount({ onFiles });
+  const zone = screen.getByLabelText("ভাউচার বা ছবি").closest("label")!;
+  const image = photo();
+  const pdf = new File(["sample"], "sample.pdf", { type: "application/pdf" });
+  const dataTransfer = { types: ["Files"], files: [image, pdf] };
+  fireEvent.dragEnter(zone, { dataTransfer });
+  expect(zone.classList.contains("is-dragging")).toBe(true);
+  fireEvent.drop(zone, { dataTransfer });
+  await waitFor(() => expect(onFiles).toHaveBeenCalledWith([image, pdf]));
+  expect(zone.classList.contains("is-dragging")).toBe(false);
+});
