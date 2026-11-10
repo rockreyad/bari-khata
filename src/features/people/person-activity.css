@@ -85,15 +85,13 @@
   overflow-wrap: anywhere;
 }
 .contact-detail-page .contact-history .history-row-amount {
-  max-width: 44%;
+  max-width: 62%;
   color: var(--text);
   font-size: 14px;
   line-height: 1.6;
   font-weight: 600;
   letter-spacing: normal;
   text-align: right;
-  white-space: normal;
-  overflow-wrap: anywhere;
 }
 .contact-detail-page .contact-history .history-empty {
   padding: 28px 16px;

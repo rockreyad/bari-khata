@@ -99,11 +99,6 @@
 .house-payment-preview .house-result dd {
   font-size: 23px;
 }
-.house-cost-summary dl > div {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) fit-content(55%);
-  gap: 8px 16px;
-}
 .house-cost-summary dt,
 .house-cost-summary dd {
   min-width: 0;

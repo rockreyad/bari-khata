@@ -51,6 +51,70 @@
   overflow-wrap: anywhere;
 }
 
+/* If a value is wider than its card, scroll the value without splitting it. */
+:root
+  :is(
+    .money,
+    .home-overview-paid-total > dd,
+    .home-overview-correction dd,
+    .home-overview-due > strong,
+    .home-overview-breakdown > button > strong,
+    .home-dues-total dd,
+    .home-dues-amount,
+    .notebook-card-due > strong,
+    .work-known-due > strong,
+    .work-payable-amount,
+    .work-payable-correction > strong,
+    .job-tile-amounts strong,
+    .job-card-balance strong,
+    .job-detail-total > :is(strong, s),
+    .job-detail-money > :not(.job-detail-review, .job-detail-settled) > dd,
+    .contract-history-amount > :is(strong, span),
+    .contact-summary-hero > strong,
+    .contact-remaining-hero > strong,
+    .contact-summary-metrics dd,
+    .contact-reconciliation dd,
+    .contact-row-money > strong,
+    .ledger-search-total-value,
+    .ledger-search-parts dd,
+    .ledger-search-undated strong,
+    .history-row-amount,
+    .timeline-event-money > :is(b, del),
+    .report-total > strong,
+    .report-undated > strong,
+    .report-paid-summary > button > strong,
+    .report-breakdown-list > button > strong,
+    .spending-chart-header h2,
+    .spending-chart-callout > strong,
+    .balance-progress-amounts strong,
+    .entry-amount-card-v5 > strong,
+    .transaction-detail-v5 .detail-line > strong,
+    .entry-paid-status-copy-v5 strong,
+    .entry-payment-fold-v5 > summary > strong,
+    .detail-linked-row > strong,
+    .entry-balance-items dd,
+    .entry-balance-result > strong,
+    .transaction-summary dd,
+    .transaction-submit strong,
+    .house-payment-preview dd,
+    .house-allocation-preview li > strong,
+    .paid-purchase-amount strong,
+    .shared-total-main > strong,
+    .shared-balance-grid dd:not(.shared-balance-pending),
+    .shared-credit-note dd,
+    .shared-detail-amounts dd,
+    .shared-ledger-value > strong,
+    .shared-detail-summary > strong,
+    .shared-contract-balances dd:not(.shared-work-pending),
+    .shared-chart-selection-info output > strong,
+    .shared-chart-refunds dd,
+    .shared-chart-undated strong
+  ) {
+  min-inline-size: 0;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
 @media (min-width: 1024px) and (max-width: 1199px) {
   .app-frame {
     --app-sidebar-width: 208px;
