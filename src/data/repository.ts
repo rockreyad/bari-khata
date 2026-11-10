@@ -1059,32 +1059,46 @@ const DraftBlobSchema = z
   .refine(
     (blob) => allowedTypes.has(blob.type) && blob.size <= 10 * 1024 * 1024,
   );
-const JsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
-  z.union([
-    DraftBlobSchema,
-    z.string(),
-    z.number().finite(),
-    z.boolean(),
-    z.null(),
-    z.array(JsonValueSchema),
-    z
-      .custom<Record<string, unknown>>(
-        (value) =>
-          value !== null &&
-          typeof value === "object" &&
-          (Object.getPrototypeOf(value) === Object.prototype ||
-            Object.getPrototypeOf(value) === null),
-      )
-      .pipe(z.record(z.string(), JsonValueSchema)),
-  ]),
-);
+const DraftBlobBytesSchema = z.strictObject({
+  __bariBlobBytes: z.literal(1),
+  mime: z.string().refine((type) => allowedTypes.has(type)),
+  bytes: z
+    .instanceof(ArrayBuffer)
+    .refine((bytes) => bytes.byteLength <= 10 * 1024 * 1024),
+});
+const DraftStoredBlobSchema = z.union([DraftBlobSchema, DraftBlobBytesSchema]);
+function draftValueSchema(blob: z.ZodType<unknown>) {
+  const value: z.ZodType<unknown> = z.lazy(() =>
+    z.union([
+      blob,
+      z.string(),
+      z.number().finite(),
+      z.boolean(),
+      z.null(),
+      z.array(value),
+      z
+        .custom<Record<string, unknown>>(
+          (item) =>
+            item !== null &&
+            typeof item === "object" &&
+            (Object.getPrototypeOf(item) === Object.prototype ||
+              Object.getPrototypeOf(item) === null),
+        )
+        .pipe(z.record(z.string(), value)),
+    ]),
+  );
+  return value;
+}
+
+const DraftInputSchema = draftValueSchema(DraftBlobSchema);
+const StoredDraftSchema = draftValueSchema(DraftStoredBlobSchema);
 
 const FileEnvelopeSchema = z
   .object({
     __bariFile: z.literal(1),
     name: z.string().max(300),
     lastModified: z.number().finite(),
-    blob: DraftBlobSchema,
+    blob: DraftStoredBlobSchema,
   })
   .strict();
 
@@ -1105,14 +1119,43 @@ function packDraft(value: unknown): unknown {
   return value;
 }
 
+async function packDraftBlobBytes(value: unknown): Promise<unknown> {
+  if (value instanceof Blob)
+    return {
+      __bariBlobBytes: 1,
+      mime: value.type,
+      bytes: await value.arrayBuffer(),
+    };
+  if (Array.isArray(value)) return Promise.all(value.map(packDraftBlobBytes));
+  if (value !== null && typeof value === "object")
+    return Object.fromEntries(
+      await Promise.all(
+        Object.entries(value).map(async ([key, item]) => [
+          key,
+          await packDraftBlobBytes(item),
+        ]),
+      ),
+    );
+  return value;
+}
+
+function unpackDraftBlob(value: z.infer<typeof DraftStoredBlobSchema>): Blob {
+  return value instanceof Blob
+    ? value
+    : new Blob([value.bytes], { type: value.mime });
+}
+
 function unpackDraft(value: unknown): unknown {
   if (value instanceof Blob) return value;
   if (Array.isArray(value)) return value.map(unpackDraft);
   if (value !== null && typeof value === "object") {
+    if ("__bariBlobBytes" in value)
+      return unpackDraftBlob(DraftBlobBytesSchema.parse(value));
     if ("__bariFile" in value) {
       const file = FileEnvelopeSchema.parse(value);
-      return new File([file.blob], file.name, {
-        type: file.blob.type,
+      const blob = unpackDraftBlob(file.blob);
+      return new File([blob], file.name, {
+        type: blob.type,
         lastModified: file.lastModified,
       });
     }
@@ -1150,13 +1193,22 @@ function storeDraft(
   key: string,
   value: unknown,
 ) {
-  const parsed = JsonValueSchema.parse(value);
+  const row = {
+    id: `${mode}:${key}`,
+    workspace: mode,
+    value: packDraft(DraftInputSchema.parse(value)),
+    updatedAt: now(),
+  };
   return trackLocalWrite(
-    database.drafts.put({
-      id: `${mode}:${key}`,
-      workspace: mode,
-      value: packDraft(parsed),
-      updatedAt: now(),
+    database.transaction("rw", database.drafts, async () => {
+      try {
+        return await database.drafts.put(row);
+      } catch (error) {
+        if (!isBlobStorageError(error)) throw error;
+        // Some WebKit sessions can write bytes even when IndexedDB rejects Blobs.
+        const packed = await Dexie.waitFor(() => packDraftBlobBytes(row.value));
+        return database.drafts.put({ ...row, value: packed });
+      }
     }),
     draftWriteKey(database.name, mode, key),
   );
@@ -1167,7 +1219,7 @@ async function loadDraft<T>(
   key: string,
 ): Promise<T | null> {
   const row = await database.drafts.get(`${mode}:${key}`);
-  return row ? (unpackDraft(JsonValueSchema.parse(row.value)) as T) : null;
+  return row ? (unpackDraft(StoredDraftSchema.parse(row.value)) as T) : null;
 }
 
 export function createWorkspaceStorage(mode: WorkspaceMode = "real") {

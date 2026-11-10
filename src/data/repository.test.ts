@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createEmptyLedger, createDemoLedger } from "../domain/demo";
 import { validateLedger } from "../domain/model";
 import { getAccountDatabase, setActiveOwner, LedgerDatabase } from "./database";
@@ -151,41 +151,105 @@ describe("offline ledger persistence", () => {
     ).toThrow();
   });
 
-  it("preserves unsaved voucher bytes and file names in a reopened draft", async () => {
+  it.each(["Blob", "bytes"])(
+    "preserves File and Blob vouchers in a reopened draft stored as %s",
+    async (representation) => {
+      const ownerId = crypto.randomUUID();
+      setActiveOwner(ownerId);
+      const db = getAccountDatabase(ownerId);
+      databases.push(db);
+      const key = `test-draft-${crypto.randomUUID()}`;
+      const file = new File([new Uint8Array([8, 9, 10])], "my-voucher.png", {
+        type: "image/png",
+        lastModified: 123456,
+      });
+      const plain = new Blob(["sample"], { type: "application/pdf" });
+      const put = vi.spyOn(db.drafts, "put");
+      if (representation === "bytes") {
+        const cause = new DOMException(
+          "Error preparing Blob/File data to be stored in object store",
+          "UnknownError",
+        );
+        put.mockRejectedValueOnce(new Error("IndexedDB put", { cause }));
+      }
+      await saveDraft(key, {
+        draft: { amount: "1500" },
+        files: [
+          { id: "photo", file },
+          { id: "pdf", file: plain },
+        ],
+      });
+      expect(put).toHaveBeenCalledTimes(representation === "bytes" ? 2 : 1);
+      put.mockRestore();
+      if (representation === "bytes")
+        expect((await db.drafts.get(`real:${key}`))?.value).toMatchObject({
+          files: [
+            { file: { __bariFile: 1, blob: { __bariBlobBytes: 1 } } },
+            { file: { __bariBlobBytes: 1 } },
+          ],
+        });
+      db.close();
+      await db.open();
+      const restored = await readDraft<{
+        draft: { amount: string };
+        files: [{ id: string; file: File }, { id: string; file: Blob }];
+      }>(key);
+      expect(restored?.draft.amount).toBe("1500");
+      expect(restored?.files[0].file).toBeInstanceOf(File);
+      expect(restored?.files[0].file.name).toBe("my-voucher.png");
+      expect(restored?.files[0].file.type).toBe("image/png");
+      expect(restored?.files[0].file.lastModified).toBe(123456);
+      expect(
+        new Uint8Array(await restored!.files[0].file.arrayBuffer()),
+      ).toEqual(new Uint8Array([8, 9, 10]));
+      expect(restored?.files[1].file).toBeInstanceOf(Blob);
+      expect(restored?.files[1].file.type).toBe("application/pdf");
+      expect(await restored?.files[1].file.text()).toBe("sample");
+      await expect(
+        saveDraft(key, {
+          files: [{ file: new Blob(["bad"], { type: "text/html" }) }],
+        }),
+      ).rejects.toThrow();
+      expect(
+        (await readDraft<{ files: { file: File }[] }>(key))?.files[0].file.name,
+      ).toBe("my-voucher.png");
+      await removeDraft(key);
+    },
+  );
+
+  it("preserves write order during delayed Blob conversion", async () => {
     const ownerId = crypto.randomUUID();
     setActiveOwner(ownerId);
     const db = getAccountDatabase(ownerId);
     databases.push(db);
-    const key = `test-draft-${crypto.randomUUID()}`;
-    const file = new File([new Uint8Array([8, 9, 10])], "my-voucher.png", {
-      type: "image/png",
-      lastModified: 123456,
+    const key = "same-draft";
+    const file = new Blob(["receipt"], { type: "application/pdf" });
+    const bytes = await file.arrayBuffer();
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
     });
-    await saveDraft(key, {
-      draft: { amount: "1500" },
-      files: [{ id: "photo", file }],
+    let finishConversion!: (buffer: ArrayBuffer) => void;
+    const conversion = new Promise<ArrayBuffer>((resolve) => {
+      finishConversion = resolve;
     });
-    db.close();
-    await db.open();
-    const restored = await readDraft<{
-      draft: { amount: string };
-      files: { id: string; file: File }[];
-    }>(key);
-    expect(restored?.draft.amount).toBe("1500");
-    expect(restored?.files[0].file).toBeInstanceOf(File);
-    expect(restored?.files[0].file.name).toBe("my-voucher.png");
-    expect(restored?.files[0].file.lastModified).toBe(123456);
-    expect(new Uint8Array(await restored!.files[0].file.arrayBuffer())).toEqual(
-      new Uint8Array([8, 9, 10]),
-    );
-    await expect(
-      saveDraft(key, {
-        files: [{ file: new Blob(["bad"], { type: "text/html" }) }],
-      }),
-    ).rejects.toThrow();
-    expect(
-      (await readDraft<{ files: { file: File }[] }>(key))?.files[0].file.name,
-    ).toBe("my-voucher.png");
+    vi.spyOn(file, "arrayBuffer").mockImplementationOnce(() => {
+      markStarted();
+      return conversion;
+    });
+    vi.spyOn(db.drafts, "put").mockImplementationOnce(async () => {
+      await db.drafts.get(`real:${key}`);
+      throw new DOMException(
+        "Error preparing Blob/File data to be stored in object store",
+        "UnknownError",
+      );
+    });
+    const older = saveDraft(key, { file });
+    await started;
+    const newer = saveDraft(key, { note: "newer" });
+    finishConversion(bytes);
+    await Promise.all([older, newer]);
+    expect(await readDraft(key)).toEqual({ note: "newer" });
     await removeDraft(key);
   });
 
