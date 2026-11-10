@@ -20,24 +20,28 @@ const initial = { text: "" };
 let owner: string | undefined;
 afterEach(async () => {
   cleanup();
+  vi.restoreAllMocks();
   await Promise.resolve();
   if (owner) await getAccountDatabase(owner).delete();
   owner = undefined;
   setActiveOwner(null);
 });
 function Editor({ id }: { id: string }) {
-  const { value, update, ready } = useInlineDraft(
+  const { value, update, ready, failed } = useInlineDraft(
     `inline:${id}`,
     Schema,
     initial,
   );
   return (
-    <input
-      aria-label="draft"
-      disabled={!ready}
-      value={value.text}
-      onChange={(event) => update({ text: event.target.value })}
-    />
+    <>
+      <input
+        aria-label="draft"
+        disabled={!ready}
+        value={value.text}
+        onChange={(event) => update({ text: event.target.value })}
+      />
+      {failed ? <span role="alert">Draft write failed</span> : null}
+    </>
   );
 }
 it("isolates drafts when the same mounted editor switches between identities", async () => {
@@ -78,4 +82,22 @@ it("isolates drafts when the same mounted editor switches between identities", a
       "নমুনা বদলানো প্রথম লেখা",
     ),
   );
+});
+
+it("clears a transient failure when the next draft write succeeds", async () => {
+  owner = crypto.randomUUID();
+  setActiveOwner(owner);
+  render(<Editor id="retry" />);
+  const input = screen.getByLabelText<HTMLInputElement>("draft");
+  await waitFor(() => expect(input.disabled).toBe(false));
+  vi.spyOn(getAccountDatabase(owner).drafts, "put").mockRejectedValueOnce(
+    new Error("Temporary write error"),
+  );
+  fireEvent.change(input, { target: { value: "নমুনা নতুন লেখা" } });
+  await screen.findByRole("alert");
+  fireEvent.change(input, { target: { value: "নমুনা আগের লেখা" } });
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  expect(await createWorkspaceStorage().readDraft("inline:retry")).toEqual({
+    text: "নমুনা আগের লেখা",
+  });
 });

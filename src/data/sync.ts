@@ -456,7 +456,7 @@ export async function synchronizeWorkspace(
         const blob = await transport.downloadReceipt(ref.id);
         if (blob.size !== ref.size || blob.type !== ref.mime)
           throw new Error("receipt_metadata_mismatch");
-        await repo.database.receipts.put({
+        await repo.storeDownloadedReceipt({
           key: receiptKey("real", ref.id),
           id: ref.id,
           workspace: "real",

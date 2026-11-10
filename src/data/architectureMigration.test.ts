@@ -8,6 +8,7 @@ import { migrateArchitecture } from "../domain/architectureMigration";
 import {
   LedgerDatabase,
   architectureMigrationKey,
+  readStoredReceipt,
   validateMigrationReceipts,
   type ReceiptRow,
   type WorkspaceRow,
@@ -209,7 +210,9 @@ describe("durable architecture conversion", () => {
       expect(migration.before).toEqual(row);
       expect(migration.report.before).toEqual(migration.report.after);
       expect(
-        new Uint8Array(await migration.receipts[0].blob.arrayBuffer()),
+        new Uint8Array(
+          await readStoredReceipt(migration.receipts[0]).blob.arrayBuffer(),
+        ),
       ).toEqual(new Uint8Array([8, 9, 10]));
       expect(await upgraded.outbox.get("frozen")).toEqual(frozen);
       expect(await upgraded.drafts.get("entry-form")).toEqual(savedDraft);
@@ -219,9 +222,11 @@ describe("durable architecture conversion", () => {
       expect((await repo.read())?.generation).toBe(4);
       const reopenedReceipt = (await upgraded.receipts.get("real:photo"))!;
       expect(reopenedReceipt.name).toBe(receipt.name);
-      expect(new Uint8Array(await reopenedReceipt.blob.arrayBuffer())).toEqual(
-        new Uint8Array([8, 9, 10]),
-      );
+      expect(
+        new Uint8Array(
+          await readStoredReceipt(reopenedReceipt).blob.arrayBuffer(),
+        ),
+      ).toEqual(new Uint8Array([8, 9, 10]));
     },
   );
 
@@ -322,7 +327,9 @@ describe("durable architecture conversion", () => {
     expect(await target.database.migrations.count()).toBe(1);
     const migration = (await target.database.migrations.toArray())[0];
     expect(
-      new Uint8Array(await migration.receipts[0].blob.arrayBuffer()),
+      new Uint8Array(
+        await readStoredReceipt(migration.receipts[0]).blob.arrayBuffer(),
+      ),
     ).toEqual(new Uint8Array([2, 4, 6]));
     const copy = parseBackup(await target.exportBackup());
     expect(copy.ledger).toEqual(saved.ledger);

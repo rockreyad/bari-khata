@@ -78,7 +78,14 @@ export function useInlineDraft<T>(
         if (mode === "real" && getActiveOwner() !== activeOwner)
           throw new Error("account_changed");
         await storage.saveDraft(key, schema.parse(next));
-        if (writeFailure.current?.scope === scope) writeFailure.current = null;
+        if (writeFailure.current?.scope === scope) {
+          writeFailure.current = null;
+          setState((previous) =>
+            previous.scope === scope
+              ? { ...previous, failed: false }
+              : previous,
+          );
+        }
       })
       .catch((error) => {
         writeFailure.current = { scope, error };

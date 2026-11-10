@@ -22,6 +22,7 @@ import {
   type MigrationReview,
 } from "../domain/migrationReview";
 import { readEntityLedger, writeEntityLedger } from "./entityStorage";
+import { isBlobStorageError } from "./blobStorage";
 import {
   planBackupMerge,
   preservesBackupPersonWorkLinks,
@@ -51,11 +52,32 @@ import {
   getActiveOwner,
   getWorkspaceDatabase,
   LedgerDatabase,
+  readStoredReceipt,
   receiptKey,
   type ReceiptRow,
+  type StoredReceiptRow,
   type WorkspaceMode,
   type WorkspaceRow,
 } from "./database";
+
+async function writeReceiptRows(database: LedgerDatabase, rows: ReceiptRow[]) {
+  if (!rows.length) return;
+  try {
+    await database.receipts.bulkPut(rows);
+  } catch (error) {
+    if (!isBlobStorageError(error)) throw error;
+    // WebKit can reject Blob writes while still accepting their bytes.
+    const binary = await Dexie.waitFor(() =>
+      Promise.all(
+        rows.map(async (row) => ({
+          ...row,
+          blob: await row.blob.arrayBuffer(),
+        })),
+      ),
+    );
+    await database.receipts.bulkPut(binary);
+  }
+}
 
 const ModeSchema = z.enum(["real", "demo"]);
 const LedgerDocumentShape = z
@@ -383,7 +405,7 @@ export class LedgerRepository {
           )
             throw new Error("receipt_missing");
         }
-        await this.database.receipts.bulkPut(prepared);
+        await writeReceiptRows(this.database, prepared);
         const committed = {
           ...current,
           ledger,
@@ -450,7 +472,7 @@ export class LedgerRepository {
     current: WorkspaceRow,
     source: "cloud" | "backup",
     sourceKey: string,
-    sourceReceipts?: ReceiptRow[],
+    sourceReceipts?: StoredReceiptRow[],
   ) {
     const migration = migrateArchitecture(document);
     if (migration.changed) {
@@ -599,7 +621,18 @@ export class LedgerRepository {
     id: string,
     mode: WorkspaceMode = "real",
   ): Promise<ReceiptRow | null> {
-    return (await this.database.receipts.get(receiptKey(mode, id))) ?? null;
+    const row = await this.database.receipts.get(receiptKey(mode, id));
+    if (!row) return null;
+    const receipt = readStoredReceipt(row);
+    if (receipt.workspace !== mode || receipt.id !== id)
+      throw new Error("receipt_metadata_mismatch");
+    return receipt;
+  }
+
+  async storeDownloadedReceipt(receipt: ReceiptRow) {
+    await this.database.transaction("rw", this.database.receipts, () =>
+      writeReceiptRows(this.database, [receipt]),
+    );
   }
 
   async exportBackup(mode: WorkspaceMode = "real"): Promise<string> {
@@ -616,10 +649,14 @@ export class LedgerRepository {
         if (!row) throw new Error("workspace_missing");
         const receipts: ReceiptRow[] = [];
         for (const ref of receiptReferences(row.ledger)) {
-          const receipt = await this.database.receipts.get(
-            receiptKey(mode, ref.id),
-          );
+          const receipt = await this.getReceipt(ref.id, mode);
           if (!receipt) throw new Error("receipt_missing");
+          if (
+            receipt.entryId !== ref.entryId ||
+            receipt.mime !== ref.mime ||
+            receipt.blob.size !== ref.size
+          )
+            throw new Error("receipt_metadata_mismatch");
           receipts.push(receipt);
         }
         const sourceReviews = (
@@ -707,11 +744,11 @@ export class LedgerRepository {
     const mode = options.mode ?? "real";
     if (backup.ledger.isDemo !== (mode === "demo"))
       throw new Error("workspace_mode_mismatch");
-    const receipts: ReceiptRow[] = backup.receipts.map((receipt) => ({
+    const receipts: StoredReceiptRow[] = backup.receipts.map((receipt) => ({
       ...receipt,
       key: receiptKey(mode, receipt.id),
       workspace: mode,
-      blob: base64ToBlob(receipt.base64, receipt.mime),
+      blob: base64ToBuffer(receipt.base64),
       uploadedFor: null,
     }));
     assertFinancialWritesAllowed();
@@ -889,7 +926,7 @@ export class LedgerRepository {
           throw new Error("balance_adjustment_would_be_lost");
         if (!preservesBackupPersonWorkLinks(current.ledger, ledger))
           throw new Error("person_work_links_would_be_lost");
-        const prepared: ReceiptRow[] = [];
+        const prepared: StoredReceiptRow[] = [];
         for (const ref of receiptReferences(ledger)) {
           const existing = await this.database.receipts.get(
             receiptKey(mode, ref.id),
@@ -897,7 +934,9 @@ export class LedgerRepository {
           const incoming = incomingReceipts.get(ref.id);
           if (existing && incoming) {
             // Blob পড়ার সময়ও IndexedDB-এর transaction সচল রাখতে হবে।
-            const contents = await Dexie.waitFor(blobToBase64(existing.blob));
+            const contents = await Dexie.waitFor(() =>
+              blobToBase64(readStoredReceipt(existing).blob),
+            );
             if (
               existing.entryId !== incoming.entryId ||
               existing.mime !== incoming.mime ||
@@ -911,7 +950,7 @@ export class LedgerRepository {
               ...incoming,
               key: receiptKey(mode, incoming.id),
               workspace: mode,
-              blob: base64ToBlob(incoming.base64, incoming.mime),
+              blob: base64ToBuffer(incoming.base64),
               uploadedFor: null,
             });
           }
@@ -933,7 +972,7 @@ export class LedgerRepository {
             ...receipt,
             key: receiptKey(mode, receipt.id),
             workspace: mode,
-            blob: base64ToBlob(receipt.base64, receipt.mime),
+            blob: base64ToBuffer(receipt.base64),
             uploadedFor: null,
           })),
         );
@@ -1004,11 +1043,15 @@ async function blobToBase64(blob: Blob): Promise<string> {
   return btoa(binary);
 }
 
-function base64ToBlob(base64: string, mime: string): Blob {
+function base64ToBuffer(base64: string): ArrayBuffer {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new Blob([bytes], { type: mime });
+  return bytes.buffer;
+}
+
+function base64ToBlob(base64: string, mime: string): Blob {
+  return new Blob([base64ToBuffer(base64)], { type: mime });
 }
 
 const DraftBlobSchema = z
