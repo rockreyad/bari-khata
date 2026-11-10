@@ -5,6 +5,7 @@ import {
   getActiveOwner,
   getWorkspaceDatabase,
   type WorkspaceMode,
+  type WorkspaceRow,
 } from "./database";
 import {
   LedgerRepository,
@@ -22,6 +23,10 @@ export function useLedger(mode: WorkspaceMode) {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
+  const [committed, setCommitted] = useState<{
+    repository: LedgerRepository;
+    row: WorkspaceRow;
+  } | null>(null);
 
   const state = useLiveQuery(async () => {
     try {
@@ -30,6 +35,20 @@ export function useLedger(mode: WorkspaceMode) {
       return { row: null, error: "local_data_invalid" };
     }
   }, [mode, repository]);
+  // A save can finish before Dexie publishes the corresponding live read.
+  const observed = state?.row;
+  const row =
+    committed?.repository === repository &&
+    committed.row.id === mode &&
+    observed &&
+    observed.generation < committed.row.generation
+      ? committed.row
+      : observed;
+  useEffect(() => {
+    if (committed && row !== committed.row)
+      setCommitted((current) => (current === committed ? null : current));
+  }, [committed, row]);
+
   const conflict = useLiveQuery(
     () => (mode === "real" ? database.conflicts.get("real") : undefined),
     [mode, database],
@@ -83,7 +102,13 @@ export function useLedger(mode: WorkspaceMode) {
   const save = useCallback(
     async (change: LedgerChange, files: ReceiptInput[] = []) => {
       assertFinancialWritesAllowed();
-      await repository.save(change, mode, files);
+      const saved = await repository.saveWithSnapshot(change, mode, files);
+      setCommitted((previous) =>
+        previous?.repository === repository &&
+        previous.row.generation > saved.generation
+          ? previous
+          : { repository, row: saved },
+      );
       if (mode === "real") void sync().catch(() => {});
     },
     [mode, repository, sync],
@@ -91,14 +116,14 @@ export function useLedger(mode: WorkspaceMode) {
 
   return {
     ledger:
-      mode === "real" && state?.row?.ownerId !== ownerId
+      mode === "real" && row?.ownerId !== ownerId
         ? null
-        : (state?.row?.ledger ?? null),
+        : (row?.ledger ?? null),
     loading: !initError && !state?.error && !state?.row,
     error: initError ?? state?.error ?? null,
     save,
-    pending: state?.row?.pending ?? false,
-    lastSyncedAt: state?.row?.lastSyncedAt ?? null,
+    pending: row?.pending ?? false,
+    lastSyncedAt: row?.lastSyncedAt ?? null,
     syncing,
     syncError,
     syncResult,
